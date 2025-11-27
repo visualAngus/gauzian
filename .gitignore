@@ -21,3 +21,4 @@ target
 #.idea/
 
 ./gauzina-specs/
+gauzian_sso/.env
