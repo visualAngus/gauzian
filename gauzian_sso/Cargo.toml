@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # 1. Le Moteur (Async)
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full" ,"net"] }
 
 # 2. Le Serveur Web
 axum = "0.7"
@@ -17,9 +17,22 @@ serde_json = "1"
 # 4. La Base de données
 # "runtime-tokio-rustls" est crucial : il permet d'utiliser Tokio pour la DB 
 # et d'embarquer la crypto (rustls) sans dépendre d'OpenSSL sur le système.
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "time", "chrono","ipnetwork"]  }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 # 5. La Sécurité & Config
 argon2 = "0.5"
 dotenvy = "0.15"
+
+rand = "0.8"               # Pour générer la MK aléatoire
+chacha20poly1305 = "0.10"  # Pour chiffrer la MK
+base64 = "0.21" 
+
+# 6. Gestion du temps
+chrono = { version = "0.4", features = ["serde", "clock"] } 
+
+# 7. Utilitaires Web
+tower-http = { version = "0.5", features = ["full"] } 
+
+# 8. Gestion des IP
+ipnetwork = "0.20"
