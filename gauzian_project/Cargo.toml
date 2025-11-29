@@ -1,0 +1,13 @@
+# /gauzian_project/Cargo.toml
+[workspace]
+members = [
+    "crates/gauzian_core",  # Les types et la logique partagée
+    "crates/gauzian_auth",  # Ton code actuel (SSO)
+    "crates/gauzian_api",   # L'exécutable qui lance le serveur
+]
+
+# [patch.crates-io] (utile pour le futur)
+
+# [profile.release] (utile pour la performance)
+# lto = true
+# codegen-units = 1

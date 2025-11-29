@@ -1,0 +1,20 @@
+[package]
+name = "gauzian_api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# --- Tes Modules ---
+gauzian_core = { path = "../gauzian_core" }
+gauzian_auth = { path = "../gauzian_auth" }
+
+# --- Framework Web ---
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["full","cors"] }
+
+# --- Database (nécessaire pour créer le pool ici) ---
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "time", "chrono", "ipnetwork"] }
+
+# --- Utils ---
+dotenvy = "0.15"
