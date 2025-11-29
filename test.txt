@@ -1,0 +1,1 @@
+curl -k -v https://192.168.1.165:3000/auth/login -H 'Origin: https://192.168.1.74:5500'
