@@ -1,18 +1,16 @@
 use axum::{
-    Router,
     extract::{Json, State}, // On ajoute Json et State ici
     http::StatusCode,
     response::IntoResponse,
-    routing::post,
 };
 use axum::http::{header::ACCEPT_LANGUAGE, HeaderMap}; // header constant + HeaderMap extractor
-use axum::extract::{self, ConnectInfo};
 use axum::http::header::USER_AGENT;
 use ipnetwork::IpNetwork; 
+use axum::extract;
 
-use serde::Deserialize; // On n'a besoin que de Deserialize pour l'input
-use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::net::SocketAddr;
+use sha2::Digest;
+use gauzian_core::{AppState, RegisterRequest};
 
 // On ajoute les imports pour l'identité
 use argon2::{
@@ -25,9 +23,9 @@ use argon2::{
         SaltString
     },
 };
+// verifier si la session est expirée
 use uuid::Uuid;
 // On importe le module pour charger les variables d'environnement (si ce n'est pas déjà fait)
-use dotenvy;
 use rand::RngCore; // Pour remplir des bytes au hasard
 use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit},
@@ -36,56 +34,9 @@ use chacha20poly1305::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 // std::time::Duration removed; using chrono::Duration for DateTime arithmetic
-use chrono::{DateTime, Utc, NaiveDate}; // Pour gérer les dates/heures de manière sûre et explicite
+use chrono::{DateTime, Utc}; // Pour gérer les dates/heures de manière sûre et explicite
 use chrono::Duration as ChronoDuration; // Pour l'expiration des tokens
 
-#[derive(Deserialize, Debug)]
-struct RegisterRequest {
-    email: String,
-    password: String,
-    last_name: String,
-    first_name: String,
-    date_of_birth: Option<NaiveDate>,
-    time_zone: Option<String>,
-}
-#[derive(Clone)]
-struct AppState {
-    db_pool: PgPool,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // chargement du .env
-    dotenvy::dotenv().ok();
-
-    // on lie le .env pour recupérer l'url de la bdd
-    let database_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
-
-    // connexion à la bdd
-    let db_pool = PgPoolOptions::new()
-        .max_connections(50)
-        .connect(&database_url)
-        .await?;
-
-    println!("Connected to the database");
-
-    let state: AppState = AppState { db_pool };
-
-    let app: Router = Router::new()
-        .route("/register", post(register_handler))
-        .route("/login", post(login_handler))
-        .with_state(state);
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    println!("Listening on {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-        .await?;
-
-    Ok(())
-}
 
 /// Génère une Master Key (MK) et la chiffre avec le mot de passe de l'utilisateur.
 fn create_user_vault(password: &str) -> Result<(String, String), String> {
@@ -127,18 +78,32 @@ fn create_user_vault(password: &str) -> Result<(String, String), String> {
 }
 
 
-async fn create_token() -> Result<String, String> {
+async fn hash_token(token: &str) -> String {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(token.as_bytes());
+    let hash = hasher.finalize();
+    BASE64.encode(hash)
+}
+
+async fn create_token() -> Result<(String,String), String> {
     // generation d'un token aleatoire de 32 bytes
     let mut token_bytes: [u8; 32] = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut token_bytes);
     let token_b64 = BASE64.encode(token_bytes);
-    Ok(token_b64)
+
+    // hashage du token avant de le stocker dans la base de donnees (sha256)
+
+    let token_hash_b64 = hash_token(&token_b64).await;
+
+    Ok((token_b64, token_hash_b64))
 }
+
+
 
 // 3. Le Handler (Contrôleur)
 // Il prend l'état (DB) et le JSON (payload) en entrée.
 // Il retourne quelque chose qui implémente IntoResponse (souvent un tuple (StatusCode, String))
-async fn register_handler(
+pub async fn register_handler(
     State(state): State<AppState>,        // Injection du Pool de connexions
     headers: HeaderMap,                   // FromRequestParts extractors MUST come before body extractors
     Json(payload): Json<RegisterRequest>, // Désérialisation automatique du body JSON
@@ -186,6 +151,7 @@ async fn register_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Thread error").into_response(),
     };
 
+    
     // ... Insertion SQL mise à jour
     let insert_result = sqlx::query!(
         r#"
@@ -224,7 +190,7 @@ async fn register_handler(
     }
 }
 
-async fn login_handler(
+pub async fn login_handler(
     State(state): State<AppState>,                      // 1. (Parts) État
     extract::ConnectInfo(addr): extract::ConnectInfo<SocketAddr>, // 2. (Parts) Connexion IP
     headers: HeaderMap,
@@ -287,8 +253,9 @@ async fn login_handler(
     .unwrap_or(false);
 
     if is_valid {
-        let session_token = match create_token().await {
-            Ok(token) => token,
+        // create_token returns (raw_token, hashed_token)
+        let (session_token, session_hash) = match create_token().await {
+            Ok(tuple) => tuple,
             Err(e) => {
                 eprintln!("Erreur de génération de token: {}", e);
                 return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur de token").into_response();
@@ -298,10 +265,10 @@ async fn login_handler(
         // hasher le token avant de le stocker 
 
         // expire dans 1 heure (chrono::Duration)
-        let days: i64 = std::env::var("DATABASE_URL")
+        let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
             .ok()
             .and_then(|val| val.parse::<i64>().ok())
-            .unwrap_or(1); // Default to 1 day if parsing fails
+            .unwrap_or(7); // Default to 7 days if parsing fails
         let expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
 
         let insert_session_result = sqlx::query!(
@@ -309,7 +276,8 @@ async fn login_handler(
             INSERT INTO sessions (token, user_id, expires_at, ip_address, user_agent)
             VALUES ($1, $2, $3, $4, $5)
             "#,
-            session_token,
+            // store the HASH of the token in DB, not the raw token
+            session_hash,
             user.id,
             expires_at,
             ip_network,
@@ -319,8 +287,14 @@ async fn login_handler(
         .await;
         match insert_session_result {
             Ok(_) => {
+                // Pour permettre au navigateur de stocker le cookie lors de
+                // requêtes cross-origin (frontend <> backend), le cookie doit
+                // utiliser `SameSite=None` et `Secure`.
+                // Note: `SameSite=None` exige `Secure` (HTTPS) dans les navigateurs modernes.
+                // Pour le développement local sans HTTPS, préférez utiliser un proxy
+                // (ex: Vite proxy) ou servir UI depuis la même origine que l'API.
                 let set_cookie_header = format!(
-                    "session_id={}; Max-Age={}; Path=/; HttpOnly; Secure; SameSite=Strict",
+                    "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=Lax",
                     session_token,
                     days * 24 * 3600
                 );
@@ -345,4 +319,95 @@ async fn login_handler(
         (StatusCode::UNAUTHORIZED, "Email ou mot de passe incorrect").into_response()
     }
 
+}
+
+async fn reset_token_life_time(
+    token: &str,
+    State(state): State<AppState>,
+    ) -> Result<(), String> {
+    // expire dans 1 heure (chrono::Duration)
+    let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
+        .ok()
+        .and_then(|val| val.parse::<i64>().ok())
+        .unwrap_or(7); // Default to 7 days if parsing fails
+    let new_expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
+
+    let update_result = sqlx::query!(
+        r#"
+        UPDATE sessions
+        SET expires_at = $1
+        WHERE token = $2
+        "#,
+        new_expires_at,
+        token
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match update_result {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("Erreur SQL Update Session: {:?}", e);
+            Err("Erreur interne".to_string())
+        }
+    }
+}
+
+pub async fn autologin_handler(
+    State(state): State<AppState>, // 1. (Parts) État
+    headers: HeaderMap,
+) -> impl IntoResponse {
+
+    // recuperer le cookie de session
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            return (StatusCode::UNAUTHORIZED, "Pas de cookie de session").into_response();  
+        }
+    };
+
+    // The DB stores the hashed token (SHA256 base64). We must hash the
+    // raw token from the cookie the same way before querying.
+
+    let session_hash_b64 = hash_token(&session_token).await;
+    
+    // verifier le token de session dans la base de données (compare hash)
+    let session_result = sqlx::query!(
+        "SELECT user_id, expires_at FROM sessions WHERE token = $1",
+        session_hash_b64
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+    let session = match session_result {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return (StatusCode::UNAUTHORIZED, "Session invalide").into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur SQL Autologin: {:?}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
+        }
+    };
+    println!("Session pour user_id: {}", session.user_id);
+    let now = Utc::now();
+    if session.expires_at < now {
+        return (StatusCode::UNAUTHORIZED, "Session expirée").into_response();
+    } else {
+        reset_token_life_time(&session_hash_b64, State(state)).await.unwrap_or_else(|e| {
+            eprintln!("Erreur lors de la mise à jour de l'expiration du token: {}", e);
+        });
+        return (StatusCode::OK, "Session valide").into_response();
+    }
 }
