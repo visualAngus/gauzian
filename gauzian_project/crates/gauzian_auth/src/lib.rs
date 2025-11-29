@@ -32,6 +32,7 @@ use chacha20poly1305::{
     XChaCha20Poly1305, Key
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use serde_json::json; // Import the json! macro
 
 // std::time::Duration removed; using chrono::Duration for DateTime arithmetic
 use chrono::{DateTime, Utc}; // Pour gérer les dates/heures de manière sûre et explicite
@@ -287,31 +288,28 @@ pub async fn login_handler(
         .await;
         match insert_session_result {
             Ok(_) => {
-                // Pour permettre au navigateur de stocker le cookie lors de
-                // requêtes cross-origin (frontend <> backend), le cookie doit
-                // utiliser `SameSite=None` et `Secure`.
-                // Note: `SameSite=None` exige `Secure` (HTTPS) dans les navigateurs modernes.
-                // Pour le développement local sans HTTPS, préférez utiliser un proxy
-                // (ex: Vite proxy) ou servir UI depuis la même origine que l'API.
-                let set_cookie_header = format!(
-                    "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=Lax",
-                    session_token,
-                    days * 24 * 3600
-                );
-                
-                // On utilise le tuple (Headers, StatusCode, Body) qui implémente IntoResponse
-                  return (
-                    // 1. Statut HTTP
-                    StatusCode::OK,
-                    // 2. Headers (Array de 1 seul élément)
-                    [(axum::http::header::SET_COOKIE, set_cookie_header)],
-                    // 3. Corps de la réponse (Body)
-                    "Connexion réussie. Le token est dans le cookie HttpOnly.", 
-                ).into_response();
+            // CORRECTION 1 : Pour le Cross-Origin (HTTPS), il faut SameSite=None et Secure
+            let set_cookie_header = format!(
+                "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
+                session_token,
+                days * 24 * 3600
+            );
+
+            // CORRECTION 2 : On renvoie du JSON valide, pas du texte brut
+            let body = Json(json!({
+                "status": "success",
+                "message": "Connexion réussie"
+            }));
+
+            return (
+                StatusCode::OK,
+                [(axum::http::header::SET_COOKIE, set_cookie_header)],
+                body, 
+            ).into_response();
             }
             Err(e) => {
-                eprintln!("Erreur SQL Insert Session: {:?}", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
+            eprintln!("Erreur SQL Insert Session: {:?}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
             }
         };
 
