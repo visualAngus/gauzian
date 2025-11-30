@@ -1,4 +1,5 @@
 # /gauzian_project/Cargo.toml
+
 [workspace]
 members = [
     "crates/gauzian_core",  # Les types et la logique partagée

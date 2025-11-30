@@ -22,3 +22,16 @@ target
 
 ./gauzina-specs/
 gauzian_sso/.env
+
+# Rust
+target/
+**/*.rs.bk
+
+# Docker    
+.env
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

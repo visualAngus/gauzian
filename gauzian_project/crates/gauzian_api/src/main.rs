@@ -87,11 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::list(origin_list))
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        // Ne PAS utiliser `Any` quand `allow_credentials(true)` est activé.
-        // Déclarer explicitement les headers attendus par le client.
         .allow_headers([CONTENT_TYPE, AUTHORIZATION])
-        .allow_credentials(true); // Autoriser l'envoi de cookies / credentials
-
+        .allow_credentials(true);
     // 4. Définition des Routes
     let app = Router::new()
         .route("/auth/register", post(register_handler))
@@ -103,27 +100,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. Lancement du Serveur
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     println!("🚀 GAUZIAN Cloud lancé sur http://{}", addr);
+    let listener = tokio::net::TcpListener::bind(addr).await?;
 
-    // Si on souhaite activer TLS en local : définir USE_TLS=1 et indiquer
-    // les fichiers PEM via TLS_CERT et TLS_KEY (ou placer cert.pem/key.pem).
-    if std::env::var("USE_TLS").is_ok() {
-        let cert = std::env::var("TLS_CERT").unwrap_or_else(|_| "cert.pem".to_string());
-        let key = std::env::var("TLS_KEY").unwrap_or_else(|_| "key.pem".to_string());
-
-        // Charge la config rustls depuis les fichiers PEM (cert + private key)
-        let rustls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert, key).await?;
-        println!("🔐 GAUZIAN Cloud (TLS) lancé sur https://{}", addr);
-
-        axum_server::bind_rustls(addr, rustls_config)
-            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-            .await?;
-    } else {
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-
-        // On active ConnectInfo pour pouvoir récupérer l'IP dans le login_handler
-        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-            .await?;
-    }
+    // On active ConnectInfo pour pouvoir récupérer l'IP dans le login_handler
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await?;
 
     Ok(())
 }
