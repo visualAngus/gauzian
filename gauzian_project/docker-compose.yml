@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # --- Service 1 : La Base de Données (Inchangé) ---
   db:
@@ -18,41 +20,63 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- Service 2 : Ton API Rust ---
+  # --- Service 2 : Ton API Rust (Inchangé) ---
   api:
     build:
       context: .
       dockerfile: Dockerfile
       target: dev
     container_name: gauzian_api
-    # ON RETIRE la section "ports" ici.
-    # L'API n'est plus accessible directement, on est OBLIGÉ de passer par Caddy.
-    # (C'est plus sécurisé).
     volumes:
       - .:/app
       - /app/target
     environment:
       - RUST_LOG=debug
       - DATABASE_URL=postgres://gauzian_user:gauzian_password@db:5432/gauzian_db
-      # Assure-toi que ton code Rust lit ça pour savoir sur quel port écouter (3000)
       - PORT=3000 
     depends_on:
       db:
         condition: service_healthy
 
-  # --- Service 3 : Caddy (Reverse Proxy) ---
+  # --- Service 3 : Ton Frontend Next.js (CORRIGÉ) ---
+  nextjs:
+    build:
+      # Chemin corrigé : le docker-compose est à la racine, le front dans gauzian_front2
+      context: ../gauzian_front2 
+      dockerfile: Dockerfile
+    container_name: gauzian_nextjs
+    environment:
+      - PORT=3001
+      - NODE_ENV=development
+      - HOST=0.0.0.0
+    # Pour le développement on publie le port afin d'y accéder directement
+    ports:
+      - "3001:3001"
+    volumes:
+      # Volume pour le rechargement à chaud en dev
+      - ../gauzian_front2:/app
+      # Volume anonyme pour les node_modules, pour ne pas les remplacer par ceux de l'hôte
+      - /app/node_modules
+    # En dev, utilise le serveur Next en mode "dev" (hot-reload)
+    command: npm run dev
+    restart: unless-stopped
+    depends_on:
+      - api # Le front a souvent besoin de l'API pour s'initialiser
+
+  # --- Service 4 : Caddy (Reverse Proxy) ---
   caddy:
     image: caddy:latest
     container_name: gauzian_proxy
     ports:
-      - "80:80"   # HTTP (redirige vers HTTPS auto)
-      - "443:443" # HTTPS
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile # Ta config
-      - caddy_data:/data # Stockage des certificats
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - api # Attend que l'API soit là
+      - api
+      - nextjs
 
 volumes:
   postgres_data:
