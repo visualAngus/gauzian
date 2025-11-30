@@ -11,6 +11,7 @@ use axum::extract;
 use std::net::SocketAddr;
 use sha2::Digest;
 use gauzian_core::{AppState, RegisterRequest};
+use woothee::parser::Parser; 
 
 // On ajoute les imports pour l'identité
 use argon2::{
@@ -192,30 +193,42 @@ pub async fn register_handler(
 }
 
 pub async fn login_handler(
-    State(state): State<AppState>,                      // 1. (Parts) État
-    extract::ConnectInfo(addr): extract::ConnectInfo<SocketAddr>, // 2. (Parts) Connexion IP
+    State(state): State<AppState>,
+    extract::ConnectInfo(addr): extract::ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    Json(payload): Json<RegisterRequest>,               // 3. (Body) JSON
+    Json(payload): Json<RegisterRequest>,
 ) -> impl IntoResponse {
 
-    // ip client
     let ip_addr: std::net::IpAddr = addr.ip();
     println!("Tentative de connexion depuis l'IP: {}", ip_addr);
-
     let ip_network = IpNetwork::from(ip_addr);
 
-
-    let user_agent = headers
+    // User-Agent parsing
+    let raw_user_agent = headers
         .get(USER_AGENT)
         .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string())
-        .unwrap_or("Inconnu".to_string()); // Valeur par défaut de sécurité
-    println!("User-Agent: {}", user_agent);
-    // verifier les informations de connexion dans la base de données
+        .unwrap_or("");
+
+    let parser = Parser::new();
+    let formatted_user_agent = match parser.parse(raw_user_agent) {
+        Some(result) => format!("{} {} sur {}", result.name, result.version, result.os),
+        None => {
+            if raw_user_agent.is_empty() {
+                "Inconnu".to_string()
+            } else {
+                format!("Autre ({})", &raw_user_agent.chars().take(20).collect::<String>())
+            }
+        }
+    };
+    println!("User-Agent lisible : {}", formatted_user_agent);
+
+    // Avoid moving payload fields so we can use both email and password
+    let email = payload.email.clone();
+    let password_input = payload.password.clone();
 
     let user_result = sqlx::query!(
         "SELECT id, password_hash FROM users WHERE email = $1",
-        payload.email
+        email
     )
     .fetch_optional(&state.db_pool)
     .await;
@@ -223,9 +236,6 @@ pub async fn login_handler(
     let user = match user_result {
         Ok(Some(u)) => u,
         Ok(None) => {
-            // L'utilisateur n'existe pas.
-            // Sécurité : On répond la même chose que si le mot de passe était faux
-            // pour ne pas dire aux hackers quels emails existent.
             return (StatusCode::UNAUTHORIZED, "Email ou mot de passe incorrect").into_response();
         }
         Err(e) => {
@@ -234,18 +244,13 @@ pub async fn login_handler(
         }
     };
 
-    let password_input = payload.password.clone();
-    let stored_hash = user.password_hash.clone(); // Le hash qui vient de la DB
-
+    let stored_hash = user.password_hash.clone();
 
     let is_valid = tokio::task::spawn_blocking(move || {
-        // 1. On parse le hash stocké (qui ressemble à "$argon2id$v=19$m=...")
         let parsed_hash = match PasswordHash::new(&stored_hash) {
             Ok(h) => h,
-            Err(_) => return false, // Si le hash en DB est corrompu
+            Err(_) => return false,
         };
-
-        // 2. On vérifie ! Argon2 recupère le sel dans 'parsed_hash' tout seul.
         Argon2::default()
             .verify_password(password_input.as_bytes(), &parsed_hash)
             .is_ok()
@@ -254,7 +259,6 @@ pub async fn login_handler(
     .unwrap_or(false);
 
     if is_valid {
-        // create_token returns (raw_token, hashed_token)
         let (session_token, session_hash) = match create_token().await {
             Ok(tuple) => tuple,
             Err(e) => {
@@ -263,13 +267,10 @@ pub async fn login_handler(
             }
         };
 
-        // hasher le token avant de le stocker 
-
-        // expire dans 1 heure (chrono::Duration)
-        let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
+        let days: i64 = std::env::var("TOKEN_LIFE_DAYS")
             .ok()
             .and_then(|val| val.parse::<i64>().ok())
-            .unwrap_or(7); // Default to 7 days if parsing fails
+            .unwrap_or(7);
         let expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
 
         let insert_session_result = sqlx::query!(
@@ -277,46 +278,43 @@ pub async fn login_handler(
             INSERT INTO sessions (token, user_id, expires_at, ip_address, user_agent)
             VALUES ($1, $2, $3, $4, $5)
             "#,
-            // store the HASH of the token in DB, not the raw token
             session_hash,
             user.id,
             expires_at,
             ip_network,
-            user_agent
+            formatted_user_agent
         )
         .execute(&state.db_pool)
         .await;
+
         match insert_session_result {
             Ok(_) => {
-            // CORRECTION 1 : Pour le Cross-Origin (HTTPS), il faut SameSite=None et Secure
-            let set_cookie_header = format!(
-                "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
-                session_token,
-                days * 24 * 3600
-            );
+                let set_cookie_header = format!(
+                    "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
+                    session_token,
+                    days * 24 * 3600
+                );
 
-            // CORRECTION 2 : On renvoie du JSON valide, pas du texte brut
-            let body = Json(json!({
-                "status": "success",
-                "message": "Connexion réussie"
-            }));
+                let body = Json(json!({
+                    "status": "success",
+                    "message": "Connexion réussie"
+                }));
 
-            return (
-                StatusCode::OK,
-                [(axum::http::header::SET_COOKIE, set_cookie_header)],
-                body, 
-            ).into_response();
+                return (
+                    StatusCode::OK,
+                    [(axum::http::header::SET_COOKIE, set_cookie_header)],
+                    body,
+                )
+                    .into_response();
             }
             Err(e) => {
-            eprintln!("Erreur SQL Insert Session: {:?}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
+                eprintln!("Erreur SQL Insert Session: {:?}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
             }
         };
-
     } else {
         (StatusCode::UNAUTHORIZED, "Email ou mot de passe incorrect").into_response()
     }
-
 }
 
 async fn reset_token_life_time(
@@ -401,11 +399,19 @@ pub async fn autologin_handler(
     println!("Session pour user_id: {}", session.user_id);
     let now = Utc::now();
     if session.expires_at < now {
-        return (StatusCode::UNAUTHORIZED, "Session expirée").into_response();
+        let body = Json(json!({
+                "status": "error",
+                "message": "Session expirée"
+            }));
+        return (StatusCode::UNAUTHORIZED, body).into_response();
     } else {
         reset_token_life_time(&session_hash_b64, State(state)).await.unwrap_or_else(|e| {
             eprintln!("Erreur lors de la mise à jour de l'expiration du token: {}", e);
         });
-        return (StatusCode::OK, "Session valide").into_response();
+        let body = Json(json!({
+                "status": "success",
+                "message": "Connexion réussie"
+            }));
+        return (StatusCode::OK, body).into_response();
     }
 }
