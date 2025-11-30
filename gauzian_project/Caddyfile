@@ -1,0 +1,23 @@
+{
+    # C'est la ligne qui sauve tout :
+    # Si le client (Windows) ne dit pas qui il veut voir, Caddy lui servira ce site par défaut.
+    default_sni 192.168.1.165
+}
+
+# =======================================================
+# 1. BLOC ACCÈS LOCAL (Pour votre dev personnel)
+# =======================================================
+monapi.dev {
+    tls internal
+    reverse_proxy api:3000
+}
+
+
+# =======================================================
+# 2. BLOC ACCÈS DISTANT (Le nouveau domaine public)
+# =======================================================
+gauzian.pupin.fr {
+    # Caddy s'occupe du certificat Let's Encrypt.
+    # Il utilise le port 80 pour la validation et le 443 pour le service.
+    reverse_proxy api:3000
+}
