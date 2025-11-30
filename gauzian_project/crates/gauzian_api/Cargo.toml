@@ -19,3 +19,6 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macro
 # --- Utils ---
 dotenvy = "0.15"
 axum-server = { version = "0.7", features = ["tls-rustls"] }
+
+# woothee
+woothee = "0.7"
