@@ -11,6 +11,9 @@ use axum::extract;
 use std::net::SocketAddr;
 use sha2::Digest;
 use gauzian_core::{AppState, RegisterRequest};
+
+// Ensure the database connection string is correct in your AppState configuration
+// Example: "postgres://username:password@localhost/database_name"
 use woothee::parser::Parser; 
 
 // On ajoute les imports pour l'identité
@@ -201,7 +204,7 @@ pub async fn login_handler(
 
     let ip_addr: std::net::IpAddr = addr.ip();
     println!("Tentative de connexion depuis l'IP: {}", ip_addr);
-    let ip_network = IpNetwork::from(ip_addr);
+    let ip_network = IpNetwork::from(ip_addr).to_string();
 
     // User-Agent parsing
     let raw_user_agent = headers
