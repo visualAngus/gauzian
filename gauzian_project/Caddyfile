@@ -9,15 +9,24 @@
 # =======================================================
 monapi.dev {
     tls internal
-    reverse_proxy api:3000
+    reverse_proxy api:3001
 }
 
 
 # =======================================================
-# 2. BLOC ACCÈS DISTANT (Le nouveau domaine public)
+# 2. API PUBLIQUE (Pour les utilisateurs finaux)
 # =======================================================
 gauzian.pupin.fr {
     # Caddy s'occupe du certificat Let's Encrypt.
     # Il utilise le port 80 pour la validation et le 443 pour le service.
-    reverse_proxy api:3000
+    # Proxy des appels API vers le service `api`.
+    
+    handle_path /api/* {
+        reverse_proxy api:3000
+    }
+
+    # Tout le reste est servi par Next.js
+    handle {
+        reverse_proxy nextjs:3001
+    }
 }
