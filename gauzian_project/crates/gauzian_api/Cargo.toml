@@ -22,3 +22,6 @@ axum-server = { version = "0.7", features = ["tls-rustls"] }
 
 # woothee
 woothee = "0.7"
+
+# ipnetwork
+axum-client-ip = "0.6.0"
