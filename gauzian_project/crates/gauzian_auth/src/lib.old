@@ -128,71 +128,49 @@ pub async fn register_handler(
         .to_string();
 
     let time_zone = payload.time_zone.unwrap_or("UTC".to_string());
+    
+    // 2. Hachage pour l'authentification (Argon2)
+    // Le client a envoyé un hash SHA-256. On le re-hash avec Argon2 pour la BDD.
+    // C'est la seule tâche crypto que le serveur a le droit de faire.
+    let password_clone = payload.password.clone();
 
-    let salt_auth = payload.salt_auth.clone();   
-    // génération salt pour le hash du mot de passe (argon2)
-    // encodage du mot de passe avec Argon2
-    let password_hash = match tokio::task::spawn_blocking(move || {
-        if salt_auth.is_empty() {
-            return Err("Le sel d'authentification est vide".to_string());
-        }
-        let salt = SaltString::from_b64(salt_auth.as_str())
-            .map_err(|e| format!("Sel invalide: {}", e))?;
-        if payload.password.is_empty() {
-            return Err("Le mot de passe est vide".to_string());
-        }
+    let auth_hash_result = tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
-        let password_hash = argon2
-            .hash_password(payload.password.as_bytes(), &salt)
-            .map_err(|e| format!("Erreur de hachage: {}", e))?
-            .to_string();
-        Ok(password_hash)
+        argon2
+            .hash_password(password_clone.as_bytes(), &salt)
+            .map(|hash| hash.to_string())
+            .map_err(|e| e.to_string())
     })
-    .await
-    {
-        Ok(Ok(hash)) => hash,
-        Ok(Err(e)) => {
-            eprintln!("Erreur lors de l'encodage du mot de passe: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Erreur lors de l'encodage du mot de passe",
-            )
-                .into_response();
-        }
-        Err(e) => {
-            eprintln!("Erreur interne lors de l'exécution de la tâche: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Erreur interne lors de l'exécution de la tâche",
-            )
-                .into_response();
-        }
+    .await;
+    let auth_hash = match auth_hash_result {
+            Ok(Ok(hash)) => hash,
+            Ok(Err(e)) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Hashing error: {}", e)).into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Thread error").into_response(),
     };
-
-    let storage_key_encrypted = payload.storage_key_encrypted.clone();
-    let storage_key_encrypted_recuperation = payload.storage_key_encrypted_recuperation.clone();
-
-    // Insertion dans la base de données
+    
+    // ... Insertion SQL mise à jour
     let insert_result = sqlx::query!(
-        r#"
-        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, storage_key_encrypted, storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        "#,
-        payload.email,
-        password_hash.as_bytes(),
-        payload.salt_e2e.as_bytes(),
-        payload.salt_auth.as_bytes(),
-        storage_key_encrypted.as_bytes(),
-        storage_key_encrypted_recuperation.as_bytes(),
-        payload.last_name,
-        payload.first_name,
-        payload.date_of_birth,
-        time_zone,
-        locale
-    )
+            r#"
+            INSERT INTO users (
+                id, email, password_hash, 
+                vault, vault_salt, vault_iv,  -- Ajoute vault_iv dans ta table !
+                locale, time_zone
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "#,
+            Uuid::new_v4(),
+            payload.email,
+            auth_hash,                     // Le hash pour se connecter
+            payload.keys.encrypted_storage_key, // Le coffre-fort (généré par le JS)
+            payload.keys.salt,             // Le sel du JS
+            payload.keys.iv,               // L'IV du JS (Nécessaire !)
+            locale,
+            time_zone
+        )
     .execute(&state.db_pool)
     .await;
-    
+
     // Gestion d'erreur de la DB (ex: Email déjà utilisé)
     match insert_result {
         Ok(_) => (StatusCode::CREATED, "Utilisateur GAUZIAN créé (E2EE Active).").into_response(),
@@ -216,7 +194,9 @@ pub async fn login_handler(
 ) -> impl IntoResponse {
 
     // --- LOGIQUE IP / USER-AGENT (INCHANGÉE) ---
-    let payload_client_ip = payload.ip_address.clone();
+    let payload_client_ip = payload.client_ip.clone();
+    let ip_network = ip.to_string(); 
+    
     // ... (Ton code de log IP reste ici) ...
 
     let raw_user_agent = headers
@@ -237,11 +217,13 @@ pub async fn login_handler(
     };
 
     let email = payload.email.clone();
-    let password = payload.password.clone();
+    let password_input = payload.password.clone();
 
-    // recupérer l'utilisateur dans la base de données
+    // -------------------------------------------------------------
+    // 1. MODIFICATION SQL : On récupère aussi le Vault, Salt et IV
+    // -------------------------------------------------------------
     let user_result = sqlx::query!(
-        "SELECT id, password_hash, salt_auth FROM users WHERE email = $1",
+        "SELECT id, password_hash, vault, vault_salt, vault_iv FROM users WHERE email = $1",
         email
     )
     .fetch_optional(&state.db_pool)
@@ -250,7 +232,7 @@ pub async fn login_handler(
     let user = match user_result {
         Ok(Some(u)) => u,
         Ok(None) => {
-            return (StatusCode::UNAUTHORIZED, "Email ou mot de passe invalide").into_response();
+            return (StatusCode::UNAUTHORIZED, "Email ou mot de passe incorrect").into_response();
         }
         Err(e) => {
             eprintln!("Erreur SQL Login: {:?}", e);
@@ -258,117 +240,86 @@ pub async fn login_handler(
         }
     };
 
-    println!("Utilisateur trouvé avec ID: {}", user.id);
+    let stored_hash = user.password_hash.clone();
 
-    // Cloner le mot de passe hashé pour le déplacer dans le bloc async
-    let password_hash_clone = user.password_hash.clone();
-
-    // Convertir le mot de passe hashé en String pour éviter les problèmes de durée de vie
-    let password_hash_str = match String::from_utf8(password_hash_clone) {
-        Ok(s) => s,
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
-        }
-    };
-
-    let verify_result = tokio::task::spawn_blocking(move || {
-        let parsed_hash = PasswordHash::new(&password_hash_str)
-            .map_err(|e| e.to_string())?;
-        let argon2 = Argon2::default();
-        argon2
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .map_err(|_| "Mot de passe invalide".to_string())
+    // --- VÉRIFICATION DU MOT DE PASSE (Argon2) ---
+    let is_valid = tokio::task::spawn_blocking(move || {
+        let parsed_hash = match PasswordHash::new(&stored_hash) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+        Argon2::default()
+            .verify_password(password_input.as_bytes(), &parsed_hash)
+            .is_ok()
     })
-    .await;
+    .await
+    .unwrap_or(false);
 
-    match verify_result {
-        Ok(Ok(())) => {
-            println!("Mot de passe vérifié pour l'utilisateur ID: {}", user.id);
-        }
-        _ => {
-            return (StatusCode::UNAUTHORIZED, "Email ou mot de passe invalide").into_response();
-        }
-    };
+    if is_valid {
+        // --- CRÉATION DE SESSION (INCHANGÉE) ---
+        let (session_token, session_hash) = match create_token().await {
+            Ok(tuple) => tuple,
+            Err(e) => {
+                eprintln!("Erreur de génération de token: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur de token").into_response();
+            }
+        };
 
-    // Création du token de session
-    let (token_raw, token_hash) = match create_token().await {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("Erreur lors de la création du token: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
-        }
-    };
+        let days: i64 = std::env::var("TOKEN_LIFE_DAYS")
+            .ok()
+            .and_then(|val| val.parse::<i64>().ok())
+            .unwrap_or(7);
+        let expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
 
-    // Stockage du token dans la base de données avec expiration
-    let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
-        .ok()
-        .and_then(|val| val.parse::<i64>().ok())
-        .unwrap_or(7); // Default to 7 days if parsing fails
-    let expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
+        let insert_session_result = sqlx::query!(
+            r#"
+            INSERT INTO sessions (token, user_id, expires_at, ip_address, user_agent)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            session_hash,
+            user.id,
+            expires_at,
+            payload_client_ip,
+            formatted_user_agent
+        )
+        .execute(&state.db_pool)
+        .await;
 
-    let insert_result = sqlx::query!(
-        r#"
-        INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at)
-        VALUES ($1, $2, $3, $4, $5)
-        "#,
-        user.id,
-        token_hash,
-        formatted_user_agent,
-        payload_client_ip,
-        expires_at
-    )
-    .execute(&state.db_pool)
-    .await;
+        match insert_session_result {
+            Ok(_) => {
+                let set_cookie_header = format!(
+                    "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
+                    session_token,
+                    days * 24 * 3600
+                );
 
-    match insert_result {
-        Ok(_) => {
-            println!("Session créée pour l'utilisateur ID: {}", user.id);
-        }
-        Err(e) => {
-            eprintln!("Erreur SQL Insert Session: {:?}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
-        }
+                // -------------------------------------------------------------
+                // 2. MODIFICATION RÉPONSE JSON : On renvoie le Vault au client
+                // -------------------------------------------------------------
+                let body = Json(json!({
+                    "status": "success",
+                    "message": "Connexion réussie",
+                    // C'est ici qu'on donne les clés chiffrées au JS
+                    "vault": user.vault,
+                    "vault_salt": user.vault_salt,
+                    "vault_iv": user.vault_iv
+                }));
+
+                return (
+                    StatusCode::OK,
+                    [(axum::http::header::SET_COOKIE, set_cookie_header)],
+                    body,
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                eprintln!("Erreur SQL Insert Session: {:?}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
+            }
+        };
+    } else {
+        (StatusCode::UNAUTHORIZED, "Email ou mot de passe incorrect").into_response()
     }
-
-    // recupérer le storage_key_encrypted et le salt_e2e pour la reponse
-    let user_keys_result = sqlx::query!(
-        "SELECT salt_e2e, storage_key_encrypted FROM users WHERE id = $1",
-        user.id
-    )
-    .fetch_one(&state.db_pool)
-    .await;
-
-    let keys = match user_keys_result {
-        Ok(ref keys) => keys,
-        Err(e) => {
-            eprintln!("Erreur SQL Récupération Clés Utilisateur: {:?}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
-        }
-    };
-    let salt_e2e = keys.salt_e2e.clone();
-    let salt_auth = user.salt_auth.clone();
-    let storage_key_encrypted = keys.storage_key_encrypted.clone();
-
-    let set_cookie_header = format!(
-        "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
-        token_raw,
-        days * 24 * 3600
-    );
-
-    let body = Json(json!({
-        "status": "success",
-        "message": "Connexion réussie",
-        "salt_auth": String::from_utf8(salt_auth).unwrap_or_default(),
-        "salt_e2e": String::from_utf8(salt_e2e).unwrap_or_default(),
-        "storage_key_encrypted": String::from_utf8(storage_key_encrypted).unwrap_or_default(),
-    }));
-
-    (
-        StatusCode::OK,
-        [(axum::http::header::SET_COOKIE, set_cookie_header.as_str())],
-        body,
-    )
-    .into_response()
 }
 
 async fn reset_token_life_time(
