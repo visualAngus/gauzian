@@ -9,7 +9,7 @@ use dotenvy;
 use axum::http::HeaderValue;
 use tower_http::cors::{CorsLayer, AllowOrigin};
 use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
-
+use axum_client_ip::SecureClientIpSource; 
 
 use gauzian_core::AppState; 
 // On importe les handlers depuis le module Auth
@@ -57,11 +57,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState { db_pool: pool };
 
     // 4. Définition des Routes
-    // On associe les URLs aux fonctions qui sont maintenant dans gauzian_auth
-    // Construire la liste d'origines autorisées depuis l'env `FRONT_ORIGINS`.
-    // Exemple :
-    //  FRONT_ORIGINS="https://192.168.1.74:5500,http://localhost:5173"
-    // Si non défini, on autorise `http://localhost:5173` par défaut (dev Vite).
     let origins_env = std::env::var("FRONT_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:5173".to_string());
     let origin_values: Vec<HeaderValue> = origins_env
@@ -79,9 +74,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("CORS origin(s) autorisée(s) : {:?}", origin_values);
 
-    // Utiliser AllowOrigin::custom pour accepter seulement les origines listées.
-    // Crée une copie pour passer à AllowOrigin::list (qui teste et renvoie
-    // l'origine correspondante si elle est présente dans la liste).
     let origin_list = origin_values.clone();
 
     let cors = CorsLayer::new()
@@ -89,14 +81,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([CONTENT_TYPE, AUTHORIZATION])
         .allow_credentials(true);
-    // 4. Définition des Routes
+
     let app = Router::new()
         .route("/auth/register", post(register_handler))
         .route("/auth/login", post(login_handler))
         .route("/auth/autologin", post(gauzian_auth::autologin_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
-        .layer(cors); // CORS qui gère l'origine, headers et credentials
+        .layer(tower_http::add_extension::AddExtensionLayer::new(
+            SecureClientIpSource::ConnectInfo,
+        ))
+        .layer(cors);
+
     // 5. Lancement du Serveur
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     println!("🚀 GAUZIAN Cloud lancé sur http://{}", addr);

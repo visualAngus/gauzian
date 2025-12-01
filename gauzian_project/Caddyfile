@@ -1,32 +1,47 @@
 {
-    # C'est la ligne qui sauve tout :
-    # Si le client (Windows) ne dit pas qui il veut voir, Caddy lui servira ce site par défaut.
-    default_sni 192.168.1.165
+    # 1. OPTION GLOBALE : On dit à Caddy de faire confiance aux IPs de Cloudflare.
+    # C'est ÇA qui permet à Caddy de lire les headers envoyés par le proxy.
+    servers {
+        trusted_proxies static private_ranges 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.0.0/16 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
+    }
+    
+    # Debug pour voir les logs Caddy si besoin
+    debug
 }
 
 # =======================================================
-# 1. BLOC ACCÈS LOCAL (Pour votre dev personnel)
+# 1. BLOC ACCÈS LOCAL
 # =======================================================
 monapi.dev {
     tls internal
     reverse_proxy api:3001
 }
 
-
 # =======================================================
-# 2. API PUBLIQUE (Pour les utilisateurs finaux)
+# 2. API PUBLIQUE
 # =======================================================
 gauzian.pupin.fr {
-    # Caddy s'occupe du certificat Let's Encrypt.
-    # Il utilise le port 80 pour la validation et le 443 pour le service.
-    # Proxy des appels API vers le service `api`.
     
     handle_path /api/* {
-        reverse_proxy api:3000
+        reverse_proxy api:3000 {
+            # GRANDE DIFFÉRENCE ICI :
+            # Puisque "trusted_proxies" est configuré en haut, la variable {client_ip} 
+            # contient maintenant la VRAIE IP du client (et plus celle de Cloudflare).
+            
+            # On force l'envoi de cette bonne IP dans X-Real-IP
+            header_up X-Real-IP {client_ip}
+            
+            # On laisse Caddy gérer X-Forwarded-For proprement (il ajoutera l'IP automatiquement)
+            # Mais si on veut forcer, on peut faire ça :
+            header_up X-Forwarded-For {client_ip}
+        }
     }
 
-    # Tout le reste est servi par Next.js
+    # Frontend Next.js
     handle {
-        reverse_proxy nextjs:3001
+        reverse_proxy nextjs:3001 {
+             # On fait pareil pour le front, au cas où vous en auriez besoin côté Next.js
+             header_up X-Real-IP {client_ip}
+        }
     }
 }

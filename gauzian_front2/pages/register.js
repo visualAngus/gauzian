@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
+const buf2hex = (buffer) => {
+    return [...new Uint8Array(buffer)]
+        .map((x) => x.toString(16).padStart(2, '0'))
+        .join('');
+};
+
 export default function RegisterPage() {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -15,13 +21,78 @@ export default function RegisterPage() {
         setMessage(null);
 
         try {
-            const res = await fetch('/api/auth/login', {
+
+
+            const enc = new TextEncoder();
+
+            // 1. Générer le "Sel" (Salt)
+            // C'est une valeur aléatoire nécessaire pour renforcer la transformation du mot de passe.
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            
+            const storageKey = await window.crypto.subtle.generateKey(
+                { name: "AES-GCM", length: 256 },
+                true, // extractable (on doit pouvoir l'exporter pour la chiffrer)
+                ["encrypt", "decrypt"]
+            );
+
+
+            const keyMaterial = await window.crypto.subtle.importKey(
+                "raw",
+                enc.encode(password),
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+
+
+            const passwordKey = await window.crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: salt,
+                    iterations: 100000, // 100k itérations pour ralentir les attaques brute-force
+                    hash: "SHA-256",
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                false,
+                ["encrypt", "decrypt"]
+            );
+            const iv = window.crypto.getRandomValues(new Uint8Array(12)); 
+            const rawStorageKey = await window.crypto.subtle.exportKey("raw", storageKey);
+
+            const encryptedStorageKeyBuffer = await window.crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                passwordKey,
+                rawStorageKey
+            );
+            const hashBuffer = await window.crypto.subtle.digest(
+                "SHA-256",
+                enc.encode(password)
+            );
+            const passwordHashForServer = buf2hex(hashBuffer);
+
+            // Note bien : on envoie 'passwordHashForServer' et non 'password'.
+            const payload = {
+                first_name: firstName,
+                last_name: lastName,
+                email,
+                password: passwordHashForServer, // Hash pour le login
+                // Les clés chiffrées (Le coffre-fort) :
+                keys: {
+                    salt: buf2hex(salt),
+                    iv: buf2hex(iv),
+                    encryptedStorageKey: buf2hex(encryptedStorageKeyBuffer)
+                }
+            };
+
+            const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ first_name: firstName, last_name: lastName, email, password }),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || 'Erreur');
+            
             setMessage({ type: 'success', text: data.message || 'Inscription réussie' });
             setFirstName('');
             setLastName('');
