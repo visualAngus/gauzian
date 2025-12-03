@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Définition des Routes
     let origins_env = std::env::var("FRONT_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        .unwrap_or_else(|_| "http://localhost:3001".to_string());
     let origin_values: Vec<HeaderValue> = origins_env
         .split(',')
         .map(|s| s.trim())
