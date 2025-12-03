@@ -195,13 +195,23 @@ pub async fn register_handler(
     
     // Gestion d'erreur de la DB (ex: Email déjà utilisé)
     match insert_result {
-        Ok(_) => (StatusCode::CREATED, "Utilisateur GAUZIAN créé (E2EE Active).").into_response(),
+        Ok(_) => {
+            let body = Json(json!({
+            "status": "success",
+            "message": "Utilisateur GAUZIAN créé (E2EE Active)."
+            }));
+            (StatusCode::CREATED, body).into_response()
+        }
         Err(e) => {
             eprintln!("Erreur SQL: {:?}", e);
             // Vérifie si c'est une erreur de duplicata (code 23505 en Postgres)
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur lors de la création de l'utilisateur. Email est déjà utilisé."
+            }));
             (
                 StatusCode::CONFLICT,
-                "Erreur lors de la création (Email déjà pris ?)",
+                body,
             )
             .into_response()
         }
