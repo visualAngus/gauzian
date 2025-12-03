@@ -22,67 +22,78 @@ export default function RegisterPage() {
 
         try {
 
+            // We'll mirror the bash script behavior using libsodium-wrappers:
+            // - Argon2id to derive `encrypted_password`
+            // - derive a key from that with `salt_e2e`
+            // - encrypt a generated `storage_key` with XChaCha20-Poly1305
+            // Note: this requires the `libsodium-wrappers` package in your project.
+            const sodiumLib = await import('libsodium-wrappers-sumo');
+            const sodium = sodiumLib.default || sodiumLib;
+            await sodium.ready;
 
             const enc = new TextEncoder();
 
-            // 1. Générer le "Sel" (Salt)
-            // C'est une valeur aléatoire nécessaire pour renforcer la transformation du mot de passe.
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            
-            const storageKey = await window.crypto.subtle.generateKey(
-                { name: "AES-GCM", length: 256 },
-                true, // extractable (on doit pouvoir l'exporter pour la chiffrer)
-                ["encrypt", "decrypt"]
+            // salts (16 bytes each) like the bash script
+            const salt_e2e = sodium.randombytes_buf(16);
+            const salt_auth = sodium.randombytes_buf(16);
+
+            // storage_key: random 160 bytes (to match openssl rand -base64 160)
+            const storageKeyRaw = sodium.randombytes_buf(160);
+
+            // 1) encrypted_password = Argon2id.kdf(32, password, salt_auth)
+            const passwordBytes = enc.encode(password);
+            const encryptedPassword = sodium.crypto_pwhash(
+                32,
+                passwordBytes,
+                salt_auth,
+                sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+                sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+                sodium.crypto_pwhash_ALG_ARGON2ID13
             );
 
-
-            const keyMaterial = await window.crypto.subtle.importKey(
-                "raw",
-                enc.encode(password),
-                { name: "PBKDF2" },
-                false,
-                ["deriveKey"]
+            // 2) derive a key from encryptedPassword + salt_e2e (Argon2id again)
+            const derivedKey = sodium.crypto_pwhash(
+                32,
+                encryptedPassword,
+                salt_e2e,
+                sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+                sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+                sodium.crypto_pwhash_ALG_ARGON2ID13
             );
 
-
-            const passwordKey = await window.crypto.subtle.deriveKey(
-                {
-                    name: "PBKDF2",
-                    salt: salt,
-                    iterations: 100000, // 100k itérations pour ralentir les attaques brute-force
-                    hash: "SHA-256",
-                },
-                keyMaterial,
-                { name: "AES-GCM", length: 256 },
-                false,
-                ["encrypt", "decrypt"]
+            // 3) encrypt storageKeyRaw with XChaCha20-Poly1305
+            const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                storageKeyRaw,
+                null,
+                null,
+                nonce,
+                derivedKey
             );
-            const iv = window.crypto.getRandomValues(new Uint8Array(12)); 
-            const rawStorageKey = await window.crypto.subtle.exportKey("raw", storageKey);
 
-            const encryptedStorageKeyBuffer = await window.crypto.subtle.encrypt(
-                { name: "AES-GCM", iv: iv },
-                passwordKey,
-                rawStorageKey
-            );
-            const hashBuffer = await window.crypto.subtle.digest(
-                "SHA-256",
-                enc.encode(password)
-            );
-            const passwordHashForServer = buf2hex(hashBuffer);
+            // combine nonce + ciphertext like the bash script
+            const combined = new Uint8Array(nonce.length + ciphertext.length);
+            combined.set(nonce, 0);
+            combined.set(ciphertext, nonce.length);
 
-            // Note bien : on envoie 'passwordHashForServer' et non 'password'.
+            // base64 versions for transport
+            const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
+            const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
+            const saltE2eB64 = b64NoPadding(salt_e2e);
+            const saltAuthB64 = b64NoPadding(salt_auth);
+            const storageKeyEncB64 = b64(combined);
+            const storageKeyEncRecB64 = b64(sodium.randombytes_buf(160));
+
+            // Build payload similar to the bash script (it sends plaintext password)
             const payload = {
                 first_name: firstName,
                 last_name: lastName,
                 email,
-                password: passwordHashForServer, // Hash pour le login
-                // Les clés chiffrées (Le coffre-fort) :
-                keys: {
-                    salt: buf2hex(salt),
-                    iv: buf2hex(iv),
-                    encryptedStorageKey: buf2hex(encryptedStorageKeyBuffer)
-                }
+                password, // plaintext password (matches bash script behavior)
+                salt_e2e: saltE2eB64,
+                salt_auth: saltAuthB64,
+                storage_key_encrypted: storageKeyEncB64,
+                storage_key_encrypted_recuperation: storageKeyEncRecB64
             };
 
             const res = await fetch('/api/auth/register', {
@@ -91,6 +102,7 @@ export default function RegisterPage() {
                 body: JSON.stringify(payload),
             });
             const data = await res.json();
+            console.log(data)
             if (!res.ok) throw new Error(data.message || 'Erreur');
             
             setMessage({ type: 'success', text: data.message || 'Inscription réussie' });
