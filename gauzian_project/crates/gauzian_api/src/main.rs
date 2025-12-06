@@ -1,5 +1,5 @@
 use axum::{
-    routing::post,
+    routing::{post, get},
     Router,
     http::Method, 
 };
@@ -13,7 +13,8 @@ use axum_client_ip::SecureClientIpSource;
 
 use gauzian_core::AppState; 
 // On importe les handlers depuis le module Auth
-use gauzian_auth::{register_handler, login_handler};
+use gauzian_auth::{register_handler, login_handler,autologin_handler};
+use gauzian_drive::{upload_handler, download_handler, folder_handler, files_handler, create_folder_handler};
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::http::Request;
@@ -85,7 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/auth/register", post(register_handler))
         .route("/auth/login", post(login_handler))
-        .route("/auth/autologin", post(gauzian_auth::autologin_handler))
+        .route("/auth/autologin", post(autologin_handler))
+        .route("/drive/upload", post(upload_handler))
+        .route("/drive/download", get(download_handler))
+        .route("/drive/folders", get(folder_handler))
+        .route("/drive/files", get(files_handler)) // Placeholder pour liste des fichiers
+        .route("/drive/new_folder", post(create_folder_handler)) // Nouvelle route pour créer un dossier
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAUZIAN - DRIVE</title>
+    <link rel="stylesheet" href="../styles/global.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+    <style>
+
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1><a href="/">GZDRIVE</a></h1>
+        <div class="div_user_profil">
+            <div class="div_profil_custom"></div>
+            <img class="user-image" src="../images/user_profile.png" alt="User Profile" onload="imageLoaded()">
+        </div>
+    </header>
+
+    <section>
+        <div class="div_left_part">
+            <nav>
+                <ul>
+                    <li><a href="#mon_drive" onclick="navigateToSection('mon_drive')">Mon Drive</a></li>
+                    <li><a href="#partages" onclick="navigateToSection('partages')">Partagés avec moi</a></li>
+                    <li><a href="#partages_par_moi" onclick="navigateToSection('partages_par_moi')">Partagés par moi</a>
+                    </li>
+                    <li><a href="#favoris" onclick="navigateToSection('favoris')">Favoris</a></li>
+                    <li><a href="#corbeille" onclick="navigateToSection('corbeille')">Corbeille</a></li>
+                </ul>
+            </nav>
+        </div>
+        <div class="div_right_part">
+            <div class="div_recher_filter">
+                <div class="div_recherche">
+                    <div class="div_barre_bnt">
+                        <!-- bnt recherche -->
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width:20px ; height: 20px;" viewBox="0 0 24 24"
+                            fill="currentColor">
+                            <path
+                                d="M11 2C15.968 2 20 6.032 20 11C20 15.968 15.968 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2ZM11 18C14.8675 18 18 14.8675 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18ZM19.4853 18.0711L22.3137 20.8995L20.8995 22.3137L18.0711 19.4853L19.4853 18.0711Z">
+                            </path>
+                        </svg>
+                        <!-- Search bar -->
+                        <input type="text" placeholder="Rechercher dans votre drive...">
+                        <!-- bnt clear -->
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width:20px ; height: 20px;" viewBox="0 0 24 24"
+                            fill="currentColor">
+                            <path
+                                d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z">
+                            </path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="div_filtres">
+                </div>
+
+            </div>
+            <div class="div_contenue">
+                <div class="div_path_graphique">
+                    <!-- Dynamic path will be displayed here -->
+                </div>
+                <div class="div_contenue_folder">
+                    <div class="folder_graph" id="1edd4b83-b40e-4de4-a0fe-04d96bd937d8">
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width:20px ; height: 20px;" viewBox="0 0 24 24"
+                            fill="currentColor">
+                            <path
+                                d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z">
+                            </path>
+                        </svg>
+                        <span>Tedsffs dfqsdqsd fsds fsd</span>
+                    </div>
+                </div>
+                <div class="div_contenue_file">
+                    <div class="file_graph" id="file-12345">
+                        <svg xmlns="http://www.w3.org/2000/svg" style="width:20px ; height: 20px;" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z">
+                            </path>
+                        </svg>
+                        <span>document.txt</span>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </section>
+
+
+    <script>
+        let active_path_with_id = [];
+
+
+        function imageLoaded() {
+            const placeholder = document.querySelector('.div_profil_custom');
+            const userImage = document.querySelector('.user-image');
+            placeholder.classList.add('hidden');
+            userImage.classList.add('loaded');
+        }
+        function display_path_graphique(path) {
+            const pathContainer = document.querySelector('.div_path_graphique');
+            pathContainer.innerHTML = ''; // Clear existing content
+
+            const pathParts = path.split('/').filter(part => part !== '');
+            pathParts.forEach((part, index) => {
+                const pathDiv = document.createElement('div');
+                pathDiv.classList.add('div_folder_path_grap');
+
+                const span = document.createElement('span');
+                span.textContent = part;
+                pathDiv.appendChild(span);
+                pathContainer.appendChild(pathDiv);
+
+                if (index < pathParts.length - 1) {
+                    const separatorDiv = document.createElement('div');
+                    separatorDiv.classList.add('div_folder_separator');
+
+                    const separatorSpan = document.createElement('span');
+                    separatorSpan.textContent = '/';
+                    separatorDiv.appendChild(separatorSpan);
+                    pathContainer.appendChild(separatorDiv);
+                }
+            });
+        }
+
+        function openFolder(folderId, folderName) {
+            active_path_with_id.push({ id: folderId, name: folderName });
+            const pathString = active_path_with_id.map(item => item.name).join('/');
+            display_path_graphique(pathString);
+            // Additional logic to load folder contents can be added here
+        }
+
+        function navigateToSection(sectionId) {
+            history.pushState(null, '', `#${sectionId}`);
+            // Optionally, you can add logic here to handle section visibility or other actions
+            console.log(`Navigated to section: ${sectionId}`);
+
+            // select the li corresponding to the sectionId and add a class 'active' to it, remove the class from other li
+            const navLinks = document.querySelectorAll('nav ul li a');
+            navLinks.forEach(link => {
+                if (link.getAttribute('href') === `#${sectionId}`) {
+                    link.classList.add('active');
+                    if (sectionId === 'mon_drive') {
+                        display_path_graphique('Mon Drive');
+                    } else {
+                        section_name = sectionId.split('_').map((word, index) =>
+                            index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
+                        ).join(' ');
+                        display_path_graphique(["Mon Drive", section_name].join('/'));
+                    }
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+
+        function load_folder(id_parent) {
+            // fetch un get 
+            fetch(`/api/drive/folder/${id_parent}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Folder data:', data);
+                    // Process and display folder data as needed
+                })
+                .catch((error) => {
+                    console.error('Error fetching folder data:', error);
+                });
+        }
+
+
+        // Handle initial navigation based on URL hash
+        window.addEventListener('load', () => {
+            const hash = window.location.hash.substring(1); // Remove the '#' character
+            if (hash) {
+                navigateToSection(hash);
+            }
+        });
+
+    </script>
+</body>
+
+</html>

@@ -1,7 +1,8 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, types::uuid};
 use serde::Deserialize;
 use chrono::NaiveDate;
-
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 // --- 1. État Partagé ---
 #[derive(Clone)]
@@ -18,6 +19,8 @@ pub struct RegisterRequest {
     pub salt_auth: String,
     pub storage_key_encrypted: String,
     pub storage_key_encrypted_recuperation: String,
+    pub folder_key_encrypted: String,
+    pub folder_metadata_encrypted: String,
 
     pub last_name: Option<String>,
     pub first_name: Option<String>,
@@ -39,4 +42,41 @@ pub struct LoginRequest {
     pub email: String,
     pub password: String,
     pub ip_address: Option<String>,
+}
+#[derive(Deserialize, Debug)]
+pub struct UploadRequest {
+    pub encrypted_blob: String,
+    pub encrypted_metadata: String,
+    pub encrypted_file_key: String,
+    pub media_type: String,
+    pub file_size: usize,
+    pub parent_folder_id: Option<Uuid>,
+}
+#[derive(Deserialize, Debug)]
+pub struct DownloadRequest {
+    // Le JS envoie "id_file", mais en Rust on préfère "file_id"
+    // On utilise serde pour faire le lien
+    #[serde(alias = "id_file")] 
+    pub file_id: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FolderRequest {
+    pub parent_folder_id: Option<Uuid>
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FolderCreationRequest {
+    pub parent_folder_id: Uuid,
+    pub encrypted_metadata: String,
+    pub encrypted_folder_key: String,
+}
+
+#[derive(Debug)]
+pub struct FolderRecord {
+    pub id: Uuid,
+    pub encrypted_metadata: Vec<u8>,
+    pub updated_at: Option<DateTime<Utc>>, // Option car timestamps parfois nullable par défaut
+    pub encrypted_folder_key: Vec<u8>,
+    pub is_root: bool,
 }

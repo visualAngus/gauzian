@@ -1,0 +1,368 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+}
+
+:root {
+    --dark-color: #0B1120;
+
+
+    --dark-gray-color: #334155;
+    --light-gray-color: #E2E8F0;
+    --colored-orange-gray-color: #ebedf1;
+
+
+    --orange-color: #F97316;
+    --light-orange-color: #FDBA74;
+    --ultra-light-orange-color: #FFF7ED;
+
+
+    --emmerald-color: #10B981;
+
+    --white-color: #F8FAFC;
+
+
+}
+
+body {
+    background-color: var(--white-color);
+    font-family: "Montserrat", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+}
+
+
+/* header */
+header {
+    width: 100%;
+    height: 81px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 2rem;
+
+    background-color: var(--white-color);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--dark-color);
+
+    cursor: pointer;
+}
+
+h1 a {
+    text-decoration: none;
+    color: inherit;
+}
+
+
+.div_user_profil {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+
+    background-color: var(--orange-color);
+
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.div_user_profil img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.div_profil_custom{
+    position: relative;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+}
+.div_profil_custom::after {
+    content: '';
+    background-color: var(--white-color);
+    font-size: 24px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80%;
+    height: 45%;
+
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+
+    border-radius: 15px 15px 0 0;
+}  
+
+.div_profil_custom::before {
+    content: '';
+    background-color: var(--white-color);
+    font-size: 24px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    border-radius: 50%;
+}  
+
+.user-image {
+    display: none;
+}
+
+.user-image.loaded {
+    display: block;
+}
+
+.div_profil_custom.hidden {
+    display: none;
+}
+
+
+
+/* section principale */
+
+section{
+
+    width: 100%;
+    height: calc(100vh - 81px);
+
+    display: flex;
+    flex-direction: row;
+}
+
+.div_left_part{
+    height: 100%;
+    width: 14.8%;
+    min-width: 200px;
+}
+.div_right_part{
+    height: 100%;
+    width: 85.2%;
+}
+
+nav {
+    width: 100%;
+    padding: 3rem 0.8rem;
+}
+
+nav ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+}
+
+nav ul li {
+    font-size: 0.9rem;
+    font-weight: 500;
+    width: 100%;
+}
+
+nav ul li a {
+    display: block;
+    text-decoration: none;
+    color: var(--dark-color);
+    transition: background-color 0.1s ease;
+    
+    padding: 8px 15px;
+    width: 100%;
+    color: var(--dark-color);
+    border-radius: 20px;
+}
+
+nav ul li a:hover {
+    background-color: var(--light-gray-color);
+}
+
+.active{
+    transition: background-color 0.2s ease-in-out;
+
+    background-color: var(--light-orange-color);
+}
+
+
+/* div_right_part */
+
+.div_right_part {
+    display: flex;
+    flex-direction: column;
+}
+.div_recher_filter{
+    width: 100%;
+    height: 61px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5rem;
+
+}
+.div_recherche{
+    width: 50%;
+    height: 100%;
+
+    padding-left: 50px;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+
+    gap: 10px;
+}
+#btn_upload_file:hover svg,#btn_new_folder:hover svg{
+    transition: fill 0.2s ease-in-out;
+    fill: var(--orange-color);
+    
+}
+.div_barre_bnt{
+    width: 80%;
+    height: 70%;
+    min-height: 40px;
+    min-width: 200px;
+    border: none;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    background-color: var(--colored-orange-gray-color);
+    border-radius: 30px;
+    padding: 0 15px;
+}
+.div_recherche input{
+    width: calc(100% - (30px + 30px));
+    height: 70%;
+    min-height: 40px;
+    border: none;
+    background-color: var(--colored-orange-gray-color);
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.div_recherche input:focus{
+    outline: none;
+}
+
+.div_filtres{
+    width: 50%;
+    height: 100%;   
+}
+
+.div_barre_bnt svg{
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+.div_barre_bnt svg:hover{
+    fill: var(--orange-color);
+}
+.div_barre_bnt svg:active{
+    transform: scale(0.9);
+}
+
+/* div_contenue */
+.div_contenue{
+    width: 100%;
+    height: calc(100vh - 142px);
+
+    padding: 0.2rem 50px;
+
+    overflow-y: auto;
+}
+
+.div_path_graphique{
+    width: 100%;
+    height: 50px;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    margin-bottom: 1rem;
+}
+
+.div_folder_path_grap{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    border-radius: 15px;
+    transition: 0.1s ease;
+}
+.div_folder_path_grap:hover{
+    cursor: pointer;
+    background-color: var(--light-gray-color);
+}
+.div_folder_path_grap span{
+    font-size: 1.6rem;
+    font-weight: 500;
+    color: var(--dark-color);
+}
+.div_folder_separator{
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--dark-gray-color);
+    user-select: none;
+}
+
+.div_contenue_folder, .div_contenue_file{
+    width: 100%;
+    height: auto;
+    min-height: 60px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+.folder_graph, .file_graph{
+    width: fit-content;
+    min-width: 150px;
+    height: 51px;
+    background-color: var(--colored-orange-gray-color);
+    border-radius: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+}
+.folder_graph svg{
+    width: 24px;
+    height: 24px;
+    color: var(--orange-color);
+}
+.folder_graph span{
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--dark-color);
+}
+.folder_graph:hover{
+    background-color: var(--light-gray-color);
+}

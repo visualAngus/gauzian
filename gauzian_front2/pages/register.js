@@ -21,27 +21,23 @@ export default function RegisterPage() {
         setMessage(null);
 
         try {
-
-            // We'll mirror the bash script behavior using libsodium-wrappers:
-            // - Argon2id to derive `encrypted_password`
-            // - derive a key from that with `salt_e2e`
-            // - encrypt a generated `storage_key` with XChaCha20-Poly1305
-            // Note: this requires the `libsodium-wrappers` package in your project.
             const sodiumLib = await import('libsodium-wrappers-sumo');
             const sodium = sodiumLib.default || sodiumLib;
             await sodium.ready;
 
             const enc = new TextEncoder();
 
-            // salts (16 bytes each) like the bash script
+            // --- 1. GÉNÉRATION DES SECRETS ---
             const salt_e2e = sodium.randombytes_buf(16);
             const salt_auth = sodium.randombytes_buf(16);
 
-            // storage_key: random 160 bytes (to match openssl rand -base64 160)
+            // La clé maîtresse brute (160 bytes)
             const storageKeyRaw = sodium.randombytes_buf(160);
 
-            // 1) encrypted_password = Argon2id.kdf(32, password, salt_auth)
+            // --- 2. DÉRIVATION DU MOT DE PASSE (Pour protéger la storageKey) ---
             const passwordBytes = enc.encode(password);
+            
+            // a) Hachage du mot de passe pour l'étape intermédiaire
             const encryptedPassword = sodium.crypto_pwhash(
                 32,
                 passwordBytes,
@@ -51,7 +47,7 @@ export default function RegisterPage() {
                 sodium.crypto_pwhash_ALG_ARGON2ID13
             );
 
-            // 2) derive a key from encryptedPassword + salt_e2e (Argon2id again)
+            // b) Dérivation de la KEK (Key Encryption Key)
             const derivedKey = sodium.crypto_pwhash(
                 32,
                 encryptedPassword,
@@ -61,7 +57,7 @@ export default function RegisterPage() {
                 sodium.crypto_pwhash_ALG_ARGON2ID13
             );
 
-            // 3) encrypt storageKeyRaw with XChaCha20-Poly1305
+            // --- 3. CHIFFREMENT DE LA STORAGE KEY (Le coffre-fort) ---
             const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
             const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
                 storageKeyRaw,
@@ -70,47 +66,94 @@ export default function RegisterPage() {
                 nonce,
                 derivedKey
             );
+            
+            // Concaténation [Nonce + Cipher]
+            const storageKeyEncrypted = new Uint8Array(nonce.length + ciphertext.length);
+            storageKeyEncrypted.set(nonce, 0);
+            storageKeyEncrypted.set(ciphertext, nonce.length);
 
-            // combine nonce + ciphertext like the bash script
-            const combined = new Uint8Array(nonce.length + ciphertext.length);
-            combined.set(nonce, 0);
-            combined.set(ciphertext, nonce.length);
 
-            // base64 versions for transport
+            // --- 4. PRÉPARATION DU DOSSIER RACINE (CORRECTION ICI !) ---
+            
+            // A. On dérive la clé utilisable (32 bytes) à partir de la grosse clé (160 bytes)
+            // C'est CRUCIAL pour que ça matche avec ton code de lecture (Drive)
+            const userMasterKey = sodium.crypto_generichash(32, storageKeyRaw);
+
+            // B. On crée la clé du dossier racine
+            const rootFolderKey = sodium.randombytes_buf(32);
+
+            // C. On chiffre la clé du dossier avec la userMasterKey (et PAS avec derivedKey)
+            const nonceRootKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedRootKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                rootFolderKey,
+                null,
+                null,
+                nonceRootKey,
+                userMasterKey // <--- On utilise bien la clé dérivée du storageKey
+            );
+            const finalRootFolderKey = new Uint8Array([...nonceRootKey, ...encryptedRootKeyBlob]);
+
+            // D. On chiffre les métadonnées du dossier racine avec sa propre clé
+            const folderMetadata = JSON.stringify({
+                name: 'Mon Drive', // Nom par défaut
+                created_at: new Date().toISOString(),
+            });
+
+            const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                sodium.from_string(folderMetadata),
+                null,
+                null,
+                nonceMeta,
+                rootFolderKey // <--- Chiffré avec la clé du dossier
+            );
+            const finalRootMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+
+
+            // --- 5. ENCODAGE BASE64 POUR L'ENVOI ---
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
             const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
-            const saltE2eB64 = b64NoPadding(salt_e2e);
-            const saltAuthB64 = b64NoPadding(salt_auth);
-            const storageKeyEncB64 = b64(combined);
-            const storageKeyEncRecB64 = b64(sodium.randombytes_buf(160));
 
-            // Build payload similar to the bash script (it sends plaintext password)
             const payload = {
                 first_name: firstName,
                 last_name: lastName,
                 email,
-                password, // plaintext password (matches bash script behavior)
-                salt_e2e: saltE2eB64,
-                salt_auth: saltAuthB64,
-                storage_key_encrypted: storageKeyEncB64,
-                storage_key_encrypted_recuperation: storageKeyEncRecB64
+                password, // Envoyer en clair (sur HTTPS) pour que le serveur hash pour l'auth, ou envoyer le hash selon ton back
+                
+                // Les sels
+                salt_e2e: b64NoPadding(salt_e2e),
+                salt_auth: b64NoPadding(salt_auth),
+                
+                // La clé principale chiffrée par le mot de passe
+                storage_key_encrypted: b64(storageKeyEncrypted),
+                
+                // (Optionnel) Clé de récupération - ici on met du dummy random pour l'exemple
+                storage_key_encrypted_recuperation: b64(sodium.randombytes_buf(160)), 
+                
+                // Le dossier racine chiffré par la clé principale
+                folder_key_encrypted: b64(finalRootFolderKey),
+                folder_metadata_encrypted: b64(finalRootMetadata),
             };
 
+            // --- 6. APPEL API ---
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-            const data = await res.json();
-            console.log(data)
-            if (!res.ok) throw new Error(data.message || 'Erreur');
             
-            setMessage({ type: 'success', text: data.message || 'Inscription réussie' });
-            setFirstName('');
-            setLastName('');
-            setEmail('');
-            setPassword('');
+            const data = await res.json();
+            console.log('Réponse serveur:', data);
+
+            if (!res.ok) throw new Error(data.message || 'Erreur lors de l\'inscription');
+
+            setMessage({ type: 'success', text: 'Inscription réussie ! Redirection...' });
+            
+            // Optionnel : Auto-login ou redirection vers /login
+            // window.location.href = '/login';
+
         } catch (err) {
+            console.error(err);
             setMessage({ type: 'error', text: err.message });
         } finally {
             setLoading(false);
