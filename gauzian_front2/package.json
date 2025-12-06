@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "formidable": "^3.5.4",
     "libsodium-wrappers": "^0.7.15",
     "libsodium-wrappers-sumo": "^0.7.15",
     "next": "^14.0.0",

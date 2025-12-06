@@ -7,6 +7,7 @@ edition = "2021"
 # --- Tes Modules ---
 gauzian_core = { path = "../gauzian_core" }
 gauzian_auth = { path = "../gauzian_auth" }
+gauzian_drive = { path = "../gauzian_drive" }
 
 # --- Framework Web ---
 axum = "0.7"

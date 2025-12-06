@@ -9,6 +9,8 @@ export default function Home() {
         Inscription: <a href="/register">/register</a>
         <br />
         Connexion: <a href="/login">/login</a>
+        <br />
+        Drive: <a href="/drive">/drive</a>
       </p>
     </main>
   )
