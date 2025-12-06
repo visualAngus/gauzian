@@ -1,0 +1,712 @@
+import React, { useState, useEffect, useRef } from 'react';
+import _sodium from 'libsodium-wrappers';
+// Importez vos images si elles sont dans src, sinon utilisez le chemin public
+// import userProfileImg from '../images/user_profile.png'; 
+
+// --- FONCTIONS UTILITAIRES (Sodium & Helpers) ---
+
+const hexToBuf = (hex) => {
+  if (!hex) return new Uint8Array();
+  return new Uint8Array(hex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
+};
+
+const bufToB64 = (buf) => {
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+};
+
+export default function Drive() {
+  // --- ÉTATS (STATE) ---
+  const [activeSection, setActiveSection] = useState(null);
+  const [path, setPath] = useState([]); // Le fil d'ariane
+  const [folders, setFolders] = useState([]); // Pour stocker la liste des dossiers/fichiers
+  const [files, setFiles] = useState([]); // Pour stocker la liste des fichiers
+  const [imageLoadedState, setImageLoadedState] = useState(false);
+  // varible qui contient l'id du dossier dans lequel on est
+  const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  // root id
+  const [rootFolderId, setRootFolderId] = useState(null);
+
+  // États pour l'upload (venant de votre code React)
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null); // Pour déclencher l'input file caché
+
+  // --- LOGIQUE METIER (Encryption / Upload / Download) ---
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      encodeAndSend(selectedFile);
+    }
+  };
+
+  const handelFolderChange = (e) => {
+    // a implémenter plus tard
+  };
+  const handleDownload = async (id_file) => {
+    try {
+      const response = await fetch(`/api/drive/download?id_file=${id_file}`, {
+        method: 'GET',
+      });
+      if (!response.ok) throw new Error('Erreur lors du téléchargement du fichier.');
+      const data = await response.json();
+      await _sodium.ready;
+      const sodium = _sodium;
+      console.log('Sodium ready.');
+
+      const storageKey = localStorage.getItem('storageKey');
+      if (!storageKey) {
+        throw new Error('Clé de stockage non trouvée. Veuillez vous connecter.');
+      }
+
+      const rawStorageKey = sodium.from_hex(storageKey);
+      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
+
+      // --- 1. Déchiffrement de la clé du fichier ---
+      const encryptedFileKeyB64 = data.encrypted_file_key;
+      const encryptedFileKeyBuf = sodium.from_base64(encryptedFileKeyB64, sodium.base64_variants.ORIGINAL);
+      const nonceKey = encryptedFileKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextKey = encryptedFileKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextKey,
+        null,
+        nonceKey,
+        encryptionKey
+      );
+
+      // --- 2. Déchiffrement des métadonnées ---
+      const encryptedMetadataB64 = data.encrypted_metadata;
+      const encryptedMetadataBuf = sodium.from_base64(encryptedMetadataB64, sodium.base64_variants.ORIGINAL);
+      const nonceMeta = encryptedMetadataBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextMeta = encryptedMetadataBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const metadataBuf = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextMeta,
+        null,
+        nonceMeta,
+        fileKey
+      );
+      const metadataStr = sodium.to_string(metadataBuf);
+      const metadata = JSON.parse(metadataStr);
+      console.log('Metadata déchiffrées :', metadata);
+
+      // --- 3. Déchiffrement du fichier ---
+      const encryptedBlobB64 = data.encrypted_blob;
+      const encryptedBlobBuf = sodium.from_base64(encryptedBlobB64, sodium.base64_variants.ORIGINAL);
+      const nonceFile = encryptedBlobBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextFile = encryptedBlobBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const fileBuf = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextFile,
+        null,
+        nonceFile,
+        fileKey
+      );
+
+      // Création d'un Blob pour le téléchargement
+      const blob = new Blob([fileBuf], { type: metadata.filetype });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = metadata.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      console.log('Fichier téléchargé et déchiffré avec succès.');
+
+
+    } catch (error) {
+      console.error('Error during file download:', error);
+    }
+  };
+
+  const newFolderFunction = async (folderName = "Nouveau dossier") => {
+    // 1. Initialisation
+    const sodiumLib = await import('libsodium-wrappers-sumo');
+    const sodium = sodiumLib.default || sodiumLib;
+    await sodium.ready;
+
+    // Définition des helpers (si pas déjà définis ailleurs)
+    const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
+
+    // 2. Récupération de la clé maîtresse depuis le localStorage
+    const storageKeyHex = localStorage.getItem('storageKey');
+    if (!storageKeyHex) {
+      throw new Error('Clé de stockage non trouvée. Veuillez vous connecter.');
+    }
+
+    // On suppose ici que tu as stocké la clé en Hexadécimal lors du login.
+    // Si tu l'as stockée en base64, utilise sodium.from_base64()
+    const rawStorageKey = sodium.from_hex(storageKeyHex);
+
+    // 3. A. Dérivation de la clé de chiffrement (Même logique que le Root)
+    // C'est la clé qui sert à déverrouiller les clés des dossiers
+    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+
+    // 4. B. Création de la clé UNIQUE pour ce nouveau dossier
+    const folderKey = sodium.randombytes_buf(32); // Renommé pour plus de clarté (ce n'est pas le root)
+
+    // 5. C. Chiffrement de la clé du dossier avec la userMasterKey
+    const nonceFolderKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+    const encryptedFolderKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+      folderKey,
+      null,
+      null,
+      nonceFolderKey,
+      userMasterKey // On utilise la clé dérivée du storageKey
+    );
+    // Concaténation Nonce + Cipher
+    const finalEncryptedFolderKey = new Uint8Array([...nonceFolderKey, ...encryptedFolderKeyBlob]);
+
+    // 6. D. Chiffrement des métadonnées avec la clé DU DOSSIER
+    const folderMetadata = JSON.stringify({
+      name: folderName,
+      created_at: new Date().toISOString(),
+    });
+
+    const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+    const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+      sodium.from_string(folderMetadata),
+      null,
+      null,
+      nonceMeta,
+      folderKey // <--- Important : on utilise la clé spécifique de ce dossier
+    );
+    const finalEncryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+
+    // 7. Envoi API
+    // Assure-toi que activeFolderId est bien défini (passé en argument ou via un hook/store)
+    if (!activeFolderId) throw new Error("Aucun dossier parent sélectionné");
+
+    const res = await fetch('/api/drive/new_folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        encrypted_folder_key: b64(finalEncryptedFolderKey),
+        encrypted_metadata: b64(finalEncryptedMetadata),
+        parent_folder_id: activeFolderId
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Erreur création dossier');
+
+    console.log('Dossier créé avec succès:', data);
+    // Rafraîchir la vue du dossier courant
+    getFolderStructure(activeFolderId);
+  };
+
+  const encodeAndSend = async (selectedFile) => {
+    setUploading(true);
+    console.log('Starting file encryption and upload...');
+
+    try {
+      await _sodium.ready;
+      const sodium = _sodium;
+
+      const storageKey = localStorage.getItem('storageKey');
+      if (!storageKey) throw new Error('Clé de stockage manquante.');
+
+      const rawStorageKey = sodium.from_hex(storageKey);
+      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
+
+      const reader = new FileReader();
+
+      reader.onload = async (event) => {
+        try {
+          const fileBytes = new Uint8Array(event.target.result);
+          const metadata = JSON.stringify({
+            filename: selectedFile.name,
+            filesize: selectedFile.size,
+            filetype: selectedFile.type,
+          });
+
+          const fileKey = sodium.randombytes_buf(32);
+
+          // 1. Chiffrement Fichier
+          const nonceFile = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+          const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            fileBytes, null, null, nonceFile, fileKey
+          );
+          const finalBlob = new Uint8Array([...nonceFile, ...ciphertext]);
+
+          // 2. Chiffrement Métadonnées
+          const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+          const encryptedMetadata = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            sodium.from_string(metadata), null, null, nonceMeta, fileKey
+          );
+          const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
+
+          // 3. Chiffrement Clé Fichier
+          const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+          const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            fileKey, null, null, nonceKey, encryptionKey
+          );
+          const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
+
+          // Envoi API
+          const payload = {
+            encrypted_blob: bufToB64(finalBlob),
+            encrypted_metadata: bufToB64(finalMetadata),
+            encrypted_file_key: bufToB64(finalFileKey),
+            media_type: selectedFile.type || 'application/octet-stream',
+            file_size: finalBlob.length,
+            parent_folder_id: activeFolderId,
+          };
+
+          const response = await fetch('/api/drive/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) throw new Error('Erreur upload.');
+
+          console.log('Succès upload');
+          setUploading(false);
+          setTimeout(() => {
+            getFolderStructure(activeFolderId);
+            getFileStructure(activeFolderId);
+            console.log('Refreshing folder structure after upload...');
+          }, 500);
+
+        } catch (error) {
+          console.error('Encryption logic error:', error);
+          setUploading(false);
+        }
+      };
+      reader.readAsArrayBuffer(selectedFile);
+
+    } catch (error) {
+      console.error('Init error:', error);
+      setUploading(false);
+    }
+  };
+
+  const processFolder = async (folder) => {
+    await _sodium.ready;
+    const sodium = _sodium;
+
+    const storageKeyHex = localStorage.getItem('storageKey');
+    if (!storageKeyHex) throw new Error('Clé de stockage manquante.');
+
+    // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
+    const rawStorageKey = sodium.from_hex(storageKeyHex);
+    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+
+    try {
+      // --- ÉTAPE A : Déchiffrer la Clé du Dossier (FolderKey) ---
+      // On a besoin de folder.encrypted_folder_key renvoyé par le SQL
+      const encryptedKeyBuffer = sodium.from_base64(folder.encrypted_folder_key, sodium.base64_variants.ORIGINAL);
+
+      const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextKey,
+        null,
+        nonceKey,
+        userMasterKey // On utilise la clé de l'utilisateur ici
+      );
+
+      // --- ÉTAPE B : Déchiffrer les Métadonnées avec la FolderKey ---
+      const encryptedMetaBuffer = sodium.from_base64(folder.encrypted_metadata, sodium.base64_variants.ORIGINAL);
+
+      const nonceMeta = encryptedMetaBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextMeta = encryptedMetaBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      const decryptedMetadataBytes = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextMeta,
+        null,
+        nonceMeta,
+        folderKey // On utilise la clé du dossier qu'on vient de trouver !
+      );
+
+      // On parse le JSON
+      const metadata = JSON.parse(sodium.to_string(decryptedMetadataBytes));
+
+      // On retourne l'objet complet fusionné pour l'affichage
+      return {
+        ...folder,
+        name: metadata.name, // Le nom déchiffré
+        // ... autres infos du metadata si besoin
+      };
+
+    } catch (error) {
+      console.error("Erreur déchiffrement dossier:", folder.id, error);
+      return { ...folder, name: "Erreur déchiffrement" };
+    }
+  };
+
+  // une boucle toute les 1s
+
+  const processFile = async (file) => {
+    await _sodium.ready;
+    const sodium = _sodium;
+
+    const storageKeyHex = localStorage.getItem('storageKey');
+    if (!storageKeyHex) throw new Error('Clé de stockage manquante.');
+
+    // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
+    const rawStorageKey = sodium.from_hex(storageKeyHex);
+    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+
+    try {
+      // --- ÉTAPE A : Déchiffrer la Clé du Fichier (FileKey) ---
+      const encryptedKeyBuffer = sodium.from_base64(file.encrypted_file_key, sodium.base64_variants.ORIGINAL);
+
+      const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextKey,
+        null,
+        nonceKey,
+        userMasterKey // On utilise la clé de l'utilisateur ici
+      );
+
+      // --- ÉTAPE B : Déchiffrer les Métadonnées avec la FileKey ---
+      const encryptedMetaBuffer = sodium.from_base64(file.encrypted_metadata, sodium.base64_variants.ORIGINAL);
+
+      const nonceMeta = encryptedMetaBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextMeta = encryptedMetaBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      const decryptedMetadataBytes = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextMeta,
+        null,
+        nonceMeta,
+        fileKey // On utilise la clé du fichier qu'on vient de trouver !
+      );
+
+      // On parse le JSON
+      const metadata = JSON.parse(sodium.to_string(decryptedMetadataBytes));
+
+      // On retourne l'objet complet fusionné pour l'affichage
+      return {
+        ...file,
+        name: metadata.filename, // Le nom déchiffré
+        size: metadata.filesize,
+        type: metadata.filetype,
+        // ... autres infos du metadata si besoin
+      };
+
+    } catch (error) {
+      console.error("Erreur déchiffrement fichier:", file.id, error);
+      return { ...file, name: "Erreur déchiffrement" };
+    }
+  };
+
+  const getFolderStructure = async (id_parent) => {
+    let url = `/api/drive/folders?parent_folder_id=${id_parent}`;
+    if (id_parent) {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') { // Adapte selon ton retour API exact
+
+        const decryptedFolders = [];
+
+        for (const folder of data.folders) {
+          // On appelle la fonction qui fait le double déchiffrement
+          const cleanFolder = await processFolder(folder);
+          decryptedFolders.push(cleanFolder);
+        }
+
+        setFolders(decryptedFolders);
+      }
+    }
+    else {
+      getRootFolder();
+    }
+  };
+
+  const getFileStructure = async (id_parent) => {
+    let url = `/api/drive/files?parent_folder_id=${id_parent}`;
+    console.log("Fetching files for folder ID:", id_parent);
+    if (id_parent) {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') { // Adapte selon ton retour API exact
+        console.log("Fichiers reçus:", data);
+        const decryptedFiles = [];
+
+        for (const file of data.files) {
+          // On appelle la fonction qui fait le double déchiffrement
+          const cleanFile = await processFile(file);
+          decryptedFiles.push(cleanFile);
+        }
+
+        setFiles(decryptedFiles);
+      }
+    }
+  }
+
+  const getRootFolder = async () => {
+    const res = await fetch('/api/drive/folders', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await res.json();
+    if (data.status === 'success' && data.folders.length > 0) {
+      const rootId = data.folders[0].folder_id;
+
+      setActiveFolderId(rootId);
+      setRootFolderId(rootId);
+      setActiveSection('mon_drive');
+
+      // CORRECTION ICI : On met un tableau d'objets
+      setPath([{ id: rootId, name: 'Mon Drive' }]);
+
+      return data.folders[0];
+    }
+    throw new Error('Impossible de récupérer le dossier racine.');
+  };
+
+  // --- NAVIGATION & INTERFACE ---
+
+  const navigateToSection = (sectionId) => {
+    setActiveSection(sectionId);
+
+    if (sectionId === 'mon_drive') {
+      // Retour à la racine (on utilise le rootFolderId stocké précédemment)
+      if (rootFolderId) {
+        setActiveFolderId(rootFolderId);
+        setPath([{ id: rootFolderId, name: 'Mon Drive' }]);
+      }
+    } else {
+      // Pour les autres sections (Corbeille, etc.), on peut simuler un path
+      // Note: id null ou spécifique si vous gérez des vues spéciales
+      const formatName = sectionId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      setPath([{ id: sectionId, name: formatName }]);
+      // Ici il faudra probablement une logique pour charger les fichiers "Favoris" ou "Corbeille" au lieu de getFolderStructure
+    }
+  };
+
+  const handlePathClick = (item, index) => {
+    // On garde le chemin du début (0) jusqu'à l'élément cliqué inclus (index + 1)
+    const newPath = path.slice(0, index + 1);
+    setPath(newPath);
+
+    // On charge le dossier correspondant
+    setActiveFolderId(item.id);
+  };
+  const handleFolderClick = (folderId, folderName) => {
+    if (!folderId || !folderName) return;
+    if (activeFolderId === folderId) return;
+
+    // CORRECTION : On ajoute un objet au tableau existant
+    setPath((prevPath) => [
+      ...prevPath,
+      { id: folderId, name: folderName }
+    ]);
+
+    setActiveFolderId(folderId);
+    
+  };
+  useEffect(() => {
+    if (activeFolderId === null) {
+      getRootFolder()
+      getFileStructure(activeFolderId);
+    } else {
+      getFolderStructure(activeFolderId);
+      getFileStructure(activeFolderId);
+    }
+  }, [activeFolderId]);
+  // --- RENDU (JSX) ---
+  return (
+    <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
+
+      <header>
+        <h1><a href="/">GZDRIVE</a></h1>
+        <div className="div_user_profil">
+          {!imageLoadedState && <div className="div_profil_custom"></div>}
+          <img
+            className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
+            src="/images/user_profile.png" // Assurez-vous que l'image est dans le dossier 'public'
+            alt="User Profile"
+            onLoad={() => setImageLoadedState(true)}
+          />
+        </div>
+      </header>
+
+      <section>
+        <div className="div_left_part">
+          <nav>
+            <ul>
+              {/* Liste de navigation dynamique */}
+              {[
+                { id: 'mon_drive', label: 'Mon Drive' },
+                { id: 'partages', label: 'Partagés avec moi' },
+                { id: 'partages_par_moi', label: 'Partagés par moi' },
+                { id: 'favoris', label: 'Favoris' },
+                { id: 'corbeille', label: 'Corbeille' }
+              ].map((item) => (
+                <li key={item.id}>
+                  <a
+                    href={`#${item.id}`}
+                    className={activeSection === item.id ? 'active' : ''}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigateToSection(item.id);
+                    }}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
+
+        <div className="div_right_part">
+          <div className="div_recher_filter">
+            <div className="div_recherche">
+              <div className="div_barre_bnt">
+                {/* Bouton Recherche (SVG) */}
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11 2C15.968 2 20 6.032 20 11C20 15.968 15.968 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2ZM11 18C14.8675 18 18 14.8675 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18ZM19.4853 18.0711L22.3137 20.8995L20.8995 22.3137L18.0711 19.4853L19.4853 18.0711Z"></path>
+                </svg>
+
+                <input type="text" placeholder="Rechercher dans votre drive..." />
+
+                {/* Bouton Clear (SVG) */}
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"></path>
+                </svg>
+
+                {/* --- AJOUT : BOUTON UPLOAD --- */}
+                {/* On utilise un label ou un bouton pour déclencher l'input file caché */}
+
+              </div>
+              <button
+                onClick={() => fileInputRef.current.click()}
+                style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
+                disabled={uploading}
+                title="Uploader un fichier"
+                id="btn_upload_file"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3ZM5 5V19H19V5H5ZM11 11V7H13V11H17V13H13V17H11V13H7V11H11Z"></path></svg>
+
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
+
+              {/* bouton pour rajouter un dossier */}
+              <button
+                onClick={() => newFolderFunction()}
+                style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
+                disabled={uploading}
+                title="Créer un nouveau dossier"
+                id="btn_new_folder"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5ZM4 5V19H20V7H11.5858L9.58579 5H4ZM11 12V9H13V12H16V14H13V17H11V14H8V12H11Z"></path></svg>
+
+              </button>
+            </div>
+
+            <div className="div_filtres">
+              {uploading && <span>Upload en cours...</span>}
+            </div>
+          </div>
+
+          <div className="div_contenue">
+            <div className="div_path_graphique">
+              {path.map((part, index) => (
+                <React.Fragment key={index}> {/* Utiliser index ou part.id comme key */}
+                  <div
+                    className="div_folder_path_grap"
+                    onClick={() => handlePathClick(part, index)} // Appel de la nouvelle fonction
+                    style={{ cursor: 'pointer' }}
+                    id={part.id}
+                  >
+                    {/* On affiche bien part.name */}
+                    <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
+                      {part.name}
+                    </span>
+                  </div>
+
+                  {/* Séparateur (ne pas l'afficher après le dernier élément) */}
+                  {index < path.length - 1 && (
+                    <div className="div_folder_separator">
+                      <span>/</span>
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* Contenu des dossiers (Liste générée dynamiquement) */}
+            <div className="div_contenue_folder">
+              {folders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className="folder_graph"
+                  id={folder.folder_id}
+                  onClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+                  </svg>
+                  <span>{folder.name}</span>
+                </div>
+              ))}
+
+              {/* Un exemple statique si la liste est vide pour tester l'affichage */}
+              {folders.length === 0 && (
+                <div className="folder_graph">
+                  <span>Aucun dossier dans ce répertoire.</span>
+                </div>
+              )}
+            </div>
+            <div className="div_contenue_file">
+              {files.map((file) => (
+                <div
+                  key={file.file_id}
+                  className="file_graph"
+                  id={file.file_id}
+                  onClick={() => handleDownload(file.file_id)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path></svg>
+                  <span>{file.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

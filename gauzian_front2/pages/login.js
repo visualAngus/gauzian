@@ -3,15 +3,63 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 
 const buf2hex = (buffer) => {
-    return [...new Uint8Array(buffer)]
-        .map((x) => x.toString(16).padStart(2, '0'))
-        .join('');
+  return [...new Uint8Array(buffer)]
+    .map((x) => x.toString(16).padStart(2, '0'))
+    .join('');
 };
 
 const hex2buf = (hex) => {
-    const bytes = new Uint8Array(hex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
-    return bytes.buffer;
+  const bytes = new Uint8Array(hex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
+  return bytes.buffer;
 };
+
+const hexToBuf = (hex) => {
+  if (!hex || typeof hex !== 'string') return new Uint8Array();
+  const cleaned = hex.replace(/^0x/, '').replace(/\s+/g, '');
+  try {
+    return new Uint8Array(hex2buf(cleaned));
+  } catch (e) {
+    return new Uint8Array();
+  }
+};
+
+const b64ToBuf = (b64) => {
+  if (!b64) return new Uint8Array();
+  // support base64url variants
+  b64 = String(b64).trim();
+  b64 = b64.replace(/\s+/g, '');
+  b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4;
+  if (pad) b64 += '='.repeat(4 - pad);
+  try {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  } catch (e) {
+    console.warn('b64ToBuf decode failed for value (prefix 80):', (b64 || '').slice(0, 80), e);
+    return new Uint8Array();
+  }
+};
+
+const bufToB64 = (buf) => {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+};
+
+
+// fonction qui cache tout les éléments de la page pendant le login
+const hidePageElementsDuringLogin = (hide) => {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const elements = document.querySelectorAll('body > *:not(script):not(style)');
+    elements.forEach(el => {
+      el.style.display = hide ? 'none' : '';
+    });
+  }
+};
+
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,26 +68,38 @@ export default function LoginPage() {
   const [message, setMessage] = useState(null);
   useEffect(() => {
     async function autoLogin() {
+      hidePageElementsDuringLogin(true);
       setLoading(true);
       setMessage(null);
 
-      try {
-        const res = await fetch('/api/auth/autologin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setMessage({ type: 'success', text: 'Connecté automatiquement' });
-          // redirigé vers la page d'accueil ou tableau de bord
-          // Par exemple, utiliser router.push('/') si vous utilisez Next.js router
-          window.location.href = '/';
+      const storageKey_from_storage = localStorage.getItem('storageKey');
+
+      if (storageKey_from_storage) {
+        try {
+          const res = await fetch('/api/auth/autologin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setMessage({ type: 'success', text: 'Connecté automatiquement' });
+            // redirigé vers la page d'accueil ou tableau de bord
+            // Par exemple, utiliser router.push('/') si vous utilisez Next.js router
+            window.location.href = '/';
+          }
+          hidePageElementsDuringLogin(false);
+        } catch (err) {
+          hidePageElementsDuringLogin(false);
+          setMessage({ type: 'error', text: err.message });
+        } finally {
+          setLoading(false);
         }
-      } catch (err) {
-        setMessage({ type: 'error', text: err.message });
-      } finally {
+      }
+      else { 
+        hidePageElementsDuringLogin(false);
         setLoading(false);
       }
+
     }
 
     autoLogin();
@@ -64,87 +124,117 @@ export default function LoginPage() {
 
     try {
       const enc = new TextEncoder();
-      const hashBuffer = await window.crypto.subtle.digest(
-          "SHA-256",
-          enc.encode(password)
-      );
-      const passwordHashForServer = buf2hex(hashBuffer);
 
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ email, password: passwordHashForServer, client_ip }),
+        body: JSON.stringify({ email, password, client_ip }),
       });
       const data = await res.json();
+      console.log(data)
+
       if (!res.ok) throw new Error(data.message || 'Erreur');
-       // Si le serveur nous renvoie le coffre (vault), on l'ouvre !
-      if (data.vault && data.vault_salt && data.vault_iv) {
-          setMessage({ type: 'success', text: 'Connexion API OK. Déchiffrement des clés...' });
+      // Si le serveur nous renvoie le coffre (vault), on l'ouvre !
+      if (data.salt_e2e && data.storage_key_encrypted && data.salt_auth) {
+        setMessage({ type: 'success', text: 'Connexion Déchiffrement des clés...' });
+        hidePageElementsDuringLogin(true);
 
-          // 1. Récupérer les ingrédients binaires
-          const salt = hex2buf(data.vault_salt);
-          const iv = hex2buf(data.vault_iv);
-          const encryptedVault = hex2buf(data.vault);
+        try {
+          const sodiumLib = await import('libsodium-wrappers-sumo');
+          const sodium = sodiumLib.default || sodiumLib;
+          await sodium.ready;
 
-          // 2. Recréer la clé du mot de passe (PasswordKey)
-          const keyMaterial = await window.crypto.subtle.importKey(
-              "raw",
-              enc.encode(password), // On utilise le mot de passe brut tapé par l'user
-              { name: "PBKDF2" },
-              false,
-              ["deriveKey"]
+
+
+          const passwordBytes = enc.encode(password);
+
+          // Decode salts from base64 into Uint8Array and validate lengths
+          const saltAuthBuf = b64ToBuf(data.salt_auth);
+          const saltE2eBuf = b64ToBuf(data.salt_e2e);
+
+          if (saltAuthBuf.length !== sodium.crypto_pwhash_SALTBYTES || saltE2eBuf.length !== sodium.crypto_pwhash_SALTBYTES) {
+            throw new Error("Erreur lors du déchiffrement des clés : longueur de sel invalide");
+            hidePageElementsDuringLogin(false);
+          }
+
+          const encryptedPassword = sodium.crypto_pwhash(
+            32,
+            passwordBytes,
+            saltAuthBuf,
+            sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+            sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+            sodium.crypto_pwhash_ALG_ARGON2ID13
           );
 
-          const passwordKey = await window.crypto.subtle.deriveKey(
-              {
-                  name: "PBKDF2",
-                  salt: salt,
-                  iterations: 100000,
-                  hash: "SHA-256",
-              },
-              keyMaterial,
-              { name: "AES-GCM", length: 256 },
-              false,
-              ["decrypt"]
+          const derivedKey = sodium.crypto_pwhash(
+            32,
+            encryptedPassword,
+            saltE2eBuf,
+            sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+            sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+            sodium.crypto_pwhash_ALG_ARGON2ID13
           );
+          // Debug: show derived key and salts (prefixes) to compare with register
 
-          // 3. Déchiffrer le coffre (Vault) pour obtenir la StorageKey
-          const decryptedStorageKeyBuffer = await window.crypto.subtle.decrypt(
-              { name: "AES-GCM", iv: iv },
-              passwordKey,
-              encryptedVault
-          );
+          // déchiffrement de storage_key_encrypted
+          const encryptedDataBuf = b64ToBuf(data.storage_key_encrypted);
 
-          // 4. Importer la StorageKey pour qu'elle soit utilisable par JS
-          const storageKey = await window.crypto.subtle.importKey(
-              "raw",
-              decryptedStorageKeyBuffer,
-              { name: "AES-GCM" },
-              true,
-              ["encrypt", "decrypt"]
-          );
+          const npubBytes = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES || 24;
+          if (!encryptedDataBuf || encryptedDataBuf.length <= npubBytes) {
+            throw new Error(`Donnée chiffrée trop courte: ${encryptedDataBuf.length} bytes (expected > ${npubBytes})`);
+            hidePageElementsDuringLogin(false);
+          }
 
-          console.log("🔓 CLÉ MAÎTRE DÉCHIFFRÉE AVEC SUCCÈS !");
-          
-          // STOCKAGE TEMPORAIRE DE LA CLÉ
-          // Dans une vraie app, utilise un Context React (ex: AuthContext)
-          // Pour l'instant, on la met dans window pour tester que ça marche.
-          window.GAUZIAN_MASTER_KEY = storageKey;
+          const nonce = encryptedDataBuf.slice(0, npubBytes);
+          const ciphertext = encryptedDataBuf.slice(npubBytes);
 
-          setMessage({ type: 'success', text: 'Connexion réussie & Clés déchiffrées !' });
-          
-          // Redirection vers le tableau de bord après court délai
-          setTimeout(() => {
-              window.location.href = '/';
-          }, 1000);
+          if (ciphertext == null) {
+            throw new Error('ciphertext is null or undefined after slicing encrypted data');
+            hidePageElementsDuringLogin(false);
+          }
+
+          const ciphertextU8 = new Uint8Array(ciphertext);
+          const nonceU8 = new Uint8Array(nonce);
+          const keyU8 = new Uint8Array(derivedKey);
+
+          let decryptedStorageKey = null;
+          try {
+            // libsodium binding expects (nsec, ciphertext, ad, nonce, key)
+            // nsec is unused for XChaCha20-Poly1305; pass null
+            decryptedStorageKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+              null,
+              ciphertextU8,
+              null,
+              nonceU8,
+              keyU8
+            );
+          } catch (innerErr) {
+            console.error('AEAD decrypt threw:', innerErr && innerErr.message, innerErr);
+            hidePageElementsDuringLogin(false);
+            throw innerErr;
+          }
+
+          const storageKeyHex = buf2hex(decryptedStorageKey.buffer);
+
+          // Ici, vous pouvez stocker storageKeyHex dans le contexte global, localStorage, etc.
+          // Par exemple :
+          localStorage.setItem('storageKey', storageKeyHex);
+        } catch (e) {
+          hidePageElementsDuringLogin(false);
+          throw new Error("Erreur lors du déchiffrement des clés : " + e.message);
+        }
+        // redirigé vers la page d'accueil ou tableau de bord
+        // Par exemple, utiliser router.push('/') si vous utilisez Next.js router
+        window.location.href = '/';
 
       } else {
-          // Cas bizarre : login OK mais pas de vault renvoyé ?
-          throw new Error("Erreur critique : Aucune clé de chiffrement reçue du serveur.");
+        hidePageElementsDuringLogin(false);
+        throw new Error("Erreur critique : Aucune clé de chiffrement reçue du serveur.");
       }
 
     } catch (err) {
+      hidePageElementsDuringLogin(false);
       setMessage({ type: 'error', text: err.message });
     } finally {
       setLoading(false);
