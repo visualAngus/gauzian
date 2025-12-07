@@ -62,6 +62,7 @@ export default function Drive() {
 
       const storageKey = localStorage.getItem('storageKey');
       if (!storageKey) {
+        window.location.href = '/login';
         throw new Error('Clé de stockage non trouvée. Veuillez vous connecter.');
       }
 
@@ -141,7 +142,8 @@ export default function Drive() {
     // 2. Récupération de la clé maîtresse depuis le localStorage
     const storageKeyHex = localStorage.getItem('storageKey');
     if (!storageKeyHex) {
-      throw new Error('Clé de stockage non trouvée. Veuillez vous connecter.');
+      window.location.href = '/login';
+      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
     }
 
     // On suppose ici que tu as stocké la clé en Hexadécimal lors du login.
@@ -214,7 +216,10 @@ export default function Drive() {
       const sodium = _sodium;
 
       const storageKey = localStorage.getItem('storageKey');
-      if (!storageKey) throw new Error('Clé de stockage manquante.');
+      if (!storageKey) {
+        window.location.href = '/login';
+        throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+      }
 
       const rawStorageKey = sodium.from_hex(storageKey);
       const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
@@ -297,7 +302,10 @@ export default function Drive() {
     const sodium = _sodium;
 
     const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) throw new Error('Clé de stockage manquante.');
+    if (!storageKeyHex) {
+      window.location.href = '/login';
+      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+    }
 
     // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
     const rawStorageKey = sodium.from_hex(storageKeyHex);
@@ -356,7 +364,10 @@ export default function Drive() {
     const sodium = _sodium;
 
     const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) throw new Error('Clé de stockage manquante.');
+    if (!storageKeyHex) {
+      window.location.href = '/login';
+      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+    }
 
     // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
     const rawStorageKey = sodium.from_hex(storageKeyHex);
@@ -441,7 +452,6 @@ export default function Drive() {
 
   const getFileStructure = async (id_parent) => {
     let url = `/api/drive/files?parent_folder_id=${id_parent}`;
-    console.log("Fetching files for folder ID:", id_parent);
     if (id_parent) {
       const res = await fetch(url, {
         method: 'GET',
@@ -483,12 +493,52 @@ export default function Drive() {
       setRootFolderId(rootId);
       setActiveSection('mon_drive');
 
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set('folderId', rootId);
+      window.history.pushState({}, '', newUrl);
+
       // CORRECTION ICI : On met un tableau d'objets
       setPath([{ id: rootId, name: 'Mon Drive' }]);
 
       return data.folders[0];
     }
     throw new Error('Impossible de récupérer le dossier racine.');
+  };
+
+  const loadFullPathFromFolderId = async (folderId) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const folderIdParam = urlParams.get('folderId');
+
+    if (!folderIdParam) getRootFolder();
+    else {
+      let url = `/api/drive/full_path?folder_id=${folderIdParam}`;
+      console.log("Fetching full path for folder ID:", folderIdParam);
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        const fullPathArray = data.full_path;
+        console.log("Full path data received:", fullPathArray);
+
+        const reconstructedPath = [];
+        for (const item of fullPathArray) {
+          // Déchiffrement du nom de chaque dossier dans le chemin
+          const decryptedFolder = await processFolder(item);
+          reconstructedPath.push({ id: item.folder_id, name: decryptedFolder.name });
+        }
+
+        setPath(reconstructedPath);
+        setActiveFolderId(folderIdParam);
+        return;
+      }
+      console.error("Erreur récupération full path:", data.message);
+
+    };
   };
 
   // --- NAVIGATION & INTERFACE ---
@@ -516,12 +566,23 @@ export default function Drive() {
     const newPath = path.slice(0, index + 1);
     setPath(newPath);
 
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('folderId', item.id);
+    window.history.pushState({}, '', newUrl);
+
+
     // On charge le dossier correspondant
     setActiveFolderId(item.id);
   };
   const handleFolderClick = (folderId, folderName) => {
     if (!folderId || !folderName) return;
     if (activeFolderId === folderId) return;
+
+
+    // rajoute dans l'url le folderId
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('folderId', folderId);
+    window.history.pushState({}, '', newUrl);
 
     // CORRECTION : On ajoute un objet au tableau existant
     setPath((prevPath) => [
@@ -530,16 +591,56 @@ export default function Drive() {
     ]);
 
     setActiveFolderId(folderId);
-    
+
   };
+  const opent_menu_contextual_folder = (folderId, x, y) => {
+    // creer une div qui s'affiche a la position x,y
+    // avec des options comme renommer, supprimer, partager, etc.
+
+    let menu = document.getElementById("contextual_menu_folder");
+    menu.style.display = "flex";
+    menu.style.left = x + "px";
+    menu.style.top = y + "px";
+    // stocker l'id du dossier dans un data attribute
+    menu.setAttribute("data-folder-id", folderId);
+
+    document.addEventListener("click", function handler(event) {
+      if (!menu.contains(event.target)) {
+        menu.style.display = "none";
+        document.removeEventListener("click", handler);
+
+      }
+    });
+
+  }
+
+
   useEffect(() => {
     if (activeFolderId === null) {
-      getRootFolder()
+      loadFullPathFromFolderId();
       getFileStructure(activeFolderId);
     } else {
       getFolderStructure(activeFolderId);
       getFileStructure(activeFolderId);
     }
+
+    // si on clique quelque part sur la page
+
+    const handleClickAnywhere = (event) => {
+      if (event.target.closest('.folder_graph')) return;
+      document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
+        el.classList.remove('selected_folder');
+      });
+    };
+
+    document.addEventListener('click', handleClickAnywhere);
+
+    return () => {
+      document.removeEventListener('click', handleClickAnywhere);
+    };
+
+
+
   }, [activeFolderId]);
   // --- RENDU (JSX) ---
   return (
@@ -559,6 +660,20 @@ export default function Drive() {
       </header>
 
       <section>
+        <div id='contextual_menu_folder' >
+          <div className="option_menu_contextual">
+            <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M15.7279 9.57627L14.3137 8.16206L5 17.4758V18.89H6.41421L15.7279 9.57627ZM17.1421 8.16206L18.5563 6.74785L17.1421 5.33363L15.7279 6.74785L17.1421 8.16206ZM7.24264 20.89H3V16.6473L16.435 3.21231C16.8256 2.82179 17.4587 2.82179 17.8492 3.21231L20.6777 6.04074C21.0682 6.43126 21.0682 7.06443 20.6777 7.45495L7.24264 20.89Z"></path></svg>
+            Renommer
+          </div>
+          <div className="option_menu_contextual">
+            <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M17 6H22V8H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V8H2V6H7V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V6ZM18 8H6V20H18V8ZM9 11H11V17H9V11ZM13 11H15V17H13V11ZM9 4V6H15V4H9Z"></path></svg>
+            Supprimer
+          </div>
+          <div className="option_menu_contextual">
+            <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.58582L18.2071 8.79292L16.7929 10.2071L13 6.41424V16H11V6.41424L7.20711 10.2071L5.79289 8.79292L12 2.58582ZM3 18V14H5V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V14H21V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18Z"></path></svg>
+            Partager
+          </div>
+        </div>
         <div className="div_left_part">
           <nav>
             <ul>
@@ -668,14 +783,27 @@ export default function Drive() {
               ))}
             </div>
 
-            {/* Contenu des dossiers (Liste générée dynamiquement) */}
+
             <div className="div_contenue_folder">
               {folders.map((folder) => (
                 <div
                   key={folder.id}
                   className="folder_graph"
                   id={folder.folder_id}
-                  onClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                  onClick={() => {
+                    // Enlever la classe 'selected_folder' de tous les dossiers
+                    document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
+                      el.classList.remove('selected_folder');
+                    });
+                    // Ajouter la classe 'selected_folder' au dossier cliqué
+                    document.getElementById(folder.folder_id).classList.add('selected_folder');
+                  }}
+                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                  style={{ cursor: 'pointer' }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
+                  }}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>

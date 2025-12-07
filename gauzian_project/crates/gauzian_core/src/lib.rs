@@ -65,6 +65,11 @@ pub struct FolderRequest {
     pub parent_folder_id: Option<Uuid>
 }
 
+#[derive(Deserialize, Debug)]   
+pub struct FullPathRequest {
+    pub folder_id: Uuid,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct FolderCreationRequest {
     pub parent_folder_id: Uuid,
