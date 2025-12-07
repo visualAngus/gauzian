@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use gauzian_auth::verify_session_token;
-use gauzian_core::{AppState, DownloadRequest, FolderRequest, UploadRequest,FolderRecord,FolderCreationRequest};
+use gauzian_core::{AppState, DownloadRequest, FolderRequest, UploadRequest,FolderRecord,FolderCreationRequest,FullPathRequest};
 use sqlx::PgPool;
 use serde_json::json;
 
@@ -483,6 +483,100 @@ pub async fn create_folder_handler(
                 "message": "Erreur serveur lors de la création du dossier"
             }));
             return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    };
+}
+
+pub async fn full_path_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(payload): Query<FullPathRequest>,
+) -> impl IntoResponse {
+    // verifier le token
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let select_full_path_result = sqlx::query!(
+        r#"
+        WITH RECURSIVE folder_path AS (
+            SELECT id, parent_id, encrypted_metadata, fa.encrypted_folder_key 
+            FROM folders
+            inner join folder_access fa on fa.folder_id = folders.id 
+            WHERE id = $1 AND fa.user_id = $2
+            UNION ALL
+            SELECT f.id, f.parent_id, f.encrypted_metadata, fa.encrypted_folder_key 
+            FROM folders f
+            inner join folder_access fa on fa.folder_id = f.id 
+            INNER JOIN folder_path fp ON f.id = fp.parent_id
+        )
+        SELECT id, parent_id, encrypted_metadata, encrypted_folder_key 
+        FROM folder_path
+        ORDER BY parent_id NULLS FIRST
+        "#,
+        payload.folder_id,
+        user_id,
+    ).fetch_all(&state.db_pool).await;
+
+    match select_full_path_result {
+        Ok(records) => {
+            let full_path: Vec<_> = records.into_iter().map(|record| {
+                json!({
+                    "folder_id": record.id,
+                    "encrypted_metadata": record.encrypted_metadata
+                        .and_then(|data| String::from_utf8(data).ok())
+                        .unwrap_or_default(),
+                    "encrypted_folder_key": record.encrypted_folder_key
+                        .and_then(|data| String::from_utf8(data).ok())
+                        .unwrap_or_default(),
+                    "is_root": record.parent_id.is_none(),
+                })
+            }).collect();
+
+            let body = Json(json!({
+                "status": "success",
+                "full_path": full_path,
+            }));
+            return (StatusCode::OK, body).into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur récupération chemin complet dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Chemin non trouvé ou accès refusé"
+            }));
+            return (StatusCode::NOT_FOUND, body).into_response();
         }
     };
 }

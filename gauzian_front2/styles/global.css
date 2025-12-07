@@ -366,3 +366,44 @@ nav ul li a:hover {
 .folder_graph:hover{
     background-color: var(--light-gray-color);
 }
+
+.selected_folder {
+    background-color: var(--light-orange-color) !important;
+}
+
+.selected_folder:hover {
+    background-color: var(--light-orange-color) !important;
+}
+
+/* contextual_menu_folder */
+
+#contextual_menu_folder {
+    position: absolute;
+    display: none;
+    background-color: var(--white-color);
+    border: none;
+    border-radius: 2px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 10000;
+    padding: 10px 0;
+
+    flex-direction: column;
+}
+
+.option_menu_contextual{
+    display: flex;
+    text-decoration: none;
+    color: var(--dark-color);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    padding: 10px 20px;
+
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+.option_menu_contextual:hover {
+    background-color: var(--light-gray-color);
+}
