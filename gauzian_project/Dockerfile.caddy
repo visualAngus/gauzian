@@ -1,0 +1,12 @@
+# Dockerfile.caddy
+
+FROM caddy:builder AS builder
+
+# On ajoute le module rate-limit
+RUN xcaddy build \
+    --with github.com/mholt/caddy-ratelimit
+
+FROM caddy:latest
+
+# On remplace le binaire par celui qu'on vient de compiler
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

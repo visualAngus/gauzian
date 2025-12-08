@@ -43,7 +43,6 @@ async fn hash_token(token: &str) -> String {
 }
 
 async fn create_token() -> Result<(String, String), String> {
-    // generation d'un token aleatoire de 32 bytes
     let mut token_bytes: [u8; 32] = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut token_bytes);
     let token_b64 = BASE64.encode(token_bytes);
@@ -63,6 +62,16 @@ pub async fn register_handler(
     headers: HeaderMap, // FromRequestParts extractors MUST come before body extractors
     Json(payload): Json<RegisterRequest>, // Désérialisation automatique du body JSON
 ) -> impl IntoResponse {
+
+    let client_ip = headers
+        .get("x-real-ip")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("IP Inconnue"); // Fallback si le header est absent
+
+    // 2. LOG POUR VÉRIFICATION
+    // Regarde ta console serveur quand tu fais une requête
+    println!("🔍 DEBUG IP CLIENT: {}", client_ip);
+    
     // 1. Gestion Locale / Timezone (inchangé)
     let raw_locale = headers
         .get(ACCEPT_LANGUAGE)
@@ -79,8 +88,7 @@ pub async fn register_handler(
     let time_zone = payload.time_zone.unwrap_or("UTC".to_string());
 
     let salt_auth = payload.salt_auth.clone();
-    // génération salt pour le hash du mot de passe (argon2)
-    // encodage du mot de passe avec Argon2
+
     let password_hash = match tokio::task::spawn_blocking(move || {
         if salt_auth.is_empty() {
             return Err("Le sel d'authentification est vide".to_string());
