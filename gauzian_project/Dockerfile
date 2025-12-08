@@ -24,13 +24,13 @@ COPY . .
 RUN touch src/main.rs
 RUN cargo build --release
 
-# 4. Stage de Production (Léger et sécurisé)
+# 4. Stage de Caddy Builder (Pour construire Caddy avec le module rate-limit)
 FROM debian:bookworm-slim as prod
 WORKDIR /app
-# On installe juste les lib runtime nécessaires (OpenSSL, certificats CA)
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
-# On récupère le binaire compilé depuis l'étape 'builder'
+
+# On copie JUSTE le serveur Rust
 COPY --from=builder /app/target/release/gauzian /app/server
-# On expose le port (doc uniquement)
+
 EXPOSE 8080
 CMD ["/app/server"]
