@@ -30,7 +30,7 @@ gauzian.pupin.fr {
             # La clé est l'IP réelle du client (grâce à trusted_proxies)
             key {client_ip}
             # 5 requêtes...
-            events 5
+            events 50
             # ... par fenêtre de 1 seconde
             window 1s
         }
