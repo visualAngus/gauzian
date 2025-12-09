@@ -350,6 +350,8 @@ export default function Drive() {
         name: metadata.name, // Le nom déchiffré
         created_at: metadata.created_at,
         updated_at: metadata.updated_at ||  metadata.created_at,
+        // key
+        encrypted_folder_key: folder.encrypted_folder_key,
         // ... autres infos du metadata si besoin
       };
 
@@ -910,6 +912,7 @@ renameOption.onclick = () => {
                     data-folder-name={part.name}
                     data-folder-created-at={part.created_at}
                     data-folder-updated-at={part.updated_at}
+                    data-encrypted-folder-key={part.encrypted_folder_key}
                   >
                     {/* On affiche bien part.name */}
                     <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
