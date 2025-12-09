@@ -275,7 +275,16 @@ export default function Drive() {
 
           console.log('All chunks encrypted, merging...');
           // Fusionner tous les chunks chiffrés
-          const finalBlob = new Uint8Array(chunks.reduce((acc, val) => [...acc, ...val], []));
+          // Fusionner tous les chunks chiffrés AVEC AVANCEMENT
+          let mergedArray = [];
+          for (let i = 0; i < chunks.length; i++) {
+            mergedArray.push(...chunks[i]);
+            // Ici, tu peux calculer la progression du merging :
+            // Exemple : setProgress(Math.round(((i + 1) / chunks.length) * 100));
+            console.log(`Merging chunk ${i + 1} / ${chunks.length}`);
+          }
+          const finalBlob = new Uint8Array(mergedArray);
+          console.log('File encryption completed.');
 
           // 2. Chiffrement Métadonnées
           const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
@@ -290,7 +299,7 @@ export default function Drive() {
             fileKey, null, null, nonceKey, encryptionKey
           );
           const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
-
+          console.log('Metadata and file key encryption completed.');
           // Envoi API
           const payload = {
             encrypted_blob: bufToB64(finalBlob),
@@ -300,12 +309,13 @@ export default function Drive() {
             file_size: finalBlob.length,
             parent_folder_id: activeFolderId,
           };
-
+          console.log('Sending upload request to server...');
           const response = await fetch('/api/drive/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+          console.log('Upload response received.');
 
           if (!response.ok) throw new Error('Erreur upload.');
 
