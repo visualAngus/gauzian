@@ -64,8 +64,15 @@ services:
       - api # Le front a souvent besoin de l'API pour s'initialiser
 
   # --- Service 4 : Caddy (Reverse Proxy) ---
+# ... (les autres services ne changent pas)
+
+  # --- Service 4 : Caddy (Reverse Proxy) ---
   caddy:
-    image: caddy:latest
+    # REMPLACE : image: caddy:latest
+    # PAR :
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     container_name: gauzian_proxy
     ports:
       - "80:80"
