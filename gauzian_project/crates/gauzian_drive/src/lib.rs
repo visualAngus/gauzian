@@ -5,8 +5,9 @@ use axum::{
 };
 use gauzian_auth::verify_session_token;
 use gauzian_core::{
-    AppState, DownloadRequest, FolderCreationRequest, FolderRecord, FolderRenameRequest,
-    FolderRequest, FullPathRequest, UploadRequest, UploadStreamingRequest,OpenStreamingUploadRequest
+    AppState, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest, FolderRecord,
+    FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest, UploadRequest,
+    UploadStreamingRequest,
 };
 use serde_json::json;
 use sqlx::PgPool;
@@ -658,7 +659,6 @@ pub async fn rename_folder_handler(
     };
 }
 
-#[axum::debug_handler]
 pub async fn open_streaming_upload_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -800,6 +800,82 @@ pub async fn upload_streaming_handler(
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de l'insertion du chunk"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    }
+}
+
+pub async fn finish_streaming_upload(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<FinishStreamingUploadRequest>,
+) -> impl IntoResponse {
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let vault_file_insert_result = sqlx::query!(
+        r#"
+        INSERT INTO vault_files (owner_id, encrypted_metadata,media_type,file_size,is_shared, created_at, updated_at,is_compressed,folder_id,streaming_upload_id,is_chunked)
+        VALUES ($1, $2, $3, $4, false, NOW(), NOW(), false, $5, $6, $7)
+        RETURNING id
+        "#,
+        user_id,
+        payload.encrypted_metadata.as_bytes(),
+        payload.media_type,
+        payload.file_size as i64,
+        payload.parent_folder_id,
+        payload.temp_upload_id,
+        true,
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match vault_file_insert_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Upload streaming finalisé avec succès",
+            }));
+            return (StatusCode::OK, body).into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur finalisation upload streaming dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors de la finalisation de l'upload streaming"
             }));
             return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }

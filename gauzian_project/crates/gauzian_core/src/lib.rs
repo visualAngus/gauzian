@@ -43,7 +43,6 @@ pub struct UserKeys {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
-    pub ip_address: Option<String>,
 }
 #[derive(Deserialize, Debug)]
 pub struct UploadRequest {
@@ -105,8 +104,17 @@ pub struct UploadStreamingRequest {
 #[derive(Deserialize, Debug)]
 pub struct OpenStreamingUploadRequest {
     pub encrypted_metadata: String,
-    pub encrypted_file_key: Option<String>,
     pub media_type: String,
     pub file_size: usize,
-    pub parent_folder_id: Option<Uuid>,
+    pub parent_folder_id: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FinishStreamingUploadRequest {
+    pub temp_upload_id: Uuid,
+    pub encrypted_file_key: String,
+    pub encrypted_metadata: String,
+    pub media_type: String,
+    pub file_size: usize,
+    pub parent_folder_id: Uuid,
 }
