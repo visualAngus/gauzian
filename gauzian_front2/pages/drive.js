@@ -1168,7 +1168,7 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
                     if (file.is_chunked) {
                       handleDownloadChunked(file.file_id, file.name);
                     } else {
-                      handleDownloadFile(file.file_id, file.name);
+                      handleDownload(file.file_id, file.name);
                     }
                   }}
                   style={{ cursor: 'pointer' }}
