@@ -891,7 +891,6 @@ renameOption.onclick = () => {
                 </svg>
 
                 {/* --- AJOUT : BOUTON UPLOAD --- */}
-                /* On utilise un label ou un bouton pour déclencher l'input file caché */}
 
                 </div>
                 <button
