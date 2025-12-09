@@ -678,19 +678,7 @@ renameOption.onclick = () => {
 
             // const rawStorageKey = sodium.from_hex(storageKeyHex);
             // const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-            
-            
-            // afficher tout les attributs data du dossier
-            console.log("Attributs data du dossier :", folderId);
-            for (let attr of folder.attributes) {
-                if (attr.name.startsWith("data-")) {
-                    console.log(attr.name + " = " + attr.value);
-                }
-            }
-
-
-
-
+            console.log(folder.getAttribute("data-encrypted-folder-key"));
             // Déchiffrer la clé du dossier
             // const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
             // const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
