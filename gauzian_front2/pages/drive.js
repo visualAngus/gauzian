@@ -582,6 +582,9 @@ export default function Drive() {
     if (!folderId || !folderName) return;
     if (activeFolderId === folderId) return;
 
+    // cacher tout les dossiers, et les fichiers affichés
+    setFolders([]);
+    setFiles([]);
 
     // rajoute dans l'url le folderId
     const newUrl = new URL(window.location);
