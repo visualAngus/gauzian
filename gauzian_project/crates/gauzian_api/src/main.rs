@@ -1,31 +1,44 @@
-use axum::{
-    routing::{post, get},
-    Router,
-    http::Method, 
-};
-use std::net::SocketAddr;
-use sqlx::postgres::PgPoolOptions;
-use dotenvy;
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::HeaderValue;
-use tower_http::cors::{CorsLayer, AllowOrigin};
-use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
-use axum_client_ip::SecureClientIpSource; 
+use axum::{
+    http::Method,
+    routing::{get, post},
+    Router,
+};
+use axum_client_ip::SecureClientIpSource;
+use dotenvy;
+use sqlx::postgres::PgPoolOptions;
+use std::net::SocketAddr;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use gauzian_core::AppState; 
+use gauzian_core::AppState;
 // On importe les handlers depuis le module Auth
-use gauzian_auth::{register_handler, login_handler,autologin_handler};
-use gauzian_drive::{upload_handler, download_handler, folder_handler, files_handler, create_folder_handler,full_path_handler, rename_folder_handler,open_streaming_upload_handler,upload_streaming_handler};
+use axum::body::Body;
+use axum::http::Request;
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::http::Request;
-use axum::body::Body;
+use gauzian_auth::{autologin_handler, login_handler, register_handler};
+use gauzian_drive::{
+    create_folder_handler, download_handler, files_handler, finish_streaming_upload,
+    folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
+    upload_handler, upload_streaming_handler,
+};
 
 // Middleware de debug pour logger l'origine et les méthodes (utile pour CORS)
 async fn log_origin(req: Request<Body>, next: Next) -> Response {
     if let Some(origin) = req.headers().get("origin") {
-        eprintln!("➡️ Requête entrante: {} {} Origin: {:?}", req.method(), req.uri(), origin);
+        eprintln!(
+            "➡️ Requête entrante: {} {} Origin: {:?}",
+            req.method(),
+            req.uri(),
+            origin
+        );
     } else {
-        eprintln!("➡️ Requête entrante: {} {} (no Origin)", req.method(), req.uri());
+        eprintln!(
+            "➡️ Requête entrante: {} {} (no Origin)",
+            req.method(),
+            req.uri()
+        );
     }
     // Log si c'est une préflight OPTIONS
     if req.method() == Method::OPTIONS {
@@ -39,13 +52,13 @@ async fn log_origin(req: Request<Body>, next: Next) -> Response {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Chargement de la configuration
     match dotenvy::dotenv() {
-    Ok(path) => println!("✅ .env chargé depuis : {:?}", path),
-    Err(e) => println!("⚠️ Impossible de charger .env : {:?}", e),
-}
+        Ok(path) => println!("✅ .env chargé depuis : {:?}", path),
+        Err(e) => println!("⚠️ Impossible de charger .env : {:?}", e),
+    }
 
     // 2. Connexion Base de Données
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set in .env file");
+    let database_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
 
     println!("⏳ Connexion à la base de données...");
     let pool = PgPoolOptions::new()
@@ -58,8 +71,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState { db_pool: pool };
 
     // 4. Définition des Routes
-    let origins_env = std::env::var("FRONT_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:3001".to_string());
+    let origins_env =
+        std::env::var("FRONT_ORIGINS").unwrap_or_else(|_| "http://localhost:3001".to_string());
     let origin_values: Vec<HeaderValue> = origins_env
         .split(',')
         .map(|s| s.trim())
@@ -90,12 +103,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/upload", post(upload_handler))
         .route("/drive/download", get(download_handler))
         .route("/drive/folders", get(folder_handler))
-        .route("/drive/files", get(files_handler)) 
-        .route("/drive/new_folder", post(create_folder_handler)) 
-        .route("/drive/full_path", get(full_path_handler)) 
-        .route("/drive/rename_folder", post(rename_folder_handler)) 
-        .route("/drive/open_streaming_upload", post(open_streaming_upload_handler))
-        .route("/drive/upload_chunk", post(upload_streaming_handler))       
+        .route("/drive/files", get(files_handler))
+        .route("/drive/new_folder", post(create_folder_handler))
+        .route("/drive/full_path", get(full_path_handler))
+        .route("/drive/rename_folder", post(rename_folder_handler))
+        .route(
+            "/drive/open_streaming_upload",
+            post(open_streaming_upload_handler),
+        )
+        .route("/drive/upload_chunk", post(upload_streaming_handler))
+        .route(
+            "/drive/finish_streaming_upload",
+            post(finish_streaming_upload_handler),
+        )
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(
@@ -109,8 +129,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     // On active ConnectInfo pour pouvoir récupérer l'IP dans le login_handler
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
