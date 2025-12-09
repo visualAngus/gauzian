@@ -114,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/upload_chunk", post(upload_streaming_handler))
         .route(
             "/drive/finish_streaming_upload",
-            post(finish_streaming_upload_handler),
+            post(finish_streaming_upload),
         )
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))

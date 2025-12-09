@@ -176,7 +176,9 @@ pub async fn download_handler(
         Ok(record) => {
             let body = Json(json!({
                 "status": "success",
-                "encrypted_blob": String::from_utf8(record.encrypted_blob).unwrap_or_default(),
+                "encrypted_blob": record.encrypted_blob
+                    .and_then(|data| String::from_utf8(data).ok())
+                    .unwrap_or_default(),
                 "encrypted_metadata": String::from_utf8(record.encrypted_metadata).unwrap_or_default(),
                 "encrypted_file_key": String::from_utf8(record.encrypted_file_key).unwrap_or_default(),
                 "is_compressed": record.is_compressed,
