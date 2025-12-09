@@ -225,8 +225,10 @@ export default function Drive() {
       const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
 
       const reader = new FileReader();
+      console.log('Reading file:', selectedFile.name);
 
       reader.onload = async (event) => {
+        console.log('File read successfully, starting encryption...');
         try {
           const fileBytes = new Uint8Array(event.target.result);
           const metadata = JSON.stringify({
@@ -246,6 +248,7 @@ export default function Drive() {
           let offset = 0;
           let chunks = [];
           let totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+          console.log(`Total chunks to encrypt: ${totalChunks}`);
 
           while (offset < totalSize) {
             const end = Math.min(offset + CHUNK_SIZE, totalSize);
@@ -267,6 +270,7 @@ export default function Drive() {
             offset = end;
           }
 
+          console.log('All chunks encrypted, merging...');
           // Fusionner tous les chunks chiffrés
           const finalBlob = new Uint8Array(chunks.reduce((acc, val) => [...acc, ...val], []));
 
