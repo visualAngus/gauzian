@@ -867,10 +867,30 @@ pub async fn finish_streaming_upload(
 
     match vault_file_insert_result {
         Ok(_) => {
-            let body = Json(json!({
-                "status": "success",
-                "message": "Upload streaming finalisé avec succès",
-            }));
+
+            let create_access_result = sqlx::query!(
+                r#"
+                INSERT INTO file_access (file_id, user_id, encrypted_file_key,permission_level,joined_at)
+                VALUES ($1, $2, $3, 'owner', NOW())
+                "#,
+                vault_file_insert_result.unwrap().id,
+                user_id,
+                payload.encrypted_file_key.as_bytes(),
+            )
+            .execute(&state.db_pool)
+            .await;
+
+            match create_access_result{
+                Ok(_) => {},
+                Err(e) => {
+                    eprintln!("Erreur insertion accès fichier dans la BDD: {:?}", e);
+                    let body = Json(json!({
+                        "status": "error",
+                        "message": "Erreur serveur lors de l'insertion de l'accès au fichier"
+                    }));
+                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                }
+            }
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
