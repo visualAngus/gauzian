@@ -337,6 +337,7 @@ nav ul li a:hover {
     gap: 20px;
     align-items: flex-start;
     justify-content: flex-start;
+    margin-bottom: 10px;
 }
 .folder_graph, .file_graph{
     width: fit-content;
