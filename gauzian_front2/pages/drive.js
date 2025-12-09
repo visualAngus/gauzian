@@ -413,22 +413,21 @@ export default function Drive() {
     // pub media_type: String,
     // pub file_size: usize,
     // pub parent_folder_id: Uuid,
+
+    const uploadRes = await fetch('/api/drive/upload_chunk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        temp_upload_id: temp_upload_id,
+        chunk_index: chunkIndex,
+        total_chunks: totalChunks,
+        encrypted_chunk: bufToB64(finalChunk)
+      })
+    });
+
+    if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${chunkIndex}`);
   }
 
-  const final = await fetch('/api/drive/finish_streaming_upload', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      temp_upload_id: temp_upload_id,
-      encrypted_file_key: bufToB64(finalFileKey),
-      encrypted_metadata: bufToB64(finalMetadata),
-      media_type: file.type || 'application/octet-stream',
-      file_size: file.size,
-      parent_folder_id: activeFolderId
-    }),
-  });
-
-  if (!final.ok) throw new Error('Erreur finalisation upload streaming');
 
   console.log('Streaming terminé.');
 };
