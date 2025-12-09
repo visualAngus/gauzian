@@ -679,7 +679,7 @@ renameOption.onclick = () => {
 
             const rawStorageKey = sodium.from_hex(storageKeyHex);
             const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-            Déchiffrer la clé du dossier
+            // Déchiffrer la clé du dossier
             const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
             const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
             const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
