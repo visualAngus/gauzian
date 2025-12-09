@@ -227,8 +227,8 @@ export default function Drive() {
       const reader = new FileReader();
       console.log('Reading file:', selectedFile.name);
 
-      if (selectedFile.size > 50 * 1024 * 1024) {
-        throw new Error('Le fichier est trop volumineux. Taille maximale autorisée : 50 Mo.');
+      if (selectedFile.size > 1000 * 1024 * 1024) {
+        throw new Error('Le fichier est trop volumineux. Taille maximale autorisée : 1Go.');
       }
       reader.onload = async (event) => {
         console.log('File read successfully, starting encryption...');
