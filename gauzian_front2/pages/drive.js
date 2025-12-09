@@ -667,69 +667,81 @@ renameOption.onclick = () => {
                 updated_at: updated_at
             };
 
-            await _sodium.ready;
-            const sodium = _sodium;
+            // await _sodium.ready;
+            // const sodium = _sodium;
 
-            const storageKeyHex = localStorage.getItem('storageKey');
-            if (!storageKeyHex) {
-                window.location.href = '/login';
-                throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+            // const storageKeyHex = localStorage.getItem('storageKey');
+            // if (!storageKeyHex) {
+            //     window.location.href = '/login';
+            //     throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+            // }
+
+            // const rawStorageKey = sodium.from_hex(storageKeyHex);
+            // const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+            
+            
+            // afficher tout les attributs data du dossier
+            console.log("Attributs data du dossier :", folderId);
+            for (let attr of folder.attributes) {
+                if (attr.name.startsWith("data-")) {
+                    console.log(attr.name + " = " + attr.value);
+                }
             }
 
-            const rawStorageKey = sodium.from_hex(storageKeyHex);
-            const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+
+
 
             // Déchiffrer la clé du dossier
-            const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
-            const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-            const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            // const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
+            // const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            // const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
 
-            const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-                null,
-                ciphertextKey,
-                null,
-                nonceKey,
-                userMasterKey
-            );
+            // const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            //     null,
+            //     ciphertextKey,
+            //     null,
+            //     nonceKey,
+            //     userMasterKey
+            // );
 
-            // Chiffrer les nouvelles métadonnées avec la clé du dossier
-            const metadataStr = JSON.stringify(metadata);
-            const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-            const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-                sodium.from_string(metadataStr),
-                null,
-                null,
-                nonceMeta,
-                folderKey
-            );
-            const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
-            const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
+            // // Chiffrer les nouvelles métadonnées avec la clé du dossier
+            // const metadataStr = JSON.stringify(metadata);
+            // const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            // const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            //     sodium.from_string(metadataStr),
+            //     null,
+            //     null,
+            //     nonceMeta,
+            //     folderKey
+            // );
+            // const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+            // const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
 
             
-            console.log("Renommer le dossier :", folderId, "en", newName);
-            folderName.classList.remove("editing_folder_name");
+            // console.log("Renommer le dossier :", folderId, "en", newName);
+            // folderName.classList.remove("editing_folder_name");
             
-            fetch('/api/drive/rename_folder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    folder_id: folderId,
-                    new_encrypted_metadata: encryptedMetadataB64
-                }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    console.log("Dossier renommé avec succès.");
-                    // Rafraîchir la vue du dossier courant
-                } else {
+            // fetch('/api/drive/rename_folder', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify({
+            //         folder_id: folderId,
+            //         new_encrypted_metadata: encryptedMetadataB64
+            //     }),
+            // })
+            // .then(response => response.json())
+            // .then(data => {
+            //     if (data.status === 'success') {
+            //         console.log("Dossier renommé avec succès.");
+            //         // Rafraîchir la vue du dossier courant
+            //     } else {
 
-                    console.error("Erreur renommage dossier :", data.message);
-                }
-              })
-            .catch(error => {
-                console.error("Erreur lors de la requête de renommage :", error);
-            });
+            //         console.error("Erreur renommage dossier :", data.message);
+            //     }
+            //   })
+            // .catch(error => {
+            //     console.error("Erreur lors de la requête de renommage :", error);
+            // });
         };
 
     } else {
