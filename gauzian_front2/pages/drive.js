@@ -134,6 +134,10 @@ export default function Drive() {
     }
   };
 
+  const handleDownloadChunked = async (id_file) => {
+    console.log("Download chunked for file id:", id_file);
+  };
+
   const newFolderFunction = async (folderName = "Nouveau dossier") => {
     // 1. Initialisation
     const sodiumLib = await import('libsodium-wrappers-sumo');
@@ -547,7 +551,6 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
   const processFile = async (file) => {
     await _sodium.ready;
     const sodium = _sodium;
-    console.log(file)
 
     const storageKeyHex = localStorage.getItem('storageKey');
     if (!storageKeyHex) {
@@ -968,15 +971,14 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
   }, [activeFolderId]);
   // --- RENDU (JSX) ---
   return (
-    <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
-
+    <div className="drive-container">
       <header>
         <h1><a href="/">GZDRIVE</a></h1>
         <div className="div_user_profil">
           {!imageLoadedState && <div className="div_profil_custom"></div>}
           <img
             className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
-            src="/images/user_profile.png" // Assurez-vous que l'image est dans le dossier 'public'
+            src="/images/user_profile.png"
             alt="User Profile"
             onLoad={() => setImageLoadedState(true)}
           />
@@ -984,7 +986,8 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
       </header>
 
       <section>
-        <div id='contextual_menu_folder' >
+        <div id='contextual_menu_folder'>
+          <div className="option_menu_contextual" id="rename_folder_option">
           <div className="option_menu_contextual" id="rename_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M15.7279 9.57627L14.3137 8.16206L5 17.4758V18.89H6.41421L15.7279 9.57627ZM17.1421 8.16206L18.5563 6.74785L17.1421 5.33363L15.7279 6.74785L17.1421 8.16206ZM7.24264 20.89H3V16.6473L16.435 3.21231C16.8256 2.82179 17.4587 2.82179 17.8492 3.21231L20.6777 6.04074C21.0682 6.43126 21.0682 7.06443 20.6777 7.45495L7.24264 20.89Z"></path></svg>
             Renommer
@@ -1165,7 +1168,14 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
                   key={file.file_id}
                   className="file_graph"
                   id={file.file_id}
-                  onClick={() => handleDownload(file.file_id)}
+                  onClick={() => {
+                    if (file.isChunked) {
+                      handleDownloadChunked(file.file_id);
+                    } else {
+                      handleDownload(file.file_id);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path></svg>
                   <span>{file.name}</span>
