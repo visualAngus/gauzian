@@ -85,3 +85,9 @@ pub struct FolderRecord {
     pub encrypted_folder_key: Vec<u8>,
     pub is_root: bool,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct FolderRenameRequest {
+    pub folder_id: Uuid,
+    pub new_encrypted_metadata: String,
+}
