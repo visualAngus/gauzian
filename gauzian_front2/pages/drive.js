@@ -908,11 +908,6 @@ renameOption.onclick = () => {
                     id={part.id}
                     consolelog={part}
                     // mettre des param
-                    data-folder-id={part.id || ''}
-                    data-folder-name={part.name || ''}
-                    data-folder-created-at={part.created_at || ''}
-                    data-folder-updated-at={part.updated_at || ''}
-                    data-encrypted-folder-key={part.encrypted_folder_key || ''}
                   >
                     {/* On affiche bien part.name */}
                     <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
@@ -937,6 +932,13 @@ renameOption.onclick = () => {
                   key={folder.id}
                   className="folder_graph"
                   id={folder.folder_id}
+
+
+                  data-folder-id={folder.id || ''}
+                  data-folder-name={folder.name || ''}
+                  data-folder-created-at={folder.created_at || ''}
+                  data-folder-updated-at={folder.updated_at || ''}
+                  data-encrypted-folder-key={folder.encrypted_folder_key || ''}
                   onClick={() => {
                     // Enlever la classe 'selected_folder' de tous les dossiers
                     document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
