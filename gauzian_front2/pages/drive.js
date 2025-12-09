@@ -579,30 +579,12 @@ export default function Drive() {
     setActiveFolderId(item.id);
   };
 
-  const hide_folder_and_files = () => {
-    // display none les dossiers et fichiers sans effacer les states
-    let folderContainer = document.getElementById("folder_container");
-    let fileContainer = document.getElementById("file_container");
-
-    folderContainer.style.display = "none";
-    fileContainer.style.display = "none";
-
-  };
-
-  const show_folder_and_files = () => {
-    let folderContainer = document.getElementById("folder_container");
-    let fileContainer = document.getElementById("file_container");
-    folderContainer.style.display = "";
-    fileContainer.style.display = "";
-  };
-
 
   const handleFolderClick = (folderId, folderName) => {
     if (!folderId || !folderName) return;
     if (activeFolderId === folderId) return;
 
     // cacher tout les dossiers, et les fichiers affichés
-    hide_folder_and_files();
 
     // rajoute dans l'url le folderId
     const newUrl = new URL(window.location);
