@@ -239,7 +239,6 @@ pub async fn folder_handler(
     let parent_folder_id = payload.parent_folder_id;
     let folder_query_result = if let Some(parent_id) = parent_folder_id {
         // Cas 1 : Dossier enfant
-        println!("fdshdsgfsd gfsdgfgsdh  fg gh sgfhfsdg{}", parent_id);
         sqlx::query_as!(
             FolderRecord,
             r#"
@@ -252,6 +251,7 @@ pub async fn folder_handler(
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
             WHERE f.parent_id = $1 AND fa.user_id = $2
+            ORDER BY f.updated_at DESC
             "#,
             parent_id,
             user_id,
