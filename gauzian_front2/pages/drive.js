@@ -320,6 +320,7 @@ export default function Drive() {
         }
       };
       reader.readAsArrayBuffer(selectedFile);
+      console.log('FileReader initiated.');
 
     } catch (error) {
       console.error('Init error:', error);
