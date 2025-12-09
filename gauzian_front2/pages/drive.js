@@ -999,7 +999,7 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
         </div>
         <div className="div_upload_progress" id="upload_progress_bar" style={{ display: uploading ? 'block' : 'none' }}>
           <a id="name_file_uploading">{curentFileUploadName}</a>
-          <a id="name_file_uploading">Fichier_Upload.txt</a>
+          {/* <a id="name_file_uploading">Fichier_Upload.txt</a> */}
           <div className="progress_bar_container">
             <div className="progress_bar_fill" id="progress_bar_fill" style={{ width: `${uploadProgress}%` }}></div>
           </div>
@@ -1082,9 +1082,9 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
               </button>
             </div>
 
-            <div className="div_filtres">
+            {/* <div className="div_filtres">
               {uploading && <span>Upload en cours...</span>}
-            </div>
+            </div> */}
           </div>
 
           <div className="div_contenue">
