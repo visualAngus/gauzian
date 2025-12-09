@@ -1,3 +1,5 @@
+use std::sync;
+
 use sqlx::{PgPool, types::uuid};
 use serde::Deserialize;
 use chrono::NaiveDate;
@@ -90,4 +92,20 @@ pub struct FolderRecord {
 pub struct FolderRenameRequest {
     pub folder_id: Uuid,
     pub new_encrypted_metadata: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UploadStreamingRequest {
+    pub encrypted_chunk: String,
+    pub chunk_index: usize,
+    pub total_chunks: usize,   
+    pub temp_upload_id: Uuid,
+}
+
+pub struct OpenStreamingUploadRequest {
+    pub encrypted_metadata: String,
+    pub encrypted_file_key: String,
+    pub media_type: String,
+    pub file_size: usize,
+    pub parent_folder_id: Option<Uuid>,
 }
