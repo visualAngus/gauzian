@@ -320,7 +320,6 @@ export default function Drive() {
         }
       };
       reader.readAsArrayBuffer(selectedFile);
-      console.log('FileReader initiated.');
 
     } catch (error) {
       console.error('Init error:', error);
@@ -892,27 +891,28 @@ renameOption.onclick = () => {
                 </svg>
 
                 {/* --- AJOUT : BOUTON UPLOAD --- */}
-                {/* On utilise un label ou un bouton pour déclencher l'input file caché */}
+                /* On utilise un label ou un bouton pour déclencher l'input file caché */}
 
-              </div>
-              <button
-                onClick={() => fileInputRef.current.click()}
-                style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
-                disabled={uploading}
-                title="Uploader un fichier"
-                id="btn_upload_file"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3ZM5 5V19H19V5H5ZM11 11V7H13V11H17V13H13V17H11V13H7V11H11Z"></path></svg>
-
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-              />
-
-              {/* bouton pour rajouter un dossier */}
+                </div>
+                <button
+                  onClick={() => fileInputRef.current.click()}
+                  style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
+                  disabled={uploading}
+                  title="Uploader un fichier"
+                  id="btn_upload_file"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3ZM5 5V19H19V5H5ZM11 11V7H13V11H17V13H13V17H11V13H7V11H11Z"></path></svg>
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  // Ajoute ici la taille max en octets (ex: 10 Mo = 10485760)
+                  maxSize={10485760} // <-- Ceci n'est pas standard HTML, voir ci-dessous
+                  // Pour HTML standard, utilise "accept" pour le type, mais pas la taille
+                />
+                {/* bouton pour rajouter un dossier */}
               <button
                 onClick={() => newFolderFunction()}
                 style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
