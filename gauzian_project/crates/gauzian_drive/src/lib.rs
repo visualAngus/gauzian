@@ -4,9 +4,12 @@ use axum::{
     response::IntoResponse,
 };
 use gauzian_auth::verify_session_token;
-use gauzian_core::{AppState, DownloadRequest, FolderRequest, UploadRequest,FolderRecord,FolderCreationRequest,FullPathRequest};
-use sqlx::PgPool;
+use gauzian_core::{
+    AppState, DownloadRequest, FolderCreationRequest, FolderRecord, FolderRenameRequest,
+    FolderRequest, FullPathRequest, UploadRequest,
+};
 use serde_json::json;
+use sqlx::PgPool;
 
 pub async fn upload_handler(
     State(state): State<AppState>,
@@ -305,7 +308,6 @@ pub async fn folder_handler(
     };
 }
 
-
 pub async fn files_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -358,8 +360,9 @@ pub async fn files_handler(
         "#,
         parent_folder_id,
         user_id,
-    ).fetch_all(&state.db_pool).await;
-
+    )
+    .fetch_all(&state.db_pool)
+    .await;
 
     match select_file_result {
         Ok(records) => {
@@ -387,8 +390,6 @@ pub async fn files_handler(
             return (StatusCode::NOT_FOUND, body).into_response();
         }
     };
-
-
 }
 
 pub async fn create_folder_handler(
@@ -396,7 +397,7 @@ pub async fn create_folder_handler(
     headers: HeaderMap,
     Json(payload): Json<FolderCreationRequest>,
 ) -> impl IntoResponse {
-        // verifier le token
+    // verifier le token
     let session_cookie = headers
         .get(axum::http::header::COOKIE)
         .and_then(|h| h.to_str().ok())
@@ -434,7 +435,6 @@ pub async fn create_folder_handler(
 
     let parent_folder_id = payload.parent_folder_id;
 
-
     let insert_folder_result = sqlx::query!(
         r#"
         INSERT INTO folders (owner_id, parent_id, encrypted_metadata, is_root, created_at, updated_at)
@@ -448,7 +448,6 @@ pub async fn create_folder_handler(
 
     match insert_folder_result {
         Ok(record) => {
-           
             let folder_access_insert_result = sqlx::query!(
                 r#"
                 INSERT INTO folder_access (folder_id, user_id, encrypted_folder_key, permission_level)
@@ -547,22 +546,27 @@ pub async fn full_path_handler(
         "#,
         payload.folder_id,
         user_id,
-    ).fetch_all(&state.db_pool).await;
+    )
+    .fetch_all(&state.db_pool)
+    .await;
 
     match select_full_path_result {
         Ok(records) => {
-            let full_path: Vec<_> = records.into_iter().map(|record| {
-                json!({
-                    "folder_id": record.id,
-                    "encrypted_metadata": record.encrypted_metadata
-                        .and_then(|data| String::from_utf8(data).ok())
-                        .unwrap_or_default(),
-                    "encrypted_folder_key": record.encrypted_folder_key
-                        .and_then(|data| String::from_utf8(data).ok())
-                        .unwrap_or_default(),
-                    "is_root": record.parent_id.is_none(),
+            let full_path: Vec<_> = records
+                .into_iter()
+                .map(|record| {
+                    json!({
+                        "folder_id": record.id,
+                        "encrypted_metadata": record.encrypted_metadata
+                            .and_then(|data| String::from_utf8(data).ok())
+                            .unwrap_or_default(),
+                        "encrypted_folder_key": record.encrypted_folder_key
+                            .and_then(|data| String::from_utf8(data).ok())
+                            .unwrap_or_default(),
+                        "is_root": record.parent_id.is_none(),
+                    })
                 })
-            }).collect();
+                .collect();
 
             let body = Json(json!({
                 "status": "success",
@@ -577,6 +581,78 @@ pub async fn full_path_handler(
                 "message": "Chemin non trouvé ou accès refusé"
             }));
             return (StatusCode::NOT_FOUND, body).into_response();
+        }
+    };
+}
+
+pub async fn rename_folder_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<FolderRenameRequest>,
+) -> impl IntoResponse {
+    // verifier le token
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let update_folder_result = sqlx::query!(
+        r#"
+        UPDATE folders
+        SET encrypted_metadata = $1, updated_at = NOW()
+        WHERE id = $2 AND owner_id = $3
+        "#,
+        payload.new_encrypted_metadata.as_bytes(),
+        payload.folder_id,
+        user_id,
+    )
+    .execute(&state.db_pool)
+    .await;
+    match update_folder_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Dossier renommé avec succès",
+            }));
+            return (StatusCode::OK, body).into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur renommage dossier dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors du renommage du dossier"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }
     };
 }

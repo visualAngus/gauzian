@@ -348,6 +348,8 @@ export default function Drive() {
       return {
         ...folder,
         name: metadata.name, // Le nom déchiffré
+        created_at: metadata.created_at,
+        updated_at: metadata.updated_at ||  metadata.created_at,
         // ... autres infos du metadata si besoin
       };
 
@@ -612,6 +614,136 @@ export default function Drive() {
       }
     });
 
+    let renameOption = menu.querySelector("#rename_folder_option");
+
+renameOption.onclick = () => {
+    let folder = document.getElementById(folderId);
+    let folderName = folder.querySelector(".folder_name");
+
+    if (folderName) {
+        // Hide le menu 
+        menu.style.display = "none";
+
+        folderName.classList.add("editing_folder_name");
+        folderName.contentEditable = true;
+        folderName.focus();
+        
+        // Sélectionner le texte (execCommand est un peu vieux mais fonctionne encore)
+        document.execCommand('selectAll', false, null);
+
+        // --- AJOUT : Bloquer la touche Entrée ---
+        folderName.onkeydown = (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault(); // Empêche le <br>
+                folderName.blur();  // Simule le clic en dehors pour valider
+            }
+        };
+
+        // --- AJOUT OPTIONNEL : Bloquer le collage de texte avec sauts de ligne ---
+        folderName.onpaste = (e) => {
+            e.preventDefault();
+            // Récupère le texte brut sans formatage
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            // Insère le texte en remplaçant les sauts de ligne par des espaces
+            document.execCommand('insertText', false, text.replace(/(\r\n|\n|\r)/gm, " "));
+        };
+
+        folderName.onblur = async () => {
+            // Nettoyage des événements pour éviter les conflits futurs
+            folderName.onkeydown = null;
+            folderName.onpaste = null;
+
+            folderName.contentEditable = false;
+            let newName = folderName.innerText; // .innerText nettoie souvent mieux que .innerHTML
+            let created_at = folder.getAttribute("data-created-at");
+            let updated_at = new Date().toISOString();
+
+
+            let metadata = {
+                name: newName,
+                created_at: created_at,
+                updated_at: updated_at
+            };
+
+            await _sodium.ready;
+            const sodium = _sodium;
+
+            const storageKeyHex = localStorage.getItem('storageKey');
+            if (!storageKeyHex) {
+                window.location.href = '/login';
+                throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+            }
+
+            const rawStorageKey = sodium.from_hex(storageKeyHex);
+            const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+
+            // Déchiffrer la clé du dossier
+            const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
+            const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+            const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+                null,
+                ciphertextKey,
+                null,
+                nonceKey,
+                userMasterKey
+            );
+
+            // Chiffrer les nouvelles métadonnées avec la clé du dossier
+            const metadataStr = JSON.stringify(metadata);
+            const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                sodium.from_string(metadataStr),
+                null,
+                null,
+                nonceMeta,
+                folderKey
+            );
+            const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+            const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
+
+            
+            console.log("Renommer le dossier :", folderId, "en", newName);
+            folderName.classList.remove("editing_folder_name");
+            
+            fetch('/api/drive/rename_folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    folder_id: folderId,
+                    new_encrypted_metadata: encryptedMetadataB64
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    console.log("Dossier renommé avec succès.");
+                    // Rafraîchir la vue du dossier courant
+                } else {
+
+                    console.error("Erreur renommage dossier :", data.message);
+                }
+              })
+            .catch(error => {
+                console.error("Erreur lors de la requête de renommage :", error);
+            });
+        };
+
+    } else {
+        console.error("Element with class 'folder_name' not found in folder:", folderId);
+    }
+}
+    let deleteOption = menu.querySelector("#delete_folder_option");
+    deleteOption.onclick = () => {
+      console.log("Supprimer le dossier :", folderId);
+    }
+
+    let shareOption = menu.querySelector("#share_folder_option");
+    shareOption.onclick = () => {
+      console.log("Partager le dossier :", folderId);
+    }
+
   }
 
 
@@ -623,6 +755,12 @@ export default function Drive() {
       getFolderStructure(activeFolderId);
       getFileStructure(activeFolderId);
     }
+
+    // ajouter un folder a la main pour le dev
+    setFolders((prevFolders) => [
+      ...prevFolders,
+      { folder_id: 'dev_folder', name: 'Dossier Dev' }
+    ]);
 
     // si on clique quelque part sur la page
 
@@ -661,15 +799,15 @@ export default function Drive() {
 
       <section>
         <div id='contextual_menu_folder' >
-          <div className="option_menu_contextual">
+          <div className="option_menu_contextual" id ="rename_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M15.7279 9.57627L14.3137 8.16206L5 17.4758V18.89H6.41421L15.7279 9.57627ZM17.1421 8.16206L18.5563 6.74785L17.1421 5.33363L15.7279 6.74785L17.1421 8.16206ZM7.24264 20.89H3V16.6473L16.435 3.21231C16.8256 2.82179 17.4587 2.82179 17.8492 3.21231L20.6777 6.04074C21.0682 6.43126 21.0682 7.06443 20.6777 7.45495L7.24264 20.89Z"></path></svg>
             Renommer
           </div>
-          <div className="option_menu_contextual">
+          <div className="option_menu_contextual" id ="delete_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M17 6H22V8H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V8H2V6H7V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V6ZM18 8H6V20H18V8ZM9 11H11V17H9V11ZM13 11H15V17H13V11ZM9 4V6H15V4H9Z"></path></svg>
             Supprimer
           </div>
-          <div className="option_menu_contextual">
+          <div className="option_menu_contextual" id ="share_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.58582L18.2071 8.79292L16.7929 10.2071L13 6.41424V16H11V6.41424L7.20711 10.2071L5.79289 8.79292L12 2.58582ZM3 18V14H5V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V14H21V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18Z"></path></svg>
             Partager
           </div>
@@ -766,6 +904,12 @@ export default function Drive() {
                     onClick={() => handlePathClick(part, index)} // Appel de la nouvelle fonction
                     style={{ cursor: 'pointer' }}
                     id={part.id}
+
+                    // mettre des param
+                    data-folder-id={part.id}
+                    data-folder-name={part.name}
+                    data-folder-created-at={part.created_at}
+                    data-folder-updated-at={part.updated_at}
                   >
                     {/* On affiche bien part.name */}
                     <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
@@ -808,7 +952,7 @@ export default function Drive() {
                   <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
                   </svg>
-                  <span>{folder.name}</span>
+                  <span className="folder_name">{folder.name}</span>
                 </div>
               ))}
 
