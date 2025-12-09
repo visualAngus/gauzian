@@ -351,7 +351,7 @@ export default function Drive() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         encrypted_metadata: bufToB64(finalMetadata),
-        // encrypted_file_key: bufToB64(finalFileKey), // <-- À AJOUTER DANS VOTRE BACKEND RUST
+        encrypted_file_key: bufToB64(finalFileKey),
         media_type: file.type || 'application/octet-stream',
         file_size: file.size, // Taille originale approximative
         parent_folder_id: activeFolderId

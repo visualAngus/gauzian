@@ -105,7 +105,7 @@ pub struct UploadStreamingRequest {
 #[derive(Deserialize, Debug)]
 pub struct OpenStreamingUploadRequest {
     pub encrypted_metadata: String,
-    pub encrypted_file_key: String,
+    pub encrypted_file_key: Option<String>,
     pub media_type: String,
     pub file_size: usize,
     pub parent_folder_id: Option<Uuid>,
