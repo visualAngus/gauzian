@@ -658,12 +658,14 @@ pub async fn rename_folder_handler(
     };
 }
 
+#[axum::debug_handler]
 pub async fn open_streaming_upload_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<OpenStreamingUploadRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
+    // Cette requête est bien une POST (Json à la fin)
+    // Vérifier le token
     let session_cookie = headers
         .get(axum::http::header::COOKIE)
         .and_then(|h| h.to_str().ok())
@@ -687,7 +689,7 @@ pub async fn open_streaming_upload_handler(
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
-    // requet sql pour vérifier la session
+    // Requête SQL pour vérifier la session
     let user_id = match verify_session_token(&session_token, State(state.clone())).await {
         Ok(user_id) => user_id,
         Err(_) => {
@@ -699,20 +701,22 @@ pub async fn open_streaming_upload_handler(
         }
     };
 
+    // Création de l'entrée temporaire pour l'upload streaming
     let temp_upload_insert_result = sqlx::query!(
-            r#"
-            INSERT INTO streaming_file (owner_id, encrypted_metadata, media_type, file_size, created_at, folder_id)
-            VALUES ($1, $2, $3, $4, NOW(), $5)
-            RETURNING id
-            "#,
-            user_id,
-            payload.encrypted_metadata.as_bytes(), // Assure-toi que c'est compatible BYTEA
-            payload.media_type,
-            payload.file_size as i64,
-            payload.parent_folder_id // $5 correspond au folder_id
-        )
-        .fetch_one(&state.db_pool)
-        .await;
+        r#"
+        INSERT INTO streaming_file (owner_id, encrypted_metadata, media_type, file_size, created_at, folder_id)
+        VALUES ($1, $2, $3, $4, NOW(), $5)
+        RETURNING id
+        "#,
+        user_id,
+        payload.encrypted_metadata.as_bytes(),
+        payload.media_type,
+        payload.file_size as i64,
+        payload.parent_folder_id
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
     match temp_upload_insert_result {
         Ok(record) => {
             let body = Json(json!({
