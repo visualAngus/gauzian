@@ -272,6 +272,7 @@ pub async fn folder_handler(
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
             WHERE f.is_root AND fa.user_id = $1
+            ORDER BY f.updated_at DESC
             "#,
             user_id,
         )

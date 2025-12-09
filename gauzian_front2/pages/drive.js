@@ -664,7 +664,6 @@ renameOption.onclick = () => {
             let metadata = {
                 name: newName,
                 created_at: created_at,
-                updated_at: updated_at
             };
             console.log(folder.getAttribute("data-encrypted-folder-key"));
 
