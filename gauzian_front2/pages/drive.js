@@ -33,6 +33,10 @@ export default function Drive() {
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
 
+  // upload pourcentage
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [curentFileUploadName, setCurentFileUploadName] = useState("");
+
   // États pour l'upload (venant de votre code React)
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null); // Pour déclencher l'input file caché
@@ -410,7 +414,9 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
             // Mise à jour progression UI
             chunksFinished++;
             let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
-            console.log(`Progression: ${percent}% (Chunk ${currentIndex} fini)`);
+            setUploadProgress(percent);
+            setCurentFileUploadName(file.name);
+
             // Ici tu peux appeler setProgress(percent) si tu as un state React
 
         } catch (error) {
@@ -989,6 +995,13 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
           <div className="option_menu_contextual" id="share_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.58582L18.2071 8.79292L16.7929 10.2071L13 6.41424V16H11V6.41424L7.20711 10.2071L5.79289 8.79292L12 2.58582ZM3 18V14H5V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V14H21V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18Z"></path></svg>
             Partager
+          </div>
+        </div>
+        <div className="div_upload_progress" id="upload_progress_bar" style={{ display: uploading ? 'block' : 'none' }}>
+          <a id="name_file_uploading">{curentFileUploadName}</a>
+          <a id="name_file_uploading">Fichier_Upload.txt</a>
+          <div className="progress_bar_container">
+            <div className="progress_bar_fill" id="progress_bar_fill" style={{ width: `${uploadProgress}%` }}></div>
           </div>
         </div>
         <div className="div_left_part">
