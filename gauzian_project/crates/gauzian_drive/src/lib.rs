@@ -891,6 +891,10 @@ pub async fn finish_streaming_upload(
                     return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
                 }
             }
+            let body = Json(json!({
+                "status": "success",
+                "message": "Upload streaming finalisé avec succès",
+            }));
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
