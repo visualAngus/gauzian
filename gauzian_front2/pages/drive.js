@@ -906,13 +906,13 @@ renameOption.onclick = () => {
                     onClick={() => handlePathClick(part, index)} // Appel de la nouvelle fonction
                     style={{ cursor: 'pointer' }}
                     id={part.id}
-
+                    consolelog={part}
                     // mettre des param
-                    data-folder-id={part.id}
-                    data-folder-name={part.name}
-                    data-folder-created-at={part.created_at}
-                    data-folder-updated-at={part.updated_at}
-                    data-encrypted-folder-key={part.encrypted_folder_key}
+                    data-folder-id={part.id || ''}
+                    data-folder-name={part.name || ''}
+                    data-folder-created-at={part.created_at || ''}
+                    data-folder-updated-at={part.updated_at || ''}
+                    data-encrypted-folder-key={part.encrypted_folder_key || ''}
                   >
                     {/* On affiche bien part.name */}
                     <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
