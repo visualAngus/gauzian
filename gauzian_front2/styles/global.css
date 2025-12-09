@@ -408,3 +408,7 @@ nav ul li a:hover {
 .option_menu_contextual:hover {
     background-color: var(--light-gray-color);
 }
+
+.editing_folder_name:focus {
+    outline: none;
+}
