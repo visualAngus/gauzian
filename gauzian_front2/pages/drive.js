@@ -384,7 +384,9 @@ export default function Drive() {
       const finalChunk = new Uint8Array([...nonceChunk, ...encryptedChunkBlob]);
 
       // Envoi du morceau
-      console.log(`Envoi chunk ${chunkIndex + 1}/${totalChunks}`);
+      // pourcentage
+      let percent = Math.min(100, Math.round(((chunkIndex + 1) / totalChunks) * 100));
+      console.log(`Progression: ${percent}%`);
       const uploadRes = await fetch('/api/drive/upload_chunk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
