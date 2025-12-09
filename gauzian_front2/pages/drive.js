@@ -391,6 +391,7 @@ export default function Drive() {
         body: JSON.stringify({
           temp_upload_id: temp_upload_id,
           chunk_index: chunkIndex,
+          total_chunks: totalChunks,
           encrypted_chunk: bufToB64(finalChunk)
         })
       });
