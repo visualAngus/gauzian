@@ -933,13 +933,13 @@ renameOption.onclick = () => {
                   className="folder_graph"
                   id={folder.folder_id}
 
-
                   data-folder-id={folder.id || ''}
                   data-folder-name={folder.name || ''}
                   data-folder-created-at={folder.created_at || ''}
                   data-folder-updated-at={folder.updated_at || ''}
                   data-encrypted-folder-key={folder.encrypted_folder_key || ''}
                   onClick={() => {
+                    console.log("Dossier cliqué :", folder);
                     // Enlever la classe 'selected_folder' de tous les dossiers
                     document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
                       el.classList.remove('selected_folder');
