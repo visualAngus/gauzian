@@ -547,6 +547,7 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
   const processFile = async (file) => {
     await _sodium.ready;
     const sodium = _sodium;
+    console.print(file)
 
     const storageKeyHex = localStorage.getItem('storageKey');
     if (!storageKeyHex) {
