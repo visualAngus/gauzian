@@ -237,12 +237,38 @@ export default function Drive() {
 
           const fileKey = sodium.randombytes_buf(32);
 
-          // 1. Chiffrement Fichier
-          const nonceFile = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-          const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-            fileBytes, null, null, nonceFile, fileKey
-          );
-          const finalBlob = new Uint8Array([...nonceFile, ...ciphertext]);
+
+
+          // 1. Chiffrement Fichier AVEC PROGRESSION
+          // On chiffre par chunks pour pouvoir suivre l'avancement
+          const CHUNK_SIZE = 1024 * 1024; // 1 Mo
+          const totalSize = fileBytes.length;
+          let offset = 0;
+          let chunks = [];
+          let totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+
+          while (offset < totalSize) {
+            const end = Math.min(offset + CHUNK_SIZE, totalSize);
+            const chunk = fileBytes.slice(offset, end);
+
+            // Chiffrement du chunk
+            const nonceFile = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+              chunk, null, null, nonceFile, fileKey
+            );
+            const finalChunk = new Uint8Array([...nonceFile, ...ciphertext]);
+            chunks.push(finalChunk);
+
+            // MAJ progression (ex: setProgress((offset + chunk.length) / totalSize * 100))
+            // Si tu veux afficher la progression dans le composant :
+            // setProgress(Math.round(((offset + chunk.length) / totalSize) * 100));
+            console.log(`Chiffré chunk ${chunks.length} / ${totalChunks}`);
+
+            offset = end;
+          }
+
+          // Fusionner tous les chunks chiffrés
+          const finalBlob = new Uint8Array(chunks.reduce((acc, val) => [...acc, ...val], []));
 
           // 2. Chiffrement Métadonnées
           const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
