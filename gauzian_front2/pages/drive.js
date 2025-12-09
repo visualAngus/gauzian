@@ -405,16 +405,31 @@ export default function Drive() {
     // 4. Finalisation (Optionnel mais recommandé)
     // C'est ici qu'on devrait dire au serveur "J'ai fini, déplace tout dans la vraie table"
     // et qu'on envoie la encrypted_file_key si elle n'a pas été envoyée au début.
-    /*
-    await fetch('/api/drive/finish_streaming_upload', {
+
+    // pub struct FinishStreamingUploadRequest {
+    // pub temp_upload_id: Uuid,
+    // pub encrypted_file_key: String,
+    // pub encrypted_metadata: String,
+    // pub media_type: String,
+    // pub file_size: usize,
+    // pub parent_folder_id: Uuid,
+}
+    
+    const final = await fetch('/api/drive/finish_streaming_upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            temp_upload_id: temp_upload_id,
-            encrypted_file_key: bufToB64(finalFileKey) 
-        })
+          temp_upload_id: temp_upload_id,
+          encrypted_file_key: bufToB64(finalFileKey),
+          encrypted_metadata: bufToB64(finalMetadata),
+          media_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+          parent_folder_id: activeFolderId
+          }),
     });
-    */
+
+    if (!final.ok) throw new Error('Erreur finalisation upload streaming');    
+    
     console.log('Streaming terminé.');
   };
 
