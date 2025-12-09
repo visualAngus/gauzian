@@ -102,6 +102,7 @@ pub struct UploadStreamingRequest {
     pub temp_upload_id: Uuid,
 }
 
+#[derive(Deserialize, Debug)]
 pub struct OpenStreamingUploadRequest {
     pub encrypted_metadata: String,
     pub encrypted_file_key: String,
