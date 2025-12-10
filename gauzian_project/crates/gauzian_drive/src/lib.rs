@@ -14,6 +14,7 @@ use gauzian_core::{
     UploadRequest, UploadStreamingRequest,
 };
 use serde_json::json;
+use base64::{Engine as _, engine::general_purpose};
 
 use std::pin::Pin;
 use futures::stream::Stream; // Nécessaire pour le trait object
@@ -773,8 +774,8 @@ pub async fn upload_streaming_handler(
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    // Requete sql pour vérifier la session
+    let _user_id = match verify_session_token(&session_token, State(state.clone())).await {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -785,6 +786,21 @@ pub async fn upload_streaming_handler(
         }
     };
 
+    // --- CORRECTION : Décodage Base64 ---
+    // Le frontend envoie une string Base64. On doit la transformer en octets bruts
+    // pour que Sodium puisse la lire correctement au téléchargement.
+    let chunk_data = match general_purpose::STANDARD.decode(&payload.encrypted_chunk) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("Erreur décodage Base64: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Format de chunk invalide (Base64 incorrect)"
+            }));
+            return (StatusCode::BAD_REQUEST, body).into_response();
+        }
+    };
+
     let insert_chunk_result = sqlx::query!(
         r#"
         INSERT INTO streaming_file_chunks (temp_upload_id, chunk_index, encrypted_chunk, uploaded_at)
@@ -792,7 +808,7 @@ pub async fn upload_streaming_handler(
         "#,
         payload.temp_upload_id,
         payload.chunk_index as i64,
-        payload.encrypted_chunk.as_bytes(),
+        chunk_data, // <--- On utilise le Vec<u8> décodé, pas le String
     )
     .execute(&state.db_pool)
     .await;
