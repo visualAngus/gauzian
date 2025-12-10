@@ -135,7 +135,7 @@ export default function Drive() {
     }
   };
 
-const handleDownloadChunked = async (id_file) => {
+  const handleDownloadChunked = async (id_file) => {
     try {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
       const streamSaver = (await import('streamsaver')).default;
@@ -146,7 +146,7 @@ const handleDownloadChunked = async (id_file) => {
       const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
       if (!metaResponse.ok) throw new Error("Erreur métadonnées");
       const data = await metaResponse.json();
-      
+
       // 2. Clés
       const storageKey = localStorage.getItem('storageKey');
       const rawStorageKey = sodium.from_hex(storageKey);
@@ -155,20 +155,20 @@ const handleDownloadChunked = async (id_file) => {
       // Clé Fichier
       const encFileKey = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
       const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null, 
-        encFileKey.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
-        null, 
-        encFileKey.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
+        null,
+        encFileKey.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
+        null,
+        encFileKey.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
         encryptionKey
       );
 
       // Métadonnées déchiffrées
       const encMeta = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
       const metadataBuf = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null, 
-        encMeta.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
-        null, 
-        encMeta.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
+        null,
+        encMeta.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
+        null,
+        encMeta.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
         fileKey
       );
       const metadata = JSON.parse(sodium.to_string(metadataBuf));
@@ -184,7 +184,7 @@ const handleDownloadChunked = async (id_file) => {
 
       // 5. Configuration (A VÉRIFIER AVEC TON UPLOAD)
       const UPLOAD_CHUNK_SIZE = 1024 * 1024; // <--- C'EST ICI QUE TOUT SE JOUE
-      const HEADER_SIZE = 24; 
+      const HEADER_SIZE = 24;
       const TAG_SIZE = 16;
       const FULL_BLOCK_SIZE = HEADER_SIZE + UPLOAD_CHUNK_SIZE + TAG_SIZE;
 
@@ -221,30 +221,30 @@ const handleDownloadChunked = async (id_file) => {
       async function processBuffer(bytes, isLast) {
         chunkCount++;
         try {
-            // Logs pour comprendre l'erreur
-            console.log(`🔑 Traitement Chunk #${chunkCount}. Taille: ${bytes.length} bytes. (IsLast: ${isLast})`);
-            
-            // Si c'est trop petit pour contenir un header + tag, c'est mort
-            if (bytes.length < HEADER_SIZE + TAG_SIZE) {
-                throw new Error(`Chunk trop petit (${bytes.length}) - Corruption possible`);
-            }
+          // Logs pour comprendre l'erreur
+          console.log(`🔑 Traitement Chunk #${chunkCount}. Taille: ${bytes.length} bytes. (IsLast: ${isLast})`);
 
-            const nonce = bytes.slice(0, HEADER_SIZE);
-            const cipher = bytes.slice(HEADER_SIZE);
+          // Si c'est trop petit pour contenir un header + tag, c'est mort
+          if (bytes.length < HEADER_SIZE + TAG_SIZE) {
+            throw new Error(`Chunk trop petit (${bytes.length}) - Corruption possible`);
+          }
 
-            const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-                null, cipher, null, nonce, fileKey
-            );
-            
-            await writer.write(decrypted);
-            // console.log(`✅ Chunk #${chunkCount} écrit.`); // Decommenter si besoin
+          const nonce = bytes.slice(0, HEADER_SIZE);
+          const cipher = bytes.slice(HEADER_SIZE);
+
+          const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            null, cipher, null, nonce, fileKey
+          );
+
+          await writer.write(decrypted);
+          // console.log(`✅ Chunk #${chunkCount} écrit.`); // Decommenter si besoin
 
         } catch (err) {
-            console.error(`❌ ERREUR CRITIQUE au Chunk #${chunkCount}`);
-            console.error(`Attendu: Header(24) + Tag(16) + Data. Reçu total: ${bytes.length}`);
-            console.error(err);
-            writer.abort(err);
-            throw err;
+          console.error(`❌ ERREUR CRITIQUE au Chunk #${chunkCount}`);
+          console.error(`Attendu: Header(24) + Tag(16) + Data. Reçu total: ${bytes.length}`);
+          console.error(err);
+          writer.abort(err);
+          throw err;
         }
       }
 
