@@ -107,15 +107,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/new_folder", post(create_folder_handler))
         .route("/drive/full_path", get(full_path_handler))
         .route("/drive/rename_folder", post(rename_folder_handler))
-        .route(
-            "/drive/open_streaming_upload",
-            post(open_streaming_upload_handler),
-        )
+        .route("/drive/open_streaming_upload",post(open_streaming_upload_handler))
         .route("/drive/upload_chunk", post(upload_streaming_handler))
-        .route(
-            "/drive/finish_streaming_upload",
-            post(finish_streaming_upload),
-        )
+        .route("/drive/finish_streaming_upload",post(finish_streaming_upload))
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(

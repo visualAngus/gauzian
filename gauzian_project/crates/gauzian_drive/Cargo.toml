@@ -19,3 +19,5 @@ actix-web = "4.0"
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "time", "chrono","ipnetwork"]  }
 uuid = { version = "1", features = ["serde", "v4"] }
 base64 = "0.21"
+bytes = "1.4"
+async-stream = "0.3"
