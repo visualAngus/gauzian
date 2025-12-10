@@ -1,3 +1,4 @@
+use axum::extract::path;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::HeaderValue;
 use axum::{
@@ -21,7 +22,7 @@ use gauzian_auth::{autologin_handler, login_handler, register_handler};
 use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
-    upload_handler, upload_streaming_handler,
+    upload_handler, upload_streaming_handler,download_raw_handler
 };
 
 // Middleware de debug pour logger l'origine et les méthodes (utile pour CORS)
@@ -110,6 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/open_streaming_upload",post(open_streaming_upload_handler))
         .route("/drive/upload_chunk", post(upload_streaming_handler))
         .route("/drive/finish_streaming_upload",post(finish_streaming_upload))
+        .route("/drive/download_raw", get(download_raw_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(
