@@ -915,6 +915,8 @@ pub async fn finish_streaming_upload(
     }
 }
 
+// ... imports
+
 pub async fn download_raw_handler(
     State(state): State<AppState>,
     Query(query): Query<DownloadQuery>,
@@ -927,15 +929,18 @@ pub async fn download_raw_handler(
     let pool = state.db_pool.clone();
     let id_file = query.id_file;
 
-    // 3. Création du stream avec annotation de type EXPLICITE
-    // On dit au compilateur : "Ce stream renvoie des Result<Bytes, std::io::Error>"
+    // 3. Création du stream avec la BONNE REQUÊTE SQL (JOIN)
     let stream: Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>> = Box::pin(try_stream! {
+        // On utilise la jointure pour partir de l'ID du fichier (vf.id)
+        // et récupérer les chunks associés (sfc.encrypted_chunk)
         let mut cursor = sqlx::query!(
             r#"
-            SELECT encrypted_chunk 
-            FROM streaming_file_chunks 
-            WHERE temp_upload_id = $1
-            ORDER BY chunk_index ASC
+            SELECT sfc.encrypted_chunk 
+            FROM streaming_file_chunks sfc
+            INNER JOIN streaming_file sf ON sf.id = sfc.temp_upload_id 
+            INNER JOIN vault_files vf ON sf.id = vf.streaming_upload_id 
+            WHERE vf.id = $1 AND vf.is_chunked = true
+            ORDER BY sfc.chunk_index ASC
             "#,
             id_file
         )
@@ -948,7 +953,6 @@ pub async fn download_raw_handler(
                 }
                 Err(e) => {
                     eprintln!("Erreur Streaming SQL: {:?}", e);
-                    // Le '?' va maintenant savoir qu'il doit convertir en io::Error
                     Err(io::Error::new(io::ErrorKind::Other, e))?;
                 }
             }
