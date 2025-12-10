@@ -494,7 +494,7 @@ export default function Drive() {
     let chunksFinished = 0;
 
     // Nombre d'envois simultanés (3 est un bon équilibre, max 5)
-    const MAX_CONCURRENT_UPLOADS = 3;
+    const MAX_CONCURRENT_UPLOADS = 5;
 
     // La fonction que chaque "Worker" va exécuter en boucle
     const processNextChunk = async () => {
