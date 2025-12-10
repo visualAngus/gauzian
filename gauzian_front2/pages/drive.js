@@ -1057,6 +1057,7 @@ export default function Drive() {
 
 
   useEffect(() => {
+    console.log("Active Folder ID changed:", activeFolderId);
     if (activeFolderId === null) {
       loadFullPathFromFolderId();
       getFileStructure(activeFolderId);
@@ -1253,7 +1254,7 @@ export default function Drive() {
                   data-folder-updated-at={folder.updated_at || ''}
                   data-encrypted-folder-key={folder.encrypted_folder_key || ''}
                   onClick={() => {
-                    console.log("Dossier cliqué :", folder);
+                    // console.log("Dossier cliqué :", folder);
                     // Enlever la classe 'selected_folder' de tous les dossiers
                     document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
                       el.classList.remove('selected_folder');
