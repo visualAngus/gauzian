@@ -135,24 +135,29 @@ export default function Drive() {
     }
   };
 
-  const handleDownloadChunked = async (id_file, filename) => {
+  const handleDownloadChunked = async (id_file, filename_override) => {
     try {
       console.log("Démarrage du téléchargement streaming pour :", id_file);
+
+      // 1. Import dynamique (Next.js SSR fix)
       const streamSaver = (await import('streamsaver')).default;
+
       await _sodium.ready;
       const sodium = _sodium;
 
-      // 1. Récupérer les infos du fichier (Metadata + Key chiffrée)
-      // On réutilise votre endpoint existant qui renvoie le JSON
+      // 2. Récupérer les métadonnées
       const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
       if (!metaResponse.ok) throw new Error("Erreur récupération métadonnées");
       const data = await metaResponse.json();
 
-      // 2. Déchiffrer la clé du fichier (copié-collé de votre logique actuelle)
+      // 3. Dérivation des clés (Master Key -> File Key)
       const storageKey = localStorage.getItem('storageKey');
+      if (!storageKey) throw new Error("Utilisateur non connecté (clé manquante)");
+
       const rawStorageKey = sodium.from_hex(storageKey);
       const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
 
+      // Déchiffrer la clé du fichier
       const encryptedFileKeyBuf = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
       const nonceKey = encryptedFileKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
       const ciphertextKey = encryptedFileKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
@@ -161,7 +166,7 @@ export default function Drive() {
         null, ciphertextKey, null, nonceKey, encryptionKey
       );
 
-      // Déchiffrement métadonnées pour avoir le nom et la taille
+      // Déchiffrer les métadonnées (Nom, Taille)
       const encryptedMetadataBuf = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
       const nonceMeta = encryptedMetadataBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
       const ciphertextMeta = encryptedMetadataBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
@@ -170,88 +175,83 @@ export default function Drive() {
         null, ciphertextMeta, null, nonceMeta, fileKey
       );
       const metadata = JSON.parse(sodium.to_string(metadataBuf));
-      console.log('Metadata déchiffrées pour streaming :', metadata);
+      console.log('Metadata :', metadata);
 
-      // 3. Initialiser StreamSaver (Le tuyau vers le disque dur)
+      // 4. Initialiser le tuyau de téléchargement
+      // On utilise le nom du fichier déchiffré
       const fileStream = streamSaver.createWriteStream(metadata.filename, {
-        size: metadata.filesize // Important pour la barre de progression
+        size: metadata.filesize
       });
       const writer = fileStream.getWriter();
 
-      // 4. Lancer la requête pour récupérer le BLOB brut (streamé)
+      // 5. Appeler l'API de streaming brut
       const response = await fetch(`/api/drive/download_raw?id_file=${id_file}`);
-      if (!response.ok) throw new Error("Erreur lors du téléchargement du flux");
+      if (!response.ok) throw new Error("Erreur flux réseau");
 
       const reader = response.body.getReader();
 
-      // --- CONFIGURATION DU BUFFER ---
-      // DOIT CORRESPONDRE EXACTEMENT A L'UPLOAD
-      const UPLOAD_CHUNK_DATA_SIZE = 1024 * 1024; // 1 Mo (VOTRE config upload)
-      const HEADER_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES; // 24 octets
-      const TAG_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES; // 16 octets
+      // --- CONSTANTES (Doivent matcher l'Upload) ---
+      const CHUNK_DATA_SIZE = 1024 * 1024; // 1 Mo de données utiles
+      const HEADER_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES; // 24
+      const TAG_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES; // 16
 
-      // Taille totale d'un bloc chiffré complet = Nonce + Data + Tag
-      const ENCRYPTED_BLOCK_SIZE = HEADER_SIZE + UPLOAD_CHUNK_DATA_SIZE + TAG_SIZE;
+      // Un bloc complet chiffré fait 1Mo + 24 octets (Nonce) + 16 octets (Tag)
+      const ENCRYPTED_BLOCK_SIZE = HEADER_SIZE + CHUNK_DATA_SIZE + TAG_SIZE;
 
       let buffer = new Uint8Array(0);
 
-      // 5. Boucle de lecture et déchiffrement
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          // Traiter le reste du buffer (le dernier morceau est souvent plus petit)
+          // Traiter le dernier morceau (qui est < ENCRYPTED_BLOCK_SIZE)
           if (buffer.length > 0) {
-            await processBuffer(buffer, true);
+            await processBuffer(buffer);
           }
           break;
         }
 
-        // Ajouter les nouvelles données au buffer
+        // Ajouter au buffer
         const newBuffer = new Uint8Array(buffer.length + value.length);
         newBuffer.set(buffer);
         newBuffer.set(value, buffer.length);
         buffer = newBuffer;
 
-        // Tant qu'on a assez de données pour faire un bloc complet
+        // Traiter autant de blocs COMPLETS que possible
         while (buffer.length >= ENCRYPTED_BLOCK_SIZE) {
           const chunkToProcess = buffer.slice(0, ENCRYPTED_BLOCK_SIZE);
-          buffer = buffer.slice(ENCRYPTED_BLOCK_SIZE); // On garde le reste
-          await processBuffer(chunkToProcess, false);
+          buffer = buffer.slice(ENCRYPTED_BLOCK_SIZE); // On garde le reste pour le prochain tour
+          await processBuffer(chunkToProcess);
         }
       }
 
-      // Fonction Helper pour déchiffrer et écrire
-      async function processBuffer(chunkBytes, isLast) {
+      async function processBuffer(chunkBytes) {
         try {
-          // Extraction du Nonce
+          // 1. Extraire Nonce
           const nonce = chunkBytes.slice(0, HEADER_SIZE);
-          // Extraction du Ciphertext (tout le reste)
+          // 2. Extraire Ciphertext (Data + Tag)
           const ciphertext = chunkBytes.slice(HEADER_SIZE);
 
-          // Déchiffrement
+          // 3. Déchiffrer
           const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
             null, ciphertext, null, nonce, fileKey
           );
 
-          // Écriture directe sur le disque
+          // 4. Écrire sur le disque
           await writer.write(decrypted);
-
         } catch (err) {
-          console.error("Erreur déchiffrement d'un chunk streaming", err);
-          // Si erreur ici, le fichier sera corrompu à cet endroit
-          writer.abort(err);
-          throw err;
+          console.error("Erreur de déchiffrement (Chunk corrompu ou mauvaise clé) :", err);
+          writer.abort(err); // Annule le téléchargement navigateur
+          throw err; // Stoppe la boucle JS
         }
       }
 
-      // Fermer le fichier proprement
       await writer.close();
-      console.log("Téléchargement streaming terminé avec succès !");
+      console.log("Téléchargement terminé.");
 
     } catch (error) {
-      console.error("Erreur Download Streaming:", error);
-      alert("Erreur téléchargement streaming.");
+      console.error("Erreur HandleDownloadChunked:", error);
+      alert("Erreur lors du téléchargement : " + error.message);
     }
   };
 
@@ -964,7 +964,7 @@ export default function Drive() {
           let newName = folderName.innerText; // .innerText nettoie souvent mieux que .innerHTML
           let created_at = folder.getAttribute("data-created-at");
           let updated_at = new Date().toISOString();
-          
+
 
           let metadata = {
             name: newName,
@@ -1027,7 +1027,7 @@ export default function Drive() {
                 console.log("Dossier renommé avec succès.");
                 folder.setAttribute("data-folder-name", newName);
                 // Mettre à jour l'état des dossiers
-                setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? {...f, name: newName} : f));
+                setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? { ...f, name: newName } : f));
                 // Rafraîchir la vue du dossier courant
               } else {
 
