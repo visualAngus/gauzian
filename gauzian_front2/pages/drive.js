@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import _sodium from 'libsodium-wrappers';
-import streamSaver from 'streamsaver'; // Assurez-vous d'avoir installé ceci
 
 // Importez vos images si elles sont dans src, sinon utilisez le chemin public
 // import userProfileImg from '../images/user_profile.png'; 
@@ -139,6 +138,7 @@ export default function Drive() {
   const handleDownloadChunked = async (id_file, filename) => {
     try {
       console.log("Démarrage du téléchargement streaming pour :", fileId);
+      const streamSaver = (await import('streamsaver')).default;
       await _sodium.ready;
       const sodium = _sodium;
 
