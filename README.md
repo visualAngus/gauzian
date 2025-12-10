@@ -1,75 +1,81 @@
+# GAUZIAN — Sovereign, High-Performance Cloud Infrastructure
 
-# GAUZIAN : Infrastructure Cloud Souveraine et Haute Performance
-
-### Résumé Exécutif
-GAUZIAN est une initiative technologique visant à déployer un écosystème numérique complet (SaaS), positionné comme une alternative européenne crédible aux GAFAM (Google Workspace, Office 365). Conçu intégralement en **Rust**, GAUZIAN se distingue par une approche radicale de l'efficacité énergétique, de la sécurité mémoire et du respect de la vie privée. Le projet propose une suite d'outils interconnectés (Identité, Stockage, Communication) sans monétisation des données utilisateur.
-
----
-
-### 1. Vision et Positionnement Stratégique
-
-Face à hégémonie des acteurs extra-européens et à la complexité croissante des enjeux de confidentialité (Privacy), GAUZIAN répond à un besoin critique de **souveraineté numérique**.
-
-*   **Confidentialité par le Design :** Architecture "Zero-Tracking". Aucun cookie tiers, aucune analyse comportementale, aucune revente de données.
-*   **Ancrage Européen :** Hébergement et gouvernance des données situés en Europe, garantissant une conformité stricte au RGPD.
-*   **Modèle Économique Vertueux :** La viabilité de l'offre gratuite repose sur une ingénierie logicielle d'excellence, réduisant drastiquement les coûts d'infrastructure par utilisateur, plutôt que sur la publicité ciblée.
+## Executive Summary
+GAUZIAN is a long-term technical initiative to build a complete European SaaS ecosystem — a credible alternative to Google Workspace and Microsoft 365.  
+Designed entirely in **Rust**, GAUZIAN focuses on energy efficiency, memory-safe security, and strict user privacy.  
+The platform unifies identity, storage, and communication services under a model that **never monetizes user data**.
 
 ---
 
-### 2. Architecture Technique : La Performance Native (Rust)
+## 1. Vision and Strategic Positioning
 
-Le cœur de l'innovation GAUZIAN réside dans le choix technologique du langage **Rust** pour l'intégralité du Backend. Ce choix stratégique offre des avantages concurrentiels majeurs par rapport aux solutions existantes (basées sur Java, Python ou Node.js) :
+The dominance of non-European cloud providers raises increasing concerns around privacy, security, and digital dependency.  
+GAUZIAN aims to restore autonomy with a modern, **privacy-first** and **sovereign-by-design** architecture.
 
-*   **Sécurité Mémoire (Memory Safety) :** Élimination structurelle des vulnérabilités critiques (buffer overflows, race conditions) grâce au compilateur Rust, garantissant une stabilité industrielle dès la version MVP.
-*   **Haute Concurrence & Faible Latence :** Utilisation du runtime asynchrone `Tokio` et du framework `Axum`, permettant de gérer des dizaines de milliers de connexions simultanées avec une empreinte RAM minimale.
-*   **Efficacité Énergétique :** Consommation CPU réduite de 10x à 20x par rapport aux standards du marché, permettant de proposer un stockage gratuit pérenne via des coûts d'exploitation marginaux.
-
-**Stack Technique :**
-*   **Core :** Rust (Edition 2021)
-*   **Database :** PostgreSQL + SQLx (Type-safe SQL queries)
-*   **Search Engine :** Meilisearch (Rust-based)
-*   **Security :** Argon2, Ring, Governor (Rate-limiting)
+### Core Principles
+- **Privacy by Design:** Zero tracking. No third-party cookies, no behavioral analytics, no data resale.
+- **European Data Governance:** All data hosted and processed under EU jurisdiction, fully compliant with GDPR.
+- **Ethical Sustainability:** Free services remain viable through highly optimized engineering — not through ads or profiling.
 
 ---
 
-### 3. L'Écosystème Produits
+## 2. Technical Architecture — Native Performance Through Rust
 
-L'expérience GAUZIAN unifie les services essentiels du quotidien numérique autour d'un compte unique.
+GAUZIAN's competitive edge comes from using **Rust** for the entire backend.  
+Unlike platforms built on Java, Python, or Node.js, Rust guarantees:
 
-#### 🛡️ GAUZIAN ID (Single Sign-On)
-La pierre angulaire de l'écosystème. Un service d'authentification centralisé et blindé, gérant l'identité numérique, le MFA (Authentification multi-facteurs) et les sessions sécurisées sans traçage inter-sites.
+- **Memory Safety:** Structural elimination of buffer overflows, race conditions, and other critical vulnerabilities.
+- **High Concurrency & Low Latency:** Leveraging `Tokio` and `Axum` to handle tens of thousands of simultaneous connections with minimal RAM usage.
+- **Energy Efficiency:** 10–20x lower CPU consumption compared to mainstream stacks — enabling long-term free storage with minimal operating costs.
 
-#### ☁️ GZ DRIVE (Stockage Intelligent)
-Une solution de stockage de fichiers haute performance conçue pour le volume.
-*   **Technologie "Smart Storage" :** Déduplication à la source (via hachage) et compression à la volée des médias (Images/Vidéo) pour optimiser l'espace disque.
-*   **Streaming I/O :** Gestion des flux de données sans surcharge mémoire, permettant des uploads/downloads de fichiers volumineux avec une fluidité native.
-
-#### 📧 GZ MAIL (Communication Sécurisée)
-Un service de messagerie rapide et privé (*@gzmail.fr* / *@gauzian.eu*).
-*   **Focus Performance :** Parsing et indexation des emails en temps réel.
-*   **Interopérabilité :** Compatible avec les standards SMTP/IMAP, avec une couche de chiffrement au repos.
+### Technical Stack
+- **Core:** Rust (Edition 2021)
+- **Database:** PostgreSQL + SQLx (type-safe queries)
+- **Search:** Meilisearch (Rust-powered)
+- **Security:** Argon2, Ring, Governor (rate-limiting)
 
 ---
 
-### 4. Sécurité et Modèle Anti-Abus Éthique
+## 3. Product Ecosystem
 
-GAUZIAN déploie une stratégie de protection avancée qui préserve l'anonymat (pas de vérification d'identité intrusive) tout en empêchant l'exploitation par des bots (Sybil Attacks).
+GAUZIAN brings together essential digital services around a unified identity, forming a seamless and sovereign cloud environment.
 
-*   **Rate Limiting Contextuel :** Algorithmes dynamiques limitant la création de comptes et les requêtes abusives sans impacter les usages légitimes (familles, entreprises).
-*   **Proof of Work (Preuve de Travail) :** Intégration de défis cryptographiques (via `mCaptcha`) imposant un coût computationnel aux attaquants automatisés, rendant le spam économiquement non viable.
-*   **Isolation :** Compartimentation stricte des données utilisateurs via des architectures de base de données multi-tenant sécurisées.
+### 🛡️ GAUZIAN ID — Secure Single Sign-On
+A hardened, centralized identity system managing authentication, MFA, and fully isolated sessions with **no cross-site tracking**.
+
+### ☁️ GZ DRIVE — Intelligent File Storage
+A high-performance file storage engine optimized for large-scale usage.
+
+- **Smart Storage:** Source-level deduplication and automatic media compression.
+- **Stream-based I/O:** Efficient upload/download pipelines for large files without memory overhead.
+
+### 📧 GZ MAIL — Fast, Private Email
+A modern messaging service using **@gzmail.fr** / **@gauzian.eu** domains.
+
+- **Real-time indexing:** Emails parsed and searchable instantly.
+- **Standards-compliant:** Fully compatible with SMTP/IMAP, with encrypted storage at rest.
 
 ---
 
-### 5. Feuille de Route
+## 4. Security & Ethical Anti-Abuse Model
 
-Le développement s'inscrit dans un cycle de 30 mois, privilégiant la robustesse du noyau (Core) avant l'expansion fonctionnelle.
+GAUZIAN enforces advanced protection mechanisms that avoid intrusive identity checks while blocking abusive behavior and bot networks.
 
-*   **Phase 1 (Fondation) :** Infrastructure Rust, Authentification (SSO) et Sécurité périmétrique.
-*   **Phase 2 (Data) :** Ingénierie du système de fichiers (GZ Drive), algorithmes de compression et gestion des flux.
-*   **Phase 3 (Communication) :** Déploiement de l'infrastructure Mail et gestion des contacts.
-*   **Phase 4 (Expansion) :** Services organisationnels (Agenda) et ouverture publique (Beta).
+- **Context-aware Rate Limiting:** Dynamic algorithms restricting abusive patterns without penalizing legitimate users.
+- **Cryptographic Proof-of-Work:** Integration of `mCaptcha` — forcing attackers to pay the computational cost of spamming.
+- **Tenant Isolation:** Strict data compartmentalization through secure multi-tenant database design.
 
 ---
 
-> **GAUZIAN** — *L'infrastructure où la souveraineté numérique rencontre la performance brute.*
+## 5. Roadmap (30-Month Cycle)
+
+The development strategy prioritizes core stability before feature expansion.
+
+- **Phase 1 — Foundation:** Rust infrastructure, authentication (SSO), perimeter security.
+- **Phase 2 — Data Layer:** File system engineering, compression, and streaming pipelines (GZ Drive).
+- **Phase 3 — Communication:** Mail infrastructure, contacts management.
+- **Phase 4 — Expansion:** Organizational tools (Calendar), public beta release.
+
+---
+
+> **GAUZIAN** — *Where digital sovereignty meets raw performance.*
