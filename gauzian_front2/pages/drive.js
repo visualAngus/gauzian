@@ -1066,10 +1066,10 @@ export default function Drive() {
     }
 
     // ajouter un folder a la main pour le dev
-    setFolders((prevFolders) => [
-      ...prevFolders,
-      { folder_id: 'dev_folder', name: 'Dossier Dev' }
-    ]);
+    // setFolders((prevFolders) => [
+    //   ...prevFolders,
+    //   { folder_id: 'dev_folder', name: 'Dossier Dev' }
+    // ]);
 
     // si on clique quelque part sur la page
 
