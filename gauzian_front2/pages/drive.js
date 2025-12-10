@@ -137,14 +137,14 @@ export default function Drive() {
 
   const handleDownloadChunked = async (id_file, filename) => {
     try {
-      console.log("Démarrage du téléchargement streaming pour :", fileId);
+      console.log("Démarrage du téléchargement streaming pour :", id_file);
       const streamSaver = (await import('streamsaver')).default;
       await _sodium.ready;
       const sodium = _sodium;
 
       // 1. Récupérer les infos du fichier (Metadata + Key chiffrée)
       // On réutilise votre endpoint existant qui renvoie le JSON
-      const metaResponse = await fetch(`/api/drive/download?id_file=${fileId}`);
+      const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
       if (!metaResponse.ok) throw new Error("Erreur récupération métadonnées");
       const data = await metaResponse.json();
 
@@ -179,7 +179,7 @@ export default function Drive() {
       const writer = fileStream.getWriter();
 
       // 4. Lancer la requête pour récupérer le BLOB brut (streamé)
-      const response = await fetch(`/api/drive/download_raw?id_file=${fileId}`);
+      const response = await fetch(`/api/drive/download_raw?id_file=${id_file}`);
       if (!response.ok) throw new Error("Erreur lors du téléchargement du flux");
 
       const reader = response.body.getReader();
