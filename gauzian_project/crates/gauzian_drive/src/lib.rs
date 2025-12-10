@@ -1,16 +1,23 @@
+use async_stream::try_stream;
 use axum::{
+    body::Body,
     extract::{Json, Query, State}, // Utiliser Query pour l'entrée, Json pour la sortie
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
 };
+use bytes::Bytes;
+use futures::StreamExt; // Important pour utiliser .map() sur le stream SQLx
 use gauzian_auth::verify_session_token;
 use gauzian_core::{
-    AppState, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest, FolderRecord,
-    FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest, UploadRequest,
-    UploadStreamingRequest,
+    AppState, DownloadQuery, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest,
+    FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
+    UploadRequest, UploadStreamingRequest,
 };
 use serde_json::json;
-use sqlx::PgPool;
+
+use std::pin::Pin;
+use futures::stream::Stream; // Nécessaire pour le trait object
+use std::io;
 
 pub async fn upload_handler(
     State(state): State<AppState>,
@@ -868,7 +875,6 @@ pub async fn finish_streaming_upload(
 
     match vault_file_insert_result {
         Ok(_) => {
-
             let create_access_result = sqlx::query!(
                 r#"
                 INSERT INTO file_access (file_id, user_id, encrypted_file_key,permission_level,joined_at)
@@ -881,8 +887,8 @@ pub async fn finish_streaming_upload(
             .execute(&state.db_pool)
             .await;
 
-            match create_access_result{
-                Ok(_) => {},
+            match create_access_result {
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("Erreur insertion accès fichier dans la BDD: {:?}", e);
                     let body = Json(json!({
@@ -907,4 +913,55 @@ pub async fn finish_streaming_upload(
             return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }
     }
+}
+
+pub async fn download_raw_handler(
+    State(state): State<AppState>,
+    Query(query): Query<DownloadQuery>,
+    // headers...
+) -> impl IntoResponse {
+
+    // 1. Auth...
+
+    // 2. Préparation
+    let pool = state.db_pool.clone();
+    let id_file = query.id_file;
+
+    // 3. Création du stream avec annotation de type EXPLICITE
+    // On dit au compilateur : "Ce stream renvoie des Result<Bytes, std::io::Error>"
+    let stream: Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>> = Box::pin(try_stream! {
+        let mut cursor = sqlx::query!(
+            r#"
+            SELECT encrypted_chunk 
+            FROM streaming_file_chunks 
+            WHERE temp_upload_id = $1
+            ORDER BY chunk_index ASC
+            "#,
+            id_file
+        )
+        .fetch(&pool);
+
+        while let Some(result) = cursor.next().await {
+            match result {
+                Ok(record) => {
+                    yield Bytes::from(record.encrypted_chunk);
+                }
+                Err(e) => {
+                    eprintln!("Erreur Streaming SQL: {:?}", e);
+                    // Le '?' va maintenant savoir qu'il doit convertir en io::Error
+                    Err(io::Error::new(io::ErrorKind::Other, e))?;
+                }
+            }
+        }
+    });
+
+    // 4. Création du body
+    let body = Body::from_stream(stream);
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CONTENT_DISPOSITION, "attachment; filename=\"download.enc\"")
+        .body(body)
+        .unwrap()
 }

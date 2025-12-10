@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import _sodium from 'libsodium-wrappers';
+import streamSaver from 'streamsaver'; // Assurez-vous d'avoir installé ceci
+
 // Importez vos images si elles sont dans src, sinon utilisez le chemin public
 // import userProfileImg from '../images/user_profile.png'; 
 
@@ -131,6 +133,125 @@ export default function Drive() {
 
     } catch (error) {
       console.error('Error during file download:', error);
+    }
+  };
+
+  const handleDownloadChunked = async (id_file, filename) => {
+    try {
+      console.log("Démarrage du téléchargement streaming pour :", fileId);
+      await _sodium.ready;
+      const sodium = _sodium;
+
+      // 1. Récupérer les infos du fichier (Metadata + Key chiffrée)
+      // On réutilise votre endpoint existant qui renvoie le JSON
+      const metaResponse = await fetch(`/api/drive/download?id_file=${fileId}`);
+      if (!metaResponse.ok) throw new Error("Erreur récupération métadonnées");
+      const data = await metaResponse.json();
+
+      // 2. Déchiffrer la clé du fichier (copié-collé de votre logique actuelle)
+      const storageKey = localStorage.getItem('storageKey');
+      const rawStorageKey = sodium.from_hex(storageKey);
+      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
+
+      const encryptedFileKeyBuf = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
+      const nonceKey = encryptedFileKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextKey = encryptedFileKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null, ciphertextKey, null, nonceKey, encryptionKey
+      );
+
+      // Déchiffrement métadonnées pour avoir le nom et la taille
+      const encryptedMetadataBuf = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
+      const nonceMeta = encryptedMetadataBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextMeta = encryptedMetadataBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      const metadataBuf = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null, ciphertextMeta, null, nonceMeta, fileKey
+      );
+      const metadata = JSON.parse(sodium.to_string(metadataBuf));
+      console.log('Metadata déchiffrées pour streaming :', metadata);
+
+      // 3. Initialiser StreamSaver (Le tuyau vers le disque dur)
+      const fileStream = streamSaver.createWriteStream(metadata.filename, {
+        size: metadata.filesize // Important pour la barre de progression
+      });
+      const writer = fileStream.getWriter();
+
+      // 4. Lancer la requête pour récupérer le BLOB brut (streamé)
+      const response = await fetch(`/api/drive/download_raw?id_file=${fileId}`);
+      if (!response.ok) throw new Error("Erreur lors du téléchargement du flux");
+
+      const reader = response.body.getReader();
+
+      // --- CONFIGURATION DU BUFFER ---
+      // DOIT CORRESPONDRE EXACTEMENT A L'UPLOAD
+      const UPLOAD_CHUNK_DATA_SIZE = 1024 * 1024; // 1 Mo (VOTRE config upload)
+      const HEADER_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES; // 24 octets
+      const TAG_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES; // 16 octets
+
+      // Taille totale d'un bloc chiffré complet = Nonce + Data + Tag
+      const ENCRYPTED_BLOCK_SIZE = HEADER_SIZE + UPLOAD_CHUNK_DATA_SIZE + TAG_SIZE;
+
+      let buffer = new Uint8Array(0);
+
+      // 5. Boucle de lecture et déchiffrement
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          // Traiter le reste du buffer (le dernier morceau est souvent plus petit)
+          if (buffer.length > 0) {
+            await processBuffer(buffer, true);
+          }
+          break;
+        }
+
+        // Ajouter les nouvelles données au buffer
+        const newBuffer = new Uint8Array(buffer.length + value.length);
+        newBuffer.set(buffer);
+        newBuffer.set(value, buffer.length);
+        buffer = newBuffer;
+
+        // Tant qu'on a assez de données pour faire un bloc complet
+        while (buffer.length >= ENCRYPTED_BLOCK_SIZE) {
+          const chunkToProcess = buffer.slice(0, ENCRYPTED_BLOCK_SIZE);
+          buffer = buffer.slice(ENCRYPTED_BLOCK_SIZE); // On garde le reste
+          await processBuffer(chunkToProcess, false);
+        }
+      }
+
+      // Fonction Helper pour déchiffrer et écrire
+      async function processBuffer(chunkBytes, isLast) {
+        try {
+          // Extraction du Nonce
+          const nonce = chunkBytes.slice(0, HEADER_SIZE);
+          // Extraction du Ciphertext (tout le reste)
+          const ciphertext = chunkBytes.slice(HEADER_SIZE);
+
+          // Déchiffrement
+          const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            null, ciphertext, null, nonce, fileKey
+          );
+
+          // Écriture directe sur le disque
+          await writer.write(decrypted);
+
+        } catch (err) {
+          console.error("Erreur déchiffrement d'un chunk streaming", err);
+          // Si erreur ici, le fichier sera corrompu à cet endroit
+          writer.abort(err);
+          throw err;
+        }
+      }
+
+      // Fermer le fichier proprement
+      await writer.close();
+      console.log("Téléchargement streaming terminé avec succès !");
+
+    } catch (error) {
+      console.error("Erreur Download Streaming:", error);
+      alert("Erreur téléchargement streaming.");
     }
   };
 
@@ -322,10 +443,10 @@ export default function Drive() {
     });
   };
 
-const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
+  const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
     // --- 1. Préparation (Identique à avant) ---
     const fileKey = sodium.randombytes_buf(32);
-    
+
     const metadata = JSON.stringify({
       filename: file.name,
       filesize: file.size,
@@ -362,66 +483,66 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
     console.log('Upload streaming initialisé, ID:', temp_upload_id);
 
     // --- 3. UPLOAD CONCURRENT (Le changement est ici) ---
-    
+
     const CHUNK_SIZE = 1024 * 1024; // 1 Mo
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
+
     // Variables partagées entre les workers
-    let nextChunkIndexToProcess = 0; 
+    let nextChunkIndexToProcess = 0;
     let chunksFinished = 0;
-    
+
     // Nombre d'envois simultanés (3 est un bon équilibre, max 5)
-    const MAX_CONCURRENT_UPLOADS = 3; 
+    const MAX_CONCURRENT_UPLOADS = 3;
 
     // La fonction que chaque "Worker" va exécuter en boucle
     const processNextChunk = async () => {
       while (nextChunkIndexToProcess < totalChunks) {
-        
+
         // 1. On "réserve" le morceau actuel et on incrémente le compteur global
         const currentIndex = nextChunkIndexToProcess;
         nextChunkIndexToProcess++; // Le prochain worker prendra l'index suivant
-        
+
         const offset = currentIndex * CHUNK_SIZE;
 
         try {
-            // Lecture
-            // Note: slice est rapide, ne charge pas en mémoire
-            const chunkBlob = file.slice(offset, offset + CHUNK_SIZE); 
-            const chunkBuffer = await readChunkAsArrayBuffer(chunkBlob);
-            const chunkBytes = new Uint8Array(chunkBuffer);
+          // Lecture
+          // Note: slice est rapide, ne charge pas en mémoire
+          const chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
+          const chunkBuffer = await readChunkAsArrayBuffer(chunkBlob);
+          const chunkBytes = new Uint8Array(chunkBuffer);
 
-            // Chiffrement
-            const nonceChunk = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-            const encryptedChunkBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-                chunkBytes, null, null, nonceChunk, fileKey
-            );
-            const finalChunk = new Uint8Array([...nonceChunk, ...encryptedChunkBlob]);
+          // Chiffrement
+          const nonceChunk = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+          const encryptedChunkBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+            chunkBytes, null, null, nonceChunk, fileKey
+          );
+          const finalChunk = new Uint8Array([...nonceChunk, ...encryptedChunkBlob]);
 
-            // Upload
-            const uploadRes = await fetch('/api/drive/upload_chunk', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    temp_upload_id: temp_upload_id,
-                    chunk_index: currentIndex, // Important : envoyer le bon index !
-                    total_chunks: totalChunks,
-                    encrypted_chunk: bufToB64(finalChunk)
-                })
-            });
+          // Upload
+          const uploadRes = await fetch('/api/drive/upload_chunk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              temp_upload_id: temp_upload_id,
+              chunk_index: currentIndex, // Important : envoyer le bon index !
+              total_chunks: totalChunks,
+              encrypted_chunk: bufToB64(finalChunk)
+            })
+          });
 
-            if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
+          if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
 
-            // Mise à jour progression UI
-            chunksFinished++;
-            let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
-            setUploadProgress(percent);
-            setCurentFileUploadName(file.name);
+          // Mise à jour progression UI
+          chunksFinished++;
+          let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
+          setUploadProgress(percent);
+          setCurentFileUploadName(file.name);
 
-            // Ici tu peux appeler setProgress(percent) si tu as un state React
+          // Ici tu peux appeler setProgress(percent) si tu as un state React
 
         } catch (error) {
-            console.error(`Erreur sur le chunk ${currentIndex}`, error);
-            throw error; // Cela arrêtera Promise.all
+          console.error(`Erreur sur le chunk ${currentIndex}`, error);
+          throw error; // Cela arrêtera Promise.all
         }
       }
     };
@@ -429,7 +550,7 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
     // Lancement du Pool
     const workers = [];
     for (let i = 0; i < MAX_CONCURRENT_UPLOADS; i++) {
-        workers.push(processNextChunk());
+      workers.push(processNextChunk());
     }
 
     // On attend que TOUS les workers aient fini (quand il n'y a plus de chunks)
@@ -459,7 +580,7 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
         media_type: file.type || 'application/octet-stream',
         file_size: file.size,
         parent_folder_id: activeFolderId
-        
+
       })
     });
 
@@ -904,6 +1025,7 @@ const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
             .then(data => {
               if (data.status === 'success') {
                 console.log("Dossier renommé avec succès.");
+                folderName.name = newName;
                 // Rafraîchir la vue du dossier courant
               } else {
 
