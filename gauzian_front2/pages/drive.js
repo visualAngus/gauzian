@@ -1261,7 +1261,7 @@ export default function Drive() {
                     // Ajouter la classe 'selected_folder' au dossier cliqué
                     document.getElementById(folder.folder_id).classList.add('selected_folder');
                   }}
-                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder["data-folder-name"])}
+                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
                   style={{ cursor: 'pointer' }}
                   onContextMenu={(e) => {
                     e.preventDefault();
