@@ -1026,6 +1026,8 @@ export default function Drive() {
               if (data.status === 'success') {
                 console.log("Dossier renommé avec succès.");
                 folder.setAttribute("data-folder-name", newName);
+                // Mettre à jour l'état des dossiers
+                setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? {...f, name: newName} : f));
                 // Rafraîchir la vue du dossier courant
               } else {
 
