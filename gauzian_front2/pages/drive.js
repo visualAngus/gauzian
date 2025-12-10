@@ -135,124 +135,125 @@ export default function Drive() {
     }
   };
 
-  const handleDownloadChunked = async (id_file, filename_override) => {
+const handleDownloadChunked = async (id_file) => {
     try {
-      console.log("Démarrage du téléchargement streaming pour :", id_file);
-
-      // 1. Import dynamique (Next.js SSR fix)
+      console.log("=== DÉBUT DOWNLOAD STREAMING ===");
       const streamSaver = (await import('streamsaver')).default;
-
       await _sodium.ready;
       const sodium = _sodium;
 
-      // 2. Récupérer les métadonnées
+      // 1. Métadonnées
       const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
-      if (!metaResponse.ok) throw new Error("Erreur récupération métadonnées");
+      if (!metaResponse.ok) throw new Error("Erreur métadonnées");
       const data = await metaResponse.json();
-      console.log("Métadonnées reçues :", data);
-
-      // 3. Dérivation des clés (Master Key -> File Key)
+      
+      // 2. Clés
       const storageKey = localStorage.getItem('storageKey');
-      if (!storageKey) throw new Error("Utilisateur non connecté (clé manquante)");
-
       const rawStorageKey = sodium.from_hex(storageKey);
       const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
 
-      // Déchiffrer la clé du fichier
-      const encryptedFileKeyBuf = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
-      const nonceKey = encryptedFileKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedFileKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
+      // Clé Fichier
+      const encFileKey = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
       const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null, ciphertextKey, null, nonceKey, encryptionKey
+        null, 
+        encFileKey.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
+        null, 
+        encFileKey.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
+        encryptionKey
       );
 
-      // Déchiffrer les métadonnées (Nom, Taille)
-      const encryptedMetadataBuf = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
-      const nonceMeta = encryptedMetadataBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextMeta = encryptedMetadataBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
+      // Métadonnées déchiffrées
+      const encMeta = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
       const metadataBuf = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null, ciphertextMeta, null, nonceMeta, fileKey
+        null, 
+        encMeta.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
+        null, 
+        encMeta.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES), 
+        fileKey
       );
       const metadata = JSON.parse(sodium.to_string(metadataBuf));
-      console.log('Metadata :', metadata);
+      console.log('✅ Metadata OK:', metadata);
 
-      // 4. Initialiser le tuyau de téléchargement
-      // On utilise le nom du fichier déchiffré
-      const fileStream = streamSaver.createWriteStream(metadata.filename, {
-        size: metadata.filesize
-      });
+      // 3. StreamSaver
+      const fileStream = streamSaver.createWriteStream(metadata.filename, { size: metadata.filesize });
       const writer = fileStream.getWriter();
 
-      // 5. Appeler l'API de streaming brut
+      // 4. Flux Réseau
       const response = await fetch(`/api/drive/download_raw?id_file=${id_file}`);
-      if (!response.ok) throw new Error("Erreur flux réseau");
-
       const reader = response.body.getReader();
 
-      // --- CONSTANTES (Doivent matcher l'Upload) ---
-      const CHUNK_DATA_SIZE = 1024 * 1024; // 1 Mo de données utiles
-      const HEADER_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES; // 24
-      const TAG_SIZE = sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES; // 16
+      // 5. Configuration (A VÉRIFIER AVEC TON UPLOAD)
+      const UPLOAD_CHUNK_SIZE = 1024 * 1024; // <--- C'EST ICI QUE TOUT SE JOUE
+      const HEADER_SIZE = 24; 
+      const TAG_SIZE = 16;
+      const FULL_BLOCK_SIZE = HEADER_SIZE + UPLOAD_CHUNK_SIZE + TAG_SIZE;
 
-      // Un bloc complet chiffré fait 1Mo + 24 octets (Nonce) + 16 octets (Tag)
-      const ENCRYPTED_BLOCK_SIZE = HEADER_SIZE + CHUNK_DATA_SIZE + TAG_SIZE;
+      console.log(`🔧 Config: ChunkData=${UPLOAD_CHUNK_SIZE}, BlockEncrypted=${FULL_BLOCK_SIZE}`);
 
       let buffer = new Uint8Array(0);
+      let chunkCount = 0;
 
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
-          // Traiter le dernier morceau (qui est < ENCRYPTED_BLOCK_SIZE)
+          console.log(`📥 Fin du flux réseau. Reste dans buffer: ${buffer.length}`);
           if (buffer.length > 0) {
-            await processBuffer(buffer);
+            await processBuffer(buffer, true); // Traitement final
           }
           break;
         }
 
         // Ajouter au buffer
-        const newBuffer = new Uint8Array(buffer.length + value.length);
-        newBuffer.set(buffer);
-        newBuffer.set(value, buffer.length);
-        buffer = newBuffer;
+        const temp = new Uint8Array(buffer.length + value.length);
+        temp.set(buffer);
+        temp.set(value, buffer.length);
+        buffer = temp;
 
-        // Traiter autant de blocs COMPLETS que possible
-        while (buffer.length >= ENCRYPTED_BLOCK_SIZE) {
-          const chunkToProcess = buffer.slice(0, ENCRYPTED_BLOCK_SIZE);
-          buffer = buffer.slice(ENCRYPTED_BLOCK_SIZE); // On garde le reste pour le prochain tour
-          await processBuffer(chunkToProcess);
+        // Boucle de traitement des blocs complets
+        while (buffer.length >= FULL_BLOCK_SIZE) {
+          const chunk = buffer.slice(0, FULL_BLOCK_SIZE);
+          buffer = buffer.slice(FULL_BLOCK_SIZE);
+          await processBuffer(chunk, false);
         }
       }
 
-      async function processBuffer(chunkBytes) {
+      async function processBuffer(bytes, isLast) {
+        chunkCount++;
         try {
-          // 1. Extraire Nonce
-          const nonce = chunkBytes.slice(0, HEADER_SIZE);
-          // 2. Extraire Ciphertext (Data + Tag)
-          const ciphertext = chunkBytes.slice(HEADER_SIZE);
+            // Logs pour comprendre l'erreur
+            console.log(`🔑 Traitement Chunk #${chunkCount}. Taille: ${bytes.length} bytes. (IsLast: ${isLast})`);
+            
+            // Si c'est trop petit pour contenir un header + tag, c'est mort
+            if (bytes.length < HEADER_SIZE + TAG_SIZE) {
+                throw new Error(`Chunk trop petit (${bytes.length}) - Corruption possible`);
+            }
 
-          // 3. Déchiffrer
-          const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null, ciphertext, null, nonce, fileKey
-          );
+            const nonce = bytes.slice(0, HEADER_SIZE);
+            const cipher = bytes.slice(HEADER_SIZE);
 
-          // 4. Écrire sur le disque
-          await writer.write(decrypted);
+            const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+                null, cipher, null, nonce, fileKey
+            );
+            
+            await writer.write(decrypted);
+            // console.log(`✅ Chunk #${chunkCount} écrit.`); // Decommenter si besoin
+
         } catch (err) {
-          console.error("Erreur de déchiffrement (Chunk corrompu ou mauvaise clé) :", err);
-          writer.abort(err); // Annule le téléchargement navigateur
-          throw err; // Stoppe la boucle JS
+            console.error(`❌ ERREUR CRITIQUE au Chunk #${chunkCount}`);
+            console.error(`Attendu: Header(24) + Tag(16) + Data. Reçu total: ${bytes.length}`);
+            console.error(err);
+            writer.abort(err);
+            throw err;
         }
       }
 
       await writer.close();
-      console.log("Téléchargement terminé.");
+      console.log("🎉 Téléchargement terminé avec succès.");
 
     } catch (error) {
-      console.error("Erreur HandleDownloadChunked:", error);
-      alert("Erreur lors du téléchargement : " + error.message);
+      console.error("Erreur Globale:", error);
+      alert("Erreur: " + error.message);
     }
   };
 
