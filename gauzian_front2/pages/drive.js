@@ -964,7 +964,7 @@ export default function Drive() {
           let newName = folderName.innerText; // .innerText nettoie souvent mieux que .innerHTML
           let created_at = folder.getAttribute("data-created-at");
           let updated_at = new Date().toISOString();
-
+          
 
           let metadata = {
             name: newName,
@@ -1025,7 +1025,7 @@ export default function Drive() {
             .then(data => {
               if (data.status === 'success') {
                 console.log("Dossier renommé avec succès.");
-                folderName.name = newName;
+                folder.setAttribute("data-folder-name", newName);
                 // Rafraîchir la vue du dossier courant
               } else {
 
@@ -1259,7 +1259,7 @@ export default function Drive() {
                     // Ajouter la classe 'selected_folder' au dossier cliqué
                     document.getElementById(folder.folder_id).classList.add('selected_folder');
                   }}
-                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder["data-folder-name"])}
                   style={{ cursor: 'pointer' }}
                   onContextMenu={(e) => {
                     e.preventDefault();
