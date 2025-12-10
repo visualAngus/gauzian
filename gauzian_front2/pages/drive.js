@@ -149,6 +149,7 @@ export default function Drive() {
       const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
       if (!metaResponse.ok) throw new Error("Erreur récupération métadonnées");
       const data = await metaResponse.json();
+      console.log("Métadonnées reçues :", data);
 
       // 3. Dérivation des clés (Master Key -> File Key)
       const storageKey = localStorage.getItem('storageKey');
