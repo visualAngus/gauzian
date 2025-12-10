@@ -118,3 +118,8 @@ pub struct FinishStreamingUploadRequest {
     pub file_size: usize,
     pub parent_folder_id: Uuid,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct DownloadQuery {
+    pub id_file: Uuid,
+}
