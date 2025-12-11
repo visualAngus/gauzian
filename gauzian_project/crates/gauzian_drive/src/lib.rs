@@ -5,20 +5,21 @@ use axum::{
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
+use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use futures::StreamExt; // Important pour utiliser .map() sur le stream SQLx
 use gauzian_auth::verify_session_token;
 use gauzian_core::{
     AppState, DownloadQuery, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
-    UploadRequest, UploadStreamingRequest,
+    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,
 };
 use serde_json::json;
-use base64::{Engine as _, engine::general_purpose};
+use uuid::Uuid;
 
-use std::pin::Pin;
 use futures::stream::Stream; // Nécessaire pour le trait object
 use std::io;
+use std::pin::Pin;
 
 pub async fn upload_handler(
     State(state): State<AppState>,
@@ -69,6 +70,24 @@ pub async fn upload_handler(
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
+
+    // verifier que le user a encode de la place pour le fichier
+    let storage_usage = get_storage_usage_handler(user_id, &state).await;
+    if let Some(usage) = storage_usage {
+        if usage + payload.file_size as u64 > USER_STORAGE_LIMIT {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Espace de stockage insuffisant"
+            }));
+            return (StatusCode::BAD_REQUEST, body).into_response();
+        }
+    } else {
+        let body = Json(json!({
+            "status": "error",
+            "message": "Impossible de vérifier l'espace de stockage"
+        }));
+        return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+    }
 
     // requet sql pour rajouter le fichier dans la bdd associée à user_id
 
@@ -712,6 +731,24 @@ pub async fn open_streaming_upload_handler(
         }
     };
 
+    // verifier que le user a encode de la place pour le fichier
+    let storage_usage = get_storage_usage_handler(user_id, &state).await;
+    if let Some(usage) = storage_usage {
+        if usage + payload.file_size as u64 > USER_STORAGE_LIMIT {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Espace de stockage insuffisant"
+            }));
+            return (StatusCode::BAD_REQUEST, body).into_response();
+        }
+    } else {
+        let body = Json(json!({
+            "status": "error",
+            "message": "Impossible de vérifier l'espace de stockage"
+        }));
+        return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+    }
+
     // Création de l'entrée temporaire pour l'upload streaming
     let temp_upload_insert_result = sqlx::query!(
         r#"
@@ -938,7 +975,6 @@ pub async fn download_raw_handler(
     Query(query): Query<DownloadQuery>,
     // headers...
 ) -> impl IntoResponse {
-
     // 1. Auth...
 
     // 2. Préparation
@@ -946,11 +982,12 @@ pub async fn download_raw_handler(
     let id_file = query.id_file;
 
     // 3. Création du stream avec la BONNE REQUÊTE SQL (JOIN)
-    let stream: Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>> = Box::pin(try_stream! {
-        // On utilise la jointure pour partir de l'ID du fichier (vf.id)
-        // et récupérer les chunks associés (sfc.encrypted_chunk)
-        let mut cursor = sqlx::query!(
-            r#"
+    let stream: Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>> =
+        Box::pin(try_stream! {
+            // On utilise la jointure pour partir de l'ID du fichier (vf.id)
+            // et récupérer les chunks associés (sfc.encrypted_chunk)
+            let mut cursor = sqlx::query!(
+                r#"
             SELECT sfc.encrypted_chunk 
             FROM streaming_file_chunks sfc
             INNER JOIN streaming_file sf ON sf.id = sfc.temp_upload_id 
@@ -958,22 +995,22 @@ pub async fn download_raw_handler(
             WHERE vf.id = $1 AND vf.is_chunked = true
             ORDER BY sfc.chunk_index ASC
             "#,
-            id_file
-        )
-        .fetch(&pool);
+                id_file
+            )
+            .fetch(&pool);
 
-        while let Some(result) = cursor.next().await {
-            match result {
-                Ok(record) => {
-                    yield Bytes::from(record.encrypted_chunk);
-                }
-                Err(e) => {
-                    eprintln!("Erreur Streaming SQL: {:?}", e);
-                    Err(io::Error::new(io::ErrorKind::Other, e))?;
+            while let Some(result) = cursor.next().await {
+                match result {
+                    Ok(record) => {
+                        yield Bytes::from(record.encrypted_chunk);
+                    }
+                    Err(e) => {
+                        eprintln!("Erreur Streaming SQL: {:?}", e);
+                        Err(io::Error::new(io::ErrorKind::Other, e))?;
+                    }
                 }
             }
-        }
-    });
+        });
 
     // 4. Création du body
     let body = Body::from_stream(stream);
@@ -981,7 +1018,31 @@ pub async fn download_raw_handler(
     Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/octet-stream")
-        .header(header::CONTENT_DISPOSITION, "attachment; filename=\"download.enc\"")
+        .header(
+            header::CONTENT_DISPOSITION,
+            "attachment; filename=\"download.enc\"",
+        )
         .body(body)
         .unwrap()
+}
+
+async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<u64> {
+    let storage_usage_result = sqlx::query_scalar!(
+        r#"
+        SELECT COALESCE(SUM(file_size), 0)::int8 AS total_storage
+        FROM vault_files
+        WHERE owner_id = $1
+        "#,
+        user_id,
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match storage_usage_result {
+        Ok(total_storage) => total_storage,
+        Err(e) => {
+            eprintln!("Erreur récupération stockage utilisateur: {:?}", e);
+            None
+        }
+    }
 }
