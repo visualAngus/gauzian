@@ -47,6 +47,7 @@ export default function Drive() {
   const [uploadingsFilesCount, setUploadingsFilesCount] = useState(0); // Nombre de fichiers en cours d'upload
   const [curentUploadingFilesNames, setCurentUploadingFilesNames] = useState([]); // Noms des fichiers en cours d'upload
   const [UploadProcesses, setUploadProcesses] = useState({}); // Dictionnaire des processus d'upload par fichier
+  const uploadingCountRef = useRef(0); // Ref pour compter de manière synchrone
 
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
@@ -354,16 +355,17 @@ export default function Drive() {
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
-    while (uploadingsFilesCount >= 3) {
+    while (uploadingCountRef.current >= 3) {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    setUploadingsFilesCount(uploadingsFilesCount + 1);
+    uploadingCountRef.current += 1;
+    setUploadingsFilesCount(uploadingCountRef.current);
     console.log('Début du processus...');
     setTimeout(() => {
       
-      console.log(`Total fichiers en upload après incrémentation: ${uploadingsFilesCount}`);
+      console.log(`Total fichiers en upload après incrémentation: ${uploadingCountRef.current}`);
     }, 100);
 
     try {
@@ -394,8 +396,9 @@ export default function Drive() {
       // 3. Fin commune
       console.log('Succès upload global.');
       // setUploading(false);
-      setUploadingsFilesCount(Math.max(0, uploadingsFilesCount - 1));
-      if (uploadingsFilesCount > 0) {
+      uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
+      setUploadingsFilesCount(uploadingCountRef.current);
+      if (uploadingCountRef.current > 0) {
         setUploading(true);
       } else {
         setUploading(false);
@@ -409,8 +412,9 @@ export default function Drive() {
       console.error('Erreur globale upload:', error);
       alert(`Erreur: ${error.message}`);
       // setUploading(false);
-      setUploadingsFilesCount(Math.max(0, uploadingsFilesCount - 1));
-      if (uploadingsFilesCount > 0) {
+      uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
+      setUploadingsFilesCount(uploadingCountRef.current);
+      if (uploadingCountRef.current > 0) {
         setUploading(true);
       } else {
         setUploading(false);
