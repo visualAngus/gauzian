@@ -362,8 +362,6 @@ export default function Drive() {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-
-    totalFilesToUploadRef.current -= 1;
     nbFilesUploadedRef.current += 1;
 
     uploadingCountRef.current += 1;
