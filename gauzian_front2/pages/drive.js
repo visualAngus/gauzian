@@ -42,6 +42,7 @@ export default function Drive() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null); // Pour déclencher l'input file caché
   const stopallUploadsRef = useRef(false); // Ref pour arrêter tous les uploads
+  const abortControllerRef = useRef(null); // AbortController pour annuler les requêtes fetch
 
 
   // Gestion upload de plusieurs fichiers
@@ -364,6 +365,12 @@ export default function Drive() {
       console.log("Upload arrêté par l'utilisateur pour le fichier:", selectedFile.name);
       return; // Ne pas traiter ce fichier
     }
+
+    // Initialiser l'AbortController si ce n'est pas déjà fait
+    if (!abortControllerRef.current) {
+      abortControllerRef.current = new AbortController();
+    }
+
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
 
@@ -429,6 +436,7 @@ export default function Drive() {
         setUploading(false);
         nbFilesUploadedRef.current = 0;
         totalFilesToUploadRef.current = 0;
+        abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
       setTimeout(() => {
         getFolderStructure(activeFolderId);
@@ -447,6 +455,7 @@ export default function Drive() {
         setUploading(false);
         nbFilesUploadedRef.current = 0;
         totalFilesToUploadRef.current = 0;
+        abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
     }
   };
@@ -512,12 +521,17 @@ export default function Drive() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) throw new Error('Erreur API Upload Simple');
       return true;
 
     } catch (e) {
+      if (e.name === 'AbortError') {
+        console.log('Upload annulé pour le petit fichier:', file.name);
+        return false;
+      }
       console.error('Erreur upload petit fichier:', e);
       return false;
     }
@@ -550,23 +564,34 @@ export default function Drive() {
     const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
 
     // --- 2. Initialisation Serveur ---
-    const openRes = await fetch('/api/drive/open_streaming_upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        encrypted_metadata: bufToB64(finalMetadata),
-        encrypted_file_key: bufToB64(finalFileKey),
-        media_type: file.type || 'application/octet-stream',
-        file_size: file.size,
-        parent_folder_id: activeFolderId
-      })
-    });
+    let temp_upload_id;
+    try {
+      const openRes = await fetch('/api/drive/open_streaming_upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          encrypted_metadata: bufToB64(finalMetadata),
+          encrypted_file_key: bufToB64(finalFileKey),
+          media_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+          parent_folder_id: activeFolderId
+        }),
+        signal: abortControllerRef.current.signal,
+      });
 
-    if (!openRes.ok) {
-      let message = await openRes.json();
-      throw new Error(message);
+      if (!openRes.ok) {
+        let message = await openRes.json();
+        throw new Error(message);
+      }
+      const data = await openRes.json();
+      temp_upload_id = data.temp_upload_id;
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        console.log('Upload annulé lors de l\'initialisation pour:', file.name);
+        return false;
+      }
+      throw e;
     }
-    const { temp_upload_id } = await openRes.json();
     // console.log('Upload streaming initialisé, ID:', temp_upload_id);
 
     // --- 3. UPLOAD CONCURRENT (Le changement est ici) ---
@@ -607,16 +632,26 @@ export default function Drive() {
           const finalChunk = new Uint8Array([...nonceChunk, ...encryptedChunkBlob]);
 
           // Upload
-          const uploadRes = await fetch('/api/drive/upload_chunk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              temp_upload_id: temp_upload_id,
-              chunk_index: currentIndex, // Important : envoyer le bon index !
-              total_chunks: totalChunks,
-              encrypted_chunk: bufToB64(finalChunk)
-            })
-          });
+          let uploadRes;
+          try {
+            uploadRes = await fetch('/api/drive/upload_chunk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                temp_upload_id: temp_upload_id,
+                chunk_index: currentIndex, // Important : envoyer le bon index !
+                total_chunks: totalChunks,
+                encrypted_chunk: bufToB64(finalChunk)
+              }),
+              signal: abortControllerRef.current.signal,
+            });
+          } catch (e) {
+            if (e.name === 'AbortError') {
+              console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
+              return; // Sortir de la fonction processNextChunk
+            }
+            throw e;
+          }
 
           if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
 
@@ -641,6 +676,7 @@ export default function Drive() {
               nbFilesUploadedRef.current = 0;
               totalFilesToUploadRef.current = 0;
               stopallUploadsRef.current = false;
+              abortControllerRef.current = null; // Réinitialiser l'AbortController
             }
           }
 
@@ -685,21 +721,30 @@ export default function Drive() {
     //     pub file_size: usize,
     //     pub parent_folder_id: Uuid,
     // }
-    const finalizeRes = await fetch('/api/drive/finish_streaming_upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        temp_upload_id: temp_upload_id,
-        encrypted_file_key: bufToB64(finalFileKey),
-        encrypted_metadata: bufToB64(finalMetadata),
-        media_type: file.type || 'application/octet-stream',
-        file_size: file.size,
-        parent_folder_id: activeFolderId
+    try {
+      const finalizeRes = await fetch('/api/drive/finish_streaming_upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          temp_upload_id: temp_upload_id,
+          encrypted_file_key: bufToB64(finalFileKey),
+          encrypted_metadata: bufToB64(finalMetadata),
+          media_type: file.type || 'application/octet-stream',
+          file_size: file.size,
+          parent_folder_id: activeFolderId
 
-      })
-    });
+        }),
+        signal: abortControllerRef.current.signal,
+      });
 
-    if (!finalizeRes.ok) throw new Error("Erreur lors de la finalisation de l'upload streaming");
+      if (!finalizeRes.ok) throw new Error("Erreur lors de la finalisation de l'upload streaming");
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        console.log('Upload annulé lors de la finalisation pour:', file.name);
+        return false;
+      }
+      throw e;
+    }
 
     console.log('Streaming terminé.');
     return true;
@@ -1503,6 +1548,9 @@ export default function Drive() {
               onClick={() => {
                 // Annuler tous les uploads en cours
                 stopallUploadsRef.current = true;
+                if (abortControllerRef.current) {
+                  abortControllerRef.current.abort();
+                }
               }}
               style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'red', fontWeight: 'bold' }}
               title="Annuler l'importation"
