@@ -51,13 +51,14 @@ export default function Drive() {
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
       // Traiter chaque fichier séquentiellement
-      Array.from(selectedFiles).forEach((file) => {
+      for (const file of selectedFiles) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
         encodeAndSend(file);
-      });
+      }
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
     e.target.value = '';
