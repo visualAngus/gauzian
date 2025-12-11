@@ -44,6 +44,7 @@ export default function Drive() {
 
 
   // Gestion upload de plusieurs fichiers
+  const [uploadingsFilesCount, setUploadingsFilesCount] = useState(0); // Nombre de fichiers en cours d'upload
   const [curentUploadingFilesNames, setCurentUploadingFilesNames] = useState([]); // Noms des fichiers en cours d'upload
   const [UploadProcesses, setUploadProcesses] = useState({}); // Dictionnaire des processus d'upload par fichier
 
@@ -57,7 +58,6 @@ export default function Drive() {
       Array.from(selectedFiles).forEach((file) => {
         encodeAndSend(file);
       });
-      setUploading(false);
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
     e.target.value = '';
@@ -351,7 +351,7 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
-    setUploading(true);
+    setUploadingsFilesCount(uploadingsFilesCount + 1);
     console.log('Début du processus...');
 
     try {
@@ -1094,6 +1094,14 @@ export default function Drive() {
     } else {
       getFolderStructure(activeFolderId);
       getFileStructure(activeFolderId);
+    }
+
+
+    // if UploadingsFilesCount > 0 on met uploading a true
+    if (uploadingsFilesCount > 0) {
+      setUploading(true);
+    } else {
+      setUploading(false);
     }
 
     // ajouter un folder a la main pour le dev
