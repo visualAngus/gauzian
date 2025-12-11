@@ -527,7 +527,7 @@ export default function Drive() {
     });
 
     if (!openRes.ok) {
-      let message = await openRes.json().message;
+      let message = await openRes.json();
       throw new Error(message);
     }
     const { temp_upload_id } = await openRes.json();
