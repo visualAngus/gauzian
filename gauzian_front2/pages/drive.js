@@ -1163,18 +1163,18 @@ export default function Drive() {
       }
     });
 
-    let renameOption = menu.querySelector("#rename_file_option");
+    let renameOption = menu.querySelector("#rename_folder_option");
 
     renameOption.onclick = () => {
       console.log("Renommer le fichier :", fileId);
     }
 
-    let deleteOption = menu.querySelector("#delete_file_option");
+    let deleteOption = menu.querySelector("#delete_folder_option");
     deleteOption.onclick = () => {
       console.log("Supprimer le fichier :", fileId);
     }
 
-    let shareOption = menu.querySelector("#share_file_option");
+    let shareOption = menu.querySelector("#share_folder_option");
     shareOption.onclick = () => {
       console.log("Partager le fichier :", fileId);
     }
