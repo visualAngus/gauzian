@@ -812,6 +812,7 @@ export default function Drive() {
       
       // CORRECTION ICI : On met un tableau d'objets
       setPath([{ id: rootId, name: 'Mon Drive' }]);
+      console.log("ROOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOT ID :", rootId);
       const menu_drive = document.getElementById('menu_drive');
       if (menu_drive) menu_drive.classList.add('active');
 
