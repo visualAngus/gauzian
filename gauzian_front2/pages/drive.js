@@ -1315,7 +1315,7 @@ export default function Drive() {
     let renameOption = menu.querySelector("#rename_folder_option");
 
     renameOption.onclick = () => {
-      console.log("Renommer le fichier :", fileId);
+      rename_file(fileId);
     }
 
     let deleteOption = menu.querySelector("#delete_folder_option");
