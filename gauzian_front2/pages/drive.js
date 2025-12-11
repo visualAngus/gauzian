@@ -1577,7 +1577,7 @@ export default function Drive() {
             </button>
           </div>
           <div style={{ marginBottom: '10px' }}>
-            <a style={{ display: totalFilesToUploadRef.current - nbFilesUploadedRef.current > 0 ? 'block' : 'none' }}>Fichier(s) restants à importer : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
+            <a style={{ display: totalFilesToUploadRef.current - nbFilesUploadedRef.current > 0 ? 'block' : 'none' }}>Fichier(s) en attente : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
           </div>
           {curentUploadingFilesNames.map((fileName) => (
             <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
@@ -1617,7 +1617,7 @@ export default function Drive() {
           {/* div storage used en go sous forme d'une barre de progression */}
           <div className="div_storage_used">
             <div className="storage_used_container">
-              <div className="storage_used_bar" style={{ width: `${(storageUsed / storageLimit) * 100}%` }}></div>
+              <div className={`storage_used_bar${(storageUsed / storageLimit) >= 0.95 ? ' full' : ''}`} style={{ width: `${(storageUsed / storageLimit) * 100}%` }}></div>
             </div>
             <div className="storage_used_text">
               <span>{(storageUsed / (1024 ** 3)).toFixed(2)} GB</span> / <span>{(storageLimit / (1024 ** 3)).toFixed(2)} GB</span>
