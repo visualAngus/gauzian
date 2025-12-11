@@ -495,6 +495,6 @@ nav ul li a:hover {
     background-color: var(--orange-color);
 }
 
-.div_upload_progress.div_storage_used{
+.div_upload_progress .div_storage_used{
     width: 100% !important;
 }
