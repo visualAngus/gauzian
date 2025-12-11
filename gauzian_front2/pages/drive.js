@@ -163,7 +163,12 @@ export default function Drive() {
   const handleDownloadChunked = async (id_file) => {
     try {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
-      // const streamSaver = (await import('streamsaver')).default;
+
+      // si l'ulr est en localhost alors ne pas importer streamSaver
+        
+      const streamSaver = (await import('streamsaver')).default;
+      
+      
       await _sodium.ready;
       const sodium = _sodium;
 
