@@ -60,6 +60,10 @@ export default function Drive() {
     if (selectedFiles && selectedFiles.length > 0) {
       // Traiter chaque fichier séquentiellement
       for (const file of selectedFiles) {
+        if (stopallUploadsRef.current) {
+          console.log("Upload arrêté par l'utilisateur avant traitement du fichier:", file.name);
+          break; // Arrêter le traitement des fichiers suivants
+        }
         await new Promise((resolve) => setTimeout(resolve, 20));
         encodeAndSend(file);
       }
@@ -356,10 +360,19 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
+    if (stopallUploadsRef.current) {
+      console.log("Upload arrêté par l'utilisateur pour le fichier:", selectedFile.name);
+      return; // Ne pas traiter ce fichier
+    }
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
 
     while (uploadingCountRef.current >= 3) {
+      if (stopallUploadsRef.current) {
+        console.log("Upload arrêté par l'utilisateur pendant l'attente pour:", selectedFile.name);
+        totalFilesToUploadRef.current = Math.max(0, totalFilesToUploadRef.current - 1); // Corriger le compteur
+        return;
+      }
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
@@ -386,10 +399,24 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
+        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
+        if (!success) {
+          // Upload annulé, décrémenter les compteurs
+          uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
+          totalFilesToUploadRef.current = Math.max(0, totalFilesToUploadRef.current - 1);
+          setUploadingsFilesCount(uploadingCountRef.current);
+          return;
+        }
       } else {
         console.log(`Fichier <= 0.9Mo (${selectedFile.size}). Passage en mode Simple.`);
-        await uploadSmallFile(selectedFile, sodium, encryptionKey);
+        const success = await uploadSmallFile(selectedFile, sodium, encryptionKey);
+        if (!success) {
+          // Upload annulé, décrémenter les compteurs
+          uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
+          totalFilesToUploadRef.current = Math.max(0, totalFilesToUploadRef.current - 1);
+          setUploadingsFilesCount(uploadingCountRef.current);
+          return;
+        }
       }
 
       // 3. Fin commune
@@ -426,73 +453,81 @@ export default function Drive() {
 
   // --- LOGIQUE FICHIERS < 0.9 Mo (En mémoire) ---
   const uploadSmallFile = async (file, sodium, encryptionKey) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+    if (stopallUploadsRef.current) {
+      console.log("Upload arrêté par l'utilisateur pour le petit fichier:", file.name);
+      return false; // Annuler l'upload de ce fichier
+    }
 
-      reader.onload = async (event) => {
-        try {
-          const fileBytes = new Uint8Array(event.target.result);
+    try {
+      const fileBytes = new Uint8Array(await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => resolve(event.target.result);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      }));
 
-          // Métadonnées
-          const metadata = JSON.stringify({
-            filename: file.name,
-            filesize: file.size,
-            filetype: file.type,
-          });
+      // Métadonnées
+      const metadata = JSON.stringify({
+        filename: file.name,
+        filesize: file.size,
+        filetype: file.type,
+      });
 
-          // Génération clé fichier
-          const fileKey = sodium.randombytes_buf(32);
+      // Génération clé fichier
+      const fileKey = sodium.randombytes_buf(32);
 
-          // Chiffrement fichier (Petit fichier = 1 seul bloc ou quelques blocs en mémoire)
-          const nonceFile = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-          const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-            fileBytes, null, null, nonceFile, fileKey
-          );
-          const finalBlob = new Uint8Array([...nonceFile, ...ciphertext]);
+      // Chiffrement fichier (Petit fichier = 1 seul bloc ou quelques blocs en mémoire)
+      const nonceFile = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        fileBytes, null, null, nonceFile, fileKey
+      );
+      const finalBlob = new Uint8Array([...nonceFile, ...ciphertext]);
 
-          // Chiffrement Métadonnées
-          const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-          const encryptedMetadata = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-            sodium.from_string(metadata), null, null, nonceMeta, fileKey
-          );
-          const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
+      // Chiffrement Métadonnées
+      const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const encryptedMetadata = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        sodium.from_string(metadata), null, null, nonceMeta, fileKey
+      );
+      const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
 
-          // Chiffrement Clé Fichier
-          const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-          const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-            fileKey, null, null, nonceKey, encryptionKey
-          );
-          const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
+      // Chiffrement Clé Fichier
+      const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        fileKey, null, null, nonceKey, encryptionKey
+      );
+      const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
 
-          nbFilesUploadedRef.current += 1;
-          // Envoi
-          const payload = {
-            encrypted_blob: bufToB64(finalBlob),
-            encrypted_metadata: bufToB64(finalMetadata),
-            encrypted_file_key: bufToB64(finalFileKey),
-            media_type: file.type || 'application/octet-stream',
-            file_size: finalBlob.length,
-            parent_folder_id: activeFolderId,
-          };
-
-          const response = await fetch('/api/drive/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-
-          if (!response.ok) throw new Error('Erreur API Upload Simple');
-          resolve();
-
-        } catch (e) { reject(e); }
+      nbFilesUploadedRef.current += 1;
+      // Envoi
+      const payload = {
+        encrypted_blob: bufToB64(finalBlob),
+        encrypted_metadata: bufToB64(finalMetadata),
+        encrypted_file_key: bufToB64(finalFileKey),
+        media_type: file.type || 'application/octet-stream',
+        file_size: finalBlob.length,
+        parent_folder_id: activeFolderId,
       };
 
-      reader.onerror = (e) => reject(e);
-      reader.readAsArrayBuffer(file);
-    });
+      const response = await fetch('/api/drive/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error('Erreur API Upload Simple');
+      return true;
+
+    } catch (e) {
+      console.error('Erreur upload petit fichier:', e);
+      return false;
+    }
   };
 
   const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
+    if (stopallUploadsRef.current) {
+      console.log("Upload arrêté par l'utilisateur pour le gros fichier:", file.name);
+      return false; // Annuler l'upload de ce fichier
+    }
     // --- 1. Préparation (Identique à avant) ---
     const fileKey = sodium.randombytes_buf(32);
 
@@ -667,6 +702,7 @@ export default function Drive() {
     if (!finalizeRes.ok) throw new Error("Erreur lors de la finalisation de l'upload streaming");
 
     console.log('Streaming terminé.');
+    return true;
   };
 
   // Helper pour lire un blob en Promise
