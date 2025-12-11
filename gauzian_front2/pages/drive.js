@@ -526,7 +526,10 @@ export default function Drive() {
       })
     });
 
-    if (!openRes.ok) throw new Error("Impossible d'initialiser l'upload streaming");
+    if (!openRes.ok) {
+      console.error("Erreur lors de l'initialisation de l'upload streaming");
+      console.log(await openRes.text());
+    }
     const { temp_upload_id } = await openRes.json();
     // console.log('Upload streaming initialisé, ID:', temp_upload_id);
 
