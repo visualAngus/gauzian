@@ -41,6 +41,7 @@ export default function Drive() {
   // États pour l'upload (venant de votre code React)
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null); // Pour déclencher l'input file caché
+  const stopallUploadsRef = useRef(false); // Ref pour arrêter tous les uploads
 
 
   // Gestion upload de plusieurs fichiers
@@ -357,7 +358,7 @@ export default function Drive() {
   const encodeAndSend = async (selectedFile) => {
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
-    
+
     while (uploadingCountRef.current >= 3) {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -545,7 +546,7 @@ export default function Drive() {
     // Nombre d'envois simultanés (3 est un bon équilibre, max 5)
     const MAX_CONCURRENT_UPLOADS = 3;
 
-      nbFilesUploadedRef.current += 1;
+    nbFilesUploadedRef.current += 1;
     // La fonction que chaque "Worker" va exécuter en boucle
     const processNextChunk = async () => {
       while (nextChunkIndexToProcess < totalChunks) {
@@ -584,10 +585,14 @@ export default function Drive() {
 
           if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
 
+          if (stopallUploadsRef.current) {
+            throw new Error("Upload annulé par l'utilisateur.");
+          }
+
           // Mise à jour progression UI
           chunksFinished++;
           let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
-          
+
           UploadProcesses[file.name] = percent;
           setUploadProcesses({ ...UploadProcesses });
           setCurentUploadingFilesNames(Object.keys(UploadProcesses));
@@ -850,15 +855,15 @@ export default function Drive() {
     if (data.status === 'success' && data.folders.length > 0) {
       const rootId = data.folders[0].folder_id;
 
-      
+
       setActiveFolderId(rootId);
       setRootFolderId(rootId);
       setActiveSection('mon_drive');
-      
+
       const newUrl = new URL(window.location);
       newUrl.searchParams.set('folderId', rootId);
       window.history.pushState({}, '', newUrl);
-      
+
       // CORRECTION ICI : On met un tableau d'objets
       setPath([{ id: rootId, name: 'Mon Drive' }]);
 
@@ -1271,7 +1276,7 @@ export default function Drive() {
           fileKey
         );
         const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
-        const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);  
+        const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
         console.log("Renommer le fichier :", fileId, "en", newName);
         fileName.classList.remove("editing_file_name");
 
@@ -1369,7 +1374,7 @@ export default function Drive() {
     // si on clique quelque part sur la page
 
     // simulé un download de fichier
-    
+
     // setCurentUploadingFilesNames([
     //   'exemple_grand_fichier_1.zip',
     //   'video_vacances_2023.mp4',
@@ -1433,21 +1438,38 @@ export default function Drive() {
             Partager
           </div>
         </div>
-        
-         <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
-            {/* div pour afficher le nombre de fichiers en attente */}
-            <div style={{ marginBottom: '10px' }}>
-              <a style={{ display: totalFilesToUploadRef.current - nbFilesUploadedRef.current > 0 ? 'block' : 'none' }}>Fichier(s) restants à importer : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
-            </div>
-            {curentUploadingFilesNames.map((fileName) => (
-              <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
-                <a>{fileName} - {UploadProcesses[fileName]}%</a>
-                <div className="progress_bar_container">
-                <div className="progress_bar_fill" style={{ width: `${UploadProcesses[fileName]}%` }}></div>
-                </div>
-              </div>
-            ))}
+
+        <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
+          {/* div pour annulé tout l'upload */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <a style={{ fontWeight: 'bold' }}>Importation en cours...</a>
+            <button
+              onClick={() => {
+                // Annuler tous les uploads en cours
+                setUploadProcesses({});
+                setCurentUploadingFilesNames([]);
+                setUploadingsFilesCount(0);
+                setUploading(false);
+                stopallUploadsRef.current = true;
+              }}
+              style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'red', fontWeight: 'bold' }}
+              title="Annuler l'importation"
+            >
+              Annuler
+            </button>
           </div>
+          <div style={{ marginBottom: '10px' }}>
+            <a style={{ display: totalFilesToUploadRef.current - nbFilesUploadedRef.current > 0 ? 'block' : 'none' }}>Fichier(s) restants à importer : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
+          </div>
+          {curentUploadingFilesNames.map((fileName) => (
+            <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
+              <a>{fileName} - {UploadProcesses[fileName]}%</a>
+              <div className="progress_bar_container">
+                <div className="progress_bar_fill" style={{ width: `${UploadProcesses[fileName]}%` }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
         <div className="div_left_part">
           <nav>
             <ul>
