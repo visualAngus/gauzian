@@ -406,6 +406,7 @@ export default function Drive() {
         setUploading(true);
       } else {
         setUploading(false);
+        nbFilesUploadedRef.current = 0;
       }
       setTimeout(() => {
         getFolderStructure(activeFolderId);
@@ -422,6 +423,7 @@ export default function Drive() {
         setUploading(true);
       } else {
         setUploading(false);
+        nbFilesUploadedRef.current = 0;
       }
     }
   };
