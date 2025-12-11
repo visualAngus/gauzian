@@ -1206,7 +1206,7 @@ export default function Drive() {
          <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
             {/* div pour afficher le nombre de fichiers en attente */}
             <div style={{ marginBottom: '10px' }}>
-              <a>Fichier(s) restants à importer : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
+              <a style={{ display: totalFilesToUploadRef.current - nbFilesUploadedRef.current > 0 ? 'block' : 'none' }}>Fichier(s) restants à importer : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
             </div>
             {curentUploadingFilesNames.map((fileName) => (
               <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
