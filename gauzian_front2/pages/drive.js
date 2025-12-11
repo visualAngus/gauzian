@@ -332,6 +332,7 @@ export default function Drive() {
     console.log('Dossier créé avec succès:', data);
     // Rafraîchir la vue du dossier courant
     getFolderStructure(activeFolderId);
+    console.log(data.folder_id);
     rename_folder(data.folder_id, folderName);
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
