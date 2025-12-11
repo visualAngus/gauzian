@@ -1135,6 +1135,8 @@ export default function Drive() {
     let deleteOption = menu.querySelector("#delete_folder_option");
     deleteOption.onclick = () => {
       delete_folder(folderId);
+      // close the menu
+      menu.style.display = "none";
     }
 
     let shareOption = menu.querySelector("#share_folder_option");
@@ -1197,6 +1199,8 @@ export default function Drive() {
     let deleteOption = menu.querySelector("#delete_folder_option");
     deleteOption.onclick = () => {
       delete_file(fileId);
+      // close the menu
+      menu.style.display = "none";
     }
 
     let shareOption = menu.querySelector("#share_folder_option");
