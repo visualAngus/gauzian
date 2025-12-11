@@ -391,6 +391,7 @@ export default function Drive() {
       console.error('Erreur globale upload:', error);
       alert(`Erreur: ${error.message}`);
       // setUploading(false);
+      setUploadingsFilesCount(Math.max(0, uploadingsFilesCount - 1));
     }
   };
 
