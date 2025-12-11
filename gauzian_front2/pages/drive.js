@@ -910,6 +910,7 @@ export default function Drive() {
   const rename_folder = async (folderId, newName) => {
     let folder = document.getElementById(folderId);
     let folderName = folder.querySelector(".folder_name");
+    let menu = document.getElementById("contextual_menu_folder");
 
     if (folderName) {
       // Hide le menu 
