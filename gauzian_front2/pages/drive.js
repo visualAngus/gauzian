@@ -1574,11 +1574,11 @@ export default function Drive() {
 
         <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
           <div className="div_storage_used">
-            <div className="storage_used_container">
-              <div className={`storage_used_bar${(storageUsed / storageLimit) >= 0.95 ? ' full' : ''}`} style={{ width: `${(storageUsed / storageLimit) * 100}%` }}></div>
-            </div>
             <div className="storage_used_text">
               <span>{(storageUsed / (1024 ** 3)).toFixed(2)} GB</span> / <span>{(storageLimit / (1024 ** 3)).toFixed(2)} GB</span>
+            </div>
+            <div className="storage_used_container">
+              <div className={`storage_used_bar${(storageUsed / storageLimit) >= 0.95 ? ' full' : ''}`} style={{ width: `${(storageUsed / storageLimit) * 100}%` }}></div>
             </div>
           </div>
           {/* div pour annulé tout l'upload */}
