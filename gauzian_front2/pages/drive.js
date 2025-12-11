@@ -1237,6 +1237,10 @@ export default function Drive() {
           // Mettre à jour l'état des dossiers
           setFolders(prevFolders => prevFolders.filter(f => f.folder_id !== folderId));
           // Rafraîchir la vue du dossier courant
+           setTimeout(() => {
+            getFolderStructure(activeFolderId);
+            getFileStructure(activeFolderId);
+          }, 500);
         } else {
           console.error("Erreur suppression dossier :", data.message);
         }
@@ -1301,6 +1305,11 @@ export default function Drive() {
           // Mettre à jour l'état des fichiers
           setFiles(prevFiles => prevFiles.filter(f => f.file_id !== fileId));
           // Rafraîchir la vue du dossier courant
+
+           setTimeout(() => {
+            getFolderStructure(activeFolderId);
+            getFileStructure(activeFolderId);
+          }, 500);
         } else {
           console.error("Erreur suppression fichier :", data.message);
         }
