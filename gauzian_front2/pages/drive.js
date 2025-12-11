@@ -352,6 +352,8 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
+    console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
+    console.log(`Fichiers actuellement en upload: ${uploadingsFilesCount}`);
     while (uploadingsFilesCount >= 3) {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -512,7 +514,7 @@ export default function Drive() {
 
     if (!openRes.ok) throw new Error("Impossible d'initialiser l'upload streaming");
     const { temp_upload_id } = await openRes.json();
-    console.log('Upload streaming initialisé, ID:', temp_upload_id);
+    // console.log('Upload streaming initialisé, ID:', temp_upload_id);
 
     // --- 3. UPLOAD CONCURRENT (Le changement est ici) ---
 
@@ -571,7 +573,7 @@ export default function Drive() {
           UploadProcesses[file.name] = percent;
           setUploadProcesses({ ...UploadProcesses });
           setCurentUploadingFilesNames(Object.keys(UploadProcesses));
-          console.log(`Chunk ${currentIndex + 1}/${totalChunks} uploadé. Progression: ${percent}%`);
+          // console.log(`Chunk ${currentIndex + 1}/${totalChunks} uploadé. Progression: ${percent}%`);
 
           // Ici tu peux appeler setProgress(percent) si tu as un state React
 
