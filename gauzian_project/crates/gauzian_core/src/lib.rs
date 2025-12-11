@@ -135,3 +135,9 @@ pub struct DeleteFileRequest {
 pub struct DeleteFolderRequest {
     pub folder_id: Uuid,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct FileRenameRequest {
+    pub file_id: Uuid,
+    pub new_encrypted_metadata: String,
+}

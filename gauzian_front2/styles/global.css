@@ -409,7 +409,7 @@ nav ul li a:hover {
     background-color: var(--light-gray-color);
 }
 
-.editing_folder_name:focus {
+.editing_folder_name:focus, .editing_file_name:focus {
     outline: none;
 }
 
