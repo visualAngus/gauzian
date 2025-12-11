@@ -1168,14 +1168,14 @@ export default function Drive() {
             Partager
           </div>
         </div>
-         <div className="div_upload_progress" style={{ display: curentUploadingFilesNames.length > 0 ? 'block' : 'none' }}>
+         <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
             {curentUploadingFilesNames.map((fileName) => (
-            <div key={fileName} style={{ marginBottom: '10px' }}>
-              <a>{fileName} - {UploadProcesses[fileName]}%</a>
-              <div className="progress_bar_container">
-              <div className="progress_bar_fill" style={{ width: `${UploadProcesses[fileName]}%` }}></div>
+              <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
+                <a>{fileName} - {UploadProcesses[fileName]}%</a>
+                <div className="progress_bar_container">
+                <div className="progress_bar_fill" style={{ width: `${UploadProcesses[fileName]}%` }}></div>
+                </div>
               </div>
-            </div>
             ))}
           </div>
         <div className="div_left_part">
