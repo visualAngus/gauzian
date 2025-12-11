@@ -423,6 +423,7 @@ nav ul li a:hover {
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     padding: 10px;
+    transition: all 0.3s ease-in-out;
     z-index: 100;
 }
 
