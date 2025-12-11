@@ -42,6 +42,12 @@ export default function Drive() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null); // Pour déclencher l'input file caché
 
+
+  // Gestion upload de plusieurs fichiers
+  const [curentUploadingFilesNames, setCurentUploadingFilesNames] = useState([]); // Noms des fichiers en cours d'upload
+  const [UploadProcesses, setUploadProcesses] = useState({}); // Dictionnaire des processus d'upload par fichier
+
+
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
   const handleFileChange = (e) => {
@@ -51,6 +57,7 @@ export default function Drive() {
       Array.from(selectedFiles).forEach((file) => {
         encodeAndSend(file);
       });
+      setUploading(false);
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
     e.target.value = '';
@@ -374,7 +381,7 @@ export default function Drive() {
 
       // 3. Fin commune
       console.log('Succès upload global.');
-      setUploading(false);
+      // setUploading(false);
       setTimeout(() => {
         getFolderStructure(activeFolderId);
         getFileStructure(activeFolderId);
@@ -383,7 +390,7 @@ export default function Drive() {
     } catch (error) {
       console.error('Erreur globale upload:', error);
       alert(`Erreur: ${error.message}`);
-      setUploading(false);
+      // setUploading(false);
     }
   };
 
@@ -546,8 +553,11 @@ export default function Drive() {
           // Mise à jour progression UI
           chunksFinished++;
           let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
-          setUploadProgress(percent);
-          setCurentFileUploadName(file.name);
+          
+          UploadProcesses[file.name] = percent;
+          setUploadProcesses({ ...UploadProcesses });
+          setCurentUploadingFilesNames(Object.keys(UploadProcesses));
+          console.log(`Chunk ${currentIndex + 1}/${totalChunks} uploadé. Progression: ${percent}%`);
 
           // Ici tu peux appeler setProgress(percent) si tu as un state React
 
@@ -1149,13 +1159,16 @@ export default function Drive() {
             Partager
           </div>
         </div>
-        <div className="div_upload_progress" id="up{uploadProgress}%load_progress_bar" style={{ display: uploading ? 'block' : 'none' }}>
-          <a id="name_file_uploading">{curentFileUploadName} - {uploadProgress}%</a>
-          {/* <a id="name_file_uploading">Fichier_Upload.txt</a> */}
-          <div className="progress_bar_container">
-            <div className="progress_bar_fill" id="progress_bar_fill" style={{ width: `${uploadProgress}%` }}></div>
+         <div className="div_upload_progress" style={{ display: curentUploadingFilesNames.length > 0 ? 'block' : 'none' }}>
+            {curentUploadingFilesNames.map((fileName) => (
+            <div key={fileName} style={{ marginBottom: '10px' }}>
+              <a>{fileName} - {UploadProcesses[fileName]}%</a>
+              <div className="progress_bar_container">
+              <div className="progress_bar_fill" style={{ width: `${UploadProcesses[fileName]}%` }}></div>
+              </div>
+            </div>
+            ))}
           </div>
-        </div>
         <div className="div_left_part">
           <nav>
             <ul>
