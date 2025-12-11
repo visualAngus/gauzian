@@ -1208,7 +1208,7 @@ export default function Drive() {
               {/* bouton pour rajouter un dossier */}
               <button
                 onClick={() =>
-                  data = newFolderFunction()
+                  newFolderFunction()
                 }
                 style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
                 disabled={uploading}
