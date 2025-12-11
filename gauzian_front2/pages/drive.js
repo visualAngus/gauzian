@@ -392,6 +392,11 @@ export default function Drive() {
       alert(`Erreur: ${error.message}`);
       // setUploading(false);
       setUploadingsFilesCount(Math.max(0, uploadingsFilesCount - 1));
+      if (uploadingsFilesCount > 0) {
+        setUploading(true);
+      } else {
+        setUploading(false);
+      }
     }
   };
 
@@ -1099,11 +1104,6 @@ export default function Drive() {
 
 
     // if UploadingsFilesCount > 0 on met uploading a true
-    if (uploadingsFilesCount > 0) {
-      setUploading(true);
-    } else {
-      setUploading(false);
-    }
 
     // ajouter un folder a la main pour le dev
     // setFolders((prevFolders) => [
