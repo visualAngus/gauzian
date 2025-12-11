@@ -389,6 +389,7 @@ pub async fn files_handler(
         FROM file_access fa
         JOIN vault_files vf ON fa.file_id = vf.id
         WHERE vf.folder_id = $1 AND fa.user_id = $2
+        ORDER BY vf.updated_at DESC
         "#,
         parent_folder_id,
         user_id,
