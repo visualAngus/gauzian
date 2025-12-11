@@ -470,7 +470,7 @@ nav ul li a:hover {
 
 .storage_used_bar {
     height: 100%;
-    background-color: var(--orange-color);
+    background-color: var(--emmerald-color);
     border-radius: 6px 0 0 6px;
     transition: width 0.3s ease-in-out;
 }
@@ -488,5 +488,5 @@ nav ul li a:hover {
 }
 
 .storage_used_bar.full {
-    background-color: var(--emmerald-color);
+    background-color: var(--orange-color);
 }
