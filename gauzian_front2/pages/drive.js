@@ -54,23 +54,39 @@ export default function Drive() {
   const handleFileChange = (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
-      // Créer une queue de fichiers à uploader
       const filesQueue = Array.from(selectedFiles);
       
-      // Fonction pour traiter les uploads avec limite de 3 simultanés
-      const processQueue = async () => {
-        const MAX_CONCURRENT = 3;
+      // Uploads actifs en cours
+      const activeUploads = [];
+      const MAX_CONCURRENT = 3;
+      
+      const processNextFile = async () => {
+        if (filesQueue.length === 0) return;
         
-        while (filesQueue.length > 0) {
-          // Prendre jusqu'à 3 fichiers et les uploader en parallèle
-          const batch = filesQueue.splice(0, MAX_CONCURRENT);
-          await Promise.all(batch.map(file => encodeAndSend(file)));
+        const file = filesQueue.shift();
+        const uploadPromise = encodeAndSend(file);
+        
+        activeUploads.push(uploadPromise);
+        
+        try {
+          await uploadPromise;
+        } finally {
+          // Retirer l'upload terminé de la liste
+          activeUploads.splice(activeUploads.indexOf(uploadPromise), 1);
+          
+          // Lancer le prochain fichier s'il y en a
+          if (filesQueue.length > 0) {
+            processNextFile();
+          }
         }
       };
       
-      processQueue();
+      // Lancer 3 uploads au démarrage
+      for (let i = 0; i < Math.min(MAX_CONCURRENT, filesQueue.length); i++) {
+        processNextFile();
+      }
     }
-    // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
+    
     e.target.value = '';
   };
 
@@ -384,7 +400,7 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
+        await œuploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
       } else {
         console.log(`Fichier <= 0.9Mo (${selectedFile.size}). Passage en mode Simple.`);
         await uploadSmallFile(selectedFile, sodium, encryptionKey);
