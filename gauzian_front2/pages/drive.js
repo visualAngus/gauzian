@@ -56,8 +56,9 @@ export default function Drive() {
     if (selectedFiles && selectedFiles.length > 0) {
       // Traiter chaque fichier séquentiellement
       for (const file of selectedFiles) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         encodeAndSend(file);
+        console.log(`Nombre de fichier en upload --------- : ${uploadingsFilesCount}`);
       }
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
@@ -353,13 +354,10 @@ export default function Drive() {
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
-    // console.log(`Fichiers actuellement en upload: ${uploadingsFilesCount}`);
     while (uploadingsFilesCount >= 3) {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-
-
 
     setUploadingsFilesCount(uploadingsFilesCount + 1);
     console.log('Début du processus...');
@@ -396,6 +394,12 @@ export default function Drive() {
       // 3. Fin commune
       console.log('Succès upload global.');
       // setUploading(false);
+      setUploadingsFilesCount(Math.max(0, uploadingsFilesCount - 1));
+      if (uploadingsFilesCount > 0) {
+        setUploading(true);
+      } else {
+        setUploading(false);
+      }
       setTimeout(() => {
         getFolderStructure(activeFolderId);
         getFileStructure(activeFolderId);
