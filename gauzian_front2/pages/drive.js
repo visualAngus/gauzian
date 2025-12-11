@@ -49,6 +49,7 @@ export default function Drive() {
   const [UploadProcesses, setUploadProcesses] = useState({}); // Dictionnaire des processus d'upload par fichier
   const uploadingCountRef = useRef(0); // Ref pour compter de manière synchrone
   const totalFilesToUploadRef = useRef(0); // Ref pour le total des fichiers à uploader
+  const nbFilesUploadedRef = useRef(0); // Ref pour le nombre de fichiers déjà uploadés
 
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
@@ -361,6 +362,9 @@ export default function Drive() {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
+
+    totalFilesToUploadRef.current -= 1;
+    nbFilesUploadedRef.current += 1;
 
     uploadingCountRef.current += 1;
     setUploadingsFilesCount(uploadingCountRef.current);
@@ -1205,7 +1209,7 @@ export default function Drive() {
          <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
             {/* div pour afficher le nombre de fichiers en attente */}
             <div style={{ marginBottom: '10px' }}>
-              <a>Upload en cours : {totalFilesToUploadRef.current} fichier(s)</a>
+              <a>Fichier(s) restants à importer : {totalFilesToUploadRef.current - nbFilesUploadedRef.current}</a>
             </div>
             {curentUploadingFilesNames.map((fileName) => (
               <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
