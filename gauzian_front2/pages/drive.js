@@ -586,7 +586,27 @@ export default function Drive() {
           if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
 
           if (stopallUploadsRef.current) {
-            throw new Error("Upload annulé par l'utilisateur.");
+            console.log("Upload arrêté par l'utilisateur.");
+            fetch('/api/drive/cancel_streaming_upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ temp_upload_id: temp_upload_id })
+            });      
+            // supprimer toutes les ref a cet upload
+            delete UploadProcesses[file.name];
+            setUploadProcesses({ ...UploadProcesses });
+            setCurentUploadingFilesNames(Object.keys(UploadProcesses));
+            // enlever 1 au nombre de fichiers en cours d'upload
+            uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
+            setUploadingsFilesCount(uploadingCountRef.current);
+            if (uploadingCountRef.current > 0) {
+              setUploading(true);
+            } else {
+              setUploading(false);
+              nbFilesUploadedRef.current = 0;
+              totalFilesToUploadRef.current = 0;
+              stopallUploadsRef.current = false;
+            }
           }
 
           // Mise à jour progression UI
@@ -1446,10 +1466,6 @@ export default function Drive() {
             <button
               onClick={() => {
                 // Annuler tous les uploads en cours
-                setUploadProcesses({});
-                setCurentUploadingFilesNames([]);
-                setUploadingsFilesCount(0);
-                setUploading(false);
                 stopallUploadsRef.current = true;
               }}
               style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'red', fontWeight: 'bold' }}

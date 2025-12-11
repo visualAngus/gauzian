@@ -13,7 +13,7 @@ use gauzian_core::{
     AppState, DownloadQuery, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
     USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,DeleteFileRequest,DeleteFolderRequest,
-    FileRenameRequest,
+    FileRenameRequest,CancelStreamingUploadRequest
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -1262,4 +1262,97 @@ pub async fn rename_file_handler(
             return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }
     };
+}
+
+
+// anulation of upload streaming
+pub async fn cancel_streaming_upload_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<CancelStreamingUploadRequest>,
+) -> impl IntoResponse {
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let _user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let delete_chunks_result = sqlx::query!(
+        r#"
+        DELETE FROM streaming_file_chunks
+        WHERE temp_upload_id = $1
+        "#,
+        payload.temp_upload_id,
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match delete_chunks_result {
+        Ok(_) => {
+            let delete_upload_result = sqlx::query!(
+                r#"
+                DELETE FROM streaming_file
+                WHERE id = $1
+                "#,
+                payload.temp_upload_id,
+            )
+            .execute(&state.db_pool)
+            .await;
+
+            match delete_upload_result {
+                Ok(_) => {
+                    let body = Json(json!({
+                        "status": "success",
+                        "message": "Upload streaming annulé avec succès",
+                    }));
+                    return (StatusCode::OK, body).into_response();
+                }
+                Err(e) => {
+                    eprintln!("Erreur suppression upload streaming dans la BDD: {:?}", e);
+                    let body = Json(json!({
+                        "status": "error",
+                        "message": "Erreur serveur lors de la suppression de l'upload streaming"
+                    }));
+                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Erreur suppression chunks upload streaming dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors de la suppression des chunks de l'upload streaming"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    }
 }
