@@ -362,15 +362,9 @@ export default function Drive() {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    nbFilesUploadedRef.current += 1;
 
     uploadingCountRef.current += 1;
     setUploadingsFilesCount(uploadingCountRef.current);
-    console.log('Début du processus...');
-    setTimeout(() => {
-      
-      console.log(`Total fichiers en upload après incrémentation: ${uploadingCountRef.current}`);
-    }, 100);
 
     try {
       await _sodium.ready;
@@ -398,7 +392,6 @@ export default function Drive() {
       }
 
       // 3. Fin commune
-      console.log('Succès upload global.');
       // setUploading(false);
       uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
       setUploadingsFilesCount(uploadingCountRef.current);
@@ -470,6 +463,7 @@ export default function Drive() {
           );
           const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
 
+          nbFilesUploadedRef.current += 1;
           // Envoi
           const payload = {
             encrypted_blob: bufToB64(finalBlob),
@@ -548,6 +542,7 @@ export default function Drive() {
     // Nombre d'envois simultanés (3 est un bon équilibre, max 5)
     const MAX_CONCURRENT_UPLOADS = 3;
 
+      nbFilesUploadedRef.current += 1;
     // La fonction que chaque "Worker" va exécuter en boucle
     const processNextChunk = async () => {
       while (nextChunkIndexToProcess < totalChunks) {
