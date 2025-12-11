@@ -141,3 +141,8 @@ pub struct FileRenameRequest {
     pub file_id: Uuid,
     pub new_encrypted_metadata: String,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct CancelStreamingUploadRequest {
+    pub temp_upload_id: Uuid,
+}
