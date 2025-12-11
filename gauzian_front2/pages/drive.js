@@ -1136,10 +1136,20 @@ export default function Drive() {
     // si on clique quelque part sur la page
 
     // simulé un download de fichier
+    
+    // setCurentUploadingFilesNames([
+    //   'exemple_grand_fichier_1.zip',
+    //   'video_vacances_2023.mp4',
+    //   'archive_photos_2022.rar',
 
+    // ]);
+    // setUploadProcesses({
+    //   'exemple_grand_fichier_1.zip': 45,
+    //   'video_vacances_2023.mp4': 70,
+    //   'archive_photos_2022.rar': 20
+    // });
+    // setUploadingsFilesCount(3);
     // setUploading(true);
-    // setUploadProgress(50);
-    // setCurentFileUploadName("Fichier_Exemple.txt");
 
 
     const handleClickAnywhere = (event) => {
@@ -1191,6 +1201,10 @@ export default function Drive() {
           </div>
         </div>
          <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
+            {/* div pour afficher le nombre de fichiers en attente */}
+            <div style={{ marginBottom: '10px' }}>
+              <a>Upload en cours : {uploadingsFilesCount} fichier(s)</a>
+            </div>
             {curentUploadingFilesNames.map((fileName) => (
               <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
                 <a>{fileName} - {UploadProcesses[fileName]}%</a>
