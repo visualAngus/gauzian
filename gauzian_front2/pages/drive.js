@@ -54,39 +54,17 @@ export default function Drive() {
   const handleFileChange = (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
+      // Créer une queue de fichiers à uploader
       const filesQueue = Array.from(selectedFiles);
       
-      // Uploads actifs en cours
-      const activeUploads = [];
-      const MAX_CONCURRENT = 3;
-      
-      const processNextFile = async () => {
-        if (filesQueue.length === 0) return;
-        
-        const file = filesQueue.shift();
-        const uploadPromise = encodeAndSend(file);
-        
-        activeUploads.push(uploadPromise);
-        
-        try {
-          await uploadPromise;
-        } finally {
-          // Retirer l'upload terminé de la liste
-          activeUploads.splice(activeUploads.indexOf(uploadPromise), 1);
-          
-          // Lancer le prochain fichier s'il y en a
-          if (filesQueue.length > 0) {
-            processNextFile();
-          }
-        }
+      // Fonction pour traiter les uploads en parallèle
+      const processQueue = async () => {
+        await Promise.all(filesQueue.map(file => encodeAndSend(file)));
       };
       
-      // Lancer 3 uploads au démarrage
-      for (let i = 0; i < Math.min(MAX_CONCURRENT, filesQueue.length); i++) {
-        processNextFile();
-      }
+      processQueue();
     }
-    
+    // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
     e.target.value = '';
   };
 
@@ -378,6 +356,12 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
+
+    while (uploadingsFilesCount >= 3) {
+      // Attendre 500ms avant de vérifier à nouveau
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     setUploadingsFilesCount(uploadingsFilesCount + 1);
     console.log('Début du processus...');
 
