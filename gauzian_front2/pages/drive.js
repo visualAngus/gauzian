@@ -527,8 +527,7 @@ export default function Drive() {
     });
 
     if (!openRes.ok) {
-      console.error("Erreur lors de l'initialisation de l'upload streaming");
-      console.log(await openRes.text());
+      throw new Error(await openRes.json().message);
     }
     const { temp_upload_id } = await openRes.json();
     // console.log('Upload streaming initialisé, ID:', temp_upload_id);
