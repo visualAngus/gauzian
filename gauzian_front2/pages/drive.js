@@ -648,6 +648,12 @@ export default function Drive() {
           } catch (e) {
             if (e.name === 'AbortError') {
               console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
+              // Nettoyer côté serveur
+              fetch('/api/drive/cancel_streaming_upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ temp_upload_id: temp_upload_id })
+              }).catch(err => console.error('Erreur lors du nettoyage:', err));
               return; // Sortir de la fonction processNextChunk
             }
             throw e;
