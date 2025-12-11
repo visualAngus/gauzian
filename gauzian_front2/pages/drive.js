@@ -332,6 +332,7 @@ export default function Drive() {
     console.log('Dossier créé avec succès:', data);
     // Rafraîchir la vue du dossier courant
     getFolderStructure(activeFolderId);
+    rename_folder(data.folder_id, folderName);
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
@@ -904,6 +905,129 @@ export default function Drive() {
     setActiveFolderId(folderId);
 
   };
+
+
+  const rename_folder = async (folderId, newName) => {
+    let folder = document.getElementById(folderId);
+    let folderName = folder.querySelector(".folder_name");
+
+    if (folderName) {
+      // Hide le menu 
+      menu.style.display = "none";
+
+      folderName.classList.add("editing_folder_name");
+      folderName.contentEditable = true;
+      folderName.focus();
+
+      // Sélectionner le texte (execCommand est un peu vieux mais fonctionne encore)
+      document.execCommand('selectAll', false, null);
+
+      // --- AJOUT : Bloquer la touche Entrée ---
+      folderName.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault(); // Empêche le <br>
+          folderName.blur();  // Simule le clic en dehors pour valider
+        }
+      };
+
+      // --- AJOUT OPTIONNEL : Bloquer le collage de texte avec sauts de ligne ---
+      folderName.onpaste = (e) => {
+        e.preventDefault();
+        // Récupère le texte brut sans formatage
+        const text = (e.clipboardData || window.clipboardData).getData('text');
+        // Insère le texte en remplaçant les sauts de ligne par des espaces
+        document.execCommand('insertText', false, text.replace(/(\r\n|\n|\r)/gm, " "));
+      };
+
+      folderName.onblur = async () => {
+        // Nettoyage des événements pour éviter les conflits futurs
+        folderName.onkeydown = null;
+        folderName.onpaste = null;
+
+        folderName.contentEditable = false;
+        let newName = folderName.innerText; // .innerText nettoie souvent mieux que .innerHTML
+        let created_at = folder.getAttribute("data-created-at");
+        let updated_at = new Date().toISOString();
+
+
+        let metadata = {
+          name: newName,
+          created_at: created_at,
+        };
+        console.log(folder.getAttribute("data-encrypted-folder-key"));
+
+        await _sodium.ready;
+        const sodium = _sodium;
+
+        const storageKeyHex = localStorage.getItem('storageKey');
+        if (!storageKeyHex) {
+          window.location.href = '/login';
+          throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+        }
+
+        const rawStorageKey = sodium.from_hex(storageKeyHex);
+        const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+        // Déchiffrer la clé du dossier
+        const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
+        const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+        const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextKey,
+          null,
+          nonceKey,
+          userMasterKey
+        );
+
+        // Chiffrer les nouvelles métadonnées avec la clé du dossier
+        const metadataStr = JSON.stringify(metadata);
+        const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+          sodium.from_string(metadataStr),
+          null,
+          null,
+          nonceMeta,
+          folderKey
+        );
+        const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+        const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
+
+
+        console.log("Renommer le dossier :", folderId, "en", newName);
+        folderName.classList.remove("editing_folder_name");
+
+        fetch('/api/drive/rename_folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder_id: folderId,
+            new_encrypted_metadata: encryptedMetadataB64
+          }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.status === 'success') {
+              console.log("Dossier renommé avec succès.");
+              folder.setAttribute("data-folder-name", newName);
+              // Mettre à jour l'état des dossiers
+              setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? { ...f, name: newName } : f));
+              // Rafraîchir la vue du dossier courant
+            } else {
+
+              console.error("Erreur renommage dossier :", data.message);
+            }
+          })
+          .catch(error => {
+            console.error("Erreur lors de la requête de renommage :", error);
+          });
+      };
+
+    } else {
+      console.error("Element with class 'folder_name' not found in folder:", folderId);
+    }
+  };
+
   const opent_menu_contextual_folder = (folderId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
@@ -926,125 +1050,9 @@ export default function Drive() {
     let renameOption = menu.querySelector("#rename_folder_option");
 
     renameOption.onclick = () => {
-      let folder = document.getElementById(folderId);
-      let folderName = folder.querySelector(".folder_name");
-
-      if (folderName) {
-        // Hide le menu 
-        menu.style.display = "none";
-
-        folderName.classList.add("editing_folder_name");
-        folderName.contentEditable = true;
-        folderName.focus();
-
-        // Sélectionner le texte (execCommand est un peu vieux mais fonctionne encore)
-        document.execCommand('selectAll', false, null);
-
-        // --- AJOUT : Bloquer la touche Entrée ---
-        folderName.onkeydown = (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault(); // Empêche le <br>
-            folderName.blur();  // Simule le clic en dehors pour valider
-          }
-        };
-
-        // --- AJOUT OPTIONNEL : Bloquer le collage de texte avec sauts de ligne ---
-        folderName.onpaste = (e) => {
-          e.preventDefault();
-          // Récupère le texte brut sans formatage
-          const text = (e.clipboardData || window.clipboardData).getData('text');
-          // Insère le texte en remplaçant les sauts de ligne par des espaces
-          document.execCommand('insertText', false, text.replace(/(\r\n|\n|\r)/gm, " "));
-        };
-
-        folderName.onblur = async () => {
-          // Nettoyage des événements pour éviter les conflits futurs
-          folderName.onkeydown = null;
-          folderName.onpaste = null;
-
-          folderName.contentEditable = false;
-          let newName = folderName.innerText; // .innerText nettoie souvent mieux que .innerHTML
-          let created_at = folder.getAttribute("data-created-at");
-          let updated_at = new Date().toISOString();
-
-
-          let metadata = {
-            name: newName,
-            created_at: created_at,
-          };
-          console.log(folder.getAttribute("data-encrypted-folder-key"));
-
-          await _sodium.ready;
-          const sodium = _sodium;
-
-          const storageKeyHex = localStorage.getItem('storageKey');
-          if (!storageKeyHex) {
-            window.location.href = '/login';
-            throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-          }
-
-          const rawStorageKey = sodium.from_hex(storageKeyHex);
-          const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-          // Déchiffrer la clé du dossier
-          const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
-          const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-          const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
-          const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null,
-            ciphertextKey,
-            null,
-            nonceKey,
-            userMasterKey
-          );
-
-          // Chiffrer les nouvelles métadonnées avec la clé du dossier
-          const metadataStr = JSON.stringify(metadata);
-          const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-          const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-            sodium.from_string(metadataStr),
-            null,
-            null,
-            nonceMeta,
-            folderKey
-          );
-          const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
-          const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
-
-
-          console.log("Renommer le dossier :", folderId, "en", newName);
-          folderName.classList.remove("editing_folder_name");
-
-          fetch('/api/drive/rename_folder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              folder_id: folderId,
-              new_encrypted_metadata: encryptedMetadataB64
-            }),
-          })
-            .then(response => response.json())
-            .then(data => {
-              if (data.status === 'success') {
-                console.log("Dossier renommé avec succès.");
-                folder.setAttribute("data-folder-name", newName);
-                // Mettre à jour l'état des dossiers
-                setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? { ...f, name: newName } : f));
-                // Rafraîchir la vue du dossier courant
-              } else {
-
-                console.error("Erreur renommage dossier :", data.message);
-              }
-            })
-            .catch(error => {
-              console.error("Erreur lors de la requête de renommage :", error);
-            });
-        };
-
-      } else {
-        console.error("Element with class 'folder_name' not found in folder:", folderId);
-      }
+      rename_folder(folderId);
     }
+
     let deleteOption = menu.querySelector("#delete_folder_option");
     deleteOption.onclick = () => {
       console.log("Supprimer le dossier :", folderId);
@@ -1198,7 +1206,9 @@ export default function Drive() {
 
               {/* bouton pour rajouter un dossier */}
               <button
-                onClick={() => newFolderFunction()}
+                onClick={() =>
+                  data = newFolderFunction()
+                }
                 style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
                 disabled={uploading}
                 title="Créer un nouveau dossier"
