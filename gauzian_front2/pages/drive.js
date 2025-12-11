@@ -893,6 +893,14 @@ export default function Drive() {
           return;
         }
 
+        // verifier si le derner dossier du path a l'attribut is_root a true
+        const lastFolder = fullPathArray[fullPathArray.length - 1];
+        console.log("Last folder in path:", lastFolder);
+        if (lastFolder.is_root) {
+          getRootFolder();
+          return;
+        }
+
         const reconstructedPath = [];
         for (const item of fullPathArray) {
           // Déchiffrement du nom de chaque dossier dans le chemin
