@@ -74,7 +74,7 @@ pub async fn upload_handler(
     // verifier que le user a encode de la place pour le fichier
     let storage_usage = get_storage_usage_handler(user_id, &state).await;
     if let Some(usage) = storage_usage {
-        if usage + payload.file_size as u64 > USER_STORAGE_LIMIT {
+        if usage + payload.file_size as i64 > USER_STORAGE_LIMIT as i64 {
             let body = Json(json!({
                 "status": "error",
                 "message": "Espace de stockage insuffisant"
@@ -734,7 +734,7 @@ pub async fn open_streaming_upload_handler(
     // verifier que le user a encode de la place pour le fichier
     let storage_usage = get_storage_usage_handler(user_id, &state).await;
     if let Some(usage) = storage_usage {
-        if usage + payload.file_size as u64 > USER_STORAGE_LIMIT {
+        if usage + payload.file_size as i64 > USER_STORAGE_LIMIT as i64  {
             let body = Json(json!({
                 "status": "error",
                 "message": "Espace de stockage insuffisant"
@@ -1026,7 +1026,7 @@ pub async fn download_raw_handler(
         .unwrap()
 }
 
-async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<u64> {
+async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<i64> {
     let storage_usage_result = sqlx::query_scalar!(
         r#"
         SELECT COALESCE(SUM(file_size), 0)::int8 AS total_storage
