@@ -887,6 +887,12 @@ export default function Drive() {
         const fullPathArray = data.full_path;
         console.log("Full path data received:", fullPathArray);
 
+        if (fullPathArray.length === 0) {
+          // Si le chemin est vide, on charge la racine
+          getRootFolder();
+          return;
+        }
+
         const reconstructedPath = [];
         for (const item of fullPathArray) {
           // Déchiffrement du nom de chaque dossier dans le chemin
