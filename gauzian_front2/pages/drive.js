@@ -1598,6 +1598,14 @@ export default function Drive() {
                   key={file.file_id}
                   className="file_graph"
                   id={file.file_id}
+
+                  data-file-id={file.file_id || ''}
+                  data-file-name={file.name || ''}
+                  data-file-size={file.size || ''}
+                  data-file-type={file.type || ''}
+                  data-file-created-at={file.created_at || ''}
+                  data-file-updated-at={file.updated_at || ''}
+                  data-encrypted-file-key={file.encrypted_file_key || ''}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     opent_menu_contextual_file(file.file_id, e.pageX, e.pageY);
