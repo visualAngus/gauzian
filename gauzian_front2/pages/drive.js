@@ -353,7 +353,7 @@ export default function Drive() {
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
-    console.log(`Fichiers actuellement en upload: ${uploadingsFilesCount}`);
+    // console.log(`Fichiers actuellement en upload: ${uploadingsFilesCount}`);
     while (uploadingsFilesCount >= 3) {
       console.log('Attente avant de lancer un nouvel upload...');
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -363,6 +363,10 @@ export default function Drive() {
 
     setUploadingsFilesCount(uploadingsFilesCount + 1);
     console.log('Début du processus...');
+    setTimeout(() => {
+      
+      console.log(`Total fichiers en upload après incrémentation: ${uploadingsFilesCount}`);
+    }, 100);
 
     try {
       await _sodium.ready;
