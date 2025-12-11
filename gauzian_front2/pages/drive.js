@@ -801,16 +801,19 @@ export default function Drive() {
     if (data.status === 'success' && data.folders.length > 0) {
       const rootId = data.folders[0].folder_id;
 
+      
       setActiveFolderId(rootId);
       setRootFolderId(rootId);
       setActiveSection('mon_drive');
-
+      
       const newUrl = new URL(window.location);
       newUrl.searchParams.set('folderId', rootId);
       window.history.pushState({}, '', newUrl);
-
+      
       // CORRECTION ICI : On met un tableau d'objets
       setPath([{ id: rootId, name: 'Mon Drive' }]);
+      const menu_drive = document.getElementById('menu_drive');
+      if (menu_drive) menu_drive.classList.add('active');
 
       return data.folders[0];
     }
@@ -857,7 +860,7 @@ export default function Drive() {
 
   const navigateToSection = (sectionId) => {
     setActiveSection(sectionId);
-
+    console.log("Navigation vers la section :", sectionId);
     if (sectionId === 'mon_drive') {
       // Retour à la racine (on utilise le rootFolderId stocké précédemment)
       if (rootFolderId) {
