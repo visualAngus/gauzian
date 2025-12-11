@@ -1144,6 +1144,44 @@ export default function Drive() {
 
   }
 
+  const opent_menu_contextual_file = (fileId, x, y) => {
+    // creer une div qui s'affiche a la position x,y
+    // avec des options comme renommer, supprimer, partager, etc.
+
+    let menu = document.getElementById("contextual_menu_folder");
+    menu.style.display = "flex";
+    menu.style.left = x + "px";
+    menu.style.top = y + "px";
+    // stocker l'id du fichier dans un data attribute
+    menu.setAttribute("data-file-id", fileId);
+
+    document.addEventListener("click", function handler(event) {
+      if (!menu.contains(event.target)) {
+        menu.style.display = "none";
+        document.removeEventListener("click", handler);
+
+      }
+    });
+
+    let renameOption = menu.querySelector("#rename_file_option");
+
+    renameOption.onclick = () => {
+      console.log("Renommer le fichier :", fileId);
+    }
+
+    let deleteOption = menu.querySelector("#delete_file_option");
+    deleteOption.onclick = () => {
+      console.log("Supprimer le fichier :", fileId);
+    }
+
+    let shareOption = menu.querySelector("#share_file_option");
+    shareOption.onclick = () => {
+      console.log("Partager le fichier :", fileId);
+    }
+
+  }
+
+  // --- EFFETS DE BORD ---
 
   useEffect(() => {
     console.log("Active Folder ID changed:", activeFolderId);
@@ -1231,6 +1269,7 @@ export default function Drive() {
             Partager
           </div>
         </div>
+        
          <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
             {/* div pour afficher le nombre de fichiers en attente */}
             <div style={{ marginBottom: '10px' }}>
@@ -1408,6 +1447,10 @@ export default function Drive() {
                   key={file.file_id}
                   className="file_graph"
                   id={file.file_id}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    opent_menu_contextual_file(file.file_id, e.pageX, e.pageY);
+                  }}
                   onClick={() => {
                     if (file.is_chunked) {
                       handleDownloadChunked(file.file_id, file.name);
