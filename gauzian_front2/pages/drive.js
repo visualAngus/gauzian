@@ -54,6 +54,9 @@ export default function Drive() {
   const nbFilesUploadedRef = useRef(0); // Ref pour le nombre de fichiers déjà uploadés
 
 
+  const [storageUsed, setStorageUsed] = useState(0);
+  const [storageLimit, setStorageLimit] = useState(1);
+
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
   const handleFileChange = async (e) => {
@@ -160,7 +163,7 @@ export default function Drive() {
   const handleDownloadChunked = async (id_file) => {
     try {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
-      const streamSaver = (await import('streamsaver')).default;
+      // const streamSaver = (await import('streamsaver')).default;
       await _sodium.ready;
       const sodium = _sodium;
 
@@ -907,6 +910,11 @@ export default function Drive() {
 
       if (data.status === 'success') { // Adapte selon ton retour API exact
 
+        const storage_used = data.storage_used || 0;
+        const storage_limit = data.storage_limit || 1;
+        setStorageUsed(storage_used);
+        setStorageLimit(storage_limit);
+
         const decryptedFolders = [];
 
         for (const folder of data.folders) {
@@ -1496,6 +1504,10 @@ export default function Drive() {
     // setUploadingsFilesCount(3);
     // setUploading(true);
 
+    // storage
+    // setStorageLimit(10737418240); // 10 Go pour le dev
+    // setStorageUsed(5368709120); // 5 Go pour le dev
+
 
     const handleClickAnywhere = (event) => {
       if (event.target.closest('.folder_graph')) return;
@@ -1602,6 +1614,15 @@ export default function Drive() {
               ))}
             </ul>
           </nav>
+          {/* div storage used en go sous forme d'une barre de progression */}
+          <div className="div_storage_used">
+            <div className="storage_used_container">
+              <div className="storage_used_bar" style={{ width: `${(storageUsed / storageLimit) * 100}%` }}></div>
+            </div>
+            <div className="storage_used_text">
+              <span>{(storageUsed / (1024 ** 3)).toFixed(2)} GB</span> / <span>{(storageLimit / (1024 ** 3)).toFixed(2)} GB</span>
+            </div>
+          </div>
         </div>
 
         <div className="div_right_part">

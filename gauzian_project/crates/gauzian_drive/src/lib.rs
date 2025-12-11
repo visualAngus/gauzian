@@ -322,10 +322,13 @@ pub async fn folder_handler(
                     "is_root": record.is_root,
                 })
             }).collect();
+            let storage_used = get_storage_usage_handler(user_id, &state).await;
 
             let body = Json(json!({
                 "status": "success",
                 "folders": folders,
+                "storage_limit": USER_STORAGE_LIMIT,
+                "storage_used": storage_used,
             }));
             return (StatusCode::OK, body).into_response();
         }
