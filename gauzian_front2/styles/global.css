@@ -484,5 +484,9 @@ nav ul li a:hover {
     gap: 4px;
     display: justify;
     justify-content: center;
-    
+
+}
+
+.storage_used_bar.full {
+    background-color: var(--emmerald-color);
 }
