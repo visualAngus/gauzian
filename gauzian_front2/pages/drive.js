@@ -1198,8 +1198,21 @@ export default function Drive() {
       fileName.contentEditable = true;
       fileName.focus();
 
-      // Sélectionner le texte (execCommand est un peu vieux mais fonctionne encore)
-      document.execCommand('selectAll', false, null);
+      // Sélectionner le nom du fichier mais pas l'extension
+      let nameParts = fileName.innerText.split('.');
+      if (nameParts.length > 1) {
+        let extension = nameParts.pop();
+        let nameWithoutExt = nameParts.join('.');
+        let range = document.createRange();
+        let sel = window.getSelection();
+        range.setStart(fileName.firstChild, 0);
+        range.setEnd(fileName.firstChild, nameWithoutExt.length);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        // Si pas d'extension, sélectionner tout
+        document.execCommand('selectAll', false, null);
+      }
 
       // --- AJOUT : Bloquer la touche Entrée ---
       fileName.onkeydown = (e) => {
