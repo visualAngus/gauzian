@@ -1144,6 +1144,31 @@ export default function Drive() {
 
   }
 
+  const delete_file = async (fileId) => {
+    console.log("Supprimer le fichier :", fileId);
+    fetch('/api/drive/delete_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_id: fileId
+      }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          console.log("Fichier supprimé avec succès.");
+          // Mettre à jour l'état des fichiers
+          setFiles(prevFiles => prevFiles.filter(f => f.file_id !== fileId));
+          // Rafraîchir la vue du dossier courant
+        } else {
+          console.error("Erreur suppression fichier :", data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de suppression :", error);
+      });
+  };
+
   const opent_menu_contextual_file = (fileId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
@@ -1171,7 +1196,7 @@ export default function Drive() {
 
     let deleteOption = menu.querySelector("#delete_folder_option");
     deleteOption.onclick = () => {
-      console.log("Supprimer le fichier :", fileId);
+      delete_file(fileId);
     }
 
     let shareOption = menu.querySelector("#share_folder_option");
