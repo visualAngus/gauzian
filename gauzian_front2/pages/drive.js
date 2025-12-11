@@ -45,10 +45,15 @@ export default function Drive() {
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      encodeAndSend(selectedFile);
+    const selectedFiles = e.target.files;
+    if (selectedFiles && selectedFiles.length > 0) {
+      // Traiter chaque fichier séquentiellement
+      Array.from(selectedFiles).forEach((file) => {
+        encodeAndSend(file);
+      });
     }
+    // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
+    e.target.value = '';
   };
 
   const handelFolderChange = (e) => {
@@ -1089,6 +1094,13 @@ export default function Drive() {
 
     // si on clique quelque part sur la page
 
+    // simulé un download de fichier
+
+    // setUploading(true);
+    // setUploadProgress(50);
+    // setCurentFileUploadName("Fichier_Exemple.txt");
+
+
     const handleClickAnywhere = (event) => {
       if (event.target.closest('.folder_graph')) return;
       document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
@@ -1137,8 +1149,8 @@ export default function Drive() {
             Partager
           </div>
         </div>
-        <div className="div_upload_progress" id="upload_progress_bar" style={{ display: uploading ? 'block' : 'none' }}>
-          <a id="name_file_uploading">{curentFileUploadName}</a>
+        <div className="div_upload_progress" id="up{uploadProgress}%load_progress_bar" style={{ display: uploading ? 'block' : 'none' }}>
+          <a id="name_file_uploading">{curentFileUploadName} - {uploadProgress}%</a>
           {/* <a id="name_file_uploading">Fichier_Upload.txt</a> */}
           <div className="progress_bar_container">
             <div className="progress_bar_fill" id="progress_bar_fill" style={{ width: `${uploadProgress}%` }}></div>
@@ -1206,6 +1218,7 @@ export default function Drive() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
+                multiple
                 maxSize={10485760}
               />
 
