@@ -396,6 +396,9 @@ export default function Drive() {
         setUploading(true);
       } else {
         setUploading(false);
+        // clear upload processes
+        setUploadProcesses({});
+        
       }
     }
   };
