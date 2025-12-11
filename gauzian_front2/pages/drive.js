@@ -54,10 +54,21 @@ export default function Drive() {
   const handleFileChange = (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
-      // Traiter chaque fichier séquentiellement
-      Array.from(selectedFiles).forEach((file) => {
-        encodeAndSend(file);
-      });
+      // Créer une queue de fichiers à uploader
+      const filesQueue = Array.from(selectedFiles);
+      
+      // Fonction pour traiter les uploads avec limite de 3 simultanés
+      const processQueue = async () => {
+        const MAX_CONCURRENT = 3;
+        
+        while (filesQueue.length > 0) {
+          // Prendre jusqu'à 3 fichiers et les uploader en parallèle
+          const batch = filesQueue.splice(0, MAX_CONCURRENT);
+          await Promise.all(batch.map(file => encodeAndSend(file)));
+        }
+      };
+      
+      processQueue();
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
     e.target.value = '';
@@ -398,7 +409,6 @@ export default function Drive() {
         setUploading(false);
         // clear upload processes
         setUploadProcesses({});
-        
       }
     }
   };
