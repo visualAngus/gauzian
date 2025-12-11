@@ -12,6 +12,9 @@ pub struct AppState {
     pub db_pool: PgPool, // "pub" est essentiel pour que les autres modules y accèdent
 }
 
+// set le USER_STORAGE_LIMIT
+pub const USER_STORAGE_LIMIT: u64 = 3 * 1024 * 1024 * 1024; // 3 Go
+
 // --- 2. DTOs (Data Transfer Objects) ---
 #[derive(Deserialize, Debug)]
 pub struct RegisterRequest {
