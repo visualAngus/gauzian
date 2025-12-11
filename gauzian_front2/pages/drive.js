@@ -54,15 +54,10 @@ export default function Drive() {
   const handleFileChange = (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
-      // Créer une queue de fichiers à uploader
-      const filesQueue = Array.from(selectedFiles);
-      
-      // Fonction pour traiter les uploads en parallèle
-      const processQueue = async () => {
-        await Promise.all(filesQueue.map(file => encodeAndSend(file)));
-      };
-      
-      processQueue();
+      // Traiter chaque fichier séquentiellement
+      Array.from(selectedFiles).forEach((file) => {
+        encodeAndSend(file);
+      });
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
     e.target.value = '';
@@ -356,12 +351,6 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
-
-    while (uploadingsFilesCount >= 3) {
-      // Attendre 500ms avant de vérifier à nouveau
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
     setUploadingsFilesCount(uploadingsFilesCount + 1);
     console.log('Début du processus...');
 
@@ -384,7 +373,7 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        await œuploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
+        await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
       } else {
         console.log(`Fichier <= 0.9Mo (${selectedFile.size}). Passage en mode Simple.`);
         await uploadSmallFile(selectedFile, sodium, encryptionKey);
@@ -407,8 +396,6 @@ export default function Drive() {
         setUploading(true);
       } else {
         setUploading(false);
-        // clear upload processes
-        setUploadProcesses({});
       }
     }
   };
