@@ -351,6 +351,13 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
+    while (uploadingsFilesCount >= 3) {
+      console.log('Attente avant de lancer un nouvel upload...');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+
+
     setUploadingsFilesCount(uploadingsFilesCount + 1);
     console.log('Début du processus...');
 
