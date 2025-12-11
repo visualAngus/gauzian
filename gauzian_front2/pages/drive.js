@@ -1185,6 +1185,114 @@ export default function Drive() {
       });
   };
 
+  const rename_file = async (fileId, newName) => {
+    let file = document.getElementById(fileId);
+    let fileName = file.querySelector(".file_name");
+    let menu = document.getElementById("contextual_menu_folder");
+
+    if (fileName) {
+      // Hide le menu 
+      menu.style.display = "none";
+
+      fileName.classList.add("editing_file_name");
+      fileName.contentEditable = true;
+      fileName.focus();
+
+      // Sélectionner le texte (execCommand est un peu vieux mais fonctionne encore)
+      document.execCommand('selectAll', false, null);
+
+      // --- AJOUT : Bloquer la touche Entrée ---
+      fileName.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault(); // Empêche le <br>
+          fileName.blur();  // Simule le clic en dehors pour valider
+        }
+      };
+
+      fileName.onblur = async () => {
+        // Nettoyage des événements pour éviter les conflits futurs
+        fileName.onkeydown = null;
+
+        fileName.contentEditable = false;
+        let newName = fileName.innerText; // .innerText nettoie souvent mieux que .innerHTML
+        let created_at = file.getAttribute("data-created-at");
+        let updated_at = new Date().toISOString();
+        let metadata = {
+          filename: newName,
+          filesize: file.getAttribute("data-file-size"),
+          filetype: file.getAttribute("data-file-type"),
+        };
+
+        await _sodium.ready;
+        const sodium = _sodium;
+
+        const storageKeyHex = localStorage.getItem('storageKey');
+        if (!storageKeyHex) {
+          window.location.href = '/login';
+          throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
+        }
+
+        const rawStorageKey = sodium.from_hex(storageKeyHex);
+        const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+        // Déchiffrer la clé du fichier
+        const encryptedKeyBuffer = sodium.from_base64(file.getAttribute("data-encrypted-file-key"), sodium.base64_variants.ORIGINAL);
+        const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+        const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextKey,
+          null,
+          nonceKey,
+          userMasterKey
+        );
+
+        // Chiffrer les nouvelles métadonnées avec la FileKey
+        const metadataStr = JSON.stringify(metadata);
+        const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+          sodium.from_string(metadataStr),
+          null,
+          null,
+          nonceMeta,
+          fileKey
+        );
+        const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+        const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);  
+        console.log("Renommer le fichier :", fileId, "en", newName);
+        fileName.classList.remove("editing_file_name");
+
+        fetch('/api/drive/rename_file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_id: fileId,
+            new_encrypted_metadata: encryptedMetadataB64
+          }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.status === 'success') {
+              console.log("Fichier renommé avec succès.");
+              file.setAttribute("data-file-name", newName);
+              // Mettre à jour l'état des fichiers
+              setFiles(prevFiles => prevFiles.map(f => f.file_id === fileId ? { ...f, name: newName } : f));
+              // Rafraîchir la vue du dossier courant
+            } else {
+
+              console.error("Erreur renommage fichier :", data.message);
+            }
+          })
+          .catch(error => {
+            console.error("Erreur lors de la requête de renommage :", error);
+          });
+      };
+
+    } else {
+      console.error("Element with class 'file_name' not found in file:", fileId);
+    }
+  }
+
   const opent_menu_contextual_file = (fileId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
@@ -1494,7 +1602,7 @@ export default function Drive() {
                     e.preventDefault();
                     opent_menu_contextual_file(file.file_id, e.pageX, e.pageY);
                   }}
-                  onClick={() => {
+                  onDoubleClick={() => {
                     if (file.is_chunked) {
                       handleDownloadChunked(file.file_id, file.name);
                     } else {

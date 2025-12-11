@@ -23,7 +23,7 @@ use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
     upload_handler, upload_streaming_handler,download_raw_handler,delete_file_handler,
-    delete_folder_handler
+    delete_folder_handler,rename_file_handler
 };
 
 // Middleware de debug pour logger l'origine et les méthodes (utile pour CORS)
@@ -115,6 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/download_raw", get(download_raw_handler))
         .route("/drive/delete_file", post(delete_file_handler))
         .route("/drive/delete_folder", post(delete_folder_handler))
+        .route("/drive/rename_file", post(rename_file_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(

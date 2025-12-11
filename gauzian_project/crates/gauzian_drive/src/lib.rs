@@ -12,7 +12,8 @@ use gauzian_auth::verify_session_token;
 use gauzian_core::{
     AppState, DownloadQuery, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
-    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,DeleteFileRequest,DeleteFolderRequest
+    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,DeleteFileRequest,DeleteFolderRequest,
+    FileRenameRequest,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -1188,4 +1189,76 @@ pub async fn delete_folder_handler(
             return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }
     }
+}
+
+pub async fn rename_file_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<FileRenameRequest>,
+) -> impl IntoResponse {
+    // verifier le token
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let update_file_result = sqlx::query!(
+        r#"
+        UPDATE vault_files
+        SET encrypted_metadata = $1, updated_at = NOW()
+        WHERE id = $2 AND owner_id = $3
+        "#,
+        payload.new_encrypted_metadata.as_bytes(),
+        payload.file_id,
+        user_id,
+    )
+    .execute(&state.db_pool)
+    .await;
+    match update_file_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Fichier renommé avec succès",
+            }));
+            return (StatusCode::OK, body).into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur renommage fichier dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors du renommage du fichier"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    };
 }
