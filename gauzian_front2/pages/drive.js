@@ -48,6 +48,7 @@ export default function Drive() {
   const [curentUploadingFilesNames, setCurentUploadingFilesNames] = useState([]); // Noms des fichiers en cours d'upload
   const [UploadProcesses, setUploadProcesses] = useState({}); // Dictionnaire des processus d'upload par fichier
   const uploadingCountRef = useRef(0); // Ref pour compter de manière synchrone
+  const totalFilesToUploadRef = useRef(0); // Ref pour le total des fichiers à uploader
 
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
@@ -57,9 +58,8 @@ export default function Drive() {
     if (selectedFiles && selectedFiles.length > 0) {
       // Traiter chaque fichier séquentiellement
       for (const file of selectedFiles) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 20));
         encodeAndSend(file);
-        console.log(`Nombre de fichier en upload --------- : ${uploadingsFilesCount}`);
       }
     }
     // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
@@ -355,9 +355,11 @@ export default function Drive() {
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
+    totalFilesToUploadRef.current += 1;
+    
     while (uploadingCountRef.current >= 3) {
       console.log('Attente avant de lancer un nouvel upload...');
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     uploadingCountRef.current += 1;
@@ -1203,7 +1205,7 @@ export default function Drive() {
          <div className="div_upload_progress" style={{ display: uploadingsFilesCount > 0 ? 'block' : 'none' }}>
             {/* div pour afficher le nombre de fichiers en attente */}
             <div style={{ marginBottom: '10px' }}>
-              <a>Upload en cours : {uploadingsFilesCount} fichier(s)</a>
+              <a>Upload en cours : {totalFilesToUploadRef.current} fichier(s)</a>
             </div>
             {curentUploadingFilesNames.map((fileName) => (
               <div key={fileName} style={{ marginBottom: '10px', display: UploadProcesses[fileName] === 100 ? 'none' : 'block' }}>
