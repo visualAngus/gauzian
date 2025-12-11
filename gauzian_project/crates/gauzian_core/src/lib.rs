@@ -126,3 +126,12 @@ pub struct FinishStreamingUploadRequest {
 pub struct DownloadQuery {
     pub id_file: Uuid,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct DeleteFileRequest {
+    pub file_id: Uuid,
+}
+#[derive(Deserialize, Debug)]
+pub struct DeleteFolderRequest {
+    pub folder_id: Uuid,
+}

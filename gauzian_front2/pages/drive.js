@@ -1082,6 +1082,31 @@ export default function Drive() {
     }
   };
 
+  const delete_folder = async (folderId) => {
+    console.log("Supprimer le dossier :", folderId);
+    fetch('/api/drive/delete_folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_id: folderId
+      }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          console.log("Dossier supprimé avec succès.");
+          // Mettre à jour l'état des dossiers
+          setFolders(prevFolders => prevFolders.filter(f => f.folder_id !== folderId));
+          // Rafraîchir la vue du dossier courant
+        } else {
+          console.error("Erreur suppression dossier :", data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de suppression :", error);
+      });
+  };
+
   const opent_menu_contextual_folder = (folderId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
@@ -1109,7 +1134,7 @@ export default function Drive() {
 
     let deleteOption = menu.querySelector("#delete_folder_option");
     deleteOption.onclick = () => {
-      console.log("Supprimer le dossier :", folderId);
+      delete_folder(folderId);
     }
 
     let shareOption = menu.querySelector("#share_folder_option");

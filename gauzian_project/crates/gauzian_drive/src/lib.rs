@@ -12,7 +12,7 @@ use gauzian_auth::verify_session_token;
 use gauzian_core::{
     AppState, DownloadQuery, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
-    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,
+    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,DeleteFileRequest,DeleteFolderRequest
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -1043,6 +1043,149 @@ async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<i6
         Err(e) => {
             eprintln!("Erreur récupération stockage utilisateur: {:?}", e);
             None
+        }
+    }
+}
+
+
+pub async fn delete_file_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<DeleteFileRequest>,
+) -> impl IntoResponse {
+    // verifier le token
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let delete_file_result = sqlx::query!(
+        r#"
+        DELETE FROM vault_files
+        WHERE id = $1 AND owner_id = $2
+        "#,
+        payload.file_id,
+        user_id,
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match delete_file_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Fichier supprimé avec succès",
+            }));
+            return (StatusCode::OK, body).into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur suppression fichier dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors de la suppression du fichier"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    }
+}
+
+pub async fn delete_folder_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<DeleteFolderRequest>,
+) -> impl IntoResponse {
+    // verifier le token
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    // requet sql pour vérifier la session
+    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+        Ok(user_id) => user_id,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    let delete_folder_result = sqlx::query!(
+        r#"
+        DELETE FROM folders
+        WHERE id = $1 AND owner_id = $2
+        "#,
+        payload.folder_id,
+        user_id,
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match delete_folder_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Dossier supprimé avec succès",
+            }));
+            return (StatusCode::OK, body).into_response();
+        }
+        Err(e) => {
+            eprintln!("Erreur suppression dossier dans la BDD: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors de la suppression du dossier"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
         }
     }
 }
