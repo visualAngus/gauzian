@@ -333,7 +333,9 @@ export default function Drive() {
     // Rafraîchir la vue du dossier courant
     getFolderStructure(activeFolderId);
     console.log(data.folder_id);
-    rename_folder(data.folder_id, folderName);
+    setTimeout(() => {
+      rename_folder(data.folder_id, folderName);
+    }, 500);
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
