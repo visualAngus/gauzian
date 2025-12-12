@@ -60,7 +60,7 @@ export default function UserAccount() {
         <div className="drive-container">
             <header>
                 <h1><a href="/">GZDRIVE</a></h1>
-                <div className="div_user_profil" onClick={() => router.push('/user')} style={{ cursor: 'pointer' }}>
+                <div className="div_user_profil" onClick={() => router.push('/profile')} style={{ cursor: 'pointer' }}>
                     {!imageLoadedState && <div className="div_profil_custom"></div>}
                     <img
                         className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
