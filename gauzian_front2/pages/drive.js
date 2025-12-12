@@ -589,7 +589,8 @@ export default function Drive() {
 
       if (!openRes.ok) {
         let message = await openRes.json();
-        throw new Error(message);
+        return false;
+        // throw new Error(message);
       }
       const data = await openRes.json();
       temp_upload_id = data.temp_upload_id;
@@ -919,6 +920,15 @@ export default function Drive() {
         const storage_limit = data.storage_limit || 1;
         setStorageUsed(storage_used);
         setStorageLimit(storage_limit);
+
+        // si le dossier est le root on appelle la focntion root
+        if (data.is_root) {
+          console.log("Dossier racine détecté.");
+          const rootId = data.folders[0]?.folder_id;
+          setActiveFolderId(rootId);
+          setRootFolderId(rootId);
+          setActiveSection('mon_drive');
+        }
 
         const decryptedFolders = [];
 
@@ -1487,41 +1497,10 @@ export default function Drive() {
       loadFullPathFromFolderId();
       getFileStructure(activeFolderId);
     } else {
+      console.log("Charger le contenu du dossi-----------------------------er actif :", activeFolderId);
       getFolderStructure(activeFolderId);
       getFileStructure(activeFolderId);
     }
-
-
-    // if UploadingsFilesCount > 0 on met uploading a true
-
-    // ajouter un folder a la main pour le dev
-    // setFolders((prevFolders) => [
-    //   ...prevFolders,
-    //   { folder_id: 'dev_folder', name: 'Dossier Dev' }
-    // ]);
-
-    // si on clique quelque part sur la page
-
-    // simulé un download de fichier
-
-    // setCurentUploadingFilesNames([
-    //   'exemple_grand_fichier_1.zip',
-    //   'video_vacances_2023.mp4',
-    //   'archive_photos_2022.rar',
-
-    // ]);
-    // setUploadProcesses({
-    //   'exemple_grand_fichier_1.zip': 45,
-    //   'video_vacances_2023.mp4': 70,
-    //   'archive_photos_2022.rar': 20
-    // });
-    // setUploadingsFilesCount(3);
-    // setUploading(true);
-
-    // storage
-    // setStorageLimit(10737418240); // 10 Go pour le dev
-    // setStorageUsed(5368709120); // 5 Go pour le dev
-
 
     const handleClickAnywhere = (event) => {
       if (event.target.closest('.folder_graph')) return;
