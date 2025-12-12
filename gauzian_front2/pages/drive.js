@@ -165,9 +165,13 @@ export default function Drive() {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
 
       // si l'ulr est en localhost alors ne pas importer streamSaver
-        
-      const streamSaver = (await import('streamsaver')).default;
-      
+      try {
+        //  const streamSaver = (await import('streamsaver')).default;
+      } catch (e) {
+        console.warn("StreamSaver non chargé en local.");
+        alert("Le téléchargement de gros fichiers n'est pas supporté en local.");
+        return;
+      }
       
       await _sodium.ready;
       const sodium = _sodium;
