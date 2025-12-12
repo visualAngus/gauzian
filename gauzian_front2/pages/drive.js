@@ -1528,7 +1528,9 @@ export default function Drive() {
 
       <header>
         <h1><a href="/">GZDRIVE</a></h1>
-        <div className="div_user_profil">
+        <div className="div_user_profil" onClick={() => {
+          window.location.href = '/profile';
+        }}>
           {!imageLoadedState && <div className="div_profil_custom"></div>}
           <img
             className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
