@@ -487,6 +487,7 @@ pub async fn files_handler(
                     "media_type": record.media_type,
                     "is_compressed": record.is_compressed,
                     "created_at": record.created_at,
+                    "owner": record.owner.unwrap_or_default(),
                 })
             }).collect();
 
