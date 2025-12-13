@@ -450,6 +450,8 @@ export default function Drive() {
       }
       // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
       setTimeout(() => {
+        console.log("Vérification dossier actif pour rafraîchissement...");
+        console.log("Dossier actif:", activeFolderId, "Fichier parent:", selectedFile.parent_folder_id);
         if (activeFolderId === (selectedFile.parent_folder_id || activeFolderId)) {
           getFolderStructure(activeFolderId);
           getFileStructure(activeFolderId);
