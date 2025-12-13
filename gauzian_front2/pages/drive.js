@@ -28,6 +28,8 @@ export default function Drive() {
   const [folders, setFolders] = useState([]); // Pour stocker la liste des dossiers/fichiers
   const [files, setFiles] = useState([]); // Pour stocker la liste des fichiers
   const [imageLoadedState, setImageLoadedState] = useState(false);
+  const [contents, setContents] = useState([]); // Contenu du dossier actif
+
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -1537,7 +1539,10 @@ export default function Drive() {
       { folder_id: '2', name: 'Dossier 2', created_at: '2024-01-01T12:00:00Z', updated_at: '2024-01-02T12:00:00Z' },
     ]);
 
-
+    setFiles([
+      { file_id: 'a', name: 'FichierA.txt', size: 1024, type: 'text/plain' },
+      { file_id: 'b', name: 'ImageB.png', size: 2048, type: 'image/png' },
+    ]);
 
 
     const handleClickAnywhere = (event) => {
@@ -1559,6 +1564,25 @@ export default function Drive() {
 
 
   }, [activeFolderId, token]);
+
+  // Met à jour `contents` dès que `folders` ou `files` changent
+  useEffect(() => {
+    const unified = [
+      ...folders.map((folder) => ({
+        ...folder,
+        id: folder.folder_id,
+        type: 'folder',
+        name: folder.name,
+      })),
+      ...files.map((file) => ({
+        ...file,
+        id: file.file_id,
+        type: 'file',
+        name: file.name,
+      })),
+    ];
+    setContents(unified);
+  }, [folders, files]);
   // --- RENDU (JSX) ---
   return (
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
@@ -1844,45 +1868,64 @@ export default function Drive() {
                   <span>Modifié le</span>
                 </div>
               </div>
-              {folders.map((folder) => (
+              {contents.map((content) => (
                 <div
-                  key={folder.id}
+                  key={content.id}
                   className="content_graph_list"
-                  id={folder.folder_id}
+                  id={content.folder_id}
 
-                  data-folder-id={folder.id || ''}
-                  data-folder-name={folder.name || ''}
-                  data-folder-created-at={folder.created_at || ''}
-                  data-folder-updated-at={folder.updated_at || ''}
-                  data-encrypted-folder-key={folder.encrypted_folder_key || ''}
+                  data-folder-id={content.id || ''}
+                  data-folder-name={content.name || ''}
+                  data-folder-created-at={content.created_at || ''}
+                  data-folder-updated-at={content.updated_at || ''}
+                  data-encrypted-folder-key={content.encrypted_folder_key || ''}
                   onClick={() => {
-                    // console.log("Dossier cliqué :", folder);
-                    // Enlever la classe 'selected_folder' de tous les dossiers
-                    document.querySelectorAll('.content_graph_list.selected_folder').forEach((el) => {
-                      el.classList.remove('selected_folder');
-                    });
-                    // Ajouter la classe 'selected_folder' au dossier cliqué
-                    document.getElementById(folder.folder_id).classList.add('selected_folder');
+                    if (content.type === 'folder') {
+                      document.querySelectorAll('.content_graph_list.selected_folder').forEach((el) => {
+                        el.classList.remove('selected_folder');
+                      });
+                      // Ajouter la classe 'selected_folder' au dossier cliqué
+                      document.getElementById(content.folder_id).classList.add('selected_folder');
+                    } else if (content.type === 'file') {
+                      document.querySelectorAll('.content_graph_list.selected_file').forEach((el) => {
+                        el.classList.remove('selected_file');
+                      });
+                      // Ajouter la classe 'selected_file' au fichier cliqué
+                      document.getElementById(content.file_id).classList.add('selected_file');
+                    }
                   }}
-                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                  onDoubleClick={() => {
+                    if (content.type === 'file') {
+                      if (content.is_chunked) {
+                        handleDownloadChunked(content.file_id, content.name);
+                      } else {
+                        handleDownload(content.file_id, content.name);
+                      }
+                    } else if (content.type === 'folder') {
+                      handleFolderClick(content.folder_id, content.name)
+                    }
+                  }}
                   style={{ cursor: 'pointer' }}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
+                    if (content.type === 'file') {
+                      opent_menu_contextual_file(content.file_id, e.pageX, e.pageY);
+                    } else if (content.type === 'folder') {
+                     opent_menu_contextual_folder(content.folder_id, e.pageX, e.pageY);
+                    }
                   }}
                 >
                   <div className="icon_and_name">
                     <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
                     </svg>
-                    <span className="folder_name">{folder.name}</span>
+                    <span className="folder_name">{content.name}</span>
                   </div>
                   <div className="additional_info">
-                    <span>{folder.owner || ''}</span>
-                    {/* <span>{folder.total_size || '—'}</span> */}
+                    <span>{content.owner || ''}</span>
                     <span>
                       {(() => {
-                        const size = folder.total_size || 0;
+                        const size = content.total_size || 0;
                         if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
                         if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
                         if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
@@ -1890,12 +1933,12 @@ export default function Drive() {
                       })()}
                     </span>
                     <span>
-                      {new Date(folder.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } 
+                      {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } 
                       )}
                     </span>
 
                     <span>
-                      {new Date(folder.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } )}
+                      {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } )}
                     </span>
 
                   </div>
