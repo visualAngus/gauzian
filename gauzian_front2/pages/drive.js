@@ -1064,6 +1064,8 @@ export default function Drive() {
       if (rootFolderId) {
         setActiveFolderId(rootFolderId);
         setPath([{ id: rootFolderId, name: 'Mon Drive' }]);
+        getFolderStructure(rootFolderId);
+        getFileStructure(rootFolderId);
       }
     } else {
       // Pour les autres sections (Corbeille, etc.), on peut simuler un path
