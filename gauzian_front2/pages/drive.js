@@ -1514,6 +1514,12 @@ export default function Drive() {
       getFileStructure(activeFolderId);
     }
 
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      setActiveSection(hash);
+    }
+
+    
     const handleClickAnywhere = (event) => {
       if (event.target.closest('.folder_graph')) return;
       document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
@@ -1529,10 +1535,6 @@ export default function Drive() {
 
 
     // get the # in the url to set the active section
-    const hash = window.location.hash.substring(1);
-    if (hash) {
-      setActiveSection(hash);
-    }
 
 
 
