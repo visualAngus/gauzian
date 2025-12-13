@@ -1879,7 +1879,16 @@ export default function Drive() {
                   </div>
                   <div className="additional_info">
                     <span>Vous</span>
-                    <span>{folder.total_size || '—'}</span>
+                    {/* <span>{folder.total_size || '—'}</span> */}
+                    <span>
+                      {(() => {
+                        const size = folder.total_size || 0;
+                        if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
+                        if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
+                        if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
+                        return size + ' B';
+                      })()}
+                    </span>
                     <span>
                       {new Date(folder.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } 
                       )}
