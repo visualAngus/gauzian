@@ -72,7 +72,8 @@ CREATE TABLE public.file_access (
     file_id uuid NOT NULL,
     encrypted_file_key bytea NOT NULL,
     permission_level character varying(20) DEFAULT 'editor'::character varying,
-    joined_at timestamp with time zone DEFAULT now()
+    joined_at timestamp with time zone DEFAULT now(),
+    folder_id uuid
 );
 
 
@@ -174,7 +175,7 @@ ALTER TABLE public.vault_files OWNER TO gauzian_user;
 -- Data for Name: file_access; Type: TABLE DATA; Schema: public; Owner: gauzian_user
 --
 
-COPY public.file_access (user_id, file_id, encrypted_file_key, permission_level, joined_at) FROM stdin;
+COPY public.file_access (user_id, file_id, encrypted_file_key, permission_level, joined_at, folder_id) FROM stdin;
 86ef55cf-b471-4f8e-8d45-5d3a4a19301e	14d52641-458c-437f-a371-d79e060a9f34	\\x324d377845386b505965545164694c6630534e71612f71432b724f4a654b4e596a365742427135726c37394577784d35375678424568413133735231626b4545696f58545359637152724a51554f307274524e6b7a625041556b62396636416d	owner	2025-12-06 13:41:47.470324+00
 86ef55cf-b471-4f8e-8d45-5d3a4a19301e	0cde3592-7af6-4a05-960f-a9d429ad1532	\\x773542467063487a5073526b315967376b4d547373334b65726a614e2b676c746752464b69706c7471594f5970466a6b744b536d546e566a78547a544755536f354b57746352326b4a324753575152305172316373657a4c756a44634d374a2b	owner	2025-12-06 13:44:05.530015+00
 86ef55cf-b471-4f8e-8d45-5d3a4a19301e	f0f8ab69-cc56-44d2-9adb-804492103db5	\\x2b37366c33785251537a335568713833314f52545865486f774453786e506e5168617573385a4b3352627251705851634a5433684a6e5a454470697063724267646d6f5748337775332b78394448345a57375538326e6c725a6574587267796b	owner	2025-12-06 13:48:07.789278+00
