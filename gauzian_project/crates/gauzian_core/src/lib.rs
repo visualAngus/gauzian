@@ -88,6 +88,7 @@ pub struct FolderRecord {
     pub updated_at: Option<DateTime<Utc>>, // Option car timestamps parfois nullable par défaut
     pub encrypted_folder_key: Vec<u8>,
     pub is_root: bool,
+    pub total_size: Option<i64>,
 }
 
 #[derive(Deserialize, Debug)]
