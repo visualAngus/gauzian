@@ -1523,7 +1523,6 @@ export default function Drive() {
     }
 
     if (hash === 'mon_drive') {
-
       console.log("Active Folder ID changed:", activeFolderId);
       if (activeFolderId === null) {
         loadFullPathFromFolderId();
@@ -1537,9 +1536,15 @@ export default function Drive() {
       setFolders([]);
       setFiles([]);
     }else {
-      getRootFolder();
-      getFolderStructure(activeFolderId);
-      getFileStructure(activeFolderId);
+      // Par défaut, on charge le dossier actif
+      if (activeFolderId === null){
+        getRootFolder();
+        getFolderStructure(activeFolderId);
+        getFileStructure(activeFolderId);
+      } else {
+        getFolderStructure(activeFolderId);
+        getFileStructure(activeFolderId);
+      }
     }
 
     // mettre des folder pour le debug  
