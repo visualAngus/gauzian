@@ -273,16 +273,44 @@ pub async fn folder_handler(
         sqlx::query_as!(
             FolderRecord,
             r#"
+            WITH RECURSIVE folder_tree AS (
+                SELECT 
+                    f.id,
+                    f.parent_id
+                FROM folders f
+                WHERE f.id = $1
+
+                UNION ALL
+                SELECT 
+                    f.id,
+                    f.parent_id
+                FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            ),
+            folder_size AS (
+                SELECT 
+                    ft.id AS folder_id,
+                    COALESCE(SUM(vf.file_size), 0)::int8 AS total_size
+                FROM folder_tree ft
+                LEFT JOIN vault_files vf ON vf.folder_id = ft.id
+                GROUP BY ft.id
+            )
+
             SELECT 
                 f.is_root,
-                f.id, 
-                f.encrypted_metadata, 
-                f.updated_at, 
-                fa.encrypted_folder_key
+                f.id,
+                f.encrypted_metadata,
+                f.updated_at,
+                fa.encrypted_folder_key,
+                fs.total_size
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
-            WHERE f.parent_id = $1 AND fa.user_id = $2
-            ORDER BY f.updated_at DESC
+            LEFT JOIN folder_size fs ON fs.folder_id = f.id
+            WHERE 
+                f.parent_id = $1
+                AND fa.user_id = $2
+            ORDER BY f.updated_at DESC;
+
             "#,
             parent_id,
             user_id,
@@ -294,16 +322,46 @@ pub async fn folder_handler(
         sqlx::query_as!(
             FolderRecord,
             r#"
+            WITH RECURSIVE folder_tree AS (
+                SELECT 
+                    f.id,
+                    f.parent_id
+                FROM folders f
+                WHERE f.id IN (
+                    SELECT folder_id 
+                    FROM folder_access 
+                    WHERE user_id = $2
+                ) AND f.parent_id IS NULL
+
+                UNION ALL
+                SELECT 
+                    f.id,
+                    f.parent_id
+                FROM folders f
+                INNER JOIN folder_tree ft ON f.parent_id = ft.id
+            ),
+            folder_size AS (
+                SELECT 
+                    ft.id AS folder_id,
+                    COALESCE(SUM(vf.file_size), 0)::int8 AS total_size
+                FROM folder_tree ft
+                LEFT JOIN vault_files vf ON vf.folder_id = ft.id
+                GROUP BY ft.id
+            )
             SELECT 
                 f.is_root,
-                f.id, 
-                f.encrypted_metadata, 
-                f.updated_at, 
-                fa.encrypted_folder_key
+                f.id,
+                f.encrypted_metadata,
+                f.updated_at,
+                fa.encrypted_folder_key,
+                fs.total_size
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
-            WHERE f.is_root AND fa.user_id = $1
-            ORDER BY f.updated_at DESC
+            LEFT JOIN folder_size fs ON fs.folder_id = f.id
+            WHERE 
+                f.parent_id IS NULL
+                AND fa.user_id = $2
+            ORDER BY f.updated_at DESC;
             "#,
             user_id,
         )

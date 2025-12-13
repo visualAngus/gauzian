@@ -53,9 +53,12 @@ export default function Drive() {
   const totalFilesToUploadRef = useRef(0); // Ref pour le total des fichiers à uploader
   const nbFilesUploadedRef = useRef(0); // Ref pour le nombre de fichiers déjà uploadés
 
-
+  // Stockage utilisé
   const [storageUsed, setStorageUsed] = useState(0);
   const [storageLimit, setStorageLimit] = useState(1);
+
+  // type de vue (list/grid)
+  const [viewType, setViewType] = useState('list'); // 'grid' ou 'list'
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
@@ -172,7 +175,7 @@ export default function Drive() {
         alert("Le téléchargement de gros fichiers n'est pas supporté en local.");
         return;
       }
-      
+
       await _sodium.ready;
       const sodium = _sodium;
 
@@ -680,7 +683,7 @@ export default function Drive() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ temp_upload_id: temp_upload_id })
-            });      
+            });
             // supprimer toutes les ref a cet upload
             delete UploadProcesses[file.name];
             setUploadProcesses({ ...UploadProcesses });
@@ -938,6 +941,7 @@ export default function Drive() {
         for (const folder of data.folders) {
           // On appelle la fonction qui fait le double déchiffrement
           const cleanFolder = await processFolder(folder);
+          console.log("Dossier déchiffré:", cleanFolder);
           decryptedFolders.push(cleanFolder);
         }
 
@@ -1066,11 +1070,11 @@ export default function Drive() {
         setPath([{ id: rootFolderId, name: 'Mon Drive' }]);
         getFolderStructure(rootFolderId);
         getFileStructure(rootFolderId);
-      }else {
+      } else {
         getRootFolder();
       }
     } else {
-      
+
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
       setFiles([]);
@@ -1261,7 +1265,7 @@ export default function Drive() {
           // Mettre à jour l'état des dossiers
           setFolders(prevFolders => prevFolders.filter(f => f.folder_id !== folderId));
           // Rafraîchir la vue du dossier courant
-           setTimeout(() => {
+          setTimeout(() => {
             getFolderStructure(activeFolderId);
             getFileStructure(activeFolderId);
           }, 500);
@@ -1330,7 +1334,7 @@ export default function Drive() {
           setFiles(prevFiles => prevFiles.filter(f => f.file_id !== fileId));
           // Rafraîchir la vue du dossier courant
 
-           setTimeout(() => {
+          setTimeout(() => {
             getFolderStructure(activeFolderId);
             getFileStructure(activeFolderId);
           }, 500);
@@ -1526,6 +1530,13 @@ export default function Drive() {
       setFolders([]);
       setFiles([]);
     }
+
+    // mettre des folder pour le debug  
+    setFolders([
+      { folder_id: '1', name: 'Dossier 1', created_at: '2024-01-01T12:00:00Z', updated_at: '2024-01-02T12:00:00Z' },
+      { folder_id: '2', name: 'Dossier 2', created_at: '2024-01-01T12:00:00Z', updated_at: '2024-01-02T12:00:00Z' },
+    ]);
+
 
 
 
@@ -1744,8 +1755,8 @@ export default function Drive() {
               ))}
             </div>
 
-
-            <div className="div_contenue_folder">
+            {/* if typeview is grid */}
+            <div className="div_contenue_folder" style={{ display: viewType === 'grid' ? 'flex' : 'none' }}>
               {folders.map((folder) => (
                 <div
                   key={folder.id}
@@ -1787,7 +1798,7 @@ export default function Drive() {
                 </div>
               )}
             </div>
-            <div className="div_contenue_file">
+            <div className="div_contenue_file" style={{ display: viewType === 'grid' ? 'flex' : 'none' }}>
               {files.map((file) => (
                 <div
                   key={file.file_id}
@@ -1816,6 +1827,69 @@ export default function Drive() {
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path></svg>
                   <span className='file_name'>{file.name}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className='div_contenue_list' style={{ display: viewType === 'list' ? 'flex' : 'none' }}>
+
+              <div className="content_list_header">
+                <div className="header_name">
+                  Nom
+                </div>
+                <div className="header_additional_info">
+                  <span>Propriétaire</span>
+                  <span>Taille</span>
+                  <span>Créé le</span>
+                  <span>Modifié le</span>
+                </div>
+              </div>
+              {folders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className="content_graph_list"
+                  id={folder.folder_id}
+
+                  data-folder-id={folder.id || ''}
+                  data-folder-name={folder.name || ''}
+                  data-folder-created-at={folder.created_at || ''}
+                  data-folder-updated-at={folder.updated_at || ''}
+                  data-encrypted-folder-key={folder.encrypted_folder_key || ''}
+                  onClick={() => {
+                    // console.log("Dossier cliqué :", folder);
+                    // Enlever la classe 'selected_folder' de tous les dossiers
+                    document.querySelectorAll('.content_graph_list.selected_folder').forEach((el) => {
+                      el.classList.remove('selected_folder');
+                    });
+                    // Ajouter la classe 'selected_folder' au dossier cliqué
+                    document.getElementById(folder.folder_id).classList.add('selected_folder');
+                  }}
+                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                  style={{ cursor: 'pointer' }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
+                  }}
+                >
+                  <div className="icon_and_name">
+                    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+                    </svg>
+                    <span className="folder_name">{folder.name}</span>
+                  </div>
+                  <div className="additional_info">
+                    <span>Vous</span>
+                    <span>--</span>
+                    <span>
+                      {new Date(folder.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } 
+                      )}
+                    </span>
+
+                    <span>
+                      {new Date(folder.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } )}
+                    </span>
+
+                  </div>
                 </div>
               ))}
             </div>
