@@ -448,10 +448,13 @@ export default function Drive() {
         totalFilesToUploadRef.current = 0;
         abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
-      // setTimeout(() => {
-      //   getFolderStructure(activeFolderId);
-      //   getFileStructure(activeFolderId);
-      // }, 500);
+      // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
+      setTimeout(() => {
+        if (activeFolderId === (selectedFile.parent_folder_id || activeFolderId)) {
+          getFolderStructure(activeFolderId);
+          getFileStructure(activeFolderId);
+        }
+      }, 500);
 
     } catch (error) {
       console.error('Erreur globale upload:', error);
