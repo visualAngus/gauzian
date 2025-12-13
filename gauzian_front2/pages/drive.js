@@ -169,7 +169,7 @@ export default function Drive() {
     try {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
 
-      // const streamSaver = (await import('streamsaver')).default;
+      const streamSaver = (await import('streamsaver')).default;
 
       await _sodium.ready;
       const sodium = _sodium;
