@@ -1542,12 +1542,6 @@ export default function Drive() {
 
     document.addEventListener('click', handleClickAnywhere);
 
-    // get the # in the url to set the active section
-    setFiles([
-      { file_id: '1', name: 'Docu dffsdfs f sgdf fgfdfgfment 1.txt', type: 'file' },
-      { file_id: '2', name: 'Image 1.png', type: 'file' },
-    ]);
-
     return () => {
       document.removeEventListener('click', handleClickAnywhere);
     };
@@ -1745,6 +1739,27 @@ export default function Drive() {
               >
                 <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5ZM4 5V19H20V7H11.5858L9.58579 5H4ZM11 12V9H13V12H16V14H13V17H11V14H8V12H11Z"></path></svg>
 
+              </button>
+
+              {/* bouton pour passer de l'affichage grid a list */}
+              <button
+                onClick={() => {
+                  if (viewType === 'grid') {
+                    setViewType('list');
+                  } else {
+                    setViewType('grid');
+                  }
+                }}
+                style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
+                disabled={uploading}
+                title={viewType === 'grid' ? 'Passer en vue liste' : 'Passer en vue grille'}
+                id="btn_toggle_view"
+              >
+                {viewType === 'grid' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H20V8H4V6ZM4 11H20V13H4V11ZM4 16H20V18H4V16Z"></path></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 4H10V10H4V4ZM14 4H20V10H14V4ZM4 14H10V20H4V14ZM14 14H20V20H14V14Z"></path></svg>
+                )}
               </button>
             </div>
 
