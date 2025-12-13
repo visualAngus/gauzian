@@ -1078,7 +1078,10 @@ export default function Drive() {
     // Mettre à jour l'URL sans recharger la page
     const newUrl = new URL(window.location);
     newUrl.searchParams.delete('folderId'); // Supprimer folderId pour les sections spéciales
+    // Ajoute un hash pour indiquer la section active dans l'URL
+    newUrl.hash = `#${sectionId}`;
     window.history.pushState({}, '', newUrl);
+
   };
 
   const handlePathClick = (item, index) => {
