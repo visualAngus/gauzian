@@ -378,6 +378,7 @@ pub async fn folder_handler(
                     "updated_at": record.updated_at,
                     "encrypted_folder_key": String::from_utf8(record.encrypted_folder_key).unwrap_or_default(),
                     "is_root": record.is_root,
+                    "total_size": record.total_size.unwrap_or(0),
                 })
             }).collect();
             let storage_used = get_storage_usage_handler(user_id, &state).await;
