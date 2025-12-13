@@ -290,7 +290,7 @@ export default function Drive() {
 
     } catch (error) {
       console.error("Erreur Globale:", error);
-      alert("Erreur: " + error.message);
+      // alert("Erreur: " + error.message);
     }
   };
 
