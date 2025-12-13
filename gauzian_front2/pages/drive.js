@@ -1074,6 +1074,7 @@ export default function Drive() {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
       setFiles([]);
+      setPath([]); // Vider le chemin car on n'est pas dans un dossier classique
     }
 
     // Mettre à jour l'URL sans recharger la page
