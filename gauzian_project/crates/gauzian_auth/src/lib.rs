@@ -231,7 +231,10 @@ pub async fn login_handler(
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
     // --- LOGIQUE IP / USER-AGENT (INCHANGÉE) ---
-    let payload_client_ip = payload.ip_address.clone();
+    let payload_client_ip = headers
+        .get("x-real-ip")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("IP Inconnue"); // Fallback si le header est absent
     // ... (Ton code de log IP reste ici) ...
 
     let raw_user_agent = headers

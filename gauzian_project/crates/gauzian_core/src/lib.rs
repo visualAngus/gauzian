@@ -1,3 +1,5 @@
+use std::sync;
+
 use sqlx::{PgPool, types::uuid};
 use serde::Deserialize;
 use chrono::NaiveDate;
@@ -9,6 +11,9 @@ use chrono::{DateTime, Utc};
 pub struct AppState {
     pub db_pool: PgPool, // "pub" est essentiel pour que les autres modules y accèdent
 }
+
+// set le USER_STORAGE_LIMIT
+pub const USER_STORAGE_LIMIT: u64 = 3 * 1024 * 1024 * 1024; // 3 Go
 
 // --- 2. DTOs (Data Transfer Objects) ---
 #[derive(Deserialize, Debug)]
@@ -41,7 +46,6 @@ pub struct UserKeys {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
-    pub ip_address: Option<String>,
 }
 #[derive(Deserialize, Debug)]
 pub struct UploadRequest {
@@ -90,4 +94,55 @@ pub struct FolderRecord {
 pub struct FolderRenameRequest {
     pub folder_id: Uuid,
     pub new_encrypted_metadata: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UploadStreamingRequest {
+    pub encrypted_chunk: String,
+    pub chunk_index: usize,
+    pub total_chunks: usize,   
+    pub temp_upload_id: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OpenStreamingUploadRequest {
+    pub encrypted_metadata: String,
+    pub media_type: String,
+    pub file_size: usize,
+    pub parent_folder_id: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FinishStreamingUploadRequest {
+    pub temp_upload_id: Uuid,
+    pub encrypted_file_key: String,
+    pub encrypted_metadata: String,
+    pub media_type: String,
+    pub file_size: usize,
+    pub parent_folder_id: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DownloadQuery {
+    pub id_file: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DeleteFileRequest {
+    pub file_id: Uuid,
+}
+#[derive(Deserialize, Debug)]
+pub struct DeleteFolderRequest {
+    pub folder_id: Uuid,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FileRenameRequest {
+    pub file_id: Uuid,
+    pub new_encrypted_metadata: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CancelStreamingUploadRequest {
+    pub temp_upload_id: Uuid,
 }

@@ -111,17 +111,6 @@ export default function LoginPage() {
     setMessage(null);
 
     // Best-effort: get client's public IP to include for server logs (non-trusted)
-    let client_ip = null;
-    try {
-      const ipr = await fetch('https://api.ipify.org?format=json');
-      if (ipr.ok) {
-        const ipj = await ipr.json();
-        if (ipj && ipj.ip) client_ip = ipj.ip;
-      }
-    } catch (_e) {
-      // ignore failures
-    }
-
     try {
       const enc = new TextEncoder();
 
@@ -129,7 +118,7 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ email, password, client_ip }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       console.log(data)

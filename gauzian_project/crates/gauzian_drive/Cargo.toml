@@ -14,8 +14,10 @@ anyhow = "1.0"
 futures = "0.3"
 log = "0.4"
 env_logger = "0.10"
-axum = "0.7"
+axum = { version = "0.7", features = ["macros"] }
 actix-web = "4.0"
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "time", "chrono","ipnetwork"]  }
 uuid = { version = "1", features = ["serde", "v4"] }
-base64 = "0.21"
+base64 = "0.22"
+bytes = "1.4"
+async-stream = "0.3"
