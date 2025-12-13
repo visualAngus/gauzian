@@ -448,10 +448,10 @@ export default function Drive() {
         totalFilesToUploadRef.current = 0;
         abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
-      setTimeout(() => {
-        getFolderStructure(activeFolderId);
-        getFileStructure(activeFolderId);
-      }, 500);
+      // setTimeout(() => {
+      //   getFolderStructure(activeFolderId);
+      //   getFileStructure(activeFolderId);
+      // }, 500);
 
     } catch (error) {
       console.error('Erreur globale upload:', error);
