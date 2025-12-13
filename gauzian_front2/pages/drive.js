@@ -171,7 +171,7 @@ export default function Drive() {
 
       // si l'ulr est en localhost alors ne pas importer streamSaver
       try {
-        //  const streamSaver = (await import('streamsaver')).default;
+         const streamSaver = (await import('streamsaver')).default;
       } catch (e) {
         console.warn("StreamSaver non chargé en local.");
         alert("Le téléchargement de gros fichiers n'est pas supporté en local.");
