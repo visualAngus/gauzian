@@ -1061,19 +1061,24 @@ export default function Drive() {
   const navigateToSection = (sectionId) => {
     setActiveSection(sectionId);
     console.log("Navigation vers la section :", sectionId);
-    if (sectionId === 'mon_drive') {
-      // Retour à la racine (on utilise le rootFolderId stocké précédemment)
-      if (rootFolderId) {
-        setActiveFolderId(rootFolderId);
-        setPath([{ id: rootFolderId, name: 'Mon Drive' }]);
-      }
-    } else {
-      // Pour les autres sections (Corbeille, etc.), on peut simuler un path
-      // Note: id null ou spécifique si vous gérez des vues spéciales
-      const formatName = sectionId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      setPath([{ id: sectionId, name: formatName }]);
-      // Ici il faudra probablement une logique pour charger les fichiers "Favoris" ou "Corbeille" au lieu de getFolderStructure
-    }
+    // if (sectionId === 'mon_drive') {
+    //   // Retour à la racine (on utilise le rootFolderId stocké précédemment)
+    //   if (rootFolderId) {
+    //     setActiveFolderId(rootFolderId);
+    //     setPath([{ id: rootFolderId, name: 'Mon Drive' }]);
+    //   }
+    // } else {
+    //   // Pour les autres sections (Corbeille, etc.), on peut simuler un path
+    //   // Note: id null ou spécifique si vous gérez des vues spéciales
+    //   const formatName = sectionId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    //   setPath([{ id: sectionId, name: formatName }]);
+    //   // Ici il faudra probablement une logique pour charger les fichiers "Favoris" ou "Corbeille" au lieu de getFolderStructure
+    // }
+
+    // Mettre à jour l'URL sans recharger la page
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete('folderId'); // Supprimer folderId pour les sections spéciales
+    window.history.pushState({}, '', newUrl);
   };
 
   const handlePathClick = (item, index) => {
