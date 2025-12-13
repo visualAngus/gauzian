@@ -430,7 +430,7 @@ nav ul li a:hover {
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
-    align-items: flex-end;
+    align-items: center;    
     gap: 50px;
     width: fit-content;
 }
