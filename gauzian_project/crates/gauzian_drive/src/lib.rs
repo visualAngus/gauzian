@@ -302,10 +302,12 @@ pub async fn folder_handler(
                 f.encrypted_metadata,
                 f.updated_at,
                 fa.encrypted_folder_key,
-                fs.total_size
+                fs.total_size,
+                CONCAT(u.first_name,' ',u.last_name) as "owner"
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
             LEFT JOIN folder_size fs ON fs.folder_id = f.id
+            inner join users u on u.id = f.owner_id 
             WHERE 
                 f.parent_id = $1
                 AND fa.user_id = $2
@@ -354,10 +356,12 @@ pub async fn folder_handler(
                 f.encrypted_metadata,
                 f.updated_at,
                 fa.encrypted_folder_key,
-                fs.total_size
+                fs.total_size,
+                CONCAT(u.first_name,' ',u.last_name) as "owner"
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
             LEFT JOIN folder_size fs ON fs.folder_id = f.id
+            inner join users u on u.id = f.owner_id 
             WHERE 
                 f.parent_id IS NULL
                 AND fa.user_id = $1

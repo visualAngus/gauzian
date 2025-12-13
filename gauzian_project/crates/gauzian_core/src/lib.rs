@@ -89,6 +89,7 @@ pub struct FolderRecord {
     pub encrypted_folder_key: Vec<u8>,
     pub is_root: bool,
     pub total_size: Option<i64>,
+    pub owner: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
