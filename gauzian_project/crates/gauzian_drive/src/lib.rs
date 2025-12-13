@@ -999,15 +999,14 @@ pub async fn finish_streaming_upload(
 
     let vault_file_insert_result = sqlx::query!(
         r#"
-        INSERT INTO vault_files (owner_id, encrypted_metadata,media_type,file_size,is_shared, created_at, updated_at,is_compressed,folder_id,streaming_upload_id,is_chunked)
-        VALUES ($1, $2, $3, $4, false, NOW(), NOW(), false, $5, $6, $7)
+        INSERT INTO vault_files (owner_id, encrypted_metadata,media_type,file_size,is_shared, created_at, updated_at,is_compressed,streaming_upload_id,is_chunked)
+        VALUES ($1, $2, $3, $4, false, NOW(), NOW(), false, $5, $6)
         RETURNING id
         "#,
         user_id,
         payload.encrypted_metadata.as_bytes(),
         payload.media_type,
         payload.file_size as i64,
-        payload.parent_folder_id,
         payload.temp_upload_id,
         true,
     )
@@ -1018,12 +1017,13 @@ pub async fn finish_streaming_upload(
         Ok(_) => {
             let create_access_result = sqlx::query!(
                 r#"
-                INSERT INTO file_access (file_id, user_id, encrypted_file_key,permission_level,joined_at)
-                VALUES ($1, $2, $3, 'owner', NOW())
+                INSERT INTO file_access (file_id, user_id, encrypted_file_key,permission_level,joined_at,folder_id)
+                VALUES ($1, $2, $3, 'owner', NOW(), $4)
                 "#,
                 vault_file_insert_result.unwrap().id,
                 user_id,
                 payload.encrypted_file_key.as_bytes(),
+                payload.parent_folder_id,
             )
             .execute(&state.db_pool)
             .await;
