@@ -1878,7 +1878,7 @@ export default function Drive() {
                     <span className="folder_name">{folder.name}</span>
                   </div>
                   <div className="additional_info">
-                    <span>Vous</span>
+                    <span>{folder.owner || ''}</span>
                     {/* <span>{folder.total_size || '—'}</span> */}
                     <span>
                       {(() => {
