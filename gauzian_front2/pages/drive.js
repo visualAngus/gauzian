@@ -1502,38 +1502,34 @@ export default function Drive() {
   // --- EFFETS DE BORD ---
 
   useEffect(() => {
-    console.log("Active Folder ID changed:", activeFolderId);
-    if (activeFolderId === null) {
-      loadFullPathFromFolderId();
-      getFileStructure(activeFolderId);
-    } else {
-      console.log("Charger le contenu du dossi-----------------------------er actif :", activeFolderId);
-      getFolderStructure(activeFolderId);
-      getFileStructure(activeFolderId);
-    }
+    // console.log("Active Folder ID changed:", activeFolderId);
+    // if (activeFolderId === null) {
+    //   loadFullPathFromFolderId();
+    //   getFileStructure(activeFolderId);
+    // } else {
+    //   console.log("Charger le contenu du dossi-----------------------------er actif :", activeFolderId);
+    //   getFolderStructure(activeFolderId);
+    //   getFileStructure(activeFolderId);
+    // }
 
-    const hash = window.location.hash.substring(1);
-    if (hash) {
-      setActiveSection(hash);
-    }
-
-
-    const handleClickAnywhere = (event) => {
-      if (event.target.closest('.folder_graph')) return;
-      document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
-        el.classList.remove('selected_folder');
-      });
-    };
-
-    document.addEventListener('click', handleClickAnywhere);
-
-    return () => {
-      document.removeEventListener('click', handleClickAnywhere);
-    };
+    // const hash = window.location.hash.substring(1);
+    // if (hash) {
+    //   setActiveSection(hash);
+    // }
 
 
-    // get the # in the url to set the active section
+    // const handleClickAnywhere = (event) => {
+    //   if (event.target.closest('.folder_graph')) return;
+    //   document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
+    //     el.classList.remove('selected_folder');
+    //   });
+    // };
 
+    // document.addEventListener('click', handleClickAnywhere);
+
+    // return () => {
+    //   document.removeEventListener('click', handleClickAnywhere);
+    // };
 
 
   }, [activeFolderId]);
