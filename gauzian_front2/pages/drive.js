@@ -1345,9 +1345,10 @@ export default function Drive() {
 
   const rename_file = async (fileId, newName) => {
     let file = document.getElementById(fileId);
+    console.log("file element:", file);
     let fileName = file.querySelector(".file_name");
     let menu = document.getElementById("contextual_menu_folder");
-
+    
     if (fileName) {
       // Hide le menu 
       menu.style.display = "none";
@@ -1464,7 +1465,7 @@ export default function Drive() {
     }
   }
 
-  const opent_menu_contextual_file = (fileId, x, y) => {
+  const open_menu_contextual_file = (fileId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
 
@@ -1472,6 +1473,7 @@ export default function Drive() {
     menu.style.display = "flex";
     menu.style.left = x + "px";
     menu.style.top = y + "px";
+
     // stocker l'id du fichier dans un data attribute
     menu.setAttribute("data-file-id", fileId);
 
@@ -1574,6 +1576,15 @@ export default function Drive() {
     ];
     setContents(unified);
   }, [folders, files]);
+
+  // Ajoutez ceci à l'intérieur de votre composant, avant le return
+  const [selectedId, setSelectedId] = useState(null);
+
+  // Fonction utilitaire pour gérer la sélection (évite la répétition)
+  const handleSelection = (id) => {
+    setSelectedId(id);
+  };
+
   // --- RENDU (JSX) ---
   return (
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
@@ -1745,22 +1756,22 @@ export default function Drive() {
           <div className="div_contenue">
             <div className="div_path_graphique">
               {path.map((part, index) => (
-                <React.Fragment key={index}> {/* Utiliser index ou part.id comme key */}
+                <React.Fragment key={index}> {/* Line 1749 omitted */}
                   <div
                     className="div_folder_path_grap"
-                    onClick={() => handlePathClick(part, index)} // Appel de la nouvelle fonction
+                    onClick={() => handlePathClick(part, index)} /* Lines 1752-1753 omitted */
                     style={{ cursor: 'pointer' }}
                     id={part.id}
                     consolelog={part}
-                  // mettre des param
+                  /* Lines 1756-1757 omitted */
                   >
-                    {/* On affiche bien part.name */}
+                    {/* Line 1758 omitted */}
                     <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
                       {part.name}
                     </span>
                   </div>
 
-                  {/* Séparateur (ne pas l'afficher après le dernier élément) */}
+                  {/* Line 1764 omitted */}
                   {index < path.length - 1 && (
                     <div className="div_folder_separator">
                       <span>/</span>
@@ -1770,172 +1781,182 @@ export default function Drive() {
               ))}
             </div>
 
-            {/* if typeview is grid */}
-            <div className="div_contenue_folder" style={{ display: viewType === 'grid' ? 'flex' : 'none' }}>
-              {folders.map((folder) => (
-                <div
-                  key={folder.id}
-                  className="folder_graph"
-                  id={folder.folder_id}
+            {/* =================================================================================
+                VUE GRILLE (GRID)
+                S'affiche uniquement si viewType est 'grid'
+               ================================================================================= */}
+            {viewType === 'grid' && (
+              <>
+                {/* --- DOSSIERS (GRILLE) --- */}
+                <div className="div_contenue_folder" style={{ display: 'flex' }}>
+                  {folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      className={`folder_graph ${selectedId === folder.folder_id ? 'selected_folder' : ''}`}
+                      id={folder.folder_id}
+                      
+                      // Data attributes conservés
+                      data-folder-id={folder.id || ''}
+                      data-folder-name={folder.name || ''}
+                      data-folder-created-at={folder.created_at || ''}
+                      data-folder-updated-at={folder.updated_at || ''}
+                      data-encrypted-folder-key={folder.encrypted_folder_key || ''}
+                      
+                      onClick={() => handleSelection(folder.folder_id)}
+                      onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(folder.folder_id);
+                        opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+                      </svg>
+                      <span className="folder_name">{folder.name}</span>
+                    </div>
+                  ))}
 
-                  data-folder-id={folder.id || ''}
-                  data-folder-name={folder.name || ''}
-                  data-folder-created-at={folder.created_at || ''}
-                  data-folder-updated-at={folder.updated_at || ''}
-                  data-encrypted-folder-key={folder.encrypted_folder_key || ''}
-                  onClick={() => {
-                    // console.log("Dossier cliqué :", folder);
-                    // Enlever la classe 'selected_folder' de tous les dossiers
-                    document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
-                      el.classList.remove('selected_folder');
-                    });
-                    // Ajouter la classe 'selected_folder' au dossier cliqué
-                    document.getElementById(folder.folder_id).classList.add('selected_folder');
-                  }}
-                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
-                  style={{ cursor: 'pointer' }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
-                  </svg>
-                  <span className="folder_name">{folder.name}</span>
+                  {folders.length === 0 && (
+                    <div className="folder_graph_empty">
+                      <span>Aucun dossier.</span>
+                    </div>
+                  )}
                 </div>
-              ))}
 
-              {/* Un exemple statique si la liste est vide pour tester l'affichage */}
-              {folders.length === 0 && (
-                <div className="folder_graph">
-                  <span>Aucun dossier dans ce répertoire.</span>
-                </div>
-              )}
-            </div>
-            <div className="div_contenue_file" style={{ display: viewType === 'grid' ? 'flex' : 'none' }}>
-              {files.map((file) => (
-                <div
-                  key={file.file_id}
-                  className="file_graph"
-                  id={file.file_id}
+                {/* --- FICHIERS (GRILLE) --- */}
+                <div className="div_contenue_file" style={{ display: 'flex' }}>
+                  {files.map((file) => (
+                    <div
+                      key={file.file_id}
+                      className={`file_graph ${selectedId === file.file_id ? 'selected_file' : ''}`}
+                      id={file.file_id}
 
-                  data-file-id={file.file_id || ''}
-                  data-file-name={file.name || ''}
-                  data-file-size={file.size || ''}
-                  data-file-type={file.type || ''}
-                  data-file-created-at={file.created_at || ''}
-                  data-file-updated-at={file.updated_at || ''}
-                  data-encrypted-file-key={file.encrypted_file_key || ''}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    opent_menu_contextual_file(file.file_id, e.pageX, e.pageY);
-                  }}
-                  onDoubleClick={() => {
-                    if (file.is_chunked) {
-                      handleDownloadChunked(file.file_id, file.name);
-                    } else {
-                      handleDownload(file.file_id, file.name);
-                    }
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path></svg>
-                  <span className='file_name'>{file.name}</span>
-                </div>
-              ))}
-            </div>
+                      // Data attributes conservés
+                      data-file-id={file.file_id || ''}
+                      data-file-name={file.name || ''}
+                      data-file-size={file.size || ''}
+                      data-file-type={file.type || ''}
+                      data-file-created-at={file.created_at || ''}
+                      data-file-updated-at={file.updated_at || ''}
+                      data-encrypted-file-key={file.encrypted_file_key || ''}
 
-            <div className='div_contenue_list' style={{ display: viewType === 'list' ? 'flex' : 'none' }}>
+                      onClick={() => handleSelection(file.file_id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(file.file_id);
+                        open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
+                      }}
+                      onDoubleClick={() => {
+                        if (file.is_chunked) {
+                          handleDownloadChunked(file.file_id, file.name);
+                        } else {
+                          handleDownload(file.file_id, file.name);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+                      </svg>
+                      <span className='file_name'>{file.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
 
-              <div className="content_list_header">
-                <div className="header_name">
-                  Nom
+            {/* =================================================================================
+                VUE LISTE (LIST)
+                S'affiche uniquement si viewType est 'list'
+               ================================================================================= */}
+            {viewType === 'list' && (
+              <div className='div_contenue_list' style={{ display: 'flex' }}>
+                <div className="content_list_header">
+                  <div className="header_name">Nom</div>
+                  <div className="header_additional_info">
+                    <span>Propriétaire</span>
+                    <span>Taille</span>
+                    <span>Créé le</span>
+                    <span>Modifié le</span>
+                  </div>
                 </div>
-                <div className="header_additional_info">
-                  <span>Propriétaire</span>
-                  <span>Taille</span>
-                  <span>Créé le</span>
-                  <span>Modifié le</span>
-                </div>
+
+                {contents.map((content) => {
+                  // Détermination de l'ID unique et de la classe CSS selon le type
+                  const currentId = content.type === 'folder' ? content.folder_id : content.file_id;
+                  const isSelected = selectedId === currentId;
+                  const selectionClass = isSelected ? (content.type === 'folder' ? 'selected_folder' : 'selected_file') : '';
+
+                  return (
+                    <div
+                      key={content.id}
+                      className={`content_graph_list ${selectionClass}`}
+                      id={currentId}
+
+                      // Data attributes conservés
+                      data-folder-id={content.id || ''}
+                      data-folder-name={content.name || ''}
+                      data-folder-created-at={content.created_at || ''}
+                      data-folder-updated-at={content.updated_at || ''}
+                      data-encrypted-folder-key={content.encrypted_folder_key || ''}
+
+                      onClick={() => handleSelection(currentId)}
+                      onDoubleClick={() => {
+                        if (content.type === 'file') {
+                          if (content.is_chunked) {
+                            handleDownloadChunked(content.file_id, content.name);
+                          } else {
+                            handleDownload(content.file_id, content.name);
+                          }
+                        } else if (content.type === 'folder') {
+                          handleFolderClick(content.folder_id, content.name);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(currentId);
+                        if (content.type === 'file') {
+                          open_menu_contextual_file(content.file_id, e.pageX, e.pageY);
+                        } else if (content.type === 'folder') {
+                          opent_menu_contextual_folder(content.folder_id, e.pageX, e.pageY);
+                        }
+                      }}
+                    >
+                      <div className="icon_and_name">
+                        <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                          {content.type === 'folder' 
+                            ? <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+                            : <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+                          }
+                        </svg>
+                        <span className={content.type === 'file' ? 'file_name' : 'folder_name'}>{content.name}</span>
+                      </div>
+                      <div className="additional_info">
+                        <span>{content.owner || ''}</span>
+                        <span>
+                          {(() => {
+                            const size = content.total_size || 0;
+                            if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
+                            if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
+                            if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
+                            return size + ' B';
+                          })()}
+                        </span>
+                        <span>
+                          {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </span>
+                        <span>
+                          {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              {contents.map((content) => (
-                <div
-                  key={content.id}
-                  className="content_graph_list"
-                  id={content.folder_id}
-
-                  data-folder-id={content.id || ''}
-                  data-folder-name={content.name || ''}
-                  data-folder-created-at={content.created_at || ''}
-                  data-folder-updated-at={content.updated_at || ''}
-                  data-encrypted-folder-key={content.encrypted_folder_key || ''}
-                  onClick={() => {
-                    if (content.type === 'folder') {
-                      document.querySelectorAll('.content_graph_list.selected_folder').forEach((el) => {
-                        el.classList.remove('selected_folder');
-                      });
-                      // Ajouter la classe 'selected_folder' au dossier cliqué
-                      document.getElementById(content.folder_id).classList.add('selected_folder');
-                    } else if (content.type === 'file') {
-                      document.querySelectorAll('.content_graph_list.selected_file').forEach((el) => {
-                        el.classList.remove('selected_file');
-                      });
-                      // Ajouter la classe 'selected_file' au fichier cliqué
-                      document.getElementById(content.file_id).classList.add('selected_file');
-                    }
-                  }}
-                  onDoubleClick={() => {
-                    if (content.type === 'file') {
-                      if (content.is_chunked) {
-                        handleDownloadChunked(content.file_id, content.name);
-                      } else {
-                        handleDownload(content.file_id, content.name);
-                      }
-                    } else if (content.type === 'folder') {
-                      handleFolderClick(content.folder_id, content.name)
-                    }
-                  }}
-                  style={{ cursor: 'pointer' }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    if (content.type === 'file') {
-                      opent_menu_contextual_file(content.file_id, e.pageX, e.pageY);
-                    } else if (content.type === 'folder') {
-                     opent_menu_contextual_folder(content.folder_id, e.pageX, e.pageY);
-                    }
-                  }}
-                >
-                  <div className="icon_and_name">
-                    <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
-                    </svg>
-                    <span className="folder_name">{content.name}</span>
-                  </div>
-                  <div className="additional_info">
-                    <span>{content.owner || ''}</span>
-                    <span>
-                      {(() => {
-                        const size = content.total_size || 0;
-                        if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
-                        if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
-                        if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
-                        return size + ' B';
-                      })()}
-                    </span>
-                    <span>
-                      {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } 
-                      )}
-                    </span>
-
-                    <span>
-                      {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } )}
-                    </span>
-
-                  </div>
-                </div>
-              ))}
-            </div>
+            )}
           </div>
         </div>
       </section>
