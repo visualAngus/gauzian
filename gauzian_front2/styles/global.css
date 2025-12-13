@@ -155,6 +155,10 @@ section{
     height: 100%;
     width: 14.8%;
     min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
 }
 .div_right_part{
     height: 100%;
@@ -409,6 +413,88 @@ nav ul li a:hover {
     background-color: var(--light-gray-color);
 }
 
-.editing_folder_name:focus {
+.editing_folder_name:focus, .editing_file_name:focus {
     outline: none;
+}
+
+.div_upload_progress {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    
+    min-width: 150px;
+    background-color: var(--white-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 10px;
+    transition: all 0.3s ease-in-out;
+    z-index: 100;
+}
+
+.div_upload_progress a {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+    word-break: break-word;
+}
+
+.progress_bar_container {
+    width: 100%;
+    height: 8px;
+    background-color: var(--light-gray-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress_bar_fill {
+    height: 100%;
+    background-color: var(--orange-color);
+    transition: width 0.3s ease-in-out;
+}
+/* Storage Used Bar */
+.div_storage_used {
+    width: 180px;
+    margin: 1.5rem 0;
+    padding: 0 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.storage_used_container {
+    width: 100%;
+    height: 12px;
+    background-color: var(--light-gray-color);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.storage_used_bar {
+    height: 100%;
+    background-color: var(--emmerald-color);
+    border-radius: 6px 0 0 6px;
+    transition: width 0.3s ease-in-out;
+}
+
+.storage_used_text {
+    width: 100%;
+    font-size: 0.8rem;
+    color: var(--dark-color);
+    font-weight: 500;
+    display: flex;
+    gap: 4px;
+    display: justify;
+    justify-content: center;
+
+}
+
+.storage_used_bar.full {
+    background-color: var(--orange-color);
+}
+
+.div_upload_progress .div_storage_used{
+    width: 100% !important;
 }
