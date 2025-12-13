@@ -900,7 +900,7 @@ export default function Drive() {
       return {
         ...file,
         name: metadata.filename, // Le nom déchiffré
-        size: metadata.filesize,
+        total_size: metadata.filesize,
         type: metadata.filetype,
         // ... autres infos du metadata si besoin
       };
