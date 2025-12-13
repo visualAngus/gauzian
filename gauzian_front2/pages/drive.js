@@ -347,7 +347,7 @@ export default function Drive() {
     // 7. Envoi API
     // Assure-toi que activeFolderId est bien défini (passé en argument ou via un hook/store)
     if (!activeFolderId) throw new Error("Aucun dossier parent sélectionné");
-
+    let dossierParentId = activeFolderId;
     const res = await fetch('/api/drive/new_folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -357,6 +357,7 @@ export default function Drive() {
         parent_folder_id: activeFolderId
       }),
     });
+    
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur création dossier');
@@ -451,8 +452,8 @@ export default function Drive() {
       // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
       setTimeout(() => {
         console.log("Vérification dossier actif pour rafraîchissement...");
-        console.log("Dossier actif:", activeFolderId, "Fichier parent:", selectedFile.parent_folder_id);
-        if (activeFolderId === (selectedFile.parent_folder_id || activeFolderId)) {
+        console.log("Dossier actif:", activeFolderId, "Fichier parent:", dossierParentId);
+        if (activeFolderId === (dossierParentId || activeFolderId)) {
           getFolderStructure(activeFolderId);
           getFileStructure(activeFolderId);
         }
