@@ -1536,6 +1536,8 @@ export default function Drive() {
       // Pour l'instant, on ne gère pas les fichiers spéciaux
       setFolders([]);
       setFiles([]);
+    }else {
+      getRootFolder();
     }
 
     // mettre des folder pour le debug  
