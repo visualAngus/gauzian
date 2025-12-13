@@ -347,7 +347,6 @@ export default function Drive() {
     // 7. Envoi API
     // Assure-toi que activeFolderId est bien défini (passé en argument ou via un hook/store)
     if (!activeFolderId) throw new Error("Aucun dossier parent sélectionné");
-    let dossierParentId = activeFolderId;
     const res = await fetch('/api/drive/new_folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -384,6 +383,7 @@ export default function Drive() {
 
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
+    let dossierParentId = activeFolderId; // Capturer l'ID du dossier parent au moment de l'appel
 
     while (uploadingCountRef.current >= 3) {
       if (stopallUploadsRef.current) {
