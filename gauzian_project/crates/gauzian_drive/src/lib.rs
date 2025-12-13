@@ -303,7 +303,10 @@ pub async fn folder_handler(
                 f.updated_at,
                 fa.encrypted_folder_key,
                 fs.total_size,
-                CONCAT(u.first_name,' ',u.last_name) as "owner"
+                CASE 
+                    WHEN f.owner_id = fa.user_id THEN 'vous'
+                    ELSE CONCAT(u.first_name, ' ', u.last_name)
+                END AS "owner"
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
             LEFT JOIN folder_size fs ON fs.folder_id = f.id
@@ -357,7 +360,10 @@ pub async fn folder_handler(
                 f.updated_at,
                 fa.encrypted_folder_key,
                 fs.total_size,
-                CONCAT(u.first_name,' ',u.last_name) as "owner"
+                CASE 
+                    WHEN f.owner_id = fa.user_id THEN 'vous'
+                    ELSE CONCAT(u.first_name, ' ', u.last_name)
+                END AS "owner"
             FROM folders f
             INNER JOIN folder_access fa ON f.id = fa.folder_id
             LEFT JOIN folder_size fs ON fs.folder_id = f.id
@@ -383,6 +389,7 @@ pub async fn folder_handler(
                     "encrypted_folder_key": String::from_utf8(record.encrypted_folder_key).unwrap_or_default(),
                     "is_root": record.is_root,
                     "total_size": record.total_size.unwrap_or(0),
+                    "owner": record.owner.unwrap_or_default(),
                 })
             }).collect();
             let storage_used = get_storage_usage_handler(user_id, &state).await;
