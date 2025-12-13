@@ -94,8 +94,8 @@ pub async fn upload_handler(
 
     let vault_file_insert_result = sqlx::query!(
         r#"
-        INSERT INTO vault_files (owner_id, encrypted_blob, encrypted_metadata,media_type,file_size,is_shared, created_at, updated_at,is_compressed,folder_id)
-        VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW(), false, $6)
+        INSERT INTO vault_files (owner_id, encrypted_blob, encrypted_metadata,media_type,file_size,is_shared, created_at, updated_at,is_compressed)
+        VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW(), false)
         RETURNING id
         "#,
         user_id,
@@ -103,19 +103,19 @@ pub async fn upload_handler(
         payload.encrypted_metadata.as_bytes(),
         payload.media_type,
         payload.file_size as i64,
-        payload.parent_folder_id,
     );
 
     match vault_file_insert_result.fetch_one(&state.db_pool).await {
         Ok(record) => {
             let file_access_insert_result = sqlx::query!(
                 r#"
-                INSERT INTO file_access (file_id, user_id, encrypted_file_key,permission_level,joined_at)
-                VALUES ($1, $2, $3, 'owner', NOW())
+                INSERT INTO file_access (file_id, user_id, encrypted_file_key,permission_level,joined_at,folder_id)
+                VALUES ($1, $2, $3, 'owner', NOW(), $4)
                 "#,
                 record.id,
                 user_id,
                 payload.encrypted_file_key.as_bytes(),
+                payload.parent_folder_id,
             ).execute(&state.db_pool).await;
             match file_access_insert_result {
                 Ok(_) => {
@@ -292,7 +292,9 @@ pub async fn folder_handler(
                     ft.id AS folder_id,
                     COALESCE(SUM(vf.file_size), 0)::int8 AS total_size
                 FROM folder_tree ft
-                LEFT JOIN vault_files vf ON vf.folder_id = ft.id
+                LEFT JOIN file_access fa ON fa.folder_id = ft.id
+                LEFT JOIN vault_files vf ON vf.id = fa.file_id
+                WHERE fa.user_id = $2
                 GROUP BY ft.id
             )
 
@@ -350,7 +352,9 @@ pub async fn folder_handler(
                     ft.id AS folder_id,
                     COALESCE(SUM(vf.file_size), 0)::int8 AS total_size
                 FROM folder_tree ft
-                LEFT JOIN vault_files vf ON vf.folder_id = ft.id
+                LEFT JOIN file_access fa ON fa.folder_id = ft.id
+                LEFT JOIN vault_files vf ON vf.id = fa.file_id
+                WHERE fa.user_id = $1
                 GROUP BY ft.id
             )
             SELECT 
@@ -465,7 +469,7 @@ pub async fn files_handler(
         FROM file_access fa
         JOIN vault_files vf ON fa.file_id = vf.id
         inner join users u on u.id = vf.owner_id 
-        WHERE vf.folder_id = $1 AND fa.user_id = $2
+        WHERE fa.folder_id = $1 AND fa.user_id = $2
         ORDER BY vf.updated_at DESC
         "#,
         parent_folder_id,
