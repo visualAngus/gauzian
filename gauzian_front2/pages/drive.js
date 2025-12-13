@@ -1502,37 +1502,48 @@ export default function Drive() {
   // --- EFFETS DE BORD ---
 
   useEffect(() => {
-    // console.log("Active Folder ID changed:", activeFolderId);
-    // if (activeFolderId === null) {
-    //   loadFullPathFromFolderId();
-    //   getFileStructure(activeFolderId);
-    // } else {
-    //   console.log("Charger le contenu du dossi-----------------------------er actif :", activeFolderId);
-    //   getFolderStructure(activeFolderId);
-    //   getFileStructure(activeFolderId);
-    // }
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      setActiveSection(hash);
+    }
 
-    // const hash = window.location.hash.substring(1);
-    // if (hash) {
-    //   setActiveSection(hash);
-    // }
+    if (hash === 'mon_drive') {
 
-
-    // const handleClickAnywhere = (event) => {
-    //   if (event.target.closest('.folder_graph')) return;
-    //   document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
-    //     el.classList.remove('selected_folder');
-    //   });
-    // };
-
-    // document.addEventListener('click', handleClickAnywhere);
-
-    // return () => {
-    //   document.removeEventListener('click', handleClickAnywhere);
-    // };
+      console.log("Active Folder ID changed:", activeFolderId);
+      if (activeFolderId === null) {
+        loadFullPathFromFolderId();
+        getFileStructure(activeFolderId);
+      } else {
+        getFolderStructure(activeFolderId);
+        getFileStructure(activeFolderId);
+      }
+    } else if (hash === 'corbeille' || hash === 'favoris') {
+      // Pour l'instant, on ne gère pas les fichiers spéciaux
+      setFolders([]);
+      setFiles([]);
+    }
 
 
-  }, [activeFolderId]);
+
+    const handleClickAnywhere = (event) => {
+      if (event.target.closest('.folder_graph')) return;
+      document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
+        el.classList.remove('selected_folder');
+      });
+    };
+
+    document.addEventListener('click', handleClickAnywhere);
+
+    return () => {
+      document.removeEventListener('click', handleClickAnywhere);
+    };
+
+
+    // get the # in the url to set the active section
+
+
+
+  }, [activeFolderId, token]);
   // --- RENDU (JSX) ---
   return (
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
