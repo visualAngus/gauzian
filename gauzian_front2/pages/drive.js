@@ -169,7 +169,7 @@ export default function Drive() {
     try {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
 
-      const streamSaver = (await import('streamsaver')).default;
+      // const streamSaver = (await import('streamsaver')).default;
 
       await _sodium.ready;
       const sodium = _sodium;
@@ -1540,12 +1540,17 @@ export default function Drive() {
 
     document.addEventListener('click', handleClickAnywhere);
 
+    // get the # in the url to set the active section
+    setFiles([
+      { file_id: '1', name: 'Docu dffsdfs f sgdf fgfdfgfment 1.txt', type: 'file' },
+      { file_id: '2', name: 'Image 1.png', type: 'file' },
+    ]);
+
     return () => {
       document.removeEventListener('click', handleClickAnywhere);
     };
 
 
-    // get the # in the url to set the active section
 
 
 
