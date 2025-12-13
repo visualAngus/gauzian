@@ -1528,6 +1528,13 @@ export default function Drive() {
     };
 
 
+    // get the # in the url to set the active section
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      setActiveSection(hash);
+    }
+
+
 
   }, [activeFolderId]);
   // --- RENDU (JSX) ---
