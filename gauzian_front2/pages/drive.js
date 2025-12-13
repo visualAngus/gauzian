@@ -32,6 +32,7 @@ export default function Drive() {
 
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
+  const activeFolderIdRef = useRef(null); // Garde la dernière valeur pour les callbacks async
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
@@ -61,6 +62,10 @@ export default function Drive() {
 
   // type de vue (list/grid)
   const [viewType, setViewType] = useState('list'); // 'grid' ou 'list'
+
+  useEffect(() => {
+    activeFolderIdRef.current = activeFolderId;
+  }, [activeFolderId]);
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
@@ -371,6 +376,7 @@ export default function Drive() {
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
+    const uploadFolderId = activeFolderId; // Capture le dossier cible au moment du lancement
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le fichier:", selectedFile.name);
       return; // Ne pas traiter ce fichier
@@ -383,7 +389,6 @@ export default function Drive() {
 
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
-    let dossierParentId = activeFolderId; // Capturer l'ID du dossier parent au moment de l'appel
 
     while (uploadingCountRef.current >= 3) {
       if (stopallUploadsRef.current) {
@@ -451,11 +456,9 @@ export default function Drive() {
       }
       // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
       setTimeout(() => {
-        console.log("Vérification dossier actif pour rafraîchissement...");
-        console.log("Dossier actif:", activeFolderId, "Fichier parent:", dossierParentId);
-        if (activeFolderId === (dossierParentId || activeFolderId)) {
-          getFolderStructure(activeFolderId);
-          getFileStructure(activeFolderId);
+        if (uploadFolderId && activeFolderIdRef.current === uploadFolderId) {
+          getFolderStructure(uploadFolderId);
+          getFileStructure(uploadFolderId);
         }
       }, 500);
 
