@@ -458,7 +458,7 @@ pub async fn files_handler(
 
     let select_file_result = sqlx::query!(
         r#"
-        SELECT vf.id, vf.encrypted_metadata, vf.updated_at, fa.encrypted_file_key, vf.is_chunked
+        SELECT vf.id, vf.encrypted_metadata, vf.updated_at, fa.encrypted_file_key, vf.is_chunked, vf.file_size, vf.media_type, vf.is_compressed, vf.created_at
         FROM file_access fa
         JOIN vault_files vf ON fa.file_id = vf.id
         WHERE vf.folder_id = $1 AND fa.user_id = $2
@@ -479,6 +479,10 @@ pub async fn files_handler(
                     "updated_at": record.updated_at,
                     "encrypted_file_key": String::from_utf8(record.encrypted_file_key).unwrap_or_default(),
                     "is_chunked": record.is_chunked,
+                    "file_size": record.file_size,
+                    "media_type": record.media_type,
+                    "is_compressed": record.is_compressed,
+                    "created_at": record.created_at,
                 })
             }).collect();
 
