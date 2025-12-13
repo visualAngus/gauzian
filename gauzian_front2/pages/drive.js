@@ -1896,14 +1896,28 @@ export default function Drive() {
                       id={currentId}
 
                       // Data attributes conservés
-                      data-folder-id={content.id || ''}
-                      data-folder-name={content.name || ''}
-                      data-folder-created-at={content.created_at || ''}
-                      data-folder-updated-at={content.updated_at || ''}
-                      data-encrypted-folder-key={content.encrypted_folder_key || ''}
+                        // Data attributes selon le type (clean code)
+                        {...(content.type === 'folder'
+                        ? {
+                          'data-folder-id': content.folder_id || '',
+                          'data-folder-name': content.name || '',
+                          'data-folder-created-at': content.created_at || '',
+                          'data-folder-updated-at': content.updated_at || '',
+                          'data-encrypted-folder-key': content.encrypted_folder_key || '',
+                          }
+                        : {
+                          'data-file-id': content.file_id || '',
+                          'data-file-name': content.name || '',
+                          'data-file-size': content.total_size || '',
+                          'data-file-type': content.type || '',
+                          'data-file-created-at': content.created_at || '',
+                          'data-file-updated-at': content.updated_at || '',
+                          'data-encrypted-file-key': content.encrypted_file_key || '',
+                          }
+                        )}
 
-                      onClick={() => handleSelection(currentId)}
-                      onDoubleClick={() => {
+                        onClick={() => handleSelection(currentId)}
+                        onDoubleClick={() => {
                         if (content.type === 'file') {
                           if (content.is_chunked) {
                             handleDownloadChunked(content.file_id, content.name);
