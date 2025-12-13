@@ -931,7 +931,6 @@ export default function Drive() {
           const rootId = data.folders[0]?.folder_id;
           setActiveFolderId(rootId);
           setRootFolderId(rootId);
-          setActiveSection('mon_drive');
         }
 
         const decryptedFolders = [];
@@ -992,7 +991,6 @@ export default function Drive() {
 
       setActiveFolderId(rootId);
       setRootFolderId(rootId);
-      setActiveSection('mon_drive');
 
       const newUrl = new URL(window.location);
       newUrl.searchParams.set('folderId', rootId);
@@ -1519,7 +1517,7 @@ export default function Drive() {
       setActiveSection(hash);
     }
 
-    
+
     const handleClickAnywhere = (event) => {
       if (event.target.closest('.folder_graph')) return;
       document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
