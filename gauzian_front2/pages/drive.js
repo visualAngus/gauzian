@@ -835,7 +835,7 @@ export default function Drive() {
         name: metadata.name, // Le nom déchiffré
         created_at: metadata.created_at,
         updated_at: metadata.updated_at || metadata.created_at,
-        // key
+        total_size: folder.total_size || 0,
         encrypted_folder_key: folder.encrypted_folder_key,
         // ... autres infos du metadata si besoin
       };
