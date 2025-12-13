@@ -531,7 +531,7 @@ export default function Drive() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
       });
 
       if (!response.ok) throw new Error('Erreur API Upload Simple');
