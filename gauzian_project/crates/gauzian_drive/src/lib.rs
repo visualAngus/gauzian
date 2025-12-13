@@ -10,10 +10,10 @@ use bytes::Bytes;
 use futures::StreamExt; // Important pour utiliser .map() sur le stream SQLx
 use gauzian_auth::verify_session_token;
 use gauzian_core::{
-    AppState, DownloadQuery, DownloadRequest, FinishStreamingUploadRequest, FolderCreationRequest,
+    AppState, CancelStreamingUploadRequest, DeleteFileRequest, DeleteFolderRequest, DownloadQuery,
+    DownloadRequest, FileRenameRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
-    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,DeleteFileRequest,DeleteFolderRequest,
-    FileRenameRequest,CancelStreamingUploadRequest
+    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,
 };
 use serde_json::json;
 use uuid::Uuid;
@@ -458,9 +458,13 @@ pub async fn files_handler(
 
     let select_file_result = sqlx::query!(
         r#"
-        SELECT vf.id, vf.encrypted_metadata, vf.updated_at, fa.encrypted_file_key, vf.is_chunked, vf.file_size, vf.media_type, vf.is_compressed, vf.created_at
+        SELECT vf.id, vf.encrypted_metadata, vf.updated_at, fa.encrypted_file_key, vf.is_chunked, vf.file_size, vf.media_type, vf.is_compressed, vf.created_at,
+        CASE WHEN vf.owner_id = fa.user_id THEN 'vous'
+                ELSE CONCAT(u.first_name, ' ', u.last_name)
+            END AS "owner"
         FROM file_access fa
         JOIN vault_files vf ON fa.file_id = vf.id
+        inner join users u on u.id = vf.owner_id 
         WHERE vf.folder_id = $1 AND fa.user_id = $2
         ORDER BY vf.updated_at DESC
         "#,
@@ -813,7 +817,7 @@ pub async fn open_streaming_upload_handler(
     // verifier que le user a encode de la place pour le fichier
     let storage_usage = get_storage_usage_handler(user_id, &state).await;
     if let Some(usage) = storage_usage {
-        if usage + payload.file_size as i64 > USER_STORAGE_LIMIT as i64  {
+        if usage + payload.file_size as i64 > USER_STORAGE_LIMIT as i64 {
             let body = Json(json!({
                 "status": "error",
                 "message": "Espace de stockage insuffisant"
@@ -1126,7 +1130,6 @@ async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<i6
     }
 }
 
-
 pub async fn delete_file_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1341,7 +1344,6 @@ pub async fn rename_file_handler(
     };
 }
 
-
 // anulation of upload streaming
 pub async fn cancel_streaming_upload_handler(
     State(state): State<AppState>,
@@ -1424,7 +1426,10 @@ pub async fn cancel_streaming_upload_handler(
             }
         }
         Err(e) => {
-            eprintln!("Erreur suppression chunks upload streaming dans la BDD: {:?}", e);
+            eprintln!(
+                "Erreur suppression chunks upload streaming dans la BDD: {:?}",
+                e
+            );
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression des chunks de l'upload streaming"
