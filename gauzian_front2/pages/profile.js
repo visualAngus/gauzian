@@ -45,7 +45,7 @@ export default function UserAccount() {
         return (
             <div className="drive-container">
                 <header>
-                    <h1><a href="/">GZDRIVE</a></h1>
+                    <h1><a href="/">GZPROFILE</a></h1>
                 </header>
                 <div className="loading-container">Chargement...</div>
             </div>
@@ -59,7 +59,7 @@ export default function UserAccount() {
     return (
         <div className="drive-container">
             <header>
-                <h1><a href="/">GZDRIVE</a></h1>
+                <h1><a href="/">GZPROFILE</a></h1>
                 <div className="div_user_profil" onClick={() => router.push('/profile')} style={{ cursor: 'pointer' }}>
                     {!imageLoadedState && <div className="div_profil_custom"></div>}
                     <img
@@ -101,12 +101,6 @@ export default function UserAccount() {
                 </div>
 
                 <div className="div_right_part">
-                    <div className="div_recher_filter">
-                        <div className="account-title-section">
-                            <h2>Paramètres du compte</h2>
-                        </div>
-                    </div>
-
                     <div className="div_contenue">
                         <div className="profile-container">
                             <div className="div_user_profil">
