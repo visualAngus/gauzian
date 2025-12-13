@@ -1070,12 +1070,10 @@ export default function Drive() {
         getRootFolder();
       }
     } else {
-      // Pour les autres sections (Corbeille, etc.), on peut simuler un path
-      // Note: id null ou spécifique si vous gérez des vues spéciales
-      // const formatName = sectionId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      // setPath([{ id: sectionId, name: formatName }]);
-      // Ici il faudra probablement une logique pour charger les fichiers "Favoris" ou "Corbeille" au lieu de getFolderStructure
-      console.log(`Chargement de la section spéciale : ${sectionId}`);
+      
+      // Sections spéciales : cacher les dossiers et fichiers
+      setFolders([]);
+      setFiles([]);
     }
 
     // Mettre à jour l'URL sans recharger la page
