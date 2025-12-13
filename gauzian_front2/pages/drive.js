@@ -1538,6 +1538,8 @@ export default function Drive() {
       setFiles([]);
     }else {
       getRootFolder();
+      getFolderStructure(activeFolderId);
+      getFileStructure(activeFolderId);
     }
 
     // mettre des folder pour le debug  
