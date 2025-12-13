@@ -1534,15 +1534,7 @@ export default function Drive() {
     }
 
     // mettre des folder pour le debug  
-    setFolders([
-      { folder_id: '1', name: 'Dossier 1', created_at: '2024-01-01T12:00:00Z', updated_at: '2024-01-02T12:00:00Z' },
-      { folder_id: '2', name: 'Dossier 2', created_at: '2024-01-01T12:00:00Z', updated_at: '2024-01-02T12:00:00Z' },
-    ]);
 
-    setFiles([
-      { file_id: 'a', name: 'FichierA.txt', size: 1024, type: 'text/plain' },
-      { file_id: 'b', name: 'ImageB.png', size: 2048, type: 'image/png' },
-    ]);
 
 
     const handleClickAnywhere = (event) => {
