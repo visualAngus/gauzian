@@ -1541,6 +1541,7 @@ export default function Drive() {
         getRootFolder();
         getFolderStructure(activeFolderId);
         getFileStructure(activeFolderId);
+        let newUrl = new URL(window.location);
         newUrl.hash = `#mon_drive`;
         window.history.pushState({}, '', newUrl);
       } else {
