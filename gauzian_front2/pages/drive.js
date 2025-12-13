@@ -1879,7 +1879,7 @@ export default function Drive() {
                   </div>
                   <div className="additional_info">
                     <span>Vous</span>
-                    <span>--</span>
+                    <span>{folder.total_size || '—'}</span>
                     <span>
                       {new Date(folder.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' } 
                       )}
