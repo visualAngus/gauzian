@@ -463,7 +463,7 @@ nav ul li a:hover {
     flex-direction: row;
     justify-content: flex-end;
     align-items: flex-end;
-    gap: 80px;
+    gap: 95px;
     width: fit-content;
 }
 .header_name{
