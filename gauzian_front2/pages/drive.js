@@ -968,7 +968,7 @@ export default function Drive() {
       const data = await res.json();
 
       if (data.status === 'success') { // Adapte selon ton retour API exact
-        console.log("Fichiers reçus:", data);
+        // console.log("Fichiers reçus:", data);
         const decryptedFiles = [];
 
         for (const file of data.files) {
@@ -976,7 +976,8 @@ export default function Drive() {
           const cleanFile = await processFile(file);
           decryptedFiles.push(cleanFile);
         }
-
+        
+        console.log("Fichier déchiffré:", decryptedFiles);
         setFiles(decryptedFiles);
       }
     }
