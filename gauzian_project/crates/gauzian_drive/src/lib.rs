@@ -330,7 +330,7 @@ pub async fn folder_handler(
                 WHERE f.id IN (
                     SELECT folder_id 
                     FROM folder_access 
-                    WHERE user_id = $2
+                    WHERE user_id = $1
                 ) AND f.parent_id IS NULL
 
                 UNION ALL
@@ -360,7 +360,7 @@ pub async fn folder_handler(
             LEFT JOIN folder_size fs ON fs.folder_id = f.id
             WHERE 
                 f.parent_id IS NULL
-                AND fa.user_id = $2
+                AND fa.user_id = $1
             ORDER BY f.updated_at DESC;
             "#,
             user_id,
