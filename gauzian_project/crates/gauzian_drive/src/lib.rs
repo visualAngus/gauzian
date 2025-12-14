@@ -325,7 +325,6 @@ pub async fn folder_handler(
         .fetch_all(&state.db_pool)
         .await
     } else {
-        // Cas 2 : Racine (parent_id IS NULL)
         sqlx::query_as!(
             FolderRecord,
             r#"
