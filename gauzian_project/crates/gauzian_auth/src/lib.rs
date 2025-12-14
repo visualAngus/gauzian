@@ -495,6 +495,8 @@ pub async fn info_handler(
         }
     };
 
+    println!("INFO_HANDLER: session_token={}", session_token);
+
     // Validate the token and get the user ID
     let user_id = match validate_and_refresh_token(&session_token) {
         Ok(uid) => uid,
@@ -506,6 +508,8 @@ pub async fn info_handler(
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
+
+    println!("INFO_HANDLER: user_id={}", user_id);
 
     // Fetch user info from the database
     let user_uuid = match uuid::Uuid::parse_str(&user_id) {
