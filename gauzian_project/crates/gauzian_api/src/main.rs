@@ -18,7 +18,7 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::middleware::Next;
 use axum::response::Response;
-use gauzian_auth::{autologin_handler, login_handler, register_handler};
+use gauzian_auth::{autologin_handler, login_handler, register_handler, info_handler};
 use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
@@ -102,6 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/register", post(register_handler))
         .route("/auth/login", post(login_handler))
         .route("/auth/autologin", post(autologin_handler))
+        .route("/auth/info", post(info_handler))
         .route("/drive/upload", post(upload_handler))
         .route("/drive/download", get(download_handler))
         .route("/drive/folders", get(folder_handler))

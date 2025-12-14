@@ -465,3 +465,88 @@ pub async fn autologin_handler(
         }
     }
 }
+
+
+pub async fn info_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // recuperer le cookie de session
+    let session_cookie = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                }
+            }
+            None
+        });
+    let session_token = match session_cookie {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Pas de cookie de session trouvé"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    // Validate the token and get the user ID
+    let user_id = match validate_and_refresh_token(&session_token) {
+        Ok(uid) => uid,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session invalide ou expirée"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    // Fetch user info from the database
+    let user_uuid = match uuid::Uuid::parse_str(&user_id) {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Identifiant utilisateur invalide"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+    let user_info_result = sqlx::query!(
+        "SELECT email, first_name, last_name, date_of_birth, time_zone, locale FROM users WHERE id = $1",
+        user_uuid
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match user_info_result {
+        Ok(user) => {
+            let body = Json(json!({
+                "status": "success",
+                "user_info": {
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "date_of_birth": user.date_of_birth,
+                    "time_zone": user.time_zone,
+                    "locale": user.locale,
+                }
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        Err(e) => {
+            eprintln!("Erreur SQL Récupération Infos Utilisateur: {:?}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur lors de la récupération des informations utilisateur"
+            }));
+            (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        }
+    }
+}

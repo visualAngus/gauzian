@@ -31,6 +31,9 @@ export default function Drive() {
   const [imageLoadedState, setImageLoadedState] = useState(false);
   const [contents, setContents] = useState([]); // Contenu du dossier actif
 
+  // username
+  const [userName, setUserName] = useState("User");
+
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
   const activeFolderIdRef = useRef(null); // Garde la dernière valeur pour les callbacks async
@@ -1514,6 +1517,22 @@ export default function Drive() {
     }
 
   }
+
+  const getUserInfo = async () => {
+    const res = await fetch('/api/auth/info', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      console.log("Info utilisateur récupérée :", data);
+    } else {
+      console.error("Erreur récupération info utilisateur :", data.message);
+    }
+  };
 
   // --- EFFETS DE BORD ---
 
