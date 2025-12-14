@@ -1324,7 +1324,7 @@ pub async fn rename_file_handler(
         SET encrypted_metadata = $1, updated_at = NOW()
         WHERE id = $2 AND owner_id = $3
         "#,
-        payload.new_encrypted_metadata,
+        payload.new_encrypted_metadata.as_bytes(),
         payload.file_id,
         user_id,
     )
