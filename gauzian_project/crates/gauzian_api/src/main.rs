@@ -102,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/register", post(register_handler))
         .route("/auth/login", post(login_handler))
         .route("/auth/autologin", post(autologin_handler))
-        .route("/auth/info", post(info_handler))
+        .route("/auth/info", get(info_handler))
         .route("/drive/upload", post(upload_handler))
         .route("/drive/download", get(download_handler))
         .route("/drive/folders", get(folder_handler))
