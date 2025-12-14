@@ -61,7 +61,7 @@ pub async fn upload_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -177,7 +177,7 @@ pub async fn download_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -256,7 +256,7 @@ pub async fn folder_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -446,7 +446,7 @@ pub async fn files_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -541,7 +541,7 @@ pub async fn create_folder_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -635,7 +635,7 @@ pub async fn full_path_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -734,7 +734,7 @@ pub async fn rename_folder_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -807,7 +807,7 @@ pub async fn open_streaming_upload_handler(
         }
     };
     // Requête SQL pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -899,7 +899,7 @@ pub async fn upload_streaming_handler(
         }
     };
     // Requete sql pour vérifier la session
-    let _user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let _user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -985,7 +985,7 @@ pub async fn finish_streaming_upload(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -1164,7 +1164,7 @@ pub async fn delete_file_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -1235,7 +1235,7 @@ pub async fn delete_folder_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -1306,7 +1306,7 @@ pub async fn rename_file_handler(
         }
     };
     // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
@@ -1378,7 +1378,7 @@ pub async fn cancel_streaming_upload_handler(
         }
     };
     // requet sql pour vérifier la session
-    let _user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    let _user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
