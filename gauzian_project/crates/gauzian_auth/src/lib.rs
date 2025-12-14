@@ -8,6 +8,7 @@ use axum::{
 use axum_client_ip::InsecureClientIp;
 use gauzian_core::{AppState, LoginRequest, RegisterRequest,Claims};
 
+use uuid::Uuid;
 // Ensure the database connection string is correct in your AppState configuration
 // Example: "postgres://username:password@localhost/database_name"
 use woothee::parser::Parser;
@@ -81,7 +82,7 @@ pub fn validate_and_refresh_token(token: &str) -> Result<String, jsonwebtoken::e
     create_token(&user_id)
 }
 
-pub fn verify_session_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::Error> {
     // 1. Validation du token existant
     let validation = Validation::default();
     let secret_key = get_secret_key();
@@ -97,7 +98,11 @@ pub fn verify_session_token(token: &str) -> Result<String, jsonwebtoken::errors:
     // On récupère l'ID utilisateur (sub) du token décodé
     let user_id = token_data.claims.sub;
 
-    Ok(user_id)
+    // Convertir le String en Uuid avant de retourner
+    match Uuid::parse_str(&user_id) {
+        Ok(uuid) => Ok(uuid),
+        Err(_e) => Err(jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken)),
+    }
 }
 
 // 3. Le Handler (Contrôleur)
