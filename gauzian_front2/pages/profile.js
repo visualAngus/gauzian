@@ -125,7 +125,7 @@ export default function ProfilePage() {
             <header className="header">
                 <div className="header-content">
                     <div className="logo-section">
-                        <Gauzial />
+                        {/* <Gauzial /> */}
                         <h1>Gauzian</h1>
                     </div>
                     <nav className="nav-menu">
