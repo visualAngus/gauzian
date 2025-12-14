@@ -1537,6 +1537,14 @@ export default function Drive() {
   // --- EFFETS DE BORD ---
 
   useEffect(() => {
+    if (!token) {
+      window.location.href = '/login';
+    } else {
+      getUserInfo();
+    }
+  }, [token]);
+
+  useEffect(() => {
     const hash = window.location.hash.substring(1);
     if (hash) {
       setActiveSection(hash);
