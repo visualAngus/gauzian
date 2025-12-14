@@ -81,6 +81,25 @@ pub fn validate_and_refresh_token(token: &str) -> Result<String, jsonwebtoken::e
     create_token(&user_id)
 }
 
+pub fn verify_session_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    // 1. Validation du token existant
+    let validation = Validation::default();
+    let secret_key = get_secret_key();
+
+    // Si le token est expiré ou que la signature est fausse, decode renverra une erreur
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(&secret_key),
+        &validation,
+    )?;
+
+    // 2. Si on est ici, le token est valide.
+    // On récupère l'ID utilisateur (sub) du token décodé
+    let user_id = token_data.claims.sub;
+
+    Ok(user_id)
+}
+
 // 3. Le Handler (Contrôleur)
 // Il prend l'état (DB) et le JSON (payload) en entrée.
 // Il retourne quelque chose qui implémente IntoResponse (souvent un tuple (StatusCode, String))
