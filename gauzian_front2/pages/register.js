@@ -16,6 +16,7 @@ export default function RegisterPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isLoadingPage, setIsLoadingPage] = useState(false);
     const [message, setMessage] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
     const [isEmailValid, setIsEmailValid] = useState(true);
@@ -62,6 +63,8 @@ export default function RegisterPage() {
             setLoading(false);
             return;
         }
+
+        setIsLoadingPage(true);
 
         try {
             const sodiumLib = await import('libsodium-wrappers-sumo');
@@ -198,6 +201,7 @@ export default function RegisterPage() {
         } catch (err) {
             console.error(err);
             setIsRequestGood(false);
+            setIsLoadingPage(false);
             setMessage({ type: 'error', text: err.message });
         } finally {
             setLoading(false);
@@ -207,7 +211,7 @@ export default function RegisterPage() {
     return (
         <main className="page">
             <div className="left-panel">
-                <Gauzial lookAway={showPassword} isUnhappy={(!isEmailValid && email.length > 0) || (!isPasswordValid && password.length > 0) || !isRequestGood} isRequestGood={isRequestGood} />
+                <Gauzial lookAway={showPassword} isUnhappy={(!isEmailValid && email.length > 0) || (!isPasswordValid && password.length > 0) || !isRequestGood} isRequestGood={isRequestGood} isLoadingPage={isLoadingPage} />
                 <div className="branding">
                     <h2>Gauzian</h2>
                     <p>Votre espace sécurisé</p>
@@ -225,7 +229,7 @@ export default function RegisterPage() {
                         <div className={`alert ${message.type === 'error' ? 'err' : 'ok'}`}>{message.text}</div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="form">
+                    <form onSubmit={handleSubmit} className="form" style={{ opacity: isLoadingPage ? 0.5 : 1, pointerEvents: isLoadingPage ? 'none' : 'auto' }}>
                         <div className="form-row">
                             <div className="input-group">
                                 <label>Prénom</label>
@@ -233,7 +237,7 @@ export default function RegisterPage() {
                                     type="text"
                                     value={firstName} 
                                     onChange={(e) => setFirstName(e.target.value)} 
-                                    disabled={loading} 
+                                    disabled={loading || isLoadingPage} 
                                     placeholder="Jean"
                                     required 
                                 />
@@ -245,7 +249,7 @@ export default function RegisterPage() {
                                     type="text"
                                     value={lastName} 
                                     onChange={(e) => setLastName(e.target.value)} 
-                                    disabled={loading} 
+                                    disabled={loading || isLoadingPage} 
                                     placeholder="Dupont"
                                     required 
                                 />
@@ -258,7 +262,7 @@ export default function RegisterPage() {
                                 type="email" 
                                 value={email} 
                                 onChange={handleEmailChange}
-                                disabled={loading} 
+                                disabled={loading || isLoadingPage} 
                                 placeholder="votre@email.com"
                                 className={!validateEmail(email) && email.length > 0 ? 'input-error' : ''}
                                 required 
@@ -275,7 +279,7 @@ export default function RegisterPage() {
                                     type={showPassword ? "text" : "password"}
                                     value={password} 
                                     onChange={handlePasswordChange}
-                                    disabled={loading} 
+                                    disabled={loading || isLoadingPage} 
                                     placeholder="••••••••"
                                     className={!validatePassword(password) && password.length > 0 ? 'input-error' : ''}
                                     required 
@@ -288,7 +292,7 @@ export default function RegisterPage() {
                                         setShowPassword(!showPassword);
                                         
                                     }}
-                                    disabled={loading}
+                                    disabled={loading || isLoadingPage}
                                     aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                                 >
                                     {showPassword ? (
@@ -310,7 +314,7 @@ export default function RegisterPage() {
                             )}
                         </div>
 
-                        <button type="submit" className="submit-btn" disabled={loading}>
+                        <button type="submit" className="submit-btn" disabled={loading || isLoadingPage}>
                             {loading ? 'Inscription en cours…' : 'S\'inscrire'}
                         </button>
                         

@@ -2,80 +2,73 @@
 import { useState, useEffect, useRef } from 'react';
 import styles from './gauzial.module.css';
 
-const Gauzial = ({ className = "", lookAway = false, isUnhappy = false, isRequestGood = true }) => {
+const Gauzial = ({ 
+    className = "", 
+    lookAway = false, 
+    isUnhappy = false, 
+    isRequestGood = true, 
+    isLoadingPage = false 
+}) => {
     const [look, setLook] = useState({ x: 0, y: 0 });
     const [pupil, setPupil] = useState({ x: 0, y: 0 });
-
-    // Nouvel état pour le clignement
     const [isBlinking, setIsBlinking] = useState(false);
-    const [lastMousePosition, setLastMousePosition] = useState({ x: null, y: null });
+    
+    // On garde en mémoire la dernière position pour quand on arrête de charger
+    const lastMousePosition = useRef({ x: 0, y: 0 });
 
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            lastMousePosition.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        }
+    }, []);
     const bodyRef = useRef(null);
 
     useEffect(() => {
-        if (lookAway) {
-            setLook({ x: 0, y: -18 }); // Tourne la tête vers la gauche
-            setPupil({ x: -12, y: -8 }); // Pupilles vers la gauche
-        } else {
-            // avec les dernières positions de la souris
-            if (lastMousePosition.x !== null && lastMousePosition.y !== null && bodyRef.current) {
-                const { left, top, width, height } = bodyRef.current.getBoundingClientRect();
-                const centerX = left + width / 2;
-                const centerY = top + height / 2;
-
-                const x = (lastMousePosition.x - centerX) / (window.innerWidth / 2);
-                const y = (lastMousePosition.y - centerY) / (window.innerHeight / 2);
-
-                // Rotation
-                const rotateX = -y * 15;
-                const rotateY = x * 15;
-                setLook({ x: rotateX, y: rotateY });
-
-                // Pupilles
-                const pupilX = x * 8;
-                const pupilY = y * 8;
-                setPupil({ x: pupilX, y: pupilY });
-            }else {
-                setLook({ x: 0, y: 0 });
-                setPupil({ x: 0, y: 0 });
-            }
-        }
-        // Gestion du mouvement de la souris
-        const handleMouseMove = (e) => {
+        // Fonction utilitaire pour calculer la position
+        const calculatePosition = (clientX, clientY) => {
             if (!bodyRef.current) return;
-            console.log(e.clientX, e.clientY);
-            setLastMousePosition({ x: e.clientX, y: e.clientY });
-            if (lookAway) {
-                return; // Ne pas écouter la souris
-            }
 
             const { left, top, width, height } = bodyRef.current.getBoundingClientRect();
             const centerX = left + width / 2;
             const centerY = top + height / 2;
 
-            const x = (e.clientX - centerX) / (window.innerWidth / 2);
-            const y = (e.clientY - centerY) / (window.innerHeight / 2);
+            const x = (clientX - centerX) / (window.innerWidth / 2);
+            const y = (clientY - centerY) / (window.innerHeight / 2);
 
-            // Rotation
-            const rotateX = -y * 15;
-            const rotateY = x * 15;
-            setLook({ x: rotateX, y: rotateY });
-
-            // Pupilles
-            const pupilX = x * 8;
-            const pupilY = y * 8;
-            setPupil({ x: pupilX, y: pupilY });
+            setLook({ x: -y * 15, y: x * 15 });
+            setPupil({ x: x * 8, y: y * 8 });
         };
 
-        // Gestion du clic (Clignement)
+        // Si on est en chargement, on ne fait RIEN (le CSS gère tout)
+        if (isLoadingPage) {
+            return; 
+        }
+
+        // Logique "Look Away" (regarder ailleurs)
+        if (lookAway) {
+            setLook({ x: 0, y: -18 });
+            setPupil({ x: -12, y: -8 });
+            return;
+        }
+
+        // Si on revient d'un chargement ou d'un lookAway, on rétablit la position
+        calculatePosition(lastMousePosition.current.x, lastMousePosition.current.y);
+
+        const handleMouseMove = (e) => {
+            if (!bodyRef.current || lookAway || isLoadingPage) return;
+            
+            // On sauvegarde la position pour plus tard
+            lastMousePosition.current = { x: e.clientX, y: e.clientY };
+            calculatePosition(e.clientX, e.clientY);
+        };
+
         const handleMouseDown = () => {
-            if (!lookAway) setIsBlinking(true);
+            if (!lookAway && !isLoadingPage) setIsBlinking(true);
         };
         const handleMouseUp = () => {
-            if (!lookAway) setIsBlinking(false);
+            if (!lookAway && !isLoadingPage) setIsBlinking(false);
         };
 
-        // On attache les événements à window pour que ça marche partout
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mousedown', handleMouseDown);
         window.addEventListener('mouseup', handleMouseUp);
@@ -85,29 +78,36 @@ const Gauzial = ({ className = "", lookAway = false, isUnhappy = false, isReques
             window.removeEventListener('mousedown', handleMouseDown);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [lookAway]);
+    }, [lookAway, isLoadingPage]); // On relance l'effet si isLoadingPage change
 
     return (
-        <div className={`${styles.floater} ${className}`}>
-            <div className="test"></div>
+        <div className={`${styles.floater} ${className} ${isLoadingPage ? styles.loading : ''}`}>
+            
             <div
                 ref={bodyRef}
                 className={styles.body}
-                style={{
-                    transform: `perspective(800px) rotateX(${look.x}deg) rotateY(${look.y}deg)`
-                }}
+                style={
+                    // IMPORTANTE CORRECTION :
+                    // Si on charge, on enlève le style inline pour laisser l'animation CSS (spinZ) prendre le dessus
+                    isLoadingPage ? {} : {
+                        transform: `perspective(800px) rotateX(${look.x}deg) rotateY(${look.y}deg)`
+                    }
+                }
             >
                 <div className={`${styles.face} ${!isRequestGood ? styles.angry : ''}`}>
                     <div className={styles.eyesRow}>
 
-                        {/* Oeil Gauche : On ajoute la classe conditionnelle 'closed' */}
+                        {/* Oeil Gauche */}
                         <div className={`${styles.eye} ${isBlinking ? styles.closed : ''}`}>
                             <div
                                 className={styles.pupil}
-                                style={{
-                                    transform: `translate(${pupil.x}px, ${pupil.y}px)`,
-                                    transition: lookAway ? 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'transform 0.1s'
-                                }}
+                                style={
+                                    // Si on charge, on enlève le style inline pour laisser l'animation centrifuge CSS
+                                    isLoadingPage ? {} : {
+                                        transform: `translate(${pupil.x}px, ${pupil.y}px)`,
+                                        transition: lookAway ? 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'transform 0.1s'
+                                    }
+                                }
                             >
                                 <div className={styles.glint}></div>
                             </div>
@@ -117,16 +117,19 @@ const Gauzial = ({ className = "", lookAway = false, isUnhappy = false, isReques
                         <div className={`${styles.eye} ${isBlinking ? styles.closed : ''}`}>
                             <div
                                 className={styles.pupil}
-                                style={{
-                                    transform: `translate(${pupil.x}px, ${pupil.y}px)`,
-                                    transition: lookAway ? 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'transform 0.1s'
-                                }}
+                                style={
+                                    isLoadingPage ? {} : {
+                                        transform: `translate(${pupil.x}px, ${pupil.y}px)`,
+                                        transition: lookAway ? 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'transform 0.1s'
+                                    }
+                                }
                             >
                                 <div className={styles.glint}></div>
                             </div>
                         </div>
 
                     </div>
+                    {/* Bouche */}
                     <div className={`${styles.mouth} ${isUnhappy ? styles.sad : ''}`}></div>
                 </div>
             </div>

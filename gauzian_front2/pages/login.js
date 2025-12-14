@@ -68,6 +68,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isValid, setIsValid] = useState(true);
@@ -86,7 +87,7 @@ export default function LoginPage() {
   }
 
   // Gérer le changement d'email et valider
-  const handleEmailChange = (e) => {
+  const handleEmailChange = (e) => {  
     setIsRequestGood(true);
     const newEmail = e.target.value;
     setEmail(newEmail);
@@ -101,7 +102,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     async function autoLogin() {
-      hidePageElementsDuringLogin(true);
+      setIsLoadingPage(true);
       setLoading(true);
       setMessage(null);
 
@@ -120,9 +121,9 @@ export default function LoginPage() {
             // Par exemple, utiliser router.push('/') si vous utilisez Next.js router
             window.location.href = '/';
           }
-          hidePageElementsDuringLogin(false);
+          setIsLoadingPage(false);
         } catch (err) {
-          hidePageElementsDuringLogin(false);
+          setIsLoadingPage(false);
           setIsRequestGood(false);
           setMessage({ type: 'error', text: err.message });
         } finally {
@@ -130,7 +131,7 @@ export default function LoginPage() {
         }
       }
       else { 
-        hidePageElementsDuringLogin(false);
+        setIsLoadingPage(false);
         setLoading(false);
       }
 
@@ -162,7 +163,7 @@ export default function LoginPage() {
       // Si le serveur nous renvoie le coffre (vault), on l'ouvre !
       if (data.salt_e2e && data.storage_key_encrypted && data.salt_auth) {
         setMessage({ type: 'success', text: 'Connexion Déchiffrement des clés...' });
-        hidePageElementsDuringLogin(true);
+        setIsLoadingPage(true);
 
         try {
           const sodiumLib = await import('libsodium-wrappers-sumo');
@@ -178,8 +179,8 @@ export default function LoginPage() {
           const saltE2eBuf = b64ToBuf(data.salt_e2e);
 
           if (saltAuthBuf.length !== sodium.crypto_pwhash_SALTBYTES || saltE2eBuf.length !== sodium.crypto_pwhash_SALTBYTES) {
+            setIsLoadingPage(false);
             throw new Error("Erreur lors du déchiffrement des clés : longueur de sel invalide");
-            hidePageElementsDuringLogin(false);
           }
 
           const encryptedPassword = sodium.crypto_pwhash(
@@ -207,7 +208,7 @@ export default function LoginPage() {
           const npubBytes = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES || 24;
           if (!encryptedDataBuf || encryptedDataBuf.length <= npubBytes) {
             throw new Error(`Donnée chiffrée trop courte: ${encryptedDataBuf.length} bytes (expected > ${npubBytes})`);
-            hidePageElementsDuringLogin(false);
+            setIsLoadingPage(false);
           }
 
           const nonce = encryptedDataBuf.slice(0, npubBytes);
@@ -215,7 +216,7 @@ export default function LoginPage() {
 
           if (ciphertext == null) {
             throw new Error('ciphertext is null or undefined after slicing encrypted data');
-            hidePageElementsDuringLogin(false);
+            setIsLoadingPage(false);
           }
 
           const ciphertextU8 = new Uint8Array(ciphertext);
@@ -235,7 +236,7 @@ export default function LoginPage() {
             );
           } catch (innerErr) {
             console.error('AEAD decrypt threw:', innerErr && innerErr.message, innerErr);
-            hidePageElementsDuringLogin(false);
+            setIsLoadingPage(false);
             throw innerErr;
           }
 
@@ -245,7 +246,7 @@ export default function LoginPage() {
           // Par exemple :
           localStorage.setItem('storageKey', storageKeyHex);
         } catch (e) {
-          hidePageElementsDuringLogin(false);
+          setIsLoadingPage(false);
           throw new Error("Erreur lors du déchiffrement des clés : " + e.message);
         }
         // redirigé vers la page d'accueil ou tableau de bord
@@ -253,12 +254,12 @@ export default function LoginPage() {
         window.location.href = '/';
 
       } else {
-        hidePageElementsDuringLogin(false);
+        setIsLoadingPage(false);
         throw new Error("Erreur critique : Aucune clé de chiffrement reçue du serveur.");
       }
 
     } catch (err) {
-      hidePageElementsDuringLogin(false);
+      setIsLoadingPage(false);
       setIsRequestGood(false);
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -269,7 +270,12 @@ export default function LoginPage() {
   return (
     <main className="page">
       <div className="left-panel">
-        <Gauzial lookAway={showPassword} isUnhappy={!isValid} isRequestGood={isRequestGood} />
+        <Gauzial 
+          lookAway={showPassword} 
+          isUnhappy={!isValid} 
+          isRequestGood={isRequestGood}
+          isLoadingPage={isLoadingPage}
+        />
         <div className="branding">
           <h2>Gauzian</h2>
           <p>Votre espace sécurisé</p>
@@ -287,14 +293,14 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="form">
+          <form onSubmit={handleSubmit} className="form" style={{ opacity: isLoadingPage ? 0.5 : 1, pointerEvents: isLoadingPage ? 'none' : 'auto' }}>
             <div className="input-group">
               <label>Email</label>
               <input 
                 type="email" 
                 value={email} 
                 onChange={handleEmailChange}
-                disabled={loading} 
+                disabled={loading || isLoadingPage} 
                 placeholder="votre@email.com"
                 className={ !validateEmail(email) && email.length > 0 ? 'input-error' : '' }
                 required 
@@ -312,7 +318,7 @@ export default function LoginPage() {
                   value={password} 
                   onChange={ (e) => handelPasswordChange(e)}
                   className={ !validatePassword(password) && password.length > 0 ? 'input-error' : '' }
-                  disabled={loading} 
+                  disabled={loading || isLoadingPage} 
                   placeholder="••••••••"
                   required 
                 />
@@ -323,7 +329,7 @@ export default function LoginPage() {
                     setShowPassword(!showPassword);
                     if (!showPassword) { setIsRequestGood(true); }
                   }}
-                  disabled={loading}
+                  disabled={loading || isLoadingPage}
                   aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >
                   {showPassword ? (
@@ -341,7 +347,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button type="submit" className="submit-btn" disabled={loading}>
+            <button type="submit" className="submit-btn" disabled={loading || isLoadingPage}>
               {loading ? 'Connexion en cours…' : 'Se connecter'}
             </button>
             
