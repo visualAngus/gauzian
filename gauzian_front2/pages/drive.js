@@ -37,7 +37,7 @@ export default function Drive() {
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
   const activeFolderIdRef = useRef(null); // Garde la dernière valeur pour les callbacks async
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('storageKey') : null;
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
 
