@@ -1605,7 +1605,7 @@ export default function Drive() {
   return (
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
 
-      <Header></Header>
+      <Header TITLE="GZDRIVE"></Header>
 
       <section>
         <div id='contextual_menu_folder' >
