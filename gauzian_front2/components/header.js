@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 
-const Header = () => {
+const Header = ({ TITLE }) => {
     const [imageLoadedState, setImageLoadedState] = useState(false);
+    const [title, setTitle] = useState(TITLE || "GAUZIAN");
 
     return (
         <div className="drive-container">
             {/* J'ai retiré html/head/body pour integrer dans un composant */}
             <header>
                 <h1>
-                    <a href="/">GZDRIVE</a>
+                    <a href="/">{title}</a>
                 </h1>
                 <div
                     className="div_user_profil"
