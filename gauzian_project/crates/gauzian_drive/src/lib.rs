@@ -1090,7 +1090,7 @@ pub async fn download_raw_handler(
             while let Some(result) = cursor.next().await {
                 match result {
                     Ok(record) => {
-                        yield Bytes::from(record.encrypted_chunk);
+                        yield Bytes::from(record.encrypted_chunk.unwrap_or_default());
                     }
                     Err(e) => {
                         eprintln!("Erreur Streaming SQL: {:?}", e);
