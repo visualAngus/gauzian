@@ -15,12 +15,15 @@ export default function RegisterPage() {
     const [lastName, setLastName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [loading, setLoading] = useState(false)
     const [isLoadingPage, setIsLoadingPage] = useState(false);
     const [message, setMessage] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isEmailValid, setIsEmailValid] = useState(true);
     const [isPasswordValid, setIsPasswordValid] = useState(true);
+    const [isPasswordMatch, setIsPasswordMatch] = useState(true);
     const [isRequestGood, setIsRequestGood] = useState(true);
 
     // Fonction de validation d'email
@@ -50,6 +53,18 @@ export default function RegisterPage() {
         const newPassword = e.target.value;
         setPassword(newPassword);
         setIsPasswordValid(validatePassword(newPassword));
+        // Vérifier la correspondance si le champ de confirmation n'est pas vide
+        if (confirmPassword) {
+            setIsPasswordMatch(newPassword === confirmPassword);
+        }
+    };
+
+    // Gérer le changement du mot de passe de confirmation
+    const handleConfirmPasswordChange = (e) => {
+        setIsRequestGood(true);
+        const newConfirmPassword = e.target.value;
+        setConfirmPassword(newConfirmPassword);
+        setIsPasswordMatch(password === newConfirmPassword);
     };
 
     async function handleSubmit(e) {
@@ -58,7 +73,7 @@ export default function RegisterPage() {
         setMessage(null);
 
         // Vérifier que tous les champs sont valides avant de soumettre
-        if (!firstName || !lastName || !email || !password || !validateEmail(email) || !validatePassword(password)) {
+        if (!firstName || !lastName || !email || !password || !confirmPassword || !validateEmail(email) || !validatePassword(password) || password !== confirmPassword) {
             setIsRequestGood(false);
             setLoading(false);
             return;
@@ -211,7 +226,7 @@ export default function RegisterPage() {
     return (
         <main className="page">
             <div className="left-panel">
-                <Gauzial lookAway={showPassword} isUnhappy={(!isEmailValid && email.length > 0) || (!isPasswordValid && password.length > 0) || !isRequestGood} isRequestGood={isRequestGood} isLoadingPage={isLoadingPage} />
+                <Gauzial lookAway={showPassword || showConfirmPassword} isUnhappy={(!isEmailValid && email.length > 0) || (!isPasswordValid && password.length > 0) || (!isPasswordMatch && confirmPassword.length > 0) || !isRequestGood} isRequestGood={isRequestGood} isLoadingPage={isLoadingPage} />
                 <div className="branding">
                     <h2>Gauzian</h2>
                     <p>Votre espace sécurisé</p>
@@ -311,6 +326,44 @@ export default function RegisterPage() {
                             <span className="helper-text">Minimum 8 caractères, 1 majuscule, 1 chiffre, 1 caractère spécial</span>
                             {!validatePassword(password) && password.length > 0 && (
                                 <span className="error-text">❌ Mot de passe non valide</span>
+                            )}
+                        </div>
+
+                        <div className="input-group">
+                            <label>Confirmer le mot de passe</label>
+                            <div className="password-wrapper">
+                                <input 
+                                    type={showConfirmPassword ? "text" : "password"}
+                                    value={confirmPassword} 
+                                    onChange={handleConfirmPasswordChange}
+                                    disabled={loading || isLoadingPage} 
+                                    placeholder="••••••••"
+                                    className={!isPasswordMatch && confirmPassword.length > 0 ? 'input-error' : ''}
+                                    required 
+                                    minLength={6} 
+                                />
+                                <button 
+                                    type="button" 
+                                    className="toggle-password"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    disabled={loading || isLoadingPage}
+                                    aria-label={showConfirmPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                                >
+                                    {showConfirmPassword ? (
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                                            <line x1="1" y1="1" x2="23" y2="23"/>
+                                        </svg>
+                                    ) : (
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
+                            {!isPasswordMatch && confirmPassword.length > 0 && (
+                                <span className="error-text">❌ Les mots de passe ne correspondent pas</span>
                             )}
                         </div>
 
