@@ -1,132 +1,1215 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Gauzial from '../components/gauzial';
 
-export default function UserAccount() {
+export default function ProfilePage() {
     const router = useRouter();
-    const [user, setUser] = useState(null);
+    const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [imageLoadedState, setImageLoadedState] = useState(false);
+    const [activeTab, setActiveTab] = useState('overview'); // overview, account, security, storage
+
+    // Stats
+    const [stats, setStats] = useState({
+        filesCount: 0,
+        foldersCount: 0,
+        storageUsed: 0,
+        storageTotal: 5368709120 // 5 GB par défaut
+    });
 
     useEffect(() => {
-        checkAuth();
+        const storageKey = localStorage.getItem('storageKey');
+        if (!storageKey) {
+            router.push('/login');
+            return;
+        }
+
+        // Récupérer les infos utilisateur
+        fetchUserData(storageKey);
+        fetchStorageStats(storageKey);
     }, []);
 
-    const checkAuth = async () => {
-        const token = localStorage.getItem('token');
-        // if (!token) {
-        //   router.push('/login');
-        //   return;
-        // }
-
+    const fetchUserData = async (storageKey) => {
         try {
-            // Simuler la récupération des données utilisateur
-            // TODO: Remplacer par un vrai appel API
-            const userData = {
-                name: 'John Doe',
-                email: 'john.doe@example.com',
-                storageUsed: 2.5,
-                storageLimit: 10
-            };
+            // TODO: Remplacer par votre endpoint réel
+            const response = await fetch('/api/user/profile', {
+                headers: {
+                    'Authorization': `Bearer ${storageKey}`
+                }
+            });
 
-            setUser(userData);
+            if (response.ok) {
+                const data = await response.json();
+                setUserData(data);
+            }
         } catch (error) {
-            console.error('Error fetching user data:', error);
+            console.error('Erreur lors de la récupération du profil:', error);
+            // Données de démo si l'API n'est pas prête
+            setUserData({
+                firstName: 'Jean',
+                lastName: 'Dupont',
+                email: 'jean.dupont@example.com',
+                createdAt: new Date().toISOString()
+            });
         } finally {
             setLoading(false);
         }
     };
 
+    const fetchStorageStats = async (storageKey) => {
+        try {
+            // TODO: Remplacer par votre endpoint réel
+            const response = await fetch('/api/storage/stats', {
+                headers: {
+                    'Authorization': `Bearer ${storageKey}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setStats(data);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la récupération des stats:', error);
+            // Stats de démo
+            setStats({
+                filesCount: 24,
+                foldersCount: 8,
+                storageUsed: 1073741824, // 1 GB
+                storageTotal: 5368709120 // 5 GB
+            });
+        }
+    };
+
     const handleLogout = () => {
-        localStorage.removeItem('token');
+        localStorage.removeItem('storageKey');
         router.push('/login');
     };
 
+    const formatBytes = (bytes) => {
+        if (bytes === 0) return '0 Octets';
+        const k = 1024;
+        const sizes = ['Octets', 'Ko', 'Mo', 'Go', 'To'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    };
+
+    const storagePercent = ((stats.storageUsed / stats.storageTotal) * 100).toFixed(1);
+
     if (loading) {
         return (
-            <div className="drive-container">
-                <header>
-                    <h1><a href="/">GZPROFILE</a></h1>
-                </header>
-                <div className="loading-container">Chargement...</div>
+            <div className="loading-container">
+                {/* <Gauzial isLoadingPage={true} /> */}
+                <p>Chargement du profil...</p>
+                <style jsx>{`
+                    .loading-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                        background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%);
+                    }
+                    .loading-container p {
+                        margin-top: 2rem;
+                        font-size: 1.2rem;
+                        color: #334155;
+                    }
+                `}</style>
             </div>
         );
     }
 
-    if (!user) {
-        return null;
-    }
-
     return (
-        <div className="drive-container">
-            <header>
-                <h1><a href="/">GZPROFILE</a></h1>
-                <div className="div_user_profil" onClick={() => router.push('/profile')} style={{ cursor: 'pointer' }}>
-                    {!imageLoadedState && <div className="div_profil_custom"></div>}
-                    <img
-                        className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
-                        src="/images/user_profile.png"
-                        alt="User Profile"
-                        onLoad={() => setImageLoadedState(true)}
-                    />
+        <div className="profile-page">
+            {/* Header avec navigation */}
+            <header className="header">
+                <div className="header-content">
+                    <div className="logo-section">
+                        <Gauzial />
+                        <h1>Gauzian</h1>
+                    </div>
+                    <nav className="nav-menu">
+                        <button onClick={() => router.push('/drive')} className="nav-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                <polyline points="13 2 13 9 20 9"/>
+                            </svg>
+                            Mon Drive
+                        </button>
+                        <button onClick={() => setActiveTab('overview')} className="nav-btn active">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            Profil
+                        </button>
+                        <button onClick={handleLogout} className="nav-btn logout">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                                <polyline points="16 17 21 12 16 7"/>
+                                <line x1="21" y1="12" x2="9" y2="12"/>
+                            </svg>
+                            Déconnexion
+                        </button>
+                    </nav>
                 </div>
             </header>
 
-            <section>
-                <div className="div_left_part">
-                    <nav>
-                        <ul>
-                            <li>
-                                <a href="/drive">Mon Drive</a>
-                            </li>
-                            <li>
-                                <a href="/user" className="active">Mon Compte</a>
-                            </li>
-                            <li>
-                                <a href="#" onClick={handleLogout}>Déconnexion</a>
-                            </li>
-                        </ul>
+            <div className="content-wrapper">
+                {/* Sidebar */}
+                <aside className="sidebar">
+                    <div className="profile-card">
+                        <div className="avatar">
+                            {userData?.firstName?.charAt(0)}{userData?.lastName?.charAt(0)}
+                        </div>
+                        <h2>{userData?.firstName} {userData?.lastName}</h2>
+                        <p className="email">{userData?.email}</p>
+                    </div>
+
+                    <nav className="sidebar-nav">
+                        <button 
+                            className={`sidebar-btn ${activeTab === 'overview' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('overview')}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="14" y="14" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                            </svg>
+                            Vue d'ensemble
+                        </button>
+                        <button 
+                            className={`sidebar-btn ${activeTab === 'account' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('account')}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            Informations du compte
+                        </button>
+                        <button 
+                            className={`sidebar-btn ${activeTab === 'security' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('security')}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            Sécurité
+                        </button>
+                        <button 
+                            className={`sidebar-btn ${activeTab === 'storage' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('storage')}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                            </svg>
+                            Stockage
+                        </button>
                     </nav>
+                </aside>
 
-                    <div className="div_storage_used">
-                        <div className="storage_used_container">
-                            <div
-                                className={`storage_used_bar${(user.storageUsed / user.storageLimit) >= 0.95 ? ' full' : ''}`}
-                                style={{ width: `${(user.storageUsed / user.storageLimit) * 100}%` }}
-                            ></div>
-                        </div>
-                        <div className="storage_used_text">
-                            <span>{user.storageUsed.toFixed(2)} GB</span> / <span>{user.storageLimit.toFixed(2)} GB</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="div_right_part">
-                    <div className="div_contenue">
-                        <div className="profile-container">
-                            <div className="div_user_profil">
-                                {!imageLoadedState && <div className="div_profil_custom"></div>}
-                                <img
-                                    className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
-                                    src="/images/user_profile.png"
-                                    alt="User Profile"
-                                    onLoad={() => setImageLoadedState(true)}
-                                />
-                            </div>
+                {/* Main Content */}
+                <main className="main-content">
+                    {activeTab === 'overview' && (
+                        <div className="tab-content">
+                            <h2 className="tab-title">Vue d'ensemble</h2>
                             
-                            <div className="profile-info">
-                                <div className="info-item">
-                                    <label>NOM</label>
-                                    <p>{user.name}</p>
+                            {/* Quick Stats */}
+                            <div className="stats-grid">
+                                <div className="stat-card">
+                                    <div className="stat-icon files">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                            <polyline points="13 2 13 9 20 9"/>
+                                        </svg>
+                                    </div>
+                                    <div className="stat-info">
+                                        <h3>{stats.filesCount}</h3>
+                                        <p>Fichiers</p>
+                                    </div>
                                 </div>
-                                <div className="info-item">
-                                    <label>EMAIL</label>
-                                    <p>{user.email}</p>
+
+                                <div className="stat-card">
+                                    <div className="stat-icon folders">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                        </svg>
+                                    </div>
+                                    <div className="stat-info">
+                                        <h3>{stats.foldersCount}</h3>
+                                        <p>Dossiers</p>
+                                    </div>
+                                </div>
+
+                                <div className="stat-card">
+                                    <div className="stat-icon storage">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                        </svg>
+                                    </div>
+                                    <div className="stat-info">
+                                        <h3>{formatBytes(stats.storageUsed)}</h3>
+                                        <p>Espace utilisé</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Storage Progress */}
+                            <div className="section-card">
+                                <h3>Stockage</h3>
+                                <div className="storage-bar">
+                                    <div className="storage-fill" style={{ width: `${storagePercent}%` }}></div>
+                                </div>
+                                <p className="storage-text">
+                                    {formatBytes(stats.storageUsed)} sur {formatBytes(stats.storageTotal)} utilisé ({storagePercent}%)
+                                </p>
+                            </div>
+
+                            {/* Quick Actions */}
+                            <div className="section-card">
+                                <h3>Actions rapides</h3>
+                                <div className="quick-actions">
+                                    <button className="action-btn" onClick={() => router.push('/drive')}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="17 8 12 3 7 8"/>
+                                            <line x1="12" y1="3" x2="12" y2="15"/>
+                                        </svg>
+                                        Importer des fichiers
+                                    </button>
+                                    <button className="action-btn" onClick={() => router.push('/drive')}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                        </svg>
+                                        Créer un dossier
+                                    </button>
+                                    <button className="action-btn" onClick={() => router.push('/drive')}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polyline points="16 18 22 12 16 6"/>
+                                            <polyline points="8 6 2 12 8 18"/>
+                                        </svg>
+                                        Partager
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </section>
+                    )}
+
+                    {activeTab === 'account' && (
+                        <div className="tab-content">
+                            <h2 className="tab-title">Informations du compte</h2>
+                            
+                            <div className="section-card">
+                                <h3>Informations personnelles</h3>
+                                <div className="info-grid">
+                                    <div className="info-item">
+                                        <label>Prénom</label>
+                                        <p>{userData?.firstName}</p>
+                                    </div>
+                                    <div className="info-item">
+                                        <label>Nom</label>
+                                        <p>{userData?.lastName}</p>
+                                    </div>
+                                    <div className="info-item">
+                                        <label>Email</label>
+                                        <p>{userData?.email}</p>
+                                    </div>
+                                    <div className="info-item">
+                                        <label>Membre depuis</label>
+                                        <p>{new Date(userData?.createdAt).toLocaleDateString('fr-FR', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        })}</p>
+                                    </div>
+                                </div>
+                                <button className="btn-edit">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                    Modifier mes informations
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'security' && (
+                        <div className="tab-content">
+                            <h2 className="tab-title">Sécurité</h2>
+                            
+                            <div className="section-card">
+                                <h3>Mot de passe</h3>
+                                <p className="section-description">
+                                    Assurez-vous d'utiliser un mot de passe fort et unique.
+                                </p>
+                                <button className="btn-secondary">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                    </svg>
+                                    Changer le mot de passe
+                                </button>
+                            </div>
+
+                            <div className="section-card">
+                                <h3>Chiffrement de bout en bout</h3>
+                                <p className="section-description">
+                                    Tous vos fichiers sont chiffrés localement avant d'être envoyés sur nos serveurs. 
+                                    Seul vous pouvez accéder à vos données.
+                                </p>
+                                <div className="security-badge">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                        <path d="M9 12l2 2 4-4"/>
+                                    </svg>
+                                    <span>Protection active</span>
+                                </div>
+                            </div>
+
+                            <div className="section-card">
+                                <h3>Sessions actives</h3>
+                                <p className="section-description">
+                                    Gérez les appareils connectés à votre compte.
+                                </p>
+                                <div className="session-list">
+                                    <div className="session-item">
+                                        <div className="session-icon">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                                <line x1="12" y1="17" x2="12" y2="21"/>
+                                            </svg>
+                                        </div>
+                                        <div className="session-info">
+                                            <p className="session-name">Session actuelle</p>
+                                            <p className="session-details">Linux • Dernière activité: maintenant</p>
+                                        </div>
+                                        <span className="session-badge">Actif</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'storage' && (
+                        <div className="tab-content">
+                            <h2 className="tab-title">Stockage</h2>
+                            
+                            <div className="section-card">
+                                <h3>Utilisation du stockage</h3>
+                                <div className="storage-visual">
+                                    <div className="storage-circle">
+                                        <svg viewBox="0 0 36 36">
+                                            <path
+                                                d="M18 2.0845
+                                                a 15.9155 15.9155 0 0 1 0 31.831
+                                                a 15.9155 15.9155 0 0 1 0 -31.831"
+                                                fill="none"
+                                                stroke="#E2E8F0"
+                                                strokeWidth="3"
+                                            />
+                                            <path
+                                                d="M18 2.0845
+                                                a 15.9155 15.9155 0 0 1 0 31.831
+                                                a 15.9155 15.9155 0 0 1 0 -31.831"
+                                                fill="none"
+                                                stroke="#F97316"
+                                                strokeWidth="3"
+                                                strokeDasharray={`${storagePercent}, 100`}
+                                            />
+                                        </svg>
+                                        <div className="storage-percentage">
+                                            <span className="percent">{storagePercent}%</span>
+                                            <span className="label">utilisé</span>
+                                        </div>
+                                    </div>
+                                    <div className="storage-details">
+                                        <div className="storage-detail-item">
+                                            <span className="label">Espace utilisé</span>
+                                            <span className="value">{formatBytes(stats.storageUsed)}</span>
+                                        </div>
+                                        <div className="storage-detail-item">
+                                            <span className="label">Espace disponible</span>
+                                            <span className="value">{formatBytes(stats.storageTotal - stats.storageUsed)}</span>
+                                        </div>
+                                        <div className="storage-detail-item">
+                                            <span className="label">Espace total</span>
+                                            <span className="value">{formatBytes(stats.storageTotal)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="section-card">
+                                <h3>Répartition par type</h3>
+                                <div className="storage-breakdown">
+                                    <div className="breakdown-item">
+                                        <div className="breakdown-icon documents">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                                <polyline points="14 2 14 8 20 8"/>
+                                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                                <polyline points="10 9 9 9 8 9"/>
+                                            </svg>
+                                        </div>
+                                        <div className="breakdown-info">
+                                            <p className="breakdown-label">Documents</p>
+                                            <p className="breakdown-size">425 Mo</p>
+                                        </div>
+                                        <div className="breakdown-bar">
+                                            <div className="breakdown-fill" style={{ width: '40%', background: '#3B82F6' }}></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="breakdown-item">
+                                        <div className="breakdown-icon images">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                                <polyline points="21 15 16 10 5 21"/>
+                                            </svg>
+                                        </div>
+                                        <div className="breakdown-info">
+                                            <p className="breakdown-label">Images</p>
+                                            <p className="breakdown-size">325 Mo</p>
+                                        </div>
+                                        <div className="breakdown-bar">
+                                            <div className="breakdown-fill" style={{ width: '30%', background: '#10B981' }}></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="breakdown-item">
+                                        <div className="breakdown-icon videos">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polygon points="23 7 16 12 23 17 23 7"/>
+                                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                                            </svg>
+                                        </div>
+                                        <div className="breakdown-info">
+                                            <p className="breakdown-label">Vidéos</p>
+                                            <p className="breakdown-size">250 Mo</p>
+                                        </div>
+                                        <div className="breakdown-bar">
+                                            <div className="breakdown-fill" style={{ width: '25%', background: '#8B5CF6' }}></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="breakdown-item">
+                                        <div className="breakdown-icon other">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                                <polyline points="13 2 13 9 20 9"/>
+                                            </svg>
+                                        </div>
+                                        <div className="breakdown-info">
+                                            <p className="breakdown-label">Autres</p>
+                                            <p className="breakdown-size">50 Mo</p>
+                                        </div>
+                                        <div className="breakdown-bar">
+                                            <div className="breakdown-fill" style={{ width: '5%', background: '#F59E0B' }}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="section-card">
+                                <h3>Augmenter l'espace de stockage</h3>
+                                <p className="section-description">
+                                    Besoin de plus d'espace ? Passez à un forfait supérieur.
+                                </p>
+                                <button className="btn-primary">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                        <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+                                        <polyline points="7.5 19.79 7.5 14.6 3 12"/>
+                                        <polyline points="21 12 16.5 14.6 16.5 19.79"/>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                    </svg>
+                                    Voir les forfaits
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </main>
+            </div>
+
+            <style jsx>{`
+                .profile-page {
+                    min-height: 100vh;
+                    background: #F8FAFC;
+                }
+
+                /* Header */
+                .header {
+                    background: white;
+                    border-bottom: 1px solid #E2E8F0;
+                    position: sticky;
+                    top: 0;
+                    z-index: 100;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+                }
+
+                .header-content {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 1rem 2rem;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+
+                .logo-section {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                }
+
+                .logo-section h1 {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: #0B1120;
+                    margin: 0;
+                }
+
+                .nav-menu {
+                    display: flex;
+                    gap: 0.5rem;
+                }
+
+                .nav-btn {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    padding: 0.75rem 1.25rem;
+                    border: none;
+                    background: transparent;
+                    color: #64748B;
+                    border-radius: 8px;
+                    font-size: 0.95rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    font-family: inherit;
+                }
+
+                .nav-btn:hover {
+                    background: #F1F5F9;
+                    color: #334155;
+                }
+
+                .nav-btn.active {
+                    background: linear-gradient(135deg, #F97316 0%, #FDBA74 100%);
+                    color: white;
+                }
+
+                .nav-btn.logout {
+                    color: #EF4444;
+                }
+
+                .nav-btn.logout:hover {
+                    background: #FEF2F2;
+                    color: #DC2626;
+                }
+
+                /* Content Layout */
+                .content-wrapper {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 2rem;
+                    display: grid;
+                    grid-template-columns: 280px 1fr;
+                    gap: 2rem;
+                    align-items: start;
+                }
+
+                /* Sidebar */
+                .sidebar {
+                    position: sticky;
+                    top: 100px;
+                }
+
+                .profile-card {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 2rem;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                    margin-bottom: 1rem;
+                }
+
+                .avatar {
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #F97316 0%, #FDBA74 100%);
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 2rem;
+                    font-weight: 700;
+                    margin: 0 auto 1rem;
+                }
+
+                .profile-card h2 {
+                    font-size: 1.25rem;
+                    color: #0B1120;
+                    margin: 0 0 0.5rem;
+                }
+
+                .profile-card .email {
+                    font-size: 0.9rem;
+                    color: #64748B;
+                    margin: 0;
+                }
+
+                .sidebar-nav {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                }
+
+                .sidebar-btn {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    padding: 0.875rem 1rem;
+                    border: none;
+                    background: white;
+                    color: #64748B;
+                    border-radius: 12px;
+                    font-size: 0.95rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    text-align: left;
+                    font-family: inherit;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                }
+
+                .sidebar-btn:hover {
+                    background: #F1F5F9;
+                    color: #334155;
+                    transform: translateX(4px);
+                }
+
+                .sidebar-btn.active {
+                    background: linear-gradient(135deg, #F97316 0%, #FDBA74 100%);
+                    color: white;
+                    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+                }
+
+                /* Main Content */
+                .main-content {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 2rem;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                    min-height: 600px;
+                }
+
+                .tab-content {
+                    animation: fadeIn 0.3s ease;
+                }
+
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
+                .tab-title {
+                    font-size: 2rem;
+                    font-weight: 700;
+                    color: #0B1120;
+                    margin: 0 0 2rem;
+                }
+
+                /* Stats Grid */
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 2rem;
+                }
+
+                .stat-card {
+                    background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+                    border-radius: 12px;
+                    padding: 1.5rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                    transition: transform 0.2s ease;
+                }
+
+                .stat-card:hover {
+                    transform: translateY(-4px);
+                }
+
+                .stat-icon {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 12px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                }
+
+                .stat-icon.files {
+                    background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);
+                }
+
+                .stat-icon.folders {
+                    background: linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%);
+                }
+
+                .stat-icon.storage {
+                    background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+                }
+
+                .stat-info h3 {
+                    font-size: 1.75rem;
+                    font-weight: 700;
+                    color: #0B1120;
+                    margin: 0;
+                }
+
+                .stat-info p {
+                    font-size: 0.875rem;
+                    color: #64748B;
+                    margin: 0;
+                }
+
+                /* Section Card */
+                .section-card {
+                    background: #F8FAFC;
+                    border-radius: 12px;
+                    padding: 1.5rem;
+                    margin-bottom: 1.5rem;
+                }
+
+                .section-card h3 {
+                    font-size: 1.25rem;
+                    font-weight: 600;
+                    color: #0B1120;
+                    margin: 0 0 1rem;
+                }
+
+                .section-description {
+                    color: #64748B;
+                    font-size: 0.95rem;
+                    margin: 0 0 1.5rem;
+                    line-height: 1.6;
+                }
+
+                /* Storage Bar */
+                .storage-bar {
+                    height: 12px;
+                    background: #E2E8F0;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    margin-bottom: 0.75rem;
+                }
+
+                .storage-fill {
+                    height: 100%;
+                    background: linear-gradient(90deg, #F97316 0%, #FDBA74 100%);
+                    border-radius: 6px;
+                    transition: width 0.3s ease;
+                }
+
+                .storage-text {
+                    font-size: 0.875rem;
+                    color: #64748B;
+                    margin: 0;
+                }
+
+                /* Quick Actions */
+                .quick-actions {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                    gap: 1rem;
+                }
+
+                .action-btn {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 0.75rem;
+                    padding: 1.5rem;
+                    background: white;
+                    border: 2px solid #E2E8F0;
+                    border-radius: 12px;
+                    color: #334155;
+                    font-size: 0.95rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    font-family: inherit;
+                }
+
+                .action-btn:hover {
+                    border-color: #F97316;
+                    color: #F97316;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+                }
+
+                .action-btn svg {
+                    color: #F97316;
+                }
+
+                /* Info Grid */
+                .info-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 1.5rem;
+                }
+
+                .info-item label {
+                    display: block;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                    color: #64748B;
+                    margin-bottom: 0.5rem;
+                }
+
+                .info-item p {
+                    font-size: 1rem;
+                    color: #0B1120;
+                    margin: 0;
+                    padding: 0.75rem;
+                    background: white;
+                    border-radius: 8px;
+                }
+
+                /* Buttons */
+                .btn-edit, .btn-secondary, .btn-primary {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    padding: 0.875rem 1.5rem;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    font-family: inherit;
+                }
+
+                .btn-edit {
+                    background: white;
+                    color: #F97316;
+                    border: 2px solid #F97316;
+                }
+
+                .btn-edit:hover {
+                    background: #F97316;
+                    color: white;
+                }
+
+                .btn-secondary {
+                    background: #F1F5F9;
+                    color: #334155;
+                }
+
+                .btn-secondary:hover {
+                    background: #E2E8F0;
+                }
+
+                .btn-primary {
+                    background: linear-gradient(135deg, #F97316 0%, #FDBA74 100%);
+                    color: white;
+                    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+                }
+
+                .btn-primary:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.4);
+                }
+
+                /* Security Badge */
+                .security-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    padding: 1rem 1.5rem;
+                    background: #ECFDF5;
+                    border: 2px solid #10B981;
+                    border-radius: 12px;
+                    color: #065F46;
+                    font-weight: 600;
+                }
+
+                .security-badge svg {
+                    color: #10B981;
+                }
+
+                /* Session List */
+                .session-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+
+                .session-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                    padding: 1rem;
+                    background: white;
+                    border-radius: 10px;
+                    border: 1px solid #E2E8F0;
+                }
+
+                .session-icon {
+                    width: 40px;
+                    height: 40px;
+                    background: #F1F5F9;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #64748B;
+                }
+
+                .session-info {
+                    flex: 1;
+                }
+
+                .session-name {
+                    font-weight: 600;
+                    color: #0B1120;
+                    margin: 0 0 0.25rem;
+                }
+
+                .session-details {
+                    font-size: 0.875rem;
+                    color: #64748B;
+                    margin: 0;
+                }
+
+                .session-badge {
+                    padding: 0.5rem 1rem;
+                    background: #ECFDF5;
+                    color: #065F46;
+                    border-radius: 8px;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                }
+
+                /* Storage Visual */
+                .storage-visual {
+                    display: grid;
+                    grid-template-columns: 200px 1fr;
+                    gap: 3rem;
+                    align-items: center;
+                }
+
+                .storage-circle {
+                    position: relative;
+                    width: 200px;
+                    height: 200px;
+                }
+
+                .storage-circle svg {
+                    transform: rotate(-90deg);
+                    width: 100%;
+                    height: 100%;
+                }
+
+                .storage-percentage {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    text-align: center;
+                }
+
+                .storage-percentage .percent {
+                    display: block;
+                    font-size: 2rem;
+                    font-weight: 700;
+                    color: #0B1120;
+                }
+
+                .storage-percentage .label {
+                    display: block;
+                    font-size: 0.875rem;
+                    color: #64748B;
+                }
+
+                .storage-details {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+
+                .storage-detail-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 1rem;
+                    background: white;
+                    border-radius: 10px;
+                }
+
+                .storage-detail-item .label {
+                    color: #64748B;
+                    font-size: 0.95rem;
+                }
+
+                .storage-detail-item .value {
+                    color: #0B1120;
+                    font-weight: 600;
+                    font-size: 1rem;
+                }
+
+                /* Storage Breakdown */
+                .storage-breakdown {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+
+                .breakdown-item {
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
+                    align-items: center;
+                    gap: 1rem;
+                }
+
+                .breakdown-icon {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .breakdown-icon.documents {
+                    background: rgba(59, 130, 246, 0.1);
+                    color: #3B82F6;
+                }
+
+                .breakdown-icon.images {
+                    background: rgba(16, 185, 129, 0.1);
+                    color: #10B981;
+                }
+
+                .breakdown-icon.videos {
+                    background: rgba(139, 92, 246, 0.1);
+                    color: #8B5CF6;
+                }
+
+                .breakdown-icon.other {
+                    background: rgba(245, 158, 11, 0.1);
+                    color: #F59E0B;
+                }
+
+                .breakdown-info {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                }
+
+                .breakdown-label {
+                    font-weight: 600;
+                    color: #0B1120;
+                    margin: 0;
+                }
+
+                .breakdown-size {
+                    font-size: 0.875rem;
+                    color: #64748B;
+                    margin: 0;
+                }
+
+                .breakdown-bar {
+                    width: 120px;
+                    height: 8px;
+                    background: #E2E8F0;
+                    border-radius: 4px;
+                    overflow: hidden;
+                }
+
+                .breakdown-fill {
+                    height: 100%;
+                    border-radius: 4px;
+                    transition: width 0.3s ease;
+                }
+
+                /* Responsive */
+                @media (max-width: 968px) {
+                    .content-wrapper {
+                        grid-template-columns: 1fr;
+                        padding: 1rem;
+                    }
+
+                    .sidebar {
+                        position: static;
+                    }
+
+                    .profile-card {
+                        display: none;
+                    }
+
+                    .sidebar-nav {
+                        flex-direction: row;
+                        overflow-x: auto;
+                        padding-bottom: 0.5rem;
+                    }
+
+                    .sidebar-btn {
+                        white-space: nowrap;
+                    }
+
+                    .header-content {
+                        flex-direction: column;
+                        gap: 1rem;
+                        padding: 1rem;
+                    }
+
+                    .nav-menu {
+                        width: 100%;
+                        justify-content: center;
+                        flex-wrap: wrap;
+                    }
+
+                    .stats-grid {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .storage-visual {
+                        grid-template-columns: 1fr;
+                        text-align: center;
+                    }
+
+                    .storage-circle {
+                        margin: 0 auto;
+                    }
+
+                    .info-grid {
+                        grid-template-columns: 1fr;
+                    }
+
+                    .quick-actions {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            `}</style>
         </div>
     );
 }

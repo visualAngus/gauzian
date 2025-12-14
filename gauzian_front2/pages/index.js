@@ -11,6 +11,8 @@ export default function Home() {
         Connexion: <a href="/login">/login</a>
         <br />
         Drive: <a href="/drive">/drive</a>
+        <br />
+        Profil utilisateur: <a href="/profile">/profile</a>
       </p>
     </main>
   )
