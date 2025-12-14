@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 // 1. IMPORT CORRECT
 import styles from './header.module.css'; 
 
-const Header = ({ TITLE, userName = "User" }) => {
+const Header = ({ TITLE, UserName = "User" }) => {
     const [imageError, setImageError] = useState(false);
     const [title] = useState(TITLE || "GAUZIAN");
     const [userId, setUserId] = useState(null);
-    const [userFullName, setUserFullName] = useState(userName);
-
+    const [userFullName, setUserFullName] = useState(UserName);
     useEffect(() => {
         // Récupérer les infos utilisateur depuis localStorage
         const storedUser = localStorage.getItem('userData');
