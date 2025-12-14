@@ -7,7 +7,6 @@ use axum::{
 };
 use axum_client_ip::InsecureClientIp;
 use gauzian_core::{AppState, LoginRequest, RegisterRequest,Claims};
-use sha2::Digest;
 
 // Ensure the database connection string is correct in your AppState configuration
 // Example: "postgres://username:password@localhost/database_name"
@@ -30,7 +29,7 @@ use sqlx::Row; // Import the Row trait for using the `get` method
 
 // std::time::Duration removed; using chrono::Duration for DateTime arithmetic
 use chrono::Duration as ChronoDuration;
-use chrono::{DateTime, Utc}; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
+use chrono::{Utc}; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
 
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 
