@@ -43,3 +43,5 @@ gauzian_core = { path = "../gauzian_core" }
 sha2 = "0.10"
 woothee = "0.13.0"
 axum-client-ip = "0.6.0"
+
+jsonwebtoken = "9.2"
