@@ -2,6 +2,7 @@ use std::sync;
 
 use sqlx::{PgPool, types::uuid};
 use serde::Deserialize;
+use serde::Serialize;
 use chrono::NaiveDate;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
@@ -147,4 +148,11 @@ pub struct FileRenameRequest {
 #[derive(Deserialize, Debug)]
 pub struct CancelStreamingUploadRequest {
     pub temp_upload_id: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String, // Subject (souvent l'ID utilisateur)
+    pub exp: usize,  // Expiration (timestamp unix)
+    pub iat: usize,  // Issued At (date de création)
 }

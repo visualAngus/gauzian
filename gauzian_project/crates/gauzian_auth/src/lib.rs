@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_client_ip::InsecureClientIp;
-use gauzian_core::{AppState, LoginRequest, RegisterRequest};
+use gauzian_core::{AppState, LoginRequest, RegisterRequest,Claims};
 use sha2::Digest;
 
 // Ensure the database connection string is correct in your AppState configuration
@@ -25,7 +25,6 @@ use argon2::{
 };
 // On importe le module pour charger les variables d'environnement (si ce n'est pas déjà fait)
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use rand::RngCore; // Pour remplir des bytes au hasard
 use serde_json::json; // Import the json! macro
 use sqlx::Row; // Import the Row trait for using the `get` method
 
@@ -33,25 +32,54 @@ use sqlx::Row; // Import the Row trait for using the `get` method
 use chrono::Duration as ChronoDuration;
 use chrono::{DateTime, Utc}; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
 
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
-async fn hash_token(token: &str) -> String {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(token.as_bytes());
-    let hash = hasher.finalize();
-    BASE64.encode(hash)
+fn get_secret_key() -> Vec<u8> {
+    BASE64
+        .decode(std::env::var("JWT_SECRET_KEY").unwrap_or_default())
+        .expect("Échec du décodage de JWT_SECRET_KEY depuis Base64")
 }
 
-async fn create_token() -> Result<(String, String), String> {
-    let mut token_bytes: [u8; 32] = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut token_bytes);
-    let token_b64 = BASE64.encode(token_bytes);
+pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    let now = Utc::now();
+    // Calcul de la date d'expiration : Maintenant + 7 jours
+    let expire = now + ChronoDuration::days(7);
 
-    // hashage du token avant de le stocker dans la base de donnees (sha256)
+    let claims = Claims {
+        sub: user_id.to_owned(),
+        exp: expire.timestamp() as usize,
+        iat: now.timestamp() as usize,
+    };
 
-    let token_hash_b64 = hash_token(&token_b64).await;
+    // Encodage du token avec l'algorithme HS256 par défaut
+    let secret_key = get_secret_key();
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(&secret_key),
+    )
+}
 
-    Ok((token_b64, token_hash_b64))
+pub fn validate_and_refresh_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
+    // 1. Validation du token existant
+    let validation = Validation::default();
+    let secret_key = get_secret_key();
+
+    // Si le token est expiré ou que la signature est fausse, decode renverra une erreur
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(&secret_key),
+        &validation,
+    )?;
+
+    // 2. Si on est ici, le token est valide.
+    // On récupère l'ID utilisateur (sub) du token décodé
+    let user_id = token_data.claims.sub;
+
+    // 3. On crée un NOUVEAU token pour cet utilisateur (ce qui remet le compteur à 7 jours)
+    create_token(&user_id)
 }
 
 // 3. Le Handler (Contrôleur)
@@ -311,7 +339,7 @@ pub async fn login_handler(
     };
 
     // Création du token de session
-    let (token_raw, token_hash) = match create_token().await {
+    let token_raw = match create_token(&user.id.to_string()) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("Erreur lors de la création du token: {}", e);
@@ -324,31 +352,6 @@ pub async fn login_handler(
         .ok()
         .and_then(|val| val.parse::<i64>().ok())
         .unwrap_or(7); // Default to 7 days if parsing fails
-    let expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
-
-    let insert_result = sqlx::query!(
-        r#"
-        INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at)
-        VALUES ($1, $2, $3, $4, $5)
-        "#,
-        user.id,
-        token_hash,
-        formatted_user_agent,
-        payload_client_ip,
-        expires_at
-    )
-    .execute(&state.db_pool)
-    .await;
-
-    match insert_result {
-        Ok(_) => {
-            println!("Session créée pour l'utilisateur ID: {}", user.id);
-        }
-        Err(e) => {
-            eprintln!("Erreur SQL Insert Session: {:?}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
-        }
-    }
 
     // recupérer le storage_key_encrypted et le salt_e2e pour la reponse
     let user_keys_result = sqlx::query!(
@@ -391,71 +394,7 @@ pub async fn login_handler(
         .into_response()
 }
 
-async fn reset_token_life_time(token: &str, State(state): State<AppState>) -> Result<(), String> {
-    // expire dans 1 heure (chrono::Duration)
-    let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
-        .ok()
-        .and_then(|val| val.parse::<i64>().ok())
-        .unwrap_or(7); // Default to 7 days if parsing fails
-    let new_expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
-
-    let update_result = sqlx::query!(
-        r#"
-        UPDATE sessions
-        SET expires_at = $1
-        WHERE token = $2
-        "#,
-        new_expires_at,
-        token
-    )
-    .execute(&state.db_pool)
-    .await;
-
-    match update_result {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            eprintln!("Erreur SQL Update Session: {:?}", e);
-            Err("Erreur interne".to_string())
-        }
-    }
-}
-
-pub async fn verify_session_token(
-    token: &str,
-    State(state): State<AppState>,
-) -> Result<uuid::Uuid, String> {
-    let session_hash_b64 = hash_token(&token).await;
-
-    // verifier le token de session dans la base de données (compare hash)
-    let session_result = sqlx::query!(
-        "SELECT user_id, expires_at FROM sessions WHERE token = $1",
-        session_hash_b64
-    )
-    .fetch_optional(&state.db_pool)
-    .await;
-
-    let session = match session_result {
-        Ok(Some(s)) => s,
-        Ok(None) => {
-            return Err("Session invalide".to_string());
-        }
-        Err(e) => {
-            eprintln!("Erreur SQL Autologin: {:?}", e);
-            return Err("Erreur interne".to_string());
-        }
-    };
-
-    // Vérifier si la session a expiré
-    let now = Utc::now();
-    if session.expires_at < now {
-        return Err("Session expirée".to_string());
-    }
-    reset_token_life_time(&token, State(state.clone())).await?;
-    Ok(session.user_id)
-}
-
 pub async fn autologin_handler(
-    State(state): State<AppState>, // 1. (Parts) État
     headers: HeaderMap,
 ) -> impl IntoResponse {
     // recuperer le cookie de session
@@ -485,7 +424,7 @@ pub async fn autologin_handler(
     // The DB stores the hashed token (SHA256 base64). We must hash the
     // raw token from the cookie the same way before querying.
 
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
+    match validate_and_refresh_token(&session_token) {
         Ok(user_id) => {
             let body = Json(json!({
                 "status": "success",
@@ -501,5 +440,5 @@ pub async fn autologin_handler(
             }));
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
-    };
+    }
 }
