@@ -124,7 +124,7 @@ export default function ProfilePage() {
     return (
         <div className="profile-page">
             {/* Header avec navigation */}
-            <Header TITLE = "Profil"></Header>
+            <Header TITLE = "GZPROFILE"></Header>
 
             <div className="content-wrapper">
                 {/* Sidebar */}
