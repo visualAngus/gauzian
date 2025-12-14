@@ -2,26 +2,31 @@ import React, { useState, useEffect } from 'react';
 // 1. IMPORT CORRECT
 import styles from './header.module.css'; 
 
-const Header = ({ TITLE, UserName = "User" }) => {
+const Header = ({ TITLE, userName = "User" }) => {
     const [imageError, setImageError] = useState(false);
     const [title] = useState(TITLE || "GAUZIAN");
     const [userId, setUserId] = useState(null);
-    const [userFullName, setUserFullName] = useState(UserName);
+    const [userFullName, setUserFullName] = useState(userName);
+
     useEffect(() => {
-        // Récupérer les infos utilisateur depuis localStorage
-        const storedUser = localStorage.getItem('userData');
-        if (storedUser) {
-            try {
-                const userData = JSON.parse(storedUser);
-                setUserId(userData.id || userData.user_id);
-                if (userData.firstName || userData.lastName) {
-                    setUserFullName(`${userData.firstName || ''} ${userData.lastName || ''}`.trim());
+        // Utiliser le prop userName s'il est fourni, sinon récupérer depuis localStorage
+        if (userName && userName !== "User") {
+            setUserFullName(userName);
+        } else {
+            const storedUser = localStorage.getItem('userData');
+            if (storedUser) {
+                try {
+                    const userData = JSON.parse(storedUser);
+                    setUserId(userData.id || userData.user_id);
+                    if (userData.firstName || userData.lastName) {
+                        setUserFullName(`${userData.firstName || ''} ${userData.lastName || ''}`.trim());
+                    }
+                } catch (e) {
+                    console.error('Erreur parsing userData:', e);
                 }
-            } catch (e) {
-                console.error('Erreur parsing userData:', e);
             }
         }
-    }, []);
+    }, [userName]);
 
     const getInitials = (name) => {
         return name
