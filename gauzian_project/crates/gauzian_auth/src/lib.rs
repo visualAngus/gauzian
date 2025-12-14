@@ -179,7 +179,7 @@ pub async fn register_handler(
                         "#,
                         folder_id,
                         user_id,
-                        folder_key_encrypted.as_bytes(),
+                        folder_key_encrypted,
                     )
                     .execute(&state.db_pool)
                     .await;
@@ -285,7 +285,7 @@ pub async fn login_handler(
     let password_hash_clone = user.password_hash.clone();
 
     // Convertir le mot de passe hashé en String pour éviter les problèmes de durée de vie
-    let password_hash_str = match String::from_utf8(password_hash_clone) {
+    let password_hash_str = match String::from_utf8(password_hash_clone.into()) {
         Ok(s) => s,
         Err(_) => {
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
@@ -378,9 +378,9 @@ pub async fn login_handler(
     let body = Json(json!({
         "status": "success",
         "message": "Connexion réussie",
-        "salt_auth": String::from_utf8(salt_auth).unwrap_or_default(),
-        "salt_e2e": String::from_utf8(salt_e2e).unwrap_or_default(),
-        "storage_key_encrypted": String::from_utf8(storage_key_encrypted).unwrap_or_default(),
+        "salt_auth": String::from_utf8(salt_auth.into()).unwrap_or_default(),
+        "salt_e2e": String::from_utf8(salt_e2e.into()).unwrap_or_default(),
+        "storage_key_encrypted": String::from_utf8(storage_key_encrypted.into()).unwrap_or_default(),
     }));
 
     (
