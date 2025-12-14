@@ -1519,18 +1519,28 @@ export default function Drive() {
   }
 
   const getUserInfo = async () => {
-    const res = await fetch('/api/auth/info', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    try {
+      const res = await fetch('/api/auth/info', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (data.status === 'success' && data.user_info) {
+        // Met à jour le nom d'utilisateur affiché (prénom + nom si dispo, sinon email)
+        if (data.user_info.first_name && data.user_info.last_name) {
+          setUserName(`${data.user_info.first_name} ${data.user_info.last_name}`);
+        } else if (data.user_info.email) {
+          setUserName(data.user_info.email);
+        }
+        console.log("Info utilisateur récupérée :", data.user_info);
+      } else {
+        console.error("Erreur récupération info utilisateur :", data.message);
       }
-    });
-    const data = await res.json();
-    if (data.status === 'success') {
-      console.log("Info utilisateur récupérée :", data);
-    } else {
-      console.error("Erreur récupération info utilisateur :", data.message);
+    } catch (e) {
+      console.error("Erreur lors de la récupération des infos utilisateur :", e);
     }
   };
 
