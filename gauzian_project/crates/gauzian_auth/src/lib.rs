@@ -495,11 +495,10 @@ pub async fn info_handler(
         }
     };
 
-    println!("INFO_HANDLER: session_token={}", session_token);
 
     // Validate the token and get the user ID
-    let user_id = match validate_and_refresh_token(&session_token) {
-        Ok(uid) => uid,
+    let user_id = match verify_session_token(&session_token) {
+        Ok(user_id) => user_id,
         Err(_) => {
             let body = Json(json!({
                 "status": "error",
@@ -509,22 +508,10 @@ pub async fn info_handler(
         }
     };
 
-    println!("INFO_HANDLER: user_id={}", user_id);
-
     // Fetch user info from the database
-    let user_uuid = match uuid::Uuid::parse_str(&user_id) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Identifiant utilisateur invalide"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
     let user_info_result = sqlx::query!(
         "SELECT email, first_name, last_name, date_of_birth, time_zone, locale FROM users WHERE id = $1",
-        user_uuid
+        user_id
     )
     .fetch_one(&state.db_pool)
     .await;
