@@ -428,7 +428,7 @@ export default function ProfilePage() {
                                             <p className="breakdown-size">{stats.storageByFileType[3][2] ? formatBytes(stats.storageByFileType[3][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[3][2] / stats.storageTotal) * 100}%`, background: '#3B82F6' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[3][2] / stats.storageUsed) * 100}%`, background: '#3B82F6' }}></div>
                                         </div>
                                     </div>
 
@@ -461,7 +461,7 @@ export default function ProfilePage() {
                                             <p className="breakdown-size">{stats.storageByFileType[2][2] ? formatBytes(stats.storageByFileType[2][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[2][2] / stats.storageTotal) * 100}%`, background: '#8B5CF6' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[2][2] / stats.storageUsed) * 100}%`, background: '#8B5CF6' }}></div>
                                         </div>
                                     </div>
 
@@ -477,7 +477,7 @@ export default function ProfilePage() {
                                             <p className="breakdown-size">{stats.storageByFileType[1][2] ? formatBytes(stats.storageByFileType[1][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[1][2] / stats.storageTotal) * 100}%`, background: '#F59E0B' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[1][2] / stats.storageUsed) * 100}%`, background: '#F59E0B' }}></div>
                                         </div>
                                     </div>
                                 </div>
