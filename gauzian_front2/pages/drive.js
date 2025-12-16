@@ -1530,9 +1530,9 @@ export default function Drive() {
       const data = await res.json();
       if (data.status === 'success' && data.user_info) {
         // Met à jour le nom d'utilisateur affiché (prénom + nom si dispo, sinon email)
-        if (data.user_info.first_name && data.user_info.last_name) {
-          console.log("Nom utilisateur récupéré :", `${data.user_info.first_name} ${data.user_info.last_name}`);
-          setUserName(`${data.user_info.first_name} ${data.user_info.last_name}`);
+        if (data.user_info.firstName && data.user_info.lastName) {
+          console.log("Nom utilisateur récupéré :", `${data.user_info.firstName} ${data.user_info.lastName}`);
+          setUserName(`${data.user_info.firstName} ${data.user_info.lastName}`);
         } else if (data.user_info.email) {
           setUserName(data.user_info.email);
         }
