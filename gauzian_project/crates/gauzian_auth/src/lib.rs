@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_client_ip::InsecureClientIp;
-use gauzian_core::{AppState, LoginRequest, RegisterRequest,Claims};
+use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest};
 
 use uuid::Uuid;
 // Ensure the database connection string is correct in your AppState configuration
@@ -30,9 +30,9 @@ use sqlx::Row; // Import the Row trait for using the `get` method
 
 // std::time::Duration removed; using chrono::Duration for DateTime arithmetic
 use chrono::Duration as ChronoDuration;
-use chrono::{Utc}; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
+use chrono::Utc; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
 
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
@@ -68,11 +68,7 @@ pub fn validate_and_refresh_token(token: &str) -> Result<String, jsonwebtoken::e
     let secret_key = get_secret_key();
 
     // Si le token est expiré ou que la signature est fausse, decode renverra une erreur
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(&secret_key),
-        &validation,
-    )?;
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(&secret_key), &validation)?;
 
     // 2. Si on est ici, le token est valide.
     // On récupère l'ID utilisateur (sub) du token décodé
@@ -88,11 +84,7 @@ pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::E
     let secret_key = get_secret_key();
 
     // Si le token est expiré ou que la signature est fausse, decode renverra une erreur
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(&secret_key),
-        &validation,
-    )?;
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(&secret_key), &validation)?;
 
     // 2. Si on est ici, le token est valide.
     // On récupère l'ID utilisateur (sub) du token décodé
@@ -101,7 +93,9 @@ pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::E
     // Convertir le String en Uuid avant de retourner
     match Uuid::parse_str(&user_id) {
         Ok(uuid) => Ok(uuid),
-        Err(_e) => Err(jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken)),
+        Err(_e) => Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidToken,
+        )),
     }
 }
 
@@ -113,7 +107,6 @@ pub async fn register_handler(
     headers: HeaderMap, // FromRequestParts extractors MUST come before body extractors
     Json(payload): Json<RegisterRequest>, // Désérialisation automatique du body JSON
 ) -> impl IntoResponse {
-
     let client_ip = headers
         .get("x-real-ip")
         .and_then(|val| val.to_str().ok())
@@ -122,7 +115,7 @@ pub async fn register_handler(
     // 2. LOG POUR VÉRIFICATION
     // Regarde ta console serveur quand tu fais une requête
     println!("🔍 DEBUG IP CLIENT: {}", client_ip);
-    
+
     // 1. Gestion Locale / Timezone (inchangé)
     let raw_locale = headers
         .get(ACCEPT_LANGUAGE)
@@ -244,7 +237,10 @@ pub async fn register_handler(
                             (StatusCode::OK, body).into_response()
                         }
                         Err(e) => {
-                            eprintln!("Erreur SQL lors de l'insertion de l'accès au dossier: {:?}", e);
+                            eprintln!(
+                                "Erreur SQL lors de l'insertion de l'accès au dossier: {:?}",
+                                e
+                            );
                             let body = Json(json!({
                                 "status": "error",
                                 "message": "Erreur lors de la création de l'accès au dossier utilisateur."
@@ -417,9 +413,7 @@ pub async fn login_handler(
         .into_response()
 }
 
-pub async fn autologin_handler(
-    headers: HeaderMap,
-) -> impl IntoResponse {
+pub async fn autologin_handler(headers: HeaderMap) -> impl IntoResponse {
     // recuperer le cookie de session
     let session_cookie = headers
         .get(axum::http::header::COOKIE)
@@ -466,11 +460,7 @@ pub async fn autologin_handler(
     }
 }
 
-
-pub async fn info_handler(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     // recuperer le cookie de session
     let session_cookie = headers
         .get(axum::http::header::COOKIE)
@@ -495,7 +485,6 @@ pub async fn info_handler(
         }
     };
 
-
     // Validate the token and get the user ID
     let user_id = match verify_session_token(&session_token) {
         Ok(user_id) => user_id,
@@ -510,6 +499,8 @@ pub async fn info_handler(
 
     let storage_param = get_storage_usage_handler(user_id, &state).await;
     let (storage_used, nb_folder, nb_file, storage_limit) = storage_param.unwrap_or((0, 0, 0, 0));
+
+    let media_type_usage = get_storage_usage_by_file_type_handler(user_id, &state).await;
 
     // Fetch user info from the database
     let user_info_result = sqlx::query!(
@@ -536,7 +527,8 @@ pub async fn info_handler(
                     "storageLimit": storage_limit,
                     "storageUsed": storage_used,
                     "nbFolders": nb_folder,
-                    "nbFiles": nb_file,              
+                    "nbFiles": nb_file,
+                    "storageByFileType": media_type_usage.unwrap_or_default()
                 }
             }));
             (StatusCode::OK, body).into_response()
@@ -552,8 +544,10 @@ pub async fn info_handler(
     }
 }
 
-
-pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<(i64, i64, i64, i32)> {
+pub async fn get_storage_usage_handler(
+    user_id: Uuid,
+    state: &AppState,
+) -> Option<(i64, i64, i64, i32)> {
     let storage_usage_result = sqlx::query!(
         r#"
         SELECT 
@@ -580,7 +574,54 @@ pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Optio
             row.storage_limit,
         )),
         Err(e) => {
-            eprintln!("Erreur SQL Récupération Usage Stockage Utilisateur: {:?}", e);
+            eprintln!(
+                "Erreur SQL Récupération Usage Stockage Utilisateur: {:?}",
+                e
+            );
+            None
+        }
+    }
+}
+
+pub async fn get_storage_usage_by_file_type_handler(
+    user_id: Uuid,
+    state: &AppState,
+) -> Option<Vec<(String, i64, i64)>> {
+    let storage_usage_result = sqlx::query!(
+        r#"
+         SELECT 
+                vf.media_type ,
+                COUNT(vf.media_type ) as count,
+                SUM(vf.file_size)::int8 AS total_storage
+            FROM vault_files vf
+            inner join users u on u.id = vf.owner_id 
+            WHERE u.id= $1
+            group by vf.media_type 
+        "#,
+        user_id,
+    )
+    .fetch_all(&state.db_pool)
+    .await;
+
+    match storage_usage_result {
+        Ok(rows) => {
+            let result = rows
+                .into_iter()
+                .map(|row| {
+                    (
+                        row.media_type.unwrap_or_default(),
+                        row.total_storage.unwrap_or(0),
+                        row.count.unwrap_or(0)
+                    )
+                })
+                .collect();
+            Some(result)
+        }
+        Err(e) => {
+            eprintln!(
+                "Erreur SQL Récupération Usage Stockage par Type de Fichier: {:?}",
+                e
+            );
             None
         }
     }
