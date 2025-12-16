@@ -494,3 +494,39 @@ nav ul li a.active {
 .div_upload_progress .div_storage_used{
     width: 100% !important;
 }
+
+/* Notification Area */
+
+.notification_area{
+    position: fixed;
+    top: 0;
+    right: 50%;
+    transform: translateX(50%) translateY(-100%);
+
+    max-width: 300px;
+    text-align: center;
+
+
+    background-color: var(--emmerald-color);
+    color: var(--white-color);
+    
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    font-size: 1rem;
+    font-weight: 500;
+    z-index: 10000;
+    opacity: 0.9;
+
+    transition: top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+}
+
+.notification_area.error{
+    background-color: var(--orange-color);
+}
+
+.notification_area:hover{
+    opacity: 1;
+    transform: translateX(50%) scale(1.05);
+}

@@ -64,6 +64,9 @@ export default function Drive() {
   const [storageUsed, setStorageUsed] = useState(0);
   const [storageLimit, setStorageLimit] = useState(1);
 
+  // notif text
+  const [notifText, setNotifText] = useState("");
+
   // type de vue (list/grid)
   const [viewType, setViewType] = useState('list'); // 'grid' ou 'list'
 
@@ -365,7 +368,7 @@ export default function Drive() {
         parent_folder_id: activeFolderId
       }),
     });
-    
+
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur création dossier');
@@ -982,7 +985,7 @@ export default function Drive() {
           const cleanFile = await processFile(file);
           decryptedFiles.push(cleanFile);
         }
-        
+
         console.log("Fichier déchiffré:", decryptedFiles);
         setFiles(decryptedFiles);
       }
@@ -1361,7 +1364,7 @@ export default function Drive() {
     console.log("file element:", file);
     let fileName = file.querySelector(".file_name");
     let menu = document.getElementById("contextual_menu_folder");
-    
+
     if (fileName) {
       // Hide le menu 
       menu.style.display = "none";
@@ -1544,7 +1547,37 @@ export default function Drive() {
     }
   };
 
+  const showNotification = () => {
+    const notif = document.getElementById('notification_area');
+    notif.style.display = 'fixed';
+    notif.style.top = '20px';
+    notif.style.transform = 'translateX(50%)';
+  }
+
+  const hideNotification = () => {
+    const notif = document.getElementById('notification_area');
+    notif.style.top = '-0px';
+    notif.style.transform = 'translateX(50%) translateY(-100%)';
+  }
+
   // --- EFFETS DE BORD ---
+
+  useEffect(() => {
+    if (notifText) {
+      showNotification();
+      const timer = setTimeout(() => {
+        hideNotification();
+      }, 3000); // Durée d'affichage de la notification (3 secondes)
+
+      return () => {
+        clearTimeout(timer);
+        setNotifText('');
+      }
+    }
+
+  }, [notifText]);
+
+
 
   useEffect(() => {
     if (!token) {
@@ -1573,9 +1606,9 @@ export default function Drive() {
       // Pour l'instant, on ne gère pas les fichiers spéciaux
       setFolders([]);
       setFiles([]);
-    }else {
+    } else {
       // Par défaut, on charge le dossier actif
-      if (activeFolderId === null){
+      if (activeFolderId === null) {
         getRootFolder();
         getFolderStructure(activeFolderId);
         getFileStructure(activeFolderId);
@@ -1601,12 +1634,10 @@ export default function Drive() {
 
     document.addEventListener('click', handleClickAnywhere);
 
+    setNotifText("Le téléchargement est terminé.");
     return () => {
       document.removeEventListener('click', handleClickAnywhere);
     };
-
-
-
 
 
   }, [activeFolderId, token]);
@@ -1643,6 +1674,9 @@ export default function Drive() {
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
 
       <Header TITLE="GZDRIVE" userName={userName} ></Header>
+      <div className="notification_area" id="notification_area" onClick= {() => hideNotification()}>
+        <span>{notifText}</span>
+      </div>
 
       <section>
         <div id='contextual_menu_folder' >
@@ -1855,14 +1889,14 @@ export default function Drive() {
                       key={folder.id}
                       className={`folder_graph ${selectedId === folder.folder_id ? 'selected_folder' : ''}`}
                       id={folder.folder_id}
-                      
+
                       // Data attributes conservés
                       data-folder-id={folder.id || ''}
                       data-folder-name={folder.name || ''}
                       data-folder-created-at={folder.created_at || ''}
                       data-folder-updated-at={folder.updated_at || ''}
                       data-encrypted-folder-key={folder.encrypted_folder_key || ''}
-                      
+
                       onClick={() => handleSelection(folder.folder_id)}
                       onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
                       onContextMenu={(e) => {
@@ -1957,15 +1991,15 @@ export default function Drive() {
                       id={currentId}
 
                       // Data attributes conservés
-                        // Data attributes selon le type (clean code)
-                        {...(content.type === 'folder'
+                      // Data attributes selon le type (clean code)
+                      {...(content.type === 'folder'
                         ? {
                           'data-folder-id': content.folder_id || '',
                           'data-folder-name': content.name || '',
                           'data-folder-created-at': content.created_at || '',
                           'data-folder-updated-at': content.updated_at || '',
                           'data-encrypted-folder-key': content.encrypted_folder_key || '',
-                          }
+                        }
                         : {
                           'data-file-id': content.file_id || '',
                           'data-file-name': content.name || '',
@@ -1974,11 +2008,11 @@ export default function Drive() {
                           'data-file-created-at': content.created_at || '',
                           'data-file-updated-at': content.updated_at || '',
                           'data-encrypted-file-key': content.encrypted_file_key || '',
-                          }
-                        )}
+                        }
+                      )}
 
-                        onClick={() => handleSelection(currentId)}
-                        onDoubleClick={() => {
+                      onClick={() => handleSelection(currentId)}
+                      onDoubleClick={() => {
                         if (content.type === 'file') {
                           if (content.is_chunked) {
                             handleDownloadChunked(content.file_id, content.name);
@@ -2002,7 +2036,7 @@ export default function Drive() {
                     >
                       <div className="icon_and_name">
                         <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
-                          {content.type === 'folder' 
+                          {content.type === 'folder'
                             ? <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
                             : <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
                           }
