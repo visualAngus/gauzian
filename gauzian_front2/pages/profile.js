@@ -196,33 +196,33 @@ export default function ProfilePage() {
 
                             {/* Quick Stats */}
                             <div className="stats-grid">
-                                <div className="stat-card">
+                                <div className="stat-card" onClick={() => window.location='/drive'}>
                                     <div className="stat-icon files">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                                             <polyline points="13 2 13 9 20 9" />
                                         </svg>
                                     </div>
-                                    <div className="stat-info" onClick={() => window.location='/drive'}>
+                                    <div className="stat-info">
                                         <h3>{stats.filesCount}</h3>
                                         <p>Fichiers</p>
                                     </div>
                                 </div>
 
-                                <div className="stat-card">
+                                <div className="stat-card" onClick={() => window.location='/drive'}>
                                     <div className="stat-icon folders">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                                         </svg>
                                     </div>
-                                    <div className="stat-info"> onClick={() => window.location='/drive'}
+                                    <div className="stat-info">
                                         <h3>{stats.foldersCount}</h3>
                                         <p>Dossiers</p>
                                     </div>
                                 </div>
 
-                                <div className="stat-card">
-                                    <div className="stat-icon storage" onClick={() => window.location='/drive'}>
+                                <div className="stat-card" onClick={() => window.location='/drive'}>
+                                    <div className="stat-icon storage">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                                         </svg>
