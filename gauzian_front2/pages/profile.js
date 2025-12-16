@@ -442,10 +442,10 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="breakdown-info">
                                             <p className="breakdown-label">Images</p>
-                                            <p className="breakdown-size">325 Mo</p>
+                                            <p className="breakdown-size">{stats.storageByFileType[2][2] ? formatBytes(stats.storageByFileType[2][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: '30%', background: '#10B981' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[2][2] / stats.storageTotal) * 100}%`, background: '#10B981' }}></div>
                                         </div>
                                     </div>
 
@@ -458,10 +458,10 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="breakdown-info">
                                             <p className="breakdown-label">Vidéos</p>
-                                            <p className="breakdown-size">250 Mo</p>
+                                            <p className="breakdown-size">{stats.storageByFileType[1][2] ? formatBytes(stats.storageByFileType[1][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: '25%', background: '#8B5CF6' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[1][2] / stats.storageTotal) * 100}%`, background: '#8B5CF6' }}></div>
                                         </div>
                                     </div>
 
@@ -474,10 +474,10 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="breakdown-info">
                                             <p className="breakdown-label">Autres</p>
-                                            <p className="breakdown-size">50 Mo</p>
+                                            <p className="breakdown-size">{stats.storageByFileType[0][2] ? formatBytes(stats.storageByFileType[0][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: '5%', background: '#F59E0B' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[0][2] / stats.storageTotal) * 100}%`, background: '#F59E0B' }}></div>
                                         </div>
                                     </div>
                                 </div>
