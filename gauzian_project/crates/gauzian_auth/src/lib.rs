@@ -508,19 +508,20 @@ pub async fn info_handler(
         }
     };
 
-    let storage_used = get_storage_usage_handler(user_id, &state).await.unwrap_or(0);
+    let storage_param = get_storage_usage_handler(user_id, &state).await;
+    let (storage_used, nb_folder, nb_file, storage_limit) = storage_param.unwrap_or((0, 0, 0, 0));
 
     // Fetch user info from the database
     let user_info_result = sqlx::query!(
-        "SELECT email, first_name, last_name, date_of_birth, time_zone, locale , created_at, updated_at,storage_limit
+        "SELECT email, first_name, last_name, date_of_birth, time_zone, locale , created_at, updated_at
         FROM users WHERE id = $1",
         user_id
     )
     .fetch_one(&state.db_pool)
     .await;
-
     match user_info_result {
         Ok(user) => {
+            // Déstructure storage_param une seule fois pour éviter les appels multiples à .map()
             let body = Json(json!({
                 "status": "success",
                 "user_info": {
@@ -532,8 +533,10 @@ pub async fn info_handler(
                     "locale": user.locale,
                     "createdAt": user.created_at,
                     "updatedAt": user.updated_at,
-                    "storageLimit": user.storage_limit,
-                    "storageUsed": storage_used,                    
+                    "storageLimit": storage_limit,
+                    "storageUsed": storage_used,
+                    "nbFolder": nb_folder,
+                    "nbFile": nb_file,              
                 }
             }));
             (StatusCode::OK, body).into_response()
@@ -550,12 +553,19 @@ pub async fn info_handler(
 }
 
 
-pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<i64> {
-    let storage_usage_result = sqlx::query_scalar!(
+pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<(i64, i64, i64, i32)> {
+    let storage_usage_result = sqlx::query!(
         r#"
-        SELECT COALESCE(SUM(file_size), 0)::int8 AS total_storage
-        FROM vault_files
-        WHERE owner_id = $1
+        SELECT 
+            COALESCE(SUM(vf.file_size), 0)::int8 AS total_storage, 
+            COUNT(DISTINCT fa.folder_id ) as nb_folder, 
+            COUNT(DISTINCT fa2.file_id ) as nb_file, u.storage_limit
+        FROM folder_access fa 
+        LEFT JOIN file_access fa2 ON fa2.folder_id = fa.folder_id 
+        LEFT JOIN vault_files vf ON fa2.file_id = vf.id 
+        inner join users u on u.id = fa.user_id 
+        WHERE fa.user_id = $1
+        group by u.id
         "#,
         user_id,
     )
@@ -563,9 +573,14 @@ pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Optio
     .await;
 
     match storage_usage_result {
-        Ok(total_storage) => total_storage,
+        Ok(row) => Some((
+            row.total_storage.unwrap_or(0),
+            row.nb_folder.unwrap_or(0),
+            row.nb_file.unwrap_or(0),
+            row.storage_limit,
+        )),
         Err(e) => {
-            eprintln!("Erreur récupération stockage utilisateur: {:?}", e);
+            eprintln!("Erreur SQL Récupération Usage Stockage Utilisateur: {:?}", e);
             None
         }
     }
