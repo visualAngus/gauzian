@@ -11,12 +11,7 @@ export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState('overview'); // overview, account, security, storage
 
     // Stats
-    const [stats, setStats] = useState({
-        filesCount: 0,
-        foldersCount: 0,
-        storageUsed: 0,
-        storageTotal: 5368709120 // 5 GB par défaut
-    });
+    const [stats, setStats] = useState({});
 
     useEffect(() => {
         const storageKey = localStorage.getItem('storageKey');
@@ -42,6 +37,13 @@ export default function ProfilePage() {
             if (response.ok) {
                 const data = await response.json();
                 setUserData(data.user_info);
+
+                setStats({
+                    filesCount: data.user_info.nbFiles || 0,
+                    foldersCount: data.user_info.nbFolders || 0,
+                    storageUsed: data.user_info.storageUsed || 0,
+                    storageTotal: data.user_info.storageLimit || 1073741824, // 1 Go par défaut
+                });
                 console.log("Données utilisateur récupérées :", data.user_info);
             }
         } catch (error) {
@@ -57,30 +59,6 @@ export default function ProfilePage() {
             setLoading(false);
         }
     };
-
-    const fetchStorageStats = async (storageKey) => {
-        try {
-            // TODO: Remplacer par votre endpoint réel
-            const response = await fetch('/api/storage/stats', {
-                headers: {
-                    'Authorization': `Bearer ${storageKey}`
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setStats(data);
-            }
-        } catch (error) {
-            console.error('Erreur lors de la récupération des stats:', error);
-            // Stats de démo
-            setStats({
-                filesCount: 24,
-                foldersCount: 8,
-                storageUsed: 1073741824, // 1 GB
-                storageTotal: 5368709120 // 5 GB
-            });
-        }
     };
 
     const handleLogout = () => {
