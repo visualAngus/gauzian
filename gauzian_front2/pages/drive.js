@@ -1577,7 +1577,6 @@ export default function Drive() {
 
       return () => {
         clearTimeout(timer);
-        setNotifText('');
       }
     }
 
