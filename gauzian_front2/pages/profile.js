@@ -245,30 +245,19 @@ export default function ProfilePage() {
                                 </p>
                             </div>
 
-                            {/* Quick Actions */}
+                            {/* Accès rapide aux outils */}
                             <div className="section-card">
-                                <h3>Actions rapides</h3>
-                                <div className="quick-actions">
-                                    <button className="action-btn" onClick={() => router.push('/drive')}>
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                            <polyline points="17 8 12 3 7 8"/>
-                                            <line x1="12" y1="3" x2="12" y2="15"/>
-                                        </svg>
-                                        Importer des fichiers
-                                    </button>
-                                    <button className="action-btn" onClick={() => router.push('/drive')}>
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                                        </svg>
-                                        Créer un dossier
-                                    </button>
-                                    <button className="action-btn" onClick={() => router.push('/drive')}>
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <polyline points="16 18 22 12 16 6"/>
-                                            <polyline points="8 6 2 12 8 18"/>
-                                        </svg>
-                                        Partager
+                                <h3>Accès rapide aux outils</h3>
+                                <div className="tools-grid">
+                                    <button className="tool-card" onClick={() => router.push('/drive')} title="Accéder au Drive">
+                                        <div className="tool-icon drive">
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                                <polyline points="13 2 13 9 20 9"/>
+                                            </svg>
+                                        </div>
+                                        <h4>Drive</h4>
+                                        <p>Gérez vos fichiers et dossiers</p>
                                     </button>
                                 </div>
                             </div>
@@ -841,6 +830,93 @@ export default function ProfilePage() {
 
                 .action-btn svg {
                     color: #F97316;
+                }
+
+                /* Tools Grid */
+                .tools-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                    gap: 1.5rem;
+                }
+
+                .tool-card {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 1rem;
+                    padding: 1.75rem 1.5rem;
+                    background: white;
+                    border: 2px solid #E2E8F0;
+                    border-radius: 16px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    font-family: inherit;
+                    text-align: center;
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .tool-card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: linear-gradient(135deg, rgba(249, 115, 22, 0) 0%, rgba(249, 115, 22, 0.05) 100%);
+                    opacity: 0;
+                    transition: opacity 0.3s ease;
+                    pointer-events: none;
+                }
+
+                .tool-card:hover {
+                    border-color: #F97316;
+                    transform: translateY(-4px);
+                    box-shadow: 0 8px 24px rgba(249, 115, 22, 0.15);
+                }
+
+                .tool-card:hover::before {
+                    opacity: 1;
+                }
+
+                .tool-icon {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-weight: 700;
+                    font-size: 2rem;
+                    transition: all 0.3s ease;
+                    z-index: 1;
+                }
+
+                .tool-card:hover .tool-icon {
+                    transform: scale(1.1);
+                }
+
+                .tool-icon.drive {
+                    background: linear-gradient(135deg, #F97316 0%, #FDBA74 100%);
+                }
+
+                .tool-card h4 {
+                    font-size: 1.1rem;
+                    font-weight: 700;
+                    color: #0B1120;
+                    margin: 0;
+                    z-index: 1;
+                    position: relative;
+                }
+
+                .tool-card p {
+                    font-size: 0.825rem;
+                    color: #64748B;
+                    margin: 0;
+                    line-height: 1.4;
+                    z-index: 1;
+                    position: relative;
                 }
 
                 /* Info Grid */
