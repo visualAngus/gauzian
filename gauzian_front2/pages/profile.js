@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import Gauzial from '../components/gauzial';
 import Header from '../components/header.js';
 
 
@@ -45,6 +44,7 @@ export default function ProfilePage() {
                     foldersCount: data.user_info.nbFolders || 0,
                     storageUsed: data.user_info.storageUsed || 0,
                     storageTotal: octet_limit, // 1 Go par défaut
+                    storageByFileType: data.user_info.storageByFileType || {}
                 });
                 console.log("Données utilisateur récupérées :", data.user_info);
             }
@@ -425,7 +425,7 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="breakdown-info">
                                             <p className="breakdown-label">Documents</p>
-                                            <p className="breakdown-size">425 Mo</p>
+                                            <p className="breakdown-size">{stats.storageByFileType[3][2] ? formatBytes(stats.storageByFileType[3][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
                                             <div className="breakdown-fill" style={{ width: '40%', background: '#3B82F6' }}></div>
