@@ -129,7 +129,7 @@ export default function ProfilePage() {
     return (
         <div className="profile-page">
             {/* Header avec navigation */}
-            <Header TITLE = "GZPROFILE" userName={`${userData?.firstName} ${userData?.lastName}`}></Header>
+            <Header TITLE="GZPROFILE" userName={`${userData?.firstName} ${userData?.lastName}`}></Header>
 
             <div className="content-wrapper">
                 {/* Sidebar */}
@@ -142,46 +142,46 @@ export default function ProfilePage() {
                         <p className="email">{userData?.email}</p>
                     </div>
                     <nav className="sidebar-nav">
-                        <button 
+                        <button
                             className={`sidebar-btn ${activeTab === 'overview' ? 'active' : ''}`}
                             onClick={() => setActiveTab('overview')}
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <rect x="3" y="3" width="7" height="7"/>
-                                <rect x="14" y="3" width="7" height="7"/>
-                                <rect x="14" y="14" width="7" height="7"/>
-                                <rect x="3" y="14" width="7" height="7"/>
+                                <rect x="3" y="3" width="7" height="7" />
+                                <rect x="14" y="3" width="7" height="7" />
+                                <rect x="14" y="14" width="7" height="7" />
+                                <rect x="3" y="14" width="7" height="7" />
                             </svg>
                             Vue d'ensemble
                         </button>
-                        <button 
+                        <button
                             className={`sidebar-btn ${activeTab === 'account' ? 'active' : ''}`}
                             onClick={() => setActiveTab('account')}
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                <circle cx="12" cy="7" r="4"/>
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
                             </svg>
                             Informations du compte
                         </button>
-                        <button 
+                        <button
                             className={`sidebar-btn ${activeTab === 'security' ? 'active' : ''}`}
                             onClick={() => setActiveTab('security')}
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                             </svg>
                             Sécurité
                         </button>
-                        <button 
+                        <button
                             className={`sidebar-btn ${activeTab === 'storage' ? 'active' : ''}`}
                             onClick={() => setActiveTab('storage')}
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
                             </svg>
                             Stockage
                         </button>
@@ -193,14 +193,14 @@ export default function ProfilePage() {
                     {activeTab === 'overview' && (
                         <div className="tab-content">
                             <h2 className="tab-title">Vue d'ensemble</h2>
-                            
+
                             {/* Quick Stats */}
                             <div className="stats-grid">
                                 <div className="stat-card">
                                     <div className="stat-icon files">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                                            <polyline points="13 2 13 9 20 9"/>
+                                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                            <polyline points="13 2 13 9 20 9" />
                                         </svg>
                                     </div>
                                     <div className="stat-info">
@@ -212,7 +212,7 @@ export default function ProfilePage() {
                                 <div className="stat-card">
                                     <div className="stat-icon folders">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                                         </svg>
                                     </div>
                                     <div className="stat-info">
@@ -224,7 +224,7 @@ export default function ProfilePage() {
                                 <div className="stat-card">
                                     <div className="stat-icon storage">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                                         </svg>
                                     </div>
                                     <div className="stat-info">
@@ -252,8 +252,8 @@ export default function ProfilePage() {
                                     <button className="tool-card" onClick={() => router.push('/drive')} title="Accéder au Drive">
                                         <div className="tool-icon drive">
                                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                                                <polyline points="13 2 13 9 20 9"/>
+                                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                                <polyline points="13 2 13 9 20 9" />
                                             </svg>
                                         </div>
                                         <h4>Drive</h4>
@@ -267,7 +267,7 @@ export default function ProfilePage() {
                     {activeTab === 'account' && (
                         <div className="tab-content">
                             <h2 className="tab-title">Informations du compte</h2>
-                            
+
                             <div className="section-card">
                                 <h3>Informations personnelles</h3>
                                 <div className="info-grid">
@@ -294,8 +294,8 @@ export default function ProfilePage() {
                                 </div>
                                 <button className="btn-edit">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                                     </svg>
                                     Modifier mes informations
                                 </button>
@@ -306,7 +306,7 @@ export default function ProfilePage() {
                     {activeTab === 'security' && (
                         <div className="tab-content">
                             <h2 className="tab-title">Sécurité</h2>
-                            
+
                             <div className="section-card">
                                 <h3>Mot de passe</h3>
                                 <p className="section-description">
@@ -314,8 +314,8 @@ export default function ProfilePage() {
                                 </p>
                                 <button className="btn-secondary">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                                     </svg>
                                     Changer le mot de passe
                                 </button>
@@ -324,13 +324,13 @@ export default function ProfilePage() {
                             <div className="section-card">
                                 <h3>Chiffrement de bout en bout</h3>
                                 <p className="section-description">
-                                    Tous vos fichiers sont chiffrés localement avant d'être envoyés sur nos serveurs. 
+                                    Tous vos fichiers sont chiffrés localement avant d'être envoyés sur nos serveurs.
                                     Seul vous pouvez accéder à vos données.
                                 </p>
                                 <div className="security-badge">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                                        <path d="M9 12l2 2 4-4"/>
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                        <path d="M9 12l2 2 4-4" />
                                     </svg>
                                     <span>Protection active</span>
                                 </div>
@@ -345,9 +345,9 @@ export default function ProfilePage() {
                                     <div className="session-item">
                                         <div className="session-icon">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                                                <line x1="8" y1="21" x2="16" y2="21"/>
-                                                <line x1="12" y1="17" x2="12" y2="21"/>
+                                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                                                <line x1="8" y1="21" x2="16" y2="21" />
+                                                <line x1="12" y1="17" x2="12" y2="21" />
                                             </svg>
                                         </div>
                                         <div className="session-info">
@@ -364,7 +364,7 @@ export default function ProfilePage() {
                     {activeTab === 'storage' && (
                         <div className="tab-content">
                             <h2 className="tab-title">Stockage</h2>
-                            
+
                             <div className="section-card">
                                 <h3>Utilisation du stockage</h3>
                                 <div className="storage-visual">
@@ -413,73 +413,99 @@ export default function ProfilePage() {
                             <div className="section-card">
                                 <h3>Répartition par type</h3>
                                 <div className="storage-breakdown">
-                                    <div className="breakdown-item">
-                                        <div className="breakdown-icon documents">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                                <polyline points="14 2 14 8 20 8"/>
-                                                <line x1="16" y1="13" x2="8" y2="13"/>
-                                                <line x1="16" y1="17" x2="8" y2="17"/>
-                                                <polyline points="10 9 9 9 8 9"/>
-                                            </svg>
-                                        </div>
-                                        <div className="breakdown-info">
-                                            <p className="breakdown-label">Documents</p>
-                                            <p className="breakdown-size">{stats.storageByFileType[3][2] ? formatBytes(stats.storageByFileType[3][2]) : '0 Mo'}</p>
-                                        </div>
-                                        <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[3][2] / stats.storageUsed) * 100}%`, background: '#3B82F6' }}></div>
-                                        </div>
-                                    </div>
+                                    {Array.isArray(stats.storageByFileType) && stats.storageByFileType.length > 0 ? (
+                                        (() => {
+                                            const fileTypeIcons = {
+                                                'Image': {
+                                                    color: '#10B981',
+                                                    bgColor: 'rgba(16, 185, 129, 0.1)',
+                                                    svg: (
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                                            <circle cx="8.5" cy="8.5" r="1.5" />
+                                                            <polyline points="21 15 16 10 5 21" />
+                                                        </svg>
+                                                    )
+                                                },
+                                                'Vidéo': {
+                                                    color: '#8B5CF6',
+                                                    bgColor: 'rgba(139, 92, 246, 0.1)',
+                                                    svg: (
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <polygon points="23 7 16 12 23 17 23 7" />
+                                                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                                                        </svg>
+                                                    )
+                                                },
+                                                'Document': {
+                                                    color: '#3B82F6',
+                                                    bgColor: 'rgba(59, 130, 246, 0.1)',
+                                                    svg: (
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                            <polyline points="14 2 14 8 20 8" />
+                                                            <line x1="16" y1="13" x2="8" y2="13" />
+                                                            <line x1="16" y1="17" x2="8" y2="17" />
+                                                            <polyline points="10 9 9 9 8 9" />
+                                                        </svg>
+                                                    )
+                                                },
+                                                'Autre': {
+                                                    color: '#F59E0B',
+                                                    bgColor: 'rgba(245, 158, 11, 0.1)',
+                                                    svg: (
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                                            <polyline points="13 2 13 9 20 9" />
+                                                        </svg>
+                                                    )
+                                                }
+                                            };
 
-                                    <div className="breakdown-item">
-                                        <div className="breakdown-icon images">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                                                <circle cx="8.5" cy="8.5" r="1.5"/>
-                                                <polyline points="21 15 16 10 5 21"/>
-                                            </svg>
-                                        </div>
-                                        <div className="breakdown-info">
-                                            <p className="breakdown-label">Images</p>
-                                            <p className="breakdown-size">{stats.storageByFileType[0][2] ? formatBytes(stats.storageByFileType[0][2]) : '0 Mo'}</p>
-                                        </div>
-                                        <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[0][2] / stats.storageUsed) * 100}%`, background: '#10B981' }}></div>
-                                        </div>
-                                    </div>
+                                            // Trier par taille décroissante
+                                            const sorted = [...stats.storageByFileType].sort((a, b) => (b[2] || 0) - (a[2] || 0));
 
-                                    <div className="breakdown-item">
-                                        <div className="breakdown-icon videos">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <polygon points="23 7 16 12 23 17 23 7"/>
-                                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                                            </svg>
-                                        </div>
-                                        <div className="breakdown-info">
-                                            <p className="breakdown-label">Vidéos</p>
-                                            <p className="breakdown-size">{stats.storageByFileType[2][2] ? formatBytes(stats.storageByFileType[2][2]) : '0 Mo'}</p>
-                                        </div>
-                                        <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[2][2] / stats.storageUsed) * 100}%`, background: '#8B5CF6' }}></div>
-                                        </div>
-                                    </div>
+                                            return sorted.map((item, idx) => {
+                                                const label = item[0] || 'Inconnu';
+                                                const count = item[1] || 0;
+                                                const size = item[2] || 0;
+                                                const iconData = fileTypeIcons[label] || {
+                                                    color: '#F59E0B',
+                                                    bgColor: 'rgba(245, 158, 11, 0.1)',
+                                                    svg: fileTypeIcons['Autre'].svg
+                                                };
 
-                                    <div className="breakdown-item">
-                                        <div className="breakdown-icon other">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                                                <polyline points="13 2 13 9 20 9"/>
-                                            </svg>
-                                        </div>
-                                        <div className="breakdown-info">
-                                            <p className="breakdown-label">Autres</p>
-                                            <p className="breakdown-size">{stats.storageByFileType[1][2] ? formatBytes(stats.storageByFileType[1][2]) : '0 Mo'}</p>
-                                        </div>
-                                        <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[1][2] / stats.storageUsed) * 100}%`, background: '#F59E0B' }}></div>
-                                        </div>
-                                    </div>
+                                                return (
+                                                    <div className="breakdown-item" key={idx}>
+                                                        <div
+                                                            className="breakdown-icon"
+                                                            style={{
+                                                                backgroundColor: iconData.bgColor,
+                                                                color: iconData.color
+                                                            }}
+                                                        >
+                                                            {iconData.svg}
+                                                        </div>
+                                                        <div className="breakdown-info">
+                                                            <p className="breakdown-label">{label}</p>
+                                                            <p className="breakdown-size">{size ? formatBytes(size) : '0 Mo'}</p>
+                                                        </div>
+                                                        <div className="breakdown-bar">
+                                                            <div
+                                                                className="breakdown-fill"
+                                                                style={{
+                                                                    width: `${(size / stats.storageUsed) * 100}%`,
+                                                                    background: iconData.color
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()
+                                    ) : (
+                                        <p style={{ color: '#64748B' }}>Aucune donnée disponible</p>
+                                    )}
                                 </div>
                             </div>
 
@@ -490,12 +516,12 @@ export default function ProfilePage() {
                                 </p>
                                 <button className="btn-primary">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                                        <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
-                                        <polyline points="7.5 19.79 7.5 14.6 3 12"/>
-                                        <polyline points="21 12 16.5 14.6 16.5 19.79"/>
-                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                                        <line x1="12" y1="22.08" x2="12" y2="12"/>
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                        <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+                                        <polyline points="7.5 19.79 7.5 14.6 3 12" />
+                                        <polyline points="21 12 16.5 14.6 16.5 19.79" />
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                                        <line x1="12" y1="22.08" x2="12" y2="12" />
                                     </svg>
                                     Voir les forfaits
                                 </button>
