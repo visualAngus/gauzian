@@ -41,18 +41,8 @@ export default function ProfilePage() {
 
             if (response.ok) {
                 const data = await response.json();
-                // data = {
-                // "status": "success",
-                // "user_info": {
-                //     "date_of_birth": null,
-                //     "email": "gael@pupin.fr",
-                //     "first_name": "Gael",
-                //     "last_name": "Pupin",
-                //     "locale": "en",
-                //     "time_zone": "UTC"
-                // }
-                // }
                 setUserData(data.user_info);
+                console.log("Données utilisateur récupérées :", data.user_info);
             }
         } catch (error) {
             console.error('Erreur lors de la récupération du profil:', error);
