@@ -33,7 +33,7 @@ export default function ProfilePage() {
     const fetchUserData = async (storageKey) => {
         try {
             // TODO: Remplacer par votre endpoint réel
-            const response = await fetch('/api/user/profile', {
+            const response = await fetch('/api/auth/info', {
                 headers: {
                     'Authorization': `Bearer ${storageKey}`
                 }
@@ -41,6 +41,7 @@ export default function ProfilePage() {
 
             if (response.ok) {
                 const data = await response.json();
+                console
                 setUserData(data);
             }
         } catch (error) {
