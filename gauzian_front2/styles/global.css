@@ -39,7 +39,7 @@ body {
 
 /* section principale */
 
-section{
+section {
 
     width: 100%;
     height: calc(100vh - 81px);
@@ -48,7 +48,7 @@ section{
     flex-direction: row;
 }
 
-.div_left_part{
+.div_left_part {
     height: 100%;
     width: 14.8%;
     min-width: 200px;
@@ -57,7 +57,8 @@ section{
     align-items: flex-start;
     justify-content: space-between;
 }
-.div_right_part{
+
+.div_right_part {
     height: 100%;
     width: 85.2%;
 }
@@ -108,7 +109,7 @@ nav ul li a.active {
     box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
 }
 
-.active{
+.active {
     transition: background-color 0.2s ease-in-out;
 
     background-color: var(--light-orange-color);
@@ -121,7 +122,8 @@ nav ul li a.active {
     display: flex;
     flex-direction: column;
 }
-.div_recher_filter{
+
+.div_recher_filter {
     width: 100%;
     height: 61px;
     display: flex;
@@ -130,7 +132,8 @@ nav ul li a.active {
     gap: 5rem;
 
 }
-.div_recherche{
+
+.div_recherche {
     width: 50%;
     height: 100%;
 
@@ -142,12 +145,15 @@ nav ul li a.active {
 
     gap: 10px;
 }
-#btn_upload_file:hover svg,#btn_new_folder:hover svg{
+
+#btn_upload_file:hover svg,
+#btn_new_folder:hover svg {
     transition: fill 0.2s ease-in-out;
     fill: var(--orange-color);
-    
+
 }
-.div_barre_bnt{
+
+.div_barre_bnt {
     width: 80%;
     height: 70%;
     min-height: 40px;
@@ -162,7 +168,8 @@ nav ul li a.active {
     border-radius: 30px;
     padding: 0 15px;
 }
-.div_recherche input{
+
+.div_recherche input {
     width: calc(100% - (30px + 30px));
     height: 70%;
     min-height: 40px;
@@ -172,29 +179,31 @@ nav ul li a.active {
     font-weight: 400;
 }
 
-.div_recherche input:focus{
+.div_recherche input:focus {
     outline: none;
 }
 
-.div_filtres{
+.div_filtres {
     width: 50%;
-    height: 100%;   
+    height: 100%;
 }
 
-.div_barre_bnt svg{
+.div_barre_bnt svg {
     width: 20px;
     height: 20px;
     cursor: pointer;
 }
-.div_barre_bnt svg:hover{
+
+.div_barre_bnt svg:hover {
     fill: var(--orange-color);
 }
-.div_barre_bnt svg:active{
+
+.div_barre_bnt svg:active {
     transform: scale(0.9);
 }
 
 /* div_contenue */
-.div_contenue{
+.div_contenue {
     width: 100%;
     height: calc(100vh - 142px);
 
@@ -203,7 +212,7 @@ nav ul li a.active {
     overflow-y: auto;
 }
 
-.div_path_graphique{
+.div_path_graphique {
     width: 100%;
     height: 50px;
 
@@ -214,7 +223,7 @@ nav ul li a.active {
     margin-bottom: 1rem;
 }
 
-.div_folder_path_grap{
+.div_folder_path_grap {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -222,23 +231,27 @@ nav ul li a.active {
     border-radius: 15px;
     transition: 0.1s ease;
 }
-.div_folder_path_grap:hover{
+
+.div_folder_path_grap:hover {
     cursor: pointer;
     background-color: var(--light-gray-color);
 }
-.div_folder_path_grap span{
+
+.div_folder_path_grap span {
     font-size: 1.6rem;
     font-weight: 500;
     color: var(--dark-color);
 }
-.div_folder_separator{
+
+.div_folder_separator {
     font-size: 1.2rem;
     font-weight: 500;
     color: var(--dark-gray-color);
     user-select: none;
 }
 
-.div_contenue_folder, .div_contenue_file{
+.div_contenue_folder,
+.div_contenue_file {
     width: 100%;
     height: auto;
     min-height: 60px;
@@ -250,7 +263,9 @@ nav ul li a.active {
     justify-content: flex-start;
     margin-bottom: 10px;
 }
-.folder_graph, .file_graph{
+
+.folder_graph,
+.file_graph {
     width: fit-content;
     min-width: 150px;
     height: 51px;
@@ -265,17 +280,20 @@ nav ul li a.active {
     justify-content: flex-start;
     gap: 8px;
 }
-.folder_graph svg{
+
+.folder_graph svg {
     width: 24px;
     height: 24px;
     color: var(--orange-color);
 }
-.folder_graph span{
+
+.folder_graph span {
     font-size: 1rem;
     font-weight: 500;
     color: var(--dark-color);
 }
-.folder_graph:hover{
+
+.folder_graph:hover {
     background-color: var(--light-gray-color);
 }
 
@@ -288,7 +306,7 @@ nav ul li a.active {
 }
 
 
-.div_contenue_list{
+.div_contenue_list {
     width: 100%;
     height: auto;
     display: flex;
@@ -297,7 +315,7 @@ nav ul li a.active {
     margin-bottom: 10px;
 }
 
-.content_graph_list{
+.content_graph_list {
     width: 100%;
     height: 60px;
     background-color: var(--colored-orange-gray-color);
@@ -311,44 +329,50 @@ nav ul li a.active {
     justify-content: space-between;
     gap: 50px;
 }
-.content_graph_list:hover{
+
+.content_graph_list:hover {
     background-color: var(--light-gray-color);
 }
-.content_graph_list svg{
+
+.content_graph_list svg {
     width: 24px;
     height: 24px;
     color: var(--orange-color);
 }
-.content_graph_list span{
+
+.content_graph_list span {
     font-size: 1rem;
     font-weight: 500;
     color: var(--dark-color);
 }
-.icon_and_name{
+
+.icon_and_name {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 10px;
     width: fit-content;
 }
+
 .additional_info {
     font-size: 0.8rem;
     color: var(--dark-gray-color);
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
-    align-items: center;    
+    align-items: center;
     gap: 50px;
     width: fit-content;
 }
-.additional_info span{
+
+.additional_info span {
     font-size: 0.9rem;
     font-weight: 500;
     color: var(--dark-gray-color);
     width: 85px;
 }
 
-.content_list_header{
+.content_list_header {
     width: 100%;
     height: 40px;
     background-color: var(--colored-orange-gray-color);
@@ -360,11 +384,13 @@ nav ul li a.active {
     justify-content: space-between;
     gap: 50px;
 }
-.content_list_header span{
+
+.content_list_header span {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--dark-gray-color);
 }
+
 .header_additional_info {
     display: flex;
     flex-direction: row;
@@ -373,9 +399,11 @@ nav ul li a.active {
     gap: 95px;
     width: fit-content;
 }
-.header_name{
+
+.header_name {
     margin-left: 20px;
 }
+
 /* contextual_menu_folder */
 
 #contextual_menu_folder {
@@ -391,7 +419,7 @@ nav ul li a.active {
     flex-direction: column;
 }
 
-.option_menu_contextual{
+.option_menu_contextual {
     display: flex;
     text-decoration: none;
     color: var(--dark-color);
@@ -405,11 +433,13 @@ nav ul li a.active {
     align-items: center;
     gap: 10px;
 }
+
 .option_menu_contextual:hover {
     background-color: var(--light-gray-color);
 }
 
-.editing_folder_name:focus, .editing_file_name:focus {
+.editing_folder_name:focus,
+.editing_file_name:focus {
     outline: none;
 }
 
@@ -417,7 +447,7 @@ nav ul li a.active {
     position: absolute;
     bottom: 5px;
     left: 5px;
-    
+
     min-width: 150px;
     background-color: var(--white-color);
     border-radius: 8px;
@@ -449,6 +479,7 @@ nav ul li a.active {
     background-color: var(--orange-color);
     transition: width 0.3s ease-in-out;
 }
+
 /* Storage Used Bar */
 .div_storage_used {
     width: 180px;
@@ -465,12 +496,12 @@ nav ul li a.active {
     background-color: var(--light-gray-color);
     border-radius: 6px;
     overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
 .storage_used_bar {
     height: 100%;
-    background-color: var(--emmerald-color);
+    background: linear-gradient(90deg, #F97316 0%, #FDBA74 100%);
     border-radius: 6px 0 0 6px;
     transition: width 0.3s ease-in-out;
 }
@@ -491,13 +522,13 @@ nav ul li a.active {
     background-color: var(--orange-color);
 }
 
-.div_upload_progress .div_storage_used{
+.div_upload_progress .div_storage_used {
     width: 100% !important;
 }
 
 /* Notification Area */
 
-.notification_area{
+.notification_area {
     position: fixed;
     top: 0;
     right: 50%;
@@ -509,7 +540,7 @@ nav ul li a.active {
 
     background-color: var(--emmerald-color);
     color: var(--white-color);
-    
+
     padding: 15px 25px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -522,11 +553,11 @@ nav ul li a.active {
 
 }
 
-.notification_area.error{
+.notification_area.error {
     background-color: var(--orange-color);
 }
 
-.notification_area:hover{
+.notification_area:hover {
     opacity: 1;
     transform: translateX(50%) scale(1.05);
 }
