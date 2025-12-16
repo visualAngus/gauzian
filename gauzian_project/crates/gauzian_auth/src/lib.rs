@@ -535,8 +535,8 @@ pub async fn info_handler(
                     "updatedAt": user.updated_at,
                     "storageLimit": storage_limit,
                     "storageUsed": storage_used,
-                    "nbFolder": nb_folder,
-                    "nbFile": nb_file,              
+                    "nbFolders": nb_folder,
+                    "nbFiles": nb_file,              
                 }
             }));
             (StatusCode::OK, body).into_response()
