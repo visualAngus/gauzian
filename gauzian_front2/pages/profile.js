@@ -125,7 +125,7 @@ export default function ProfilePage() {
     return (
         <div className="profile-page">
             {/* Header avec navigation */}
-            <Header TITLE = "GZPROFILE"></Header>
+            <Header TITLE = "GZPROFILE" userName={`${data.user_info.firstName} ${data.user_info.lastName}`}></Header>
 
             <div className="content-wrapper">
                 {/* Sidebar */}
@@ -137,7 +137,6 @@ export default function ProfilePage() {
                         <h2>{userData?.firstName} {userData?.lastName}</h2>
                         <p className="email">{userData?.email}</p>
                     </div>
-
                     <nav className="sidebar-nav">
                         <button 
                             className={`sidebar-btn ${activeTab === 'overview' ? 'active' : ''}`}
