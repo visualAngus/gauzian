@@ -445,7 +445,7 @@ export default function ProfilePage() {
                                             <p className="breakdown-size">{stats.storageByFileType[0][2] ? formatBytes(stats.storageByFileType[0][2]) : '0 Mo'}</p>
                                         </div>
                                         <div className="breakdown-bar">
-                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[0][2] / stats.storageTotal) * 100}%`, background: '#10B981' }}></div>
+                                            <div className="breakdown-fill" style={{ width: `${(stats.storageByFileType[0][2] / stats.storageUsed) * 100}%`, background: '#10B981' }}></div>
                                         </div>
                                     </div>
 
