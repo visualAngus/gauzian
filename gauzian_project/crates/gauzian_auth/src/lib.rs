@@ -471,6 +471,16 @@ pub async fn info_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+
+    // récupéere l'ip client
+    let client_ip = headers
+        .get("x-real-ip")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("IP Inconnue"); // Fallback si le header est absent 
+
+    println!("🔍 INFO HANDLER - IP CLIENT: {}", client_ip);
+
+
     // recuperer le cookie de session
     let session_cookie = headers
         .get(axum::http::header::COOKIE)
