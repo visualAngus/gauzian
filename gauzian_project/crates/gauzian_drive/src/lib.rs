@@ -72,21 +72,14 @@ pub async fn upload_handler(
     };
 
     // verifier que le user a encode de la place pour le fichier
-    let storage_usage = get_storage_usage_handler(user_id, &state).await;
-    if let Some(usage) = storage_usage {
-        if usage + payload.file_size as i64 > USER_STORAGE_LIMIT as i64 {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Espace de stockage insuffisant"
-            }));
-            return (StatusCode::BAD_REQUEST, body).into_response();
-        }
-    } else {
+    let storage_usage = get_storage_usage_handler(user_id, &state).await.unwrap_or((0, 0, 0, 0));
+    let used = storage_usage.0;
+    if used + payload.file_size as i64 > USER_STORAGE_LIMIT as i64 {
         let body = Json(json!({
             "status": "error",
-            "message": "Impossible de vérifier l'espace de stockage"
+            "message": "Espace de stockage insuffisant"
         }));
-        return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        return (StatusCode::BAD_REQUEST, body).into_response();
     }
 
     // requet sql pour rajouter le fichier dans la bdd associée à user_id
@@ -394,13 +387,14 @@ pub async fn folder_handler(
                     "owner": record.owner.unwrap_or_default(),
                 })
             }).collect();
-            let storage_used = get_storage_usage_handler(user_id, &state).await;
+            let storage_usage = get_storage_usage_handler(user_id, &state).await.unwrap_or((0, 0, 0, 0));
+            let used = storage_usage.0;
 
             let body = Json(json!({
                 "status": "success",
                 "folders": folders,
                 "storage_limit": USER_STORAGE_LIMIT,
-                "storage_used": storage_used,
+                "storage_used": used,
             }));
             return (StatusCode::OK, body).into_response();
         }
@@ -818,8 +812,10 @@ pub async fn open_streaming_upload_handler(
     };
 
     // verifier que le user a encode de la place pour le fichier
-    let storage_usage = get_storage_usage_handler(user_id, &state).await;
-    if let Some(usage) = storage_usage {
+    
+    let storage_usage = get_storage_usage_handler(user_id, &state).await.unwrap_or((0, 0, 0, 0));
+    let used = storage_usage.0;
+    if let Some(usage) = Some(used) {
         if usage + payload.file_size as i64 > USER_STORAGE_LIMIT as i64 {
             let body = Json(json!({
                 "status": "error",
