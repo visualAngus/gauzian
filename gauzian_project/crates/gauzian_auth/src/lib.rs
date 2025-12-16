@@ -558,8 +558,8 @@ pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Optio
         r#"
         SELECT 
             COALESCE(SUM(vf.file_size), 0)::int8 AS total_storage, 
-            COUNT(DISTINCT fa.folder_id ) as nb_folder, 
-            COUNT(DISTINCT fa2.file_id ) as nb_file, u.storage_limit
+            COUNT(DISTINCT fa.folder_id ) as nb_folders, 
+            COUNT(DISTINCT fa2.file_id ) as nb_files, u.storage_limit
         FROM folder_access fa 
         LEFT JOIN file_access fa2 ON fa2.folder_id = fa.folder_id 
         LEFT JOIN vault_files vf ON fa2.file_id = vf.id 
@@ -575,8 +575,8 @@ pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Optio
     match storage_usage_result {
         Ok(row) => Some((
             row.total_storage.unwrap_or(0),
-            row.nb_folder.unwrap_or(0),
-            row.nb_file.unwrap_or(0),
+            row.nb_folders.unwrap_or(0),
+            row.nb_files.unwrap_or(0),
             row.storage_limit,
         )),
         Err(e) => {
