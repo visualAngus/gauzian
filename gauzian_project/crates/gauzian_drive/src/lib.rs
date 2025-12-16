@@ -1259,9 +1259,34 @@ pub async fn delete_folder_handler(
 
     match delete_folder_result {
         Ok(_) => {
+
+            // supprimer les vault_files orphelins
+            let delete_orphaned_files_result = sqlx::query!(
+                r#"
+                DELETE FROM vault_files
+                WHERE owner_id = $1
+                AND id NOT IN (
+                    SELECT fa.file_id
+                    FROM file_access fa
+                    WHERE fa.user_id = $1
+                )
+                "#,
+                user_id,
+            )
+            .execute(&state.db_pool)
+            .await;
+
+            match delete_orphaned_files_result {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Erreur suppression fichiers orphelins dans la BDD: {:?}", e);
+                }
+            }
+
+
             let body = Json(json!({
                 "status": "success",
-                "message": "Dossier supprimé avec succès",
+                "message": "Dossier et fichiers orphelins supprimés avec succès",
             }));
             return (StatusCode::OK, body).into_response();
         }
