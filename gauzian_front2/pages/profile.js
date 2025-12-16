@@ -738,6 +738,7 @@ export default function ProfilePage() {
                     align-items: center;
                     gap: 1rem;
                     transition: transform 0.2s ease;
+                    cursor: pointer;
                 }
 
                 .stat-card:hover {

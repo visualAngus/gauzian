@@ -83,19 +83,29 @@ nav ul li {
 }
 
 nav ul li a {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
     text-decoration: none;
-    color: var(--dark-color);
-    transition: background-color 0.1s ease;
-    
-    padding: 8px 15px;
+    color: var(--dark-gray-color);
+    transition: all 0.2s ease;
+    padding: 0.875rem 1rem;
     width: 100%;
-    color: var(--dark-color);
-    border-radius: 20px;
+    border-radius: 12px;
+    font-family: inherit;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 nav ul li a:hover {
     background-color: var(--light-gray-color);
+    color: var(--dark-gray-color);
+    transform: translateX(4px);
+}
+
+nav ul li a.active {
+    background: linear-gradient(135deg, var(--orange-color) 0%, var(--light-orange-color) 100%);
+    color: var(--white-color);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
 }
 
 .active{
