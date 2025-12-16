@@ -19,6 +19,8 @@ use axum::http::Request;
 use axum::middleware::Next;
 use axum::response::Response;
 use gauzian_auth::{autologin_handler, login_handler, register_handler, info_handler};
+use axum::{extract::State, http::HeaderMap};
+use gauzian_core::AppState;
 use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
@@ -27,7 +29,9 @@ use gauzian_drive::{
 };
 
 // Middleware de debug pour logger l'origine et les méthodes (utile pour CORS)
-async fn log_origin(req: Request<Body>, next: Next) -> Response {
+async fn log_origin(mut req: Request<Body>, next: Next) -> Response {
+
+    // Log l'origine comme avant
     if let Some(origin) = req.headers().get("origin") {
         eprintln!(
             "➡️ Requête entrante: {} {} Origin: {:?}",
@@ -46,6 +50,14 @@ async fn log_origin(req: Request<Body>, next: Next) -> Response {
     if req.method() == Method::OPTIONS {
         eprintln!("  - Préflight OPTIONS reçu pour {}", req.uri());
     }
+
+    // Récupère l'IP client depuis le header x-real-ip (si présent)
+    let client_ip = req
+        .headers()
+        .get("x-real-ip")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("IP Inconnue");
+    println!("🔍 LOG_ORIGIN MIDDLEWARE - IP CLIENT: {}", client_ip);
 
     next.run(req).await
 }
