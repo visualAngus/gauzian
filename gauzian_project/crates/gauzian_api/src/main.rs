@@ -20,7 +20,6 @@ use axum::middleware::Next;
 use axum::response::Response;
 use gauzian_auth::{autologin_handler, login_handler, register_handler, info_handler};
 use axum::{extract::State, http::HeaderMap};
-use gauzian_core::AppState;
 use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
