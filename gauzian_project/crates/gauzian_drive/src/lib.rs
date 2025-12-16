@@ -8,7 +8,7 @@ use axum::{
 use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use futures::StreamExt; // Important pour utiliser .map() sur le stream SQLx
-use gauzian_auth::verify_session_token;
+use gauzian_auth::{verify_session_token,get_storage_usage_handler};
 use gauzian_core::{
     AppState, CancelStreamingUploadRequest, DeleteFileRequest, DeleteFolderRequest, DownloadQuery,
     DownloadRequest, FileRenameRequest, FinishStreamingUploadRequest, FolderCreationRequest,
@@ -16,7 +16,6 @@ use gauzian_core::{
     USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,
 };
 use serde_json::json;
-use uuid::Uuid;
 
 use futures::stream::Stream; // Nécessaire pour le trait object
 use std::io;
@@ -1113,26 +1112,6 @@ pub async fn download_raw_handler(
         .unwrap()
 }
 
-async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<i64> {
-    let storage_usage_result = sqlx::query_scalar!(
-        r#"
-        SELECT COALESCE(SUM(file_size), 0)::int8 AS total_storage
-        FROM vault_files
-        WHERE owner_id = $1
-        "#,
-        user_id,
-    )
-    .fetch_one(&state.db_pool)
-    .await;
-
-    match storage_usage_result {
-        Ok(total_storage) => total_storage,
-        Err(e) => {
-            eprintln!("Erreur récupération stockage utilisateur: {:?}", e);
-            None
-        }
-    }
-}
 
 pub async fn delete_file_handler(
     State(state): State<AppState>,
