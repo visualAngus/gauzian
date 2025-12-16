@@ -29,7 +29,7 @@ use gauzian_drive::{
 };
 
 // Middleware de debug pour logger l'origine et les méthodes (utile pour CORS)
-async fn log_origin(mut req: Request<Body>, next: Next) -> Response {
+async fn log_origin(req: Request<Body>, next: Next) -> Response {
 
     // Log l'origine comme avant
     if let Some(origin) = req.headers().get("origin") {
