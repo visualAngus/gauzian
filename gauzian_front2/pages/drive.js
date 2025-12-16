@@ -294,6 +294,7 @@ export default function Drive() {
 
       await writer.close();
       console.log("🎉 Téléchargement terminé avec succès.");
+      setNotifText("Le téléchargement est terminé avec succès.");
 
     } catch (error) {
       console.error("Erreur Globale:", error);
@@ -374,6 +375,7 @@ export default function Drive() {
     if (!res.ok) throw new Error(data.message || 'Erreur création dossier');
 
     console.log('Dossier créé avec succès:', data);
+    setNotifText("Dossier créé avec succès.");
     // Rafraîchir la vue du dossier courant
     getFolderStructure(activeFolderId);
     console.log(data.folder_id);
@@ -457,11 +459,14 @@ export default function Drive() {
         setUploading(true);
       } else {
         setUploading(false);
+        setNotifText("Tous les fichiers ont été uploadés avec succès.");
         nbFilesUploadedRef.current = 0;
         totalFilesToUploadRef.current = 0;
         abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
+      
       // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
+      setNotifText("Fichier uploadé avec succès.");
       setTimeout(() => {
         if (uploadFolderId && activeFolderIdRef.current === uploadFolderId) {
           getFolderStructure(uploadFolderId);
@@ -551,6 +556,7 @@ export default function Drive() {
       });
 
       if (!response.ok) throw new Error('Erreur API Upload Simple');
+      
       return true;
 
     } catch (e) {
@@ -1634,7 +1640,6 @@ export default function Drive() {
 
     document.addEventListener('click', handleClickAnywhere);
 
-    setNotifText("Le téléchargement est terminé.");
     return () => {
       document.removeEventListener('click', handleClickAnywhere);
     };
