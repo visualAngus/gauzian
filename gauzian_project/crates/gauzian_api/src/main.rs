@@ -50,14 +50,6 @@ async fn log_origin(req: Request<Body>, next: Next) -> Response {
         eprintln!("  - Préflight OPTIONS reçu pour {}", req.uri());
     }
 
-    // Récupère l'IP client depuis le header x-real-ip (si présent)
-    let client_ip = req
-        .headers()
-        .get("x-real-ip")
-        .and_then(|val| val.to_str().ok())
-        .unwrap_or("IP Inconnue");
-    println!("🔍 LOG_ORIGIN MIDDLEWARE - IP CLIENT: {}", client_ip);
-
     next.run(req).await
 }
 
