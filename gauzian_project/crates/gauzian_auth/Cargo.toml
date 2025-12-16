@@ -17,7 +17,7 @@ serde_json = "1"
 # 4. La Base de données
 # "runtime-tokio-rustls" est crucial : il permet d'utiliser Tokio pour la DB 
 # et d'embarquer la crypto (rustls) sans dépendre d'OpenSSL sur le système.
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "uuid", "time", "chrono","ipnetwork"]  }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "macros", "bigdecimal","uuid", "time", "chrono","ipnetwork"]  }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 # 5. La Sécurité & Config
@@ -45,3 +45,6 @@ woothee = "0.13.0"
 axum-client-ip = "0.6.0"
 
 jsonwebtoken = "9.2"
+
+# bigdecimal
+bigdecimal = { version = "0.3", features = ["serde"] }

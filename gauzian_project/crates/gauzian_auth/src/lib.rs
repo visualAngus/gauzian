@@ -34,6 +34,8 @@ use chrono::Utc; // Pour gérer les dates/heures de manière sûre et explicite 
 
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 
+use bigdecimal::BigDecimal;
+
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
 fn get_secret_key() -> Vec<u8> {
@@ -586,17 +588,22 @@ pub async fn get_storage_usage_handler(
 pub async fn get_storage_usage_by_file_type_handler(
     user_id: Uuid,
     state: &AppState,
-) -> Option<Vec<(String, i64, i64)>> {
+) -> Option<Vec<(String, i64, BigDecimal)>> {
     let storage_usage_result = sqlx::query!(
         r#"
-         SELECT 
-                vf.media_type ,
-                COUNT(vf.media_type ) as count,
-                SUM(vf.file_size)::int8 AS total_storage
-            FROM vault_files vf
-            inner join users u on u.id = vf.owner_id 
-            WHERE u.id= $1
-            group by vf.media_type 
+        SELECT 
+            CASE 
+                WHEN "media_type" IN ('application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain') THEN 'Document'
+                WHEN "media_type" LIKE 'image/%' THEN 'Image'
+                WHEN "media_type" LIKE 'video/%' THEN 'Vidéo'
+                ELSE 'Autre'
+            END AS "Groupe",
+            COUNT(*) AS "Nombre_de_fichiers",
+            SUM(vf.file_size ) AS "Taille_totale"
+        FROM vault_files vf
+        Where vf.owner_id = $1
+        GROUP BY "Groupe"
+        ORDER BY "Nombre_de_fichiers" DESC;
         "#,
         user_id,
     )
@@ -609,9 +616,9 @@ pub async fn get_storage_usage_by_file_type_handler(
                 .into_iter()
                 .map(|row| {
                     (
-                        row.media_type.unwrap_or_default(),
-                        row.total_storage.unwrap_or(0),
-                        row.count.unwrap_or(0)
+                        row.Groupe.unwrap_or_else(|| "Inconnu".to_string()),
+                        row.Nombre_de_fichiers.unwrap_or(0),
+                        row.Taille_totale.unwrap_or(bigdecimal::BigDecimal::from(0)),
                     )
                 })
                 .collect();
