@@ -36,11 +36,15 @@ export default function ProfilePage() {
             if (response.ok) {
                 const data = await response.json();
                 setUserData(data.user_info);
+                // data.user_info.storageLimit est en Go
+                //
+                let octet_limit = data.user_info.storageLimit || 1;
+                octet_limit = octet_limit * 1024 * 1024 * 1024; // Convertir en octets
                 setStats({
                     filesCount: data.user_info.nbFiles || 0,
                     foldersCount: data.user_info.nbFolders || 0,
                     storageUsed: data.user_info.storageUsed || 0,
-                    storageTotal: data.user_info.storageLimit || 1073741824, // 1 Go par défaut
+                    storageTotal: octet_limit, // 1 Go par défaut
                 });
                 console.log("Données utilisateur récupérées :", data.user_info);
             }
