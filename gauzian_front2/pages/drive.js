@@ -1547,11 +1547,11 @@ export default function Drive() {
   // --- EFFETS DE BORD ---
 
   useEffect(() => {
-    // if (!token) {
-    //   window.location.href = '/login';
-    // } else {
-    //   getUserInfo();
-    // }
+    if (!token) {
+      window.location.href = '/login';
+    } else {
+      getUserInfo();
+    }
   }, [token]);
 
   useEffect(() => {
