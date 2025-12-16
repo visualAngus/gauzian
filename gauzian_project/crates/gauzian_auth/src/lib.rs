@@ -508,9 +508,12 @@ pub async fn info_handler(
         }
     };
 
+    let storage_used = get_storage_usage_handler(user_id, &state).await.unwrap_or(0);
+
     // Fetch user info from the database
     let user_info_result = sqlx::query!(
-        "SELECT email, first_name, last_name, date_of_birth, time_zone, locale FROM users WHERE id = $1",
+        "SELECT email, first_name, last_name, date_of_birth, time_zone, locale , created_at, updated_at,storage_limit
+        FROM users WHERE id = $1",
         user_id
     )
     .fetch_one(&state.db_pool)
@@ -522,11 +525,15 @@ pub async fn info_handler(
                 "status": "success",
                 "user_info": {
                     "email": user.email,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
+                    "firstName": user.first_name,
+                    "lastName": user.last_name,
                     "date_of_birth": user.date_of_birth,
                     "time_zone": user.time_zone,
                     "locale": user.locale,
+                    "createdAt": user.created_at,
+                    "updatedAt": user.updated_at,
+                    "storageLimit": user.storage_limit,
+                    "storageUsed": storage_used,                    
                 }
             }));
             (StatusCode::OK, body).into_response()
@@ -538,6 +545,28 @@ pub async fn info_handler(
                 "message": "Erreur lors de la récupération des informations utilisateur"
             }));
             (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        }
+    }
+}
+
+
+pub async fn get_storage_usage_handler(user_id: Uuid, state: &AppState) -> Option<i64> {
+    let storage_usage_result = sqlx::query_scalar!(
+        r#"
+        SELECT COALESCE(SUM(file_size), 0)::int8 AS total_storage
+        FROM vault_files
+        WHERE owner_id = $1
+        "#,
+        user_id,
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match storage_usage_result {
+        Ok(total_storage) => total_storage,
+        Err(e) => {
+            eprintln!("Erreur récupération stockage utilisateur: {:?}", e);
+            None
         }
     }
 }
