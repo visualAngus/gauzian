@@ -125,7 +125,7 @@ export default function ProfilePage() {
     return (
         <div className="profile-page">
             {/* Header avec navigation */}
-            <Header TITLE = "GZPROFILE" userName={`${data.user_info.firstName} ${data.user_info.lastName}`}></Header>
+            <Header TITLE = "GZPROFILE" userName={`${userData?.firstName} ${userData?.lastName}`}></Header>
 
             <div className="content-wrapper">
                 {/* Sidebar */}
