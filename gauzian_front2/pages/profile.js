@@ -22,7 +22,6 @@ export default function ProfilePage() {
 
         // Récupérer les infos utilisateur
         fetchUserData(storageKey);
-        fetchStorageStats(storageKey);
     }, []);
 
     const fetchUserData = async (storageKey) => {
@@ -37,7 +36,6 @@ export default function ProfilePage() {
             if (response.ok) {
                 const data = await response.json();
                 setUserData(data.user_info);
-
                 setStats({
                     filesCount: data.user_info.nbFiles || 0,
                     foldersCount: data.user_info.nbFolders || 0,
@@ -59,6 +57,30 @@ export default function ProfilePage() {
             setLoading(false);
         }
     };
+
+    const fetchStorageStats = async (storageKey) => {
+        try {
+            // TODO: Remplacer par votre endpoint réel
+            const response = await fetch('/api/storage/stats', {
+                headers: {
+                    'Authorization': `Bearer ${storageKey}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setStats(data);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la récupération des stats:', error);
+            // Stats de démo
+            setStats({
+                filesCount: 24,
+                foldersCount: 8,
+                storageUsed: 1073741824, // 1 GB
+                storageTotal: 5368709120 // 5 GB
+            });
+        }
     };
 
     const handleLogout = () => {
