@@ -1587,6 +1587,7 @@ export default function Drive() {
       // regarder si il y a un dossier sous l'élément déplacer pour potentiellement deplacer le fichier dedans
 
       let elementUnder = document.elementFromPoint(e.clientX, e.clientY);
+      console.log("Element under:", elementUnder);
       if (elementUnder) {
         let folderGraph = elementUnder.closest('.folder_graph');
         document.querySelectorAll('.folder_graph').forEach((el) => {
