@@ -1701,7 +1701,10 @@ export default function Drive() {
       const timer = setTimeout(() => {
         hideNotification();
         // Réinitialiser notifText après la notification
-        setNotifText('');
+        setTimeout(() => {
+          
+          setNotifText('');
+        }, 800);
       }, 3000); // Durée d'affichage de la notification (3 secondes)
 
       return () => {
