@@ -1,11 +1,11 @@
 use std::f32::consts::E;
 
-use axum::http::header::USER_AGENT;
+use axum::http::header::{USER_AGENT, COOKIE};
 use axum::http::{HeaderMap, HeaderValue, header::ACCEPT_LANGUAGE}; // header constant + HeaderMap extractor
 use axum::{
     extract::{Json, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use axum_client_ip::InsecureClientIp;
 use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest};
@@ -39,6 +39,45 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 use bigdecimal::BigDecimal;
 use tracing::{debug, error, info};
 use sha2::{Sha256, Digest};
+
+#[derive(Debug, Clone)]
+pub struct AuthSession {
+    pub user_id: Uuid,
+    pub access_token: String,
+    pub set_cookies: Vec<HeaderValue>,
+}
+
+#[derive(Debug)]
+pub enum AuthSessionError {
+    MissingTokens,
+    InvalidAccess,
+    RefreshFailed(String),
+}
+
+impl AuthSessionError {
+    pub fn to_response(&self) -> Response {
+        let (status, message) = match self {
+            AuthSessionError::MissingTokens => (
+                StatusCode::UNAUTHORIZED,
+                "Pas de cookie de session trouvé",
+            ),
+            AuthSessionError::InvalidAccess => (
+                StatusCode::UNAUTHORIZED,
+                "Session invalide ou expirée",
+            ),
+            AuthSessionError::RefreshFailed(_) => (
+                StatusCode::UNAUTHORIZED,
+                "Session invalide ou expirée",
+            ),
+        };
+
+        let body = Json(json!({
+            "status": "error",
+            "message": message,
+        }));
+        (status, body).into_response()
+    }
+}
 
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
@@ -179,6 +218,10 @@ pub async fn logout(pool: &sqlx::PgPool, refresh_token: &str) -> Result<(), sqlx
     Ok(())
 }
 
+// fonction  
+
+
+
 // Vérifie l'Access Token JWT (inchangé)
 pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::Error> {
     let validation = Validation::default();
@@ -192,6 +235,87 @@ pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::E
         Err(_e) => Err(jsonwebtoken::errors::Error::from(
             jsonwebtoken::errors::ErrorKind::InvalidToken,
         )),
+    }
+}
+
+fn build_access_cookie(token: &str) -> Option<HeaderValue> {
+    HeaderValue::from_str(&format!(
+        "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        token,
+        5 * 60
+    ))
+    .ok()
+}
+
+fn build_refresh_cookie(token: &str) -> Option<HeaderValue> {
+    HeaderValue::from_str(&format!(
+        "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        token,
+        7 * 24 * 3600
+    ))
+    .ok()
+}
+
+fn parse_cookies(headers: &HeaderMap) -> (Option<String>, Option<String>) {
+    let mut access: Option<String> = None;
+    let mut refresh: Option<String> = None;
+
+    if let Some(raw) = headers.get(COOKIE).and_then(|h| h.to_str().ok()) {
+        for cookie in raw.split(';') {
+            let cookie = cookie.trim();
+            if cookie.starts_with("access_token=") {
+                access = Some(cookie.trim_start_matches("access_token=").to_string());
+            }
+            if cookie.starts_with("refresh_token=") {
+                refresh = Some(cookie.trim_start_matches("refresh_token=").to_string());
+            }
+        }
+    }
+
+    (access, refresh)
+}
+
+// Centralise l'authentification : renvoie l'user_id et éventuels nouveaux cookies (si refresh utilisé).
+pub async fn ensure_session(
+    headers: &HeaderMap,
+    state: &AppState,
+) -> Result<AuthSession, AuthSessionError> {
+    let (access_cookie, refresh_cookie) = parse_cookies(headers);
+
+    if let Some(token) = access_cookie {
+        if let Ok(user_id) = verify_session_token(&token) {
+            return Ok(AuthSession {
+                user_id,
+                access_token: token,
+                set_cookies: Vec::new(),
+            });
+        }
+    }
+
+    if let Some(refresh_token) = refresh_cookie {
+        match refresh_session(&state.db_pool, &refresh_token).await {
+            Ok((new_access_token, new_refresh_token)) => {
+                let user_id = verify_session_token(&new_access_token)
+                    .map_err(|_| AuthSessionError::InvalidAccess)?;
+
+                let mut set_cookies = Vec::new();
+                if let Some(cookie) = build_access_cookie(&new_access_token) {
+                    set_cookies.push(cookie);
+                }
+                if let Some(cookie) = build_refresh_cookie(&new_refresh_token) {
+                    set_cookies.push(cookie);
+                }
+
+                Ok(AuthSession {
+                    user_id,
+                    access_token: new_access_token,
+                    set_cookies,
+                })
+            }
+            Err(e) => Err(AuthSessionError::RefreshFailed(e)),
+        }
+    } else {
+        Err(AuthSessionError::MissingTokens)
     }
 }
 
