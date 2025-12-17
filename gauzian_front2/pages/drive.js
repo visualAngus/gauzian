@@ -19,6 +19,37 @@ const bufToB64 = (buf) => {
   for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
+
+  // Déplacer un fichier vers un dossier cible
+  const moveFileToFolder = async (fileId, targetFolderId) => {
+    try {
+      const res = await fetch('/api/drive/move_file', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file_id: fileId, target_folder_id: targetFolderId }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        // Retirer le fichier de la vue courante (optimiste)
+        setFiles(prev => prev.filter(f => f.file_id !== fileId));
+        setNotifText('Fichier déplacé avec succès.');
+        // Optionnel: recharger pour rester à jour
+        if (activeFolderId) {
+          getFileStructure(activeFolderId);
+          getFolderStructure(activeFolderId);
+        }
+      } else {
+        console.error('Erreur déplacement fichier :', data.message);
+        setNotifText("Erreur lors du déplacement du fichier.");
+      }
+    } catch (err) {
+      console.error('Erreur réseau déplacement fichier :', err);
+      setNotifText("Erreur réseau lors du déplacement.");
+    }
+  };
   return window.btoa(binary);
 };
 
@@ -1579,25 +1610,37 @@ export default function Drive() {
     let height = element.offsetHeight;
     let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
     let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
+    let hoveredFolderEl = null;
+    let hoveredFolderOutlineBackup = '';
+    let dropTargetFolderId = null;
 
-
+    const getFolderElUnderPoint = (clientX, clientY) => {
+      const node = document.elementFromPoint(clientX, clientY);
+      if (!node) return null;
+      // Grid: .folder_graph, List: .content_graph_list portant data-folder-id
+      const folderEl = node.closest('.folder_graph, .content_graph_list');
+      if (!folderEl) return null;
+      const fid = folderEl.getAttribute('data-folder-id');
+      return fid ? folderEl : null;
+    };
 
     const onMouseMove = (e) => {
 
-      // regarder si il y a un dossier sous l'élément déplacer pour potentiellement deplacer le fichier dedans
-
-      let elementUnder = document.elementFromPoint(e.clientX, e.clientY);
-      console.log("Element under:", elementUnder);
-      if (elementUnder) {
-        let folderGraph = elementUnder.closest('.folder_graph');
-        document.querySelectorAll('.folder_graph').forEach((el) => {
-          el.classList.remove('highlighted_folder');
-        });
-        if (folderGraph) {
-          folderGraph.classList.add('highlighted_folder');
+      // regarder si il y a un .folder_graph sous l'élément déplacer pour potentiellement deplacer le fichier dedans
+      const folderEl = getFolderElUnderPoint(e.clientX, e.clientY);
+      if (folderEl !== hoveredFolderEl) {
+        // retirer l'ancien highlight
+        if (hoveredFolderEl) hoveredFolderEl.style.outline = hoveredFolderOutlineBackup;
+        hoveredFolderEl = folderEl;
+        dropTargetFolderId = hoveredFolderEl ? hoveredFolderEl.getAttribute('data-folder-id') : null;
+        // appliquer le highlight
+        if (hoveredFolderEl) {
+          hoveredFolderOutlineBackup = hoveredFolderEl.style.outline;
+          hoveredFolderEl.style.outline = '2px dashed #4c9aff';
+        } else {
+          hoveredFolderOutlineBackup = '';
         }
       }
-
 
       element.style.width = width + 'px';
       element.style.height = height + 'px';
@@ -1609,9 +1652,27 @@ export default function Drive() {
 
     document.addEventListener('mouseup', () => {
       document.removeEventListener('mousemove', onMouseMove);
+      // enlever le highlight si présent
+      if (hoveredFolderEl) hoveredFolderEl.style.outline = hoveredFolderOutlineBackup;
+
+      // déterminer si l'élément déplacé est un fichier et s'il y a un dossier cible
+      const isFile = !!element.getAttribute('data-file-id');
+      const fileId = element.getAttribute('data-file-id');
+      const targetFolderId = dropTargetFolderId;
+
+      if (isFile && targetFolderId && fileId) {
+        // Éviter de déplacer dans le même dossier (si connu)
+        const currentParentId = activeFolderId;
+        if (!currentParentId || currentParentId !== targetFolderId) {
+          moveFileToFolder(fileId, targetFolderId);
+        }
+      }
+
       element.style.position = '';
       element.style.left = '';
       element.style.top = '';
+      element.style.width = '';
+      element.style.height = '';
       setSelectedMoveElement(null);
     }, { once: true });
 
@@ -1996,6 +2057,7 @@ export default function Drive() {
                       data-file-updated-at={file.updated_at || ''}
                       data-encrypted-file-key={file.encrypted_file_key || ''}
 
+                      onMouseDown={() => setSelectedMoveElement(file.file_id)}
                       onClick={() => handleSelection(file.file_id)}
                       onContextMenu={(e) => {
                         e.preventDefault();
