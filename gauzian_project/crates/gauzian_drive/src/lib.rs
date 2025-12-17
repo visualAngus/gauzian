@@ -1070,7 +1070,7 @@ pub async fn move_file_to_folder_handler(
         SET folder_id = $1
         WHERE file_id = $2 AND user_id = $3
         "#,
-        payload.new_folder_id,
+        payload.target_folder_id,
         payload.file_id,
         user_id,
     )
