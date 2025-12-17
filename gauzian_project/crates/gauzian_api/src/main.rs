@@ -121,8 +121,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/register", post(register_handler))
         .route("/auth/login", post(login_handler))
         .route("/auth/autologin", post(autologin_handler))
-        .route("/api/auth/refresh", post(refresh_handler))
-        .route("/api/auth/logout", post(logout_handler))
+        .route("/auth/refresh", post(refresh_handler))
+        .route("/auth/logout", post(logout_handler))
         .route("/auth/info", get(info_handler))
         .route("/drive/upload", post(upload_handler))
         .route("/drive/download", get(download_handler))
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/delete_folder", post(delete_folder_handler))
         .route("/drive/rename_file", post(rename_file_handler))
         .route("/drive/cancel_streaming_upload", post(cancel_streaming_upload_handler))
-        .route("/api/drive/move_file", post(move_file_to_folder_handler)) // À implémenter plus tard
+        .route("/drive/move_file", post(move_file_to_folder_handler)) // À implémenter plus tard
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(
