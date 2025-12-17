@@ -641,8 +641,8 @@ pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> 
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
