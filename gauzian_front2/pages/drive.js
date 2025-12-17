@@ -1608,8 +1608,8 @@ export default function Drive() {
       element.style.textOverflow = 'ellipsis';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
-      element.style.left = (e.pageX - diff_souris_corner_element_x) + 'px';
-      element.style.top = (e.pageY - diff_souris_corner_element_y) + 'px';
+      element.style.left = (e.pageX - 100) + 'px';
+      element.style.top = (e.pageY - 20) + 'px';
     };
     document.addEventListener('mousemove', onMouseMove);
 
