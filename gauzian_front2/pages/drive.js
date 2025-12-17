@@ -1662,7 +1662,7 @@ export default function Drive() {
       element.style.whiteSpace = '';
       element.style.textOverflow = '';
 
-      document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
+      document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover').forEach((el) => {
         el.classList.remove('folder_dragover');
       });
       setSelectedMoveElement(null);
@@ -2003,7 +2003,7 @@ export default function Drive() {
                       id={folder.folder_id}
 
                       // Data attributes conservés
-                      data-folder-id={folder.id || ''}
+                      data-folder-id={folder.folder_id || ''}
                       data-folder-name={folder.name || ''}
                       data-folder-created-at={folder.created_at || ''}
                       data-folder-updated-at={folder.updated_at || ''}
