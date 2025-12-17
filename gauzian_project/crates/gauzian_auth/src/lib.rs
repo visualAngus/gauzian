@@ -38,6 +38,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 
 use bigdecimal::BigDecimal;
 use tracing::{debug, error, info};
+use sha2::{Sha256, Digest};
 
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
@@ -47,18 +48,32 @@ fn get_secret_key() -> Vec<u8> {
         .expect("Échec du décodage de JWT_SECRET_KEY depuis Base64")
 }
 
-pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error> {
+// Génère un refresh token aléatoire sécurisé
+pub fn generate_refresh_token() -> String {
+    let mut random_bytes = [0u8; 32];
+    getrandom::getrandom(&mut random_bytes)
+        .expect("Erreur lors de la génération de nombres aléatoires");
+    hex::encode(random_bytes)
+}
+
+// Hash le refresh token pour le stocker en BDD
+fn hash_refresh_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+// Crée un Access Token JWT de courte durée (5 minutes)
+pub fn create_access_token(user_id: &Uuid) -> Result<String, jsonwebtoken::errors::Error> {
     let now = Utc::now();
-    // Calcul de la date d'expiration : Maintenant + 7 jours
-    let expire = now + ChronoDuration::days(7);
+    let expire = now + ChronoDuration::minutes(5);
 
     let claims = Claims {
-        sub: user_id.to_owned(),
+        sub: user_id.to_string(),
         exp: expire.timestamp() as usize,
         iat: now.timestamp() as usize,
     };
 
-    // Encodage du token avec l'algorithme HS256 par défaut
     let secret_key = get_secret_key();
     encode(
         &Header::default(),
@@ -67,35 +82,111 @@ pub fn create_token(user_id: &str) -> Result<String, jsonwebtoken::errors::Error
     )
 }
 
-pub fn validate_and_refresh_token(token: &str) -> Result<String, jsonwebtoken::errors::Error> {
-    // 1. Validation du token existant
-    let validation = Validation::default();
-    let secret_key = get_secret_key();
+// Sauvegarde le refresh token en BDD
+async fn save_refresh_token(
+    pool: &sqlx::PgPool,
+    user_id: &Uuid,
+    token: &str,
+) -> Result<(), sqlx::Error> {
+    let token_hash = hash_refresh_token(token);
+    let expires_at = Utc::now() + ChronoDuration::days(7);
 
-    // Si le token est expiré ou que la signature est fausse, decode renverra une erreur
-    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(&secret_key), &validation)?;
+    sqlx::query!(
+        r#"
+        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3)
+        "#,
+        user_id,
+        token_hash,
+        expires_at
+    )
+    .execute(pool)
+    .await?;
 
-    // 2. Si on est ici, le token est valide.
-    // On récupère l'ID utilisateur (sub) du token décodé
-    let user_id = token_data.claims.sub;
-
-    // 3. On crée un NOUVEAU token pour cet utilisateur (ce qui remet le compteur à 7 jours)
-    create_token(&user_id)
+    Ok(())
 }
 
+// Vérifie et rafraîchit la session (Rolling Refresh Token)
+pub async fn refresh_session(
+    pool: &sqlx::PgPool,
+    old_refresh_token: &str,
+) -> Result<(String, String), String> {
+    let token_hash = hash_refresh_token(old_refresh_token);
+
+    // 1. Chercher le token en BDD avec vérification d'expiration
+    let db_token = sqlx::query!(
+        r#"
+        SELECT user_id, expires_at
+        FROM refresh_tokens
+        WHERE token_hash = $1
+        "#,
+        token_hash
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Erreur BDD: {}", e))?;
+
+    // 2. Vérifications de sécurité
+    let token_data = db_token.ok_or("Token invalide ou révoqué")?;
+
+    if token_data.expires_at < Utc::now() {
+        // Nettoyer le token expiré
+        let _ = sqlx::query!(
+            "DELETE FROM refresh_tokens WHERE token_hash = $1",
+            token_hash
+        )
+        .execute(pool)
+        .await;
+
+        return Err("Token expiré, veuillez vous reconnecter".to_string());
+    }
+
+    let user_id = token_data.user_id;
+
+    // 3. Rotation : suppression de l'ancien token
+    sqlx::query!(
+        "DELETE FROM refresh_tokens WHERE token_hash = $1",
+        token_hash
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Erreur lors de la suppression: {}", e))?;
+
+    // 4. Génération de la nouvelle paire
+    let new_access_token = create_access_token(&user_id)
+        .map_err(|e| format!("Erreur création access token: {}", e))?;
+    let new_refresh_token = generate_refresh_token();
+
+    // 5. Sauvegarde du nouveau refresh token
+    save_refresh_token(pool, &user_id, &new_refresh_token)
+        .await
+        .map_err(|e| format!("Erreur sauvegarde refresh token: {}", e))?;
+
+    Ok((new_access_token, new_refresh_token))
+}
+
+// Révoque le refresh token (logout)
+pub async fn logout(pool: &sqlx::PgPool, refresh_token: &str) -> Result<(), sqlx::Error> {
+    let token_hash = hash_refresh_token(refresh_token);
+
+    sqlx::query!(
+        "DELETE FROM refresh_tokens WHERE token_hash = $1",
+        token_hash
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+// Vérifie l'Access Token JWT (inchangé)
 pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::Error> {
-    // 1. Validation du token existant
     let validation = Validation::default();
     let secret_key = get_secret_key();
 
-    // Si le token est expiré ou que la signature est fausse, decode renverra une erreur
     let token_data = decode::<Claims>(token, &DecodingKey::from_secret(&secret_key), &validation)?;
-
-    // 2. Si on est ici, le token est valide.
-    // On récupère l'ID utilisateur (sub) du token décodé
     let user_id = token_data.claims.sub;
 
-    // Convertir le String en Uuid avant de retourner
     match Uuid::parse_str(&user_id) {
         Ok(uuid) => Ok(uuid),
         Err(_e) => Err(jsonwebtoken::errors::Error::from(
@@ -309,7 +400,6 @@ pub async fn login_handler(
     let email = payload.email.clone();
     let password = payload.password.clone();
 
-    // recupérer l'utilisateur dans la base de données
     let user_result = sqlx::query!(
         "SELECT id, password_hash, salt_auth FROM users WHERE email = $1",
         email
@@ -330,13 +420,10 @@ pub async fn login_handler(
 
     debug!(user_id = %user.id, "user found for login");
 
-    // Cloner le mot de passe hashé pour le déplacer dans le bloc async
     let password_hash_clone = user.password_hash.clone();
-
-    // Convertir le mot de passe hashé en String pour éviter les problèmes de durée de vie
     let password_hash_str = match String::from_utf8(password_hash_clone) {
         Ok(s) => s,
-            Err(e) => {
+        Err(e) => {
             error!(error = ?e, "Erreur lors de la conversion du hash de mot de passe en String");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
@@ -360,22 +447,25 @@ pub async fn login_handler(
         }
     };
 
-    // Création du token de session
-    let token_raw = match create_token(&user.id.to_string()) {
+    // Création de l'Access Token (JWT - 5 minutes)
+    let access_token = match create_access_token(&user.id) {
         Ok(t) => t,
         Err(e) => {
-            error!(error = %e, "session token creation failed");
+            error!(error = %e, "access token creation failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
 
-    // Stockage du token dans la base de données avec expiration
-    let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
-        .ok()
-        .and_then(|val| val.parse::<i64>().ok())
-        .unwrap_or(7); // Default to 7 days if parsing fails
+    // Création du Refresh Token (Opaque - 7 jours)
+    let refresh_token = generate_refresh_token();
 
-    // recupérer le storage_key_encrypted et le salt_e2e pour la reponse
+    // Sauvegarde du refresh token en BDD
+    if let Err(e) = save_refresh_token(&state.db_pool, &user.id, &refresh_token).await {
+        error!(error = ?e, "refresh token save failed");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
+    }
+
+    // Récupérer les clés de l'utilisateur
     let user_keys_result = sqlx::query!(
         "SELECT salt_e2e, storage_key_encrypted FROM users WHERE id = $1",
         user.id
@@ -390,14 +480,23 @@ pub async fn login_handler(
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
+
     let salt_e2e = keys.salt_e2e.clone();
     let salt_auth = user.salt_auth.clone();
     let storage_key_encrypted = keys.storage_key_encrypted.clone();
 
-    let set_cookie_header = format!(
-        "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
-        token_raw,
-        days * 24 * 3600
+    // Cookie HttpOnly pour l'Access Token (court)
+    let access_cookie = format!(
+        "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        access_token,
+        5 * 60 // 5 minutes
+    );
+
+    // Cookie HttpOnly pour le Refresh Token (long)
+    let refresh_cookie = format!(
+        "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        refresh_token,
+        7 * 24 * 3600 // 7 jours
     );
 
     let body = Json(json!({
@@ -410,57 +509,128 @@ pub async fn login_handler(
 
     (
         StatusCode::OK,
-        [(axum::http::header::SET_COOKIE, set_cookie_header.as_str())],
+        [
+            (axum::http::header::SET_COOKIE, access_cookie.as_str()),
+            (axum::http::header::SET_COOKIE, refresh_cookie.as_str()),
+        ],
         body,
     )
         .into_response()
 }
 
-pub async fn autologin_handler(headers: HeaderMap) -> impl IntoResponse {
-    // recuperer le cookie de session
-    let session_cookie = headers
+// Nouveau handler pour le refresh
+pub async fn refresh_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // Récupérer le refresh token depuis les cookies
+    let refresh_token = headers
         .get(axum::http::header::COOKIE)
         .and_then(|h| h.to_str().ok())
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
         });
-    let session_token = match session_cookie {
+
+    let refresh_token = match refresh_token {
         Some(token) => token,
         None => {
             let body = Json(json!({
                 "status": "error",
-                "message": "Pas de cookie de session trouvé"
+                "message": "Refresh token manquant"
             }));
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
 
-    // The DB stores the hashed token (SHA256 base64). We must hash the
-    // raw token from the cookie the same way before querying.
+    // Rafraîchir la session
+    match refresh_session(&state.db_pool, &refresh_token).await {
+        Ok((new_access_token, new_refresh_token)) => {
+            // Nouveaux cookies
+            let access_cookie = format!(
+                "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_access_token,
+                5 * 60
+            );
 
-    match validate_and_refresh_token(&session_token) {
-        Ok(user_id) => {
+            let refresh_cookie = format!(
+                "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_refresh_token,
+                7 * 24 * 3600
+            );
+
             let body = Json(json!({
                 "status": "success",
-                "message": "Auto-login réussi",
-                "user_id": user_id,
+                "message": "Session rafraîchie avec succès"
             }));
-            return (StatusCode::OK, body).into_response();
+
+            (
+                StatusCode::OK,
+                [
+                    (axum::http::header::SET_COOKIE, access_cookie.as_str()),
+                    (axum::http::header::SET_COOKIE, refresh_cookie.as_str()),
+                ],
+                body,
+            )
+                .into_response()
         }
-        Err(_) => {
+        Err(e) => {
             let body = Json(json!({
                 "status": "error",
-                "message": "Session invalide ou expirée"
+                "message": e
             }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
+            (StatusCode::UNAUTHORIZED, body).into_response()
         }
     }
+}
+
+// Handler de logout
+pub async fn logout_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let refresh_token = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
+                }
+            }
+            None
+        });
+
+    if let Some(token) = refresh_token {
+        if let Err(e) = logout(&state.db_pool, &token).await {
+            error!(error = ?e, "logout failed");
+        }
+    }
+
+    // Supprimer les cookies
+    let clear_access = "access_token=; Max-Age=0; Path=/; HttpOnly; SameSite=None; Secure; Partitioned";
+    let clear_refresh = "refresh_token=; Max-Age=0; Path=/; HttpOnly; SameSite=None; Secure; Partitioned";
+
+    let body = Json(json!({
+        "status": "success",
+        "message": "Déconnexion réussie"
+    }));
+
+    (
+        StatusCode::OK,
+        [
+            (axum::http::header::SET_COOKIE, clear_access),
+            (axum::http::header::SET_COOKIE, clear_refresh),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
@@ -625,6 +795,113 @@ pub async fn get_storage_usage_by_file_type_handler(
         Err(e) => {
             error!(error = ?e, "fetch storage usage by type failed");
             None
+        }
+    }
+}
+
+
+pub async fn autologin_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // Récupérer le refresh token depuis les cookies
+    let refresh_token = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
+                }
+            }
+            None
+        });
+
+    let refresh_token = match refresh_token {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Non authentifié"
+            }));
+            return (StatusCode::UNAUTHORIZED, body).into_response();
+        }
+    };
+
+    // Vérifier le refresh token et générer une nouvelle paire
+    match refresh_session(&state.db_pool, &refresh_token).await {
+        Ok((new_access_token, new_refresh_token)) => {
+            // Récupérer l'user_id depuis le nouveau access token
+            let user_id = match verify_session_token(&new_access_token) {
+                Ok(id) => id,
+                Err(_) => {
+                    let body = Json(json!({
+                        "status": "error",
+                        "message": "Erreur lors de la vérification du token"
+                    }));
+                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                }
+            };
+
+            // Récupérer les informations de l'utilisateur
+            let user_result = sqlx::query!(
+                "SELECT salt_e2e, storage_key_encrypted, salt_auth FROM users WHERE id = $1",
+                user_id
+            )
+            .fetch_one(&state.db_pool)
+            .await;
+
+            let user = match user_result {
+                Ok(u) => u,
+                Err(e) => {
+                    error!(error = ?e, "fetch user failed in autologin");
+                    let body = Json(json!({
+                        "status": "error",
+                        "message": "Erreur interne"
+                    }));
+                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                }
+            };
+
+            // Nouveaux cookies
+            let access_cookie = format!(
+                "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_access_token,
+                5 * 60
+            );
+
+            let refresh_cookie = format!(
+                "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_refresh_token,
+                7 * 24 * 3600
+            );
+
+            let body = Json(json!({
+                "status": "success",
+                "message": "Connexion automatique réussie",
+                "salt_auth": String::from_utf8(user.salt_auth).unwrap_or_default(),
+                "salt_e2e": String::from_utf8(user.salt_e2e).unwrap_or_default(),
+                "storage_key_encrypted": String::from_utf8(user.storage_key_encrypted).unwrap_or_default(),
+            }));
+
+            (
+                StatusCode::OK,
+                [
+                    (axum::http::header::SET_COOKIE, access_cookie.as_str()),
+                    (axum::http::header::SET_COOKIE, refresh_cookie.as_str()),
+                ],
+                body,
+            )
+                .into_response()
+        }
+        Err(e) => {
+            debug!("autologin failed: {}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session expirée, veuillez vous reconnecter"
+            }));
+            (StatusCode::UNAUTHORIZED, body).into_response()
         }
     }
 }
