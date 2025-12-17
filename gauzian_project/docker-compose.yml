@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # --- Base de données ---
+  # --- Service 1 : La Base de Données (Inchangé) ---
   db:
     image: postgres:15-alpine
     container_name: gauzian_db
@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- API Rust ---
+  # --- Service 2 : Ton API Rust (Inchangé) ---
   api:
     build:
       context: .
@@ -33,15 +33,15 @@ services:
     environment:
       - RUST_LOG=debug
       - DATABASE_URL=postgres://gauzian_user:gauzian_password@db:5432/gauzian_db
-      - PORT=3000
+      - PORT=3000 
     depends_on:
       db:
         condition: service_healthy
 
-  # --- Frontend Next.js ---
+  # --- Service 3 : Ton Frontend Next.js (CORRIGÉ) ---
   nextjs:
     build:
-      context: ../gauzian_front2
+      context: ../gauzian_front2 
       dockerfile: Dockerfile
     container_name: gauzian_nextjs
     environment:
@@ -58,7 +58,7 @@ services:
     depends_on:
       - api
 
-  # --- Reverse Proxy Caddy ---
+  # --- Service 4 : Caddy (Reverse Proxy) ---
   caddy:
     build:
       context: .
@@ -75,37 +75,19 @@ services:
       - api
       - nextjs
 
-  # ===============================
-  # ======= LOGGING STACK =========
-  # ===============================
-
-  loki:
-    image: grafana/loki:2.9.2
-    container_name: gauzian_loki
-    command: -config.file=/etc/loki/local-config.yaml
+  # --- Service 5 : Portainer ---
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    ports:
+      - "9000:9000"
     volumes:
-      - ./loki:/etc/loki
-    restart: unless-stopped
-
-  promtail:
-    image: grafana/promtail:2.9.2
-    container_name: gauzian_promtail
-    volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./promtail:/etc/promtail
-    command: -config.file=/etc/promtail/config.yml
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:10.2.2
-    container_name: gauzian_grafana
-    volumes:
-      - grafana_data:/var/lib/grafana
+      - portainer_data:/data
     restart: unless-stopped
 
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
-  grafana_data:
+  portainer_data:
