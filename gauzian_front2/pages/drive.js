@@ -1635,11 +1635,18 @@ export default function Drive() {
         folder_id = null;
       }
 
-      element.style.width = '200px';
-      element.style.minWidth = '200px';
-      element.style.overflow = 'hidden';
-      element.style.whiteSpace = 'nowrap';
-      element.style.textOverflow = 'ellipsis';
+      // si on est en mode list 
+      if (viewType === 'list') {
+        element.style.width = '200px';
+        element.style.minWidth = '200px';
+        element.style.overflow = 'hidden';
+        element.style.whiteSpace = 'nowrap';
+        element.style.textOverflow = 'ellipsis';
+      }
+
+      element.style.zIndex = 1000;
+      element.style.cursor = 'grabbing';
+      element.style.width = width + 'px';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
       element.style.left = (e.pageX - 100) + 'px';
