@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, use } from 'react';
 import _sodium from 'libsodium-wrappers';
 import Header from '../components/header.js';
 
@@ -69,6 +69,8 @@ export default function Drive() {
 
   // type de vue (list/grid)
   const [viewType, setViewType] = useState('list'); // 'grid' ou 'list'
+
+  const[selectedMoveElement, setSelectedMoveElement] = useState(null);
 
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
@@ -1566,30 +1568,32 @@ export default function Drive() {
     notif.style.transform = 'translateX(50%) translateY(-100%)';
   }
 
-  const moveElementMouseDown = (content, id, e) => {
-    e.preventDefault();
-    const element = document.getElementById(id);
-    let shiftX = e.clientX - element.getBoundingClientRect().left;
-    let shiftY = e.clientY - element.getBoundingClientRect().top;
-
-    const moveAt = (pageX, pageY) => {
-      element.style.left = pageX - shiftX + 'px';
-      element.style.top = pageY - shiftY + 'px';
-    }
-
+  const moveElementMouseDown = () => {
+    console.log("Déplacement de l'élément :", selectedMoveElement);
+    // mettre un listener sur la souris pour bouger l'élément qui est dans SelectedMoveElement
+    let element_id = selectedMoveElement;
+    let element = document.getElementById(element_id);
+    if (!element) return;
+    
     const onMouseMove = (e) => {
-      moveAt(e.pageX, e.pageY);
-    }
-
+      element.style.left = e.pageX + 'px';
+      element.style.top = e.pageY + 'px';
+    };
     document.addEventListener('mousemove', onMouseMove);
 
-    element.onmouseup = () => {
+    document.addEventListener('mouseup', () => {
       document.removeEventListener('mousemove', onMouseMove);
-      element.onmouseup = null;
-    }
-  };
+      setSelectedMoveElement(null);
+    }, { once: true });
 
+  };
   // --- EFFETS DE BORD ---
+
+  useEffect(() => {
+    if (selectedMoveElement) {
+      moveElementMouseDown();
+    }
+  }, [selectedMoveElement]);
 
   useEffect(() => {
     if (notifText) {
@@ -2037,7 +2041,7 @@ export default function Drive() {
                       )}
 
                       // clique de souris down
-                      onMouseDown={(e) => moveElementMouseDown(content, currentId, e)}
+                      onMouseDown={() => setSelectedMoveElement(currentId)}
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
