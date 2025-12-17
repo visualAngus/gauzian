@@ -82,8 +82,6 @@ services:
   loki:
     image: grafana/loki:2.9.2
     container_name: gauzian_loki
-    ports:
-      - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
     volumes:
       - ./loki:/etc/loki
@@ -102,8 +100,6 @@ services:
   grafana:
     image: grafana/grafana:10.2.2
     container_name: gauzian_grafana
-    ports:
-      - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     restart: unless-stopped
