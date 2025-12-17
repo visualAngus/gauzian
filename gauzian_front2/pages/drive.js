@@ -1584,10 +1584,9 @@ export default function Drive() {
 
     const onMouseMove = (e) => {
 
-      // regarder si il y a un dossier sous l'élément déplacer pour potentiellement deplacer le fichier dedans
-
-      let elementUnder = document.elementFromPoint(e.clientX, e.clientY);
-
+      // récupérer la liste de tous les éléments sous la souris
+       let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
+       console.log("Éléments sous la souris :", elementsStack);
 
       element.style.width = width + 'px';
       element.style.height = height + 'px';
