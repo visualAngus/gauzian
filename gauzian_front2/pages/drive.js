@@ -1609,7 +1609,7 @@ export default function Drive() {
       element.style.height = height + 'px';
       element.style.position = 'absolute';
       element.style.left = (e.pageX - 100) + 'px';
-      element.style.top = (e.pageY - 20) + 'px';
+      element.style.top = (e.pageY - diff_souris_corner_element_y) + 'px';
     };
     document.addEventListener('mousemove', onMouseMove);
 
