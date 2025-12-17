@@ -1587,10 +1587,10 @@ export default function Drive() {
       // récupérer la liste de tous les éléments sous la souris
       let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
       // console.log("Éléments sous la souris :", elementsStack);
-
-      if (elementsStack.find(el => el.classList && el.classList.contains('folder_graph'))) {
+      
+      if (elementsStack.find(el => el.classList && el.classList.contains('folder_list'))) {
         console.log("Sur la zone des dossiers");
-        folder_id = elementsStack.find(el => el.classList && el.classList.contains('folder_graph'))?.id;
+        folder_id = elementsStack.find(el => el.classList && el.classList.contains('folder_list'))?.id;
       }else {
         folder_id = null;
       }
