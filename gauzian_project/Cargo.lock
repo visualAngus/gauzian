@@ -1131,9 +1131,13 @@ dependencies = [
  "gauzian_auth",
  "gauzian_core",
  "gauzian_drive",
+ "ipnetwork 0.19.0",
  "sqlx",
  "tokio",
  "tower-http",
+ "tracing",
+ "tracing-error",
+ "tracing-subscriber",
  "woothee 0.7.3",
 ]
 
@@ -1150,7 +1154,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "gauzian_core",
- "ipnetwork",
+ "ipnetwork 0.20.0",
  "jsonwebtoken",
  "rand 0.8.5",
  "serde",
@@ -1159,6 +1163,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tower-http",
+ "tracing",
  "uuid",
  "woothee 0.13.0",
 ]
@@ -1194,6 +1199,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -1656,6 +1662,15 @@ checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
 
 [[package]]
 name = "ipnetwork"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f84f1612606f3753f205a4e9a2efd6fe5b4c573a6269b2cc6c3003d44a0d127"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ipnetwork"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf466541e9d546596ee94f9f69590f89473455f88372423e0008fc1a7daf100e"
@@ -1825,6 +1840,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 
 [[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1922,6 +1946,15 @@ name = "nonempty"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
+
+[[package]]
+name = "nu-ansi-term"
+version = "0.50.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+dependencies = [
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "num-bigint"
@@ -2301,7 +2334,7 @@ dependencies = [
  "aho-corasick 0.6.10",
  "memchr",
  "regex-syntax 0.5.6",
- "thread_local",
+ "thread_local 0.3.6",
  "utf8-ranges",
 ]
 
@@ -2677,6 +2710,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sharded-slab"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
+dependencies = [
+ "lazy_static 1.5.0",
+]
+
+[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2817,7 +2859,7 @@ dependencies = [
  "hashlink",
  "hex",
  "indexmap",
- "ipnetwork",
+ "ipnetwork 0.20.0",
  "log",
  "memchr",
  "once_cell",
@@ -2948,7 +2990,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "home",
- "ipnetwork",
+ "ipnetwork 0.20.0",
  "itoa",
  "log",
  "md-5",
@@ -3153,6 +3195,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6b53e329000edc2b34dbe8545fd20e55a333362d0a321909685a19bd28c3f1b"
 dependencies = [
  "lazy_static 1.5.0",
+]
+
+[[package]]
+name = "thread_local"
+version = "1.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -3387,6 +3438,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a04e24fab5c89c6a36eb8558c9656f30d81de51dfa4d3b45f26b21d61fa0a6c"
 dependencies = [
  "once_cell",
+ "valuable",
+]
+
+[[package]]
+name = "tracing-error"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b1581020d7a273442f5b45074a6a57d5757ad0a47dac0e9f0bd57b81936f3db"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
+dependencies = [
+ "log",
+ "once_cell",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
+dependencies = [
+ "matchers",
+ "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
+ "sharded-slab",
+ "smallvec",
+ "thread_local 1.1.9",
+ "time",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
 ]
 
 [[package]]
@@ -3515,6 +3607,12 @@ dependencies = [
  "serde",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "valuable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "vcpkg"

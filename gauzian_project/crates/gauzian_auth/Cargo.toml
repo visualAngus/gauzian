@@ -48,3 +48,6 @@ jsonwebtoken = "9.2"
 
 # bigdecimal
 bigdecimal = { version = "0.3", features = ["serde"] }
+
+# Observability
+tracing = "0.1"

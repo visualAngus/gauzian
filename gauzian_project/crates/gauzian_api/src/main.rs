@@ -1,4 +1,3 @@
-use axum::extract::path;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::HeaderValue;
 use axum::{
@@ -19,7 +18,6 @@ use axum::http::Request;
 use axum::middleware::Next;
 use axum::response::Response;
 use gauzian_auth::{autologin_handler, login_handler, register_handler, info_handler};
-use axum::{extract::State, http::HeaderMap};
 use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
@@ -27,19 +25,32 @@ use gauzian_drive::{
     delete_folder_handler,rename_file_handler,cancel_streaming_upload_handler
 };
 
+use tracing_subscriber::{fmt, EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_error::ErrorLayer;
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info")); // override avec RUST_LOG
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().with_target(true).with_thread_ids(false))
+        .with(ErrorLayer::default())
+        .init();
+}
+
 // Middleware de debug pour logger l'origine et les méthodes (utile pour CORS)
 async fn log_origin(req: Request<Body>, next: Next) -> Response {
 
     // Log l'origine comme avant
     if let Some(origin) = req.headers().get("origin") {
-        eprintln!(
+        tracing::info!(
             "➡️ Requête entrante: {} {} Origin: {:?}",
             req.method(),
             req.uri(),
             origin
         );
     } else {
-        eprintln!(
+        tracing::info!(
             "➡️ Requête entrante: {} {} (no Origin)",
             req.method(),
             req.uri()
@@ -47,7 +58,7 @@ async fn log_origin(req: Request<Body>, next: Next) -> Response {
     }
     // Log si c'est une préflight OPTIONS
     if req.method() == Method::OPTIONS {
-        eprintln!("  - Préflight OPTIONS reçu pour {}", req.uri());
+        tracing::info!("  - Préflight OPTIONS reçu pour {}", req.uri());
     }
 
     next.run(req).await
@@ -55,22 +66,26 @@ async fn log_origin(req: Request<Body>, next: Next) -> Response {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    init_tracing();
+
+    tracing::info!("starting Gauzian API");
+
     // 1. Chargement de la configuration
     match dotenvy::dotenv() {
-        Ok(path) => println!("✅ .env chargé depuis : {:?}", path),
-        Err(e) => println!("⚠️ Impossible de charger .env : {:?}", e),
+        Ok(path) => tracing::info!("✅ .env chargé depuis : {:?}", path),
+        Err(e) => tracing::warn!("⚠️ Impossible de charger .env : {:?}", e),
     }
 
     // 2. Connexion Base de Données
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
 
-    println!("⏳ Connexion à la base de données...");
+    tracing::info!("⏳ Connexion à la base de données...");
     let pool = PgPoolOptions::new()
         .max_connections(50)
         .connect(&database_url)
         .await?;
-    println!("✅ Connexion DB réussie !");
+    tracing::info!("✅ Connecté à la base de données");
 
     // 3. Création de l'état partagé (défini dans gauzian_core)
     let state = AppState { db_pool: pool };
@@ -85,13 +100,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter_map(|s| match HeaderValue::from_str(s) {
             Ok(h) => Some(h),
             Err(e) => {
-                eprintln!("⚠️ FRONT_ORIGINS: valeur invalide '{}': {}", s, e);
+                tracing::warn!("⚠️ FRONT_ORIGINS: valeur invalide '{}': {}", s, e);
                 None
             }
         })
         .collect();
 
-    println!("CORS origin(s) autorisée(s) : {:?}", origin_values);
+    tracing::info!("CORS origin(s) autorisée(s) : {:?}", origin_values);
 
     let origin_list = origin_values.clone();
 
@@ -130,7 +145,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Lancement du Serveur
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    println!("🚀 GAUZIAN Cloud lancé sur http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     // On active ConnectInfo pour pouvoir récupérer l'IP dans le login_handler
@@ -140,5 +154,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
+    tracing::info!(addr = %addr, "listening");
     Ok(())
 }
