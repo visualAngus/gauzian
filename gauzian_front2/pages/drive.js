@@ -464,7 +464,7 @@ export default function Drive() {
         totalFilesToUploadRef.current = 0;
         abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
-      
+
       // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
       setNotifText("Fichier uploadé avec succès.");
       setTimeout(() => {
@@ -556,7 +556,7 @@ export default function Drive() {
       });
 
       if (!response.ok) throw new Error('Erreur API Upload Simple');
-      
+
       return true;
 
     } catch (e) {
@@ -1566,6 +1566,29 @@ export default function Drive() {
     notif.style.transform = 'translateX(50%) translateY(-100%)';
   }
 
+  const moveElementMouseDown = (content, id, e) => {
+    e.preventDefault();
+    const element = document.getElementById(id);
+    let shiftX = e.clientX - element.getBoundingClientRect().left;
+    let shiftY = e.clientY - element.getBoundingClientRect().top;
+
+    const moveAt = (pageX, pageY) => {
+      element.style.left = pageX - shiftX + 'px';
+      element.style.top = pageY - shiftY + 'px';
+    }
+
+    const onMouseMove = (e) => {
+      moveAt(e.pageX, e.pageY);
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+
+    element.onmouseup = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      element.onmouseup = null;
+    }
+  };
+
   // --- EFFETS DE BORD ---
 
   useEffect(() => {
@@ -1581,8 +1604,6 @@ export default function Drive() {
     }
 
   }, [notifText]);
-
-
 
   useEffect(() => {
     if (!token) {
@@ -1678,7 +1699,7 @@ export default function Drive() {
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
 
       <Header TITLE="GZDRIVE" userName={userName} ></Header>
-      <div className="notification_area" id="notification_area" onClick= {() => hideNotification()}>
+      <div className="notification_area" id="notification_area" onClick={() => hideNotification()}>
         <span>{notifText}</span>
       </div>
 
@@ -2014,6 +2035,9 @@ export default function Drive() {
                           'data-encrypted-file-key': content.encrypted_file_key || '',
                         }
                       )}
+
+                      // clique de souris down
+                      onMouseDown={(e) => moveElementMouseDown(content, currentId, e)}
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
