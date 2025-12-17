@@ -13,7 +13,7 @@ use gauzian_core::{
     AppState, CancelStreamingUploadRequest, DeleteFileRequest, DeleteFolderRequest, DownloadQuery,
     DownloadRequest, FileRenameRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
-    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,
+    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,MoveFileToFolderRequest,
 };
 use serde_json::json;
 
@@ -1046,6 +1046,50 @@ pub async fn cancel_streaming_upload_handler(
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression des chunks de l'upload streaming"
+            }));
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
+        }
+    }
+}
+
+pub async fn move_file_to_folder_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<MoveFileToFolderRequest>,
+) -> impl IntoResponse {
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
+
+    let update_file_folder_result = sqlx::query!(
+        r#"
+        UPDATE file_access
+        SET folder_id = $1
+        WHERE file_id = $2 AND user_id = $3
+        "#,
+        payload.new_folder_id,
+        payload.file_id,
+        user_id,
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match update_file_folder_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Fichier déplacé avec succès",
+            }));
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
+        }
+        Err(e) => {
+            error!(error = ?e, "move file to folder failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors du déplacement du fichier"
             }));
             return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
