@@ -50,3 +50,20 @@ gauzian.pupin.fr {
         }
     }
 }
+logs.gauzian.pupin.fr {
+
+    basicauth {
+        gael JDJhJDE0JHNhbHQuLi4=   # hash à générer
+    }
+
+    reverse_proxy grafana:3000
+}
+
+stats.gauzian.pupin.fr {
+
+    basicauth {
+        gael JDJhJDE0JHNhbHQuLi4=
+    }
+
+    reverse_proxy 172.17.0.1:19999
+}
