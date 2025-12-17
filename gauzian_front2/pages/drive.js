@@ -1636,8 +1636,8 @@ export default function Drive() {
       }
 
       // si on est en mode list 
-      console.log(viewType);
       if (viewType == 'list') {
+        console.log(viewType);
         element.style.width = '200px';
         element.style.minWidth = '200px';
         element.style.overflow = 'hidden';
