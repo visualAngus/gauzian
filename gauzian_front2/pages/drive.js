@@ -1645,9 +1645,7 @@ export default function Drive() {
 
     document.addEventListener('mouseup', () => {
       if (folder_id) {
-        if (element.getAttribute("data-type") === "file") {
-          move_file_to_folder(element_id, folder_id);
-        }
+        move_file_to_folder(element_id, folder_id);
       }
       document.removeEventListener('mousemove', onMouseMove);
       element.style.position = '';
@@ -2122,7 +2120,12 @@ export default function Drive() {
                       )}
 
                       // clique de souris down
-                      onMouseDown={() => setSelectedMoveElement(currentId)}
+                      onMouseDown={() => {
+                        if (content.type === 'file'){
+
+                          setSelectedMoveElement(currentId);
+                        }
+                      }}
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
