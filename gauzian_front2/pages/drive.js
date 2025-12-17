@@ -1577,6 +1577,7 @@ export default function Drive() {
     
     const onMouseMove = (e) => {
       console.log("Mouse move:", e.pageX, e.pageY);
+      element.style.position = 'absolute';
       element.style.left = e.pageX + 'px';
       element.style.top = e.pageY + 'px';
     };
