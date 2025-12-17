@@ -2035,7 +2035,7 @@ export default function Drive() {
                   return (
                     <div
                       key={content.id}
-                      className={`content_graph_list ${selectionClass}`}
+                      className={`content_graph_list ${selectionClass} ${content.type === 'folder' ? 'folder_list' : 'file_list'}`}
                       id={currentId}
 
                       // Data attributes conservés
