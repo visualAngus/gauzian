@@ -1658,10 +1658,10 @@ export default function Drive() {
 
     document.addEventListener('mouseup', () => {
       if (folder_id) {
+        element.style.display = 'none';
         move_file_to_folder(element_id, folder_id);
       }
       document.removeEventListener('mousemove', onMouseMove);
-      element.style.display = 'none';
       element.style.position = '';
       element.style.left = '';
       element.style.top = '';
