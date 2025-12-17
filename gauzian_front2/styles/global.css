@@ -562,7 +562,8 @@ nav ul li a.active {
     transform: translateX(50%) scale(1.05);
 }
 
-.highlighted_folder {
-    background-color: red !important;
+.folder_dragover {
+    background-color: var(--light-orange-color) !important;
     box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
+    border: 2px dashed var(--orange-color);
 }
