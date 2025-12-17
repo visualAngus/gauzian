@@ -1643,11 +1643,11 @@ export default function Drive() {
         element.style.overflow = 'hidden';
         element.style.whiteSpace = 'nowrap';
         element.style.textOverflow = 'ellipsis';
+      }else {
+        element.style.width = width + 'px';
       }
-
       element.style.zIndex = 1000;
       element.style.cursor = 'grabbing';
-      element.style.width = width + 'px';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
       element.style.left = (e.pageX - 100) + 'px';
