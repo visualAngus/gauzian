@@ -22,7 +22,8 @@ use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
     folder_handler, full_path_handler, open_streaming_upload_handler, rename_folder_handler,
     upload_handler, upload_streaming_handler,download_raw_handler,delete_file_handler,
-    delete_folder_handler,rename_file_handler,cancel_streaming_upload_handler
+    delete_folder_handler,rename_file_handler,cancel_streaming_upload_handler,
+    move_file_to_folder_handler,
 };
 
 use tracing_subscriber::{fmt, EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
@@ -138,6 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/delete_folder", post(delete_folder_handler))
         .route("/drive/rename_file", post(rename_file_handler))
         .route("/drive/cancel_streaming_upload", post(cancel_streaming_upload_handler))
+        .route("/api/drive/move_file", post(move_file_to_folder_handler)) // À implémenter plus tard
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(
