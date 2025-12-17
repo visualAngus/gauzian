@@ -19,37 +19,6 @@ const bufToB64 = (buf) => {
   for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-
-  // Déplacer un fichier vers un dossier cible
-  const moveFileToFolder = async (fileId, targetFolderId) => {
-    try {
-      const res = await fetch('/api/drive/move_file', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ file_id: fileId, target_folder_id: targetFolderId }),
-      });
-      const data = await res.json();
-      if (data.status === 'success') {
-        // Retirer le fichier de la vue courante (optimiste)
-        setFiles(prev => prev.filter(f => f.file_id !== fileId));
-        setNotifText('Fichier déplacé avec succès.');
-        // Optionnel: recharger pour rester à jour
-        if (activeFolderId) {
-          getFileStructure(activeFolderId);
-          getFolderStructure(activeFolderId);
-        }
-      } else {
-        console.error('Erreur déplacement fichier :', data.message);
-        setNotifText("Erreur lors du déplacement du fichier.");
-      }
-    } catch (err) {
-      console.error('Erreur réseau déplacement fichier :', err);
-      setNotifText("Erreur réseau lors du déplacement.");
-    }
-  };
   return window.btoa(binary);
 };
 
@@ -1599,36 +1568,6 @@ export default function Drive() {
     notif.style.transform = 'translateX(50%) translateY(-100%)';
   }
 
-  const moveFileToFolder = async (fileId, targetFolderId) => {
-    console.log(`Déplacer le fichier ${fileId} vers le dossier ${targetFolderId}`);
-    fetch('/api/drive/move_file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        file_id: fileId,
-        target_folder_id: targetFolderId
-      }),
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          console.log("Fichier déplacé avec succès.");
-          // Mettre à jour l'état des fichiers
-          setFiles(prevFiles => prevFiles.filter(f => f.file_id !== fileId));
-          // Rafraîchir la vue du dossier courant
-          setTimeout(() => {
-            getFolderStructure(activeFolderId);
-            getFileStructure(activeFolderId);
-          }, 500);
-        } else {
-          console.error("Erreur déplacement fichier :", data.message);
-        }
-      })
-      .catch(error => {
-        console.error("Erreur lors de la requête de déplacement :", error);
-      });
-  };
-
   const moveElementMouseDown = (e) => {
     console.log("Déplacement de l'élément :", selectedMoveElement);
     // mettre un listener sur la souris pour bouger l'élément qui est dans SelectedMoveElement
@@ -1640,43 +1579,19 @@ export default function Drive() {
     let height = element.offsetHeight;
     let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
     let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
-    let hoveredFolderEl = null;
-    let hoveredFolderOutlineBackup = '';
-    let dropTargetFolderId = null;
 
-    const getFolderElUnderPoint = (clientX, clientY) => {
-      const node = document.elementFromPoint(clientX, clientY);
-      if (!node) return null;
-      // Cherche le plus proche élément qui porte un data-folder-id (grille ou liste)
-      const folderEl = node.closest('[data-folder-id]');
-      if (!folderEl) return null;
-      const fid = folderEl.getAttribute('data-folder-id');
-      return fid ? folderEl : null;
-    };
+
 
     const onMouseMove = (e) => {
 
-      // regarder si il y a un .folder_graph sous l'élément déplacer pour potentiellement deplacer le fichier dedans
-      const folderEl = getFolderElUnderPoint(e.clientX, e.clientY);
-      if (folderEl !== hoveredFolderEl) {
-        // retirer l'ancien highlight
-        if (hoveredFolderEl) hoveredFolderEl.style.outline = hoveredFolderOutlineBackup;
-        hoveredFolderEl = folderEl;
-        dropTargetFolderId = hoveredFolderEl ? hoveredFolderEl.getAttribute('data-folder-id') : null;
-        // appliquer le highlight
-        if (hoveredFolderEl) {
-          hoveredFolderOutlineBackup = hoveredFolderEl.style.outline;
-          hoveredFolderEl.style.outline = '2px dashed #4c9aff';
-        } else {
-          hoveredFolderOutlineBackup = '';
-        }
-      }
+      // regarder si il y a un dossier sous l'élément déplacer pour potentiellement deplacer le fichier dedans
+
+      let elementUnder = document.elementFromPoint(e.clientX, e.clientY);
+
 
       element.style.width = width + 'px';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
-      element.style.zIndex = '1000';
-      element.style.pointerEvents = 'none';
       element.style.left = (e.pageX - diff_souris_corner_element_x) + 'px';
       element.style.top = (e.pageY - diff_souris_corner_element_y) + 'px';
     };
@@ -1684,29 +1599,9 @@ export default function Drive() {
 
     document.addEventListener('mouseup', () => {
       document.removeEventListener('mousemove', onMouseMove);
-      // enlever le highlight si présent
-      if (hoveredFolderEl) hoveredFolderEl.style.outline = hoveredFolderOutlineBackup;
-
-      // déterminer si l'élément déplacé est un fichier et s'il y a un dossier cible
-      const isFile = !!element.getAttribute('data-file-id');
-      const fileId = element.getAttribute('data-file-id');
-      const targetFolderId = dropTargetFolderId;
-
-      if (isFile && targetFolderId && fileId) {
-        // Éviter de déplacer dans le même dossier (si connu)
-        const currentParentId = activeFolderId;
-        if (!currentParentId || currentParentId !== targetFolderId) {
-          moveFileToFolder(fileId, targetFolderId);
-        }
-      }
-
       element.style.position = '';
       element.style.left = '';
       element.style.top = '';
-      element.style.width = '';
-      element.style.height = '';
-      element.style.zIndex = '';
-      element.style.pointerEvents = '';
       setSelectedMoveElement(null);
     }, { once: true });
 
@@ -2045,7 +1940,7 @@ export default function Drive() {
                       id={folder.folder_id}
 
                       // Data attributes conservés
-                      data-folder-id={folder.folder_id || folder.id || ''}
+                      data-folder-id={folder.id || ''}
                       data-folder-name={folder.name || ''}
                       data-folder-created-at={folder.created_at || ''}
                       data-folder-updated-at={folder.updated_at || ''}
@@ -2091,7 +1986,6 @@ export default function Drive() {
                       data-file-updated-at={file.updated_at || ''}
                       data-encrypted-file-key={file.encrypted_file_key || ''}
 
-                      onMouseDown={(e) => { setSelectedMoveElement(file.file_id); moveElementMouseDown(e); }}
                       onClick={() => handleSelection(file.file_id)}
                       onContextMenu={(e) => {
                         e.preventDefault();
@@ -2167,7 +2061,7 @@ export default function Drive() {
                       )}
 
                       // clique de souris down
-                      onMouseDown={(e) => { if (content.type === 'file') { setSelectedMoveElement(currentId); moveElementMouseDown(e); } }}
+                      onMouseDown={() => setSelectedMoveElement(currentId)}
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
