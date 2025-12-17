@@ -1564,9 +1564,13 @@ export default function Drive() {
 
   const hideNotification = () => {
     const notif = document.getElementById('notification_area');
-    notif.style.top = '-0px';
-    notif.style.transform = 'translateX(50%) translateY(-100%)';
-  }
+    if (notif) {
+        notif.style.top = '-0px';
+        notif.style.transform = 'translateX(50%) translateY(-100%)';
+    } else {
+        console.warn('Notification area not found');
+    }
+}
 
   const move_file_to_folder = async (fileId, folderId) => {
     console.log("Déplacer le fichier", fileId, "vers le dossier", folderId);
