@@ -1661,6 +1661,7 @@ export default function Drive() {
         move_file_to_folder(element_id, folder_id);
       }
       document.removeEventListener('mousemove', onMouseMove);
+      element.style.display = '';
       element.style.position = '';
       element.style.left = '';
       element.style.top = '';
