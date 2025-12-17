@@ -70,7 +70,7 @@ export default function Drive() {
   // type de vue (list/grid)
   const [viewType, setViewType] = useState('list'); // 'grid' ou 'list'
 
-  const[selectedMoveElement, setSelectedMoveElement] = useState(null);
+  const [selectedMoveElement, setSelectedMoveElement] = useState(null);
 
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
@@ -1574,19 +1574,25 @@ export default function Drive() {
     let element_id = selectedMoveElement;
     let element = document.getElementById(element_id);
     if (!element) return;
-    
+
     let width = element.offsetWidth;
     let height = element.offsetHeight;
     let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
     let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
 
-
+    let folder_id = null;
 
     const onMouseMove = (e) => {
 
       // récupérer la liste de tous les éléments sous la souris
-       let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
-       console.log("Éléments sous la souris :", elementsStack);
+      let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
+      console.log("Éléments sous la souris :", elementsStack);
+
+      if (elementsStack.includes(document.getElementById('folder_list'))) {
+        folder_id = elementsStack.find(el => el.classList && el.classList.contains('folder_graph'))?.id;
+      }else {
+        folder_id = null;
+      }
 
       element.style.width = width + 'px';
       element.style.height = height + 'px';
@@ -1597,6 +1603,10 @@ export default function Drive() {
     document.addEventListener('mousemove', onMouseMove);
 
     document.addEventListener('mouseup', () => {
+      if (folder_id) {
+        console.log("Déposé sur le dossier :", folder_id);
+        // appeler l'API pour déplacer l'élément
+      }
       document.removeEventListener('mousemove', onMouseMove);
       element.style.position = '';
       element.style.left = '';
