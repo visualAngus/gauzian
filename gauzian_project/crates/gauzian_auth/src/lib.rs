@@ -1,7 +1,7 @@
 use std::f32::consts::E;
 
 use axum::http::header::USER_AGENT;
-use axum::http::{HeaderMap, header::ACCEPT_LANGUAGE}; // header constant + HeaderMap extractor
+use axum::http::{HeaderMap, HeaderValue, header::ACCEPT_LANGUAGE}; // header constant + HeaderMap extractor
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -507,15 +507,19 @@ pub async fn login_handler(
         "storage_key_encrypted": String::from_utf8(storage_key_encrypted).unwrap_or_default(),
     }));
 
-    (
-        StatusCode::OK,
-        [
-            (axum::http::header::SET_COOKIE, access_cookie.as_str()),
-            (axum::http::header::SET_COOKIE, refresh_cookie.as_str()),
-        ],
-        body,
-    )
-        .into_response()
+    // Important: append both cookies (access + refresh). Using manual response avoids HeaderMap::extend overwriting.
+    let mut response = (StatusCode::OK, body).into_response();
+    if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, val);
+    }
+    if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, val);
+    }
+    response
 }
 
 // Nouveau handler pour le refresh
@@ -568,16 +572,18 @@ pub async fn refresh_handler(
                 "status": "success",
                 "message": "Session rafraîchie avec succès"
             }));
-
-            (
-                StatusCode::OK,
-                [
-                    (axum::http::header::SET_COOKIE, access_cookie.as_str()),
-                    (axum::http::header::SET_COOKIE, refresh_cookie.as_str()),
-                ],
-                body,
-            )
-                .into_response()
+            let mut response = (StatusCode::OK, body).into_response();
+            if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            response
         }
         Err(e) => {
             let body = Json(json!({
@@ -622,15 +628,15 @@ pub async fn logout_handler(
         "message": "Déconnexion réussie"
     }));
 
-    (
-        StatusCode::OK,
-        [
-            (axum::http::header::SET_COOKIE, clear_access),
-            (axum::http::header::SET_COOKIE, clear_refresh),
-        ],
-        body,
-    )
-        .into_response()
+    let mut response = (StatusCode::OK, body).into_response();
+    response
+        .headers_mut()
+        .append(axum::http::header::SET_COOKIE, HeaderValue::from_static(clear_access));
+    response
+        .headers_mut()
+        .append(axum::http::header::SET_COOKIE, HeaderValue::from_static(clear_refresh));
+
+    response
 }
 
 pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
@@ -884,16 +890,18 @@ pub async fn autologin_handler(
                 "salt_e2e": String::from_utf8(user.salt_e2e).unwrap_or_default(),
                 "storage_key_encrypted": String::from_utf8(user.storage_key_encrypted).unwrap_or_default(),
             }));
-
-            (
-                StatusCode::OK,
-                [
-                    (axum::http::header::SET_COOKIE, access_cookie.as_str()),
-                    (axum::http::header::SET_COOKIE, refresh_cookie.as_str()),
-                ],
-                body,
-            )
-                .into_response()
+            let mut response = (StatusCode::OK, body).into_response();
+            if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            response
         }
         Err(e) => {
             debug!("autologin failed: {}", e);
