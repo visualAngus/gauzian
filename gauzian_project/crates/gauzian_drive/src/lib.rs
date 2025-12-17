@@ -2,13 +2,13 @@ use async_stream::try_stream;
 use axum::{
     body::Body,
     extract::{Json, Query, State}, // Utiliser Query pour l'entrée, Json pour la sortie
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use futures::StreamExt; // Important pour utiliser .map() sur le stream SQLx
-use gauzian_auth::{verify_session_token,get_storage_usage_handler};
+use gauzian_auth::{ensure_session, get_storage_usage_handler, AuthSession};
 use gauzian_core::{
     AppState, CancelStreamingUploadRequest, DeleteFileRequest, DeleteFolderRequest, DownloadQuery,
     DownloadRequest, FileRenameRequest, FinishStreamingUploadRequest, FolderCreationRequest,
@@ -22,55 +22,43 @@ use std::io;
 use std::pin::Pin;
 use tracing::error;
 
+fn respond_with_cookies<T: IntoResponse>(resp: T, cookies: &[HeaderValue]) -> Response {
+    let mut response = resp.into_response();
+    for cookie in cookies {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, cookie.clone());
+    }
+    response
+}
+
+async fn require_auth(headers: &HeaderMap, state: &AppState) -> Result<AuthSession, Response> {
+    match ensure_session(headers, state).await {
+        Ok(ctx) => Ok(ctx),
+        Err(err) => Err(err.to_response()),
+    }
+}
+
 pub async fn upload_handler(
     State(state): State<AppState>,
     headers: HeaderMap,                 // <--- D'ABORD les headers
     Json(payload): Json<UploadRequest>, // <--- ENSUITE le Body (Json) à la toute fin
 ) -> impl IntoResponse {
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
+
     if payload.encrypted_blob.is_empty()
         || payload.encrypted_metadata.is_empty()
         || payload.encrypted_file_key.is_empty()
         || payload.media_type.is_empty()
         || payload.file_size == 0
     {
-        return StatusCode::BAD_REQUEST.into_response();
+        return respond_with_cookies(StatusCode::BAD_REQUEST, &cookies);
     }
-
-    // ... le reste de ta logique cookie reste identique ...
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
 
     // verifier que le user a encode de la place pour le fichier
     let storage_usage = get_storage_usage_handler(user_id, &state).await.unwrap_or((0, 0, 0, 0));
@@ -80,7 +68,7 @@ pub async fn upload_handler(
             "status": "error",
             "message": "Espace de stockage insuffisant"
         }));
-        return (StatusCode::BAD_REQUEST, body).into_response();
+        return respond_with_cookies((StatusCode::BAD_REQUEST, body), &cookies);
     }
 
     // requet sql pour rajouter le fichier dans la bdd associée à user_id
@@ -116,7 +104,7 @@ pub async fn upload_handler(
                         "status": "success",
                         "file_id": record.id,
                     }));
-                    return (StatusCode::OK, body).into_response();
+                    return respond_with_cookies((StatusCode::OK, body), &cookies);
                 }
                 Err(e) => {
                     error!(error = ?e, "file_access insert failed");
@@ -124,7 +112,7 @@ pub async fn upload_handler(
                         "status": "error",
                         "message": "Erreur serveur lors de l'insertion de l'accès au fichier"
                     }));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                    return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
                 }
             }
         }
@@ -134,7 +122,7 @@ pub async fn upload_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de l'insertion du fichier"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     }
 }
@@ -145,41 +133,12 @@ pub async fn download_handler(
     headers: HeaderMap,
     Query(payload): Query<DownloadRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     // requet sql pour récupérer le fichier dans la bdd associée à user_id et payload.file_id
     let vault_file_query_result = sqlx::query!(
@@ -206,7 +165,7 @@ pub async fn download_handler(
                 "media_type": record.media_type,
                 "file_size": record.file_size,
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "vault_file fetch failed");
@@ -214,7 +173,7 @@ pub async fn download_handler(
                 "status": "error",
                 "message": "Fichier non trouvé ou accès refusé"
             }));
-            return (StatusCode::NOT_FOUND, body).into_response();
+            return respond_with_cookies((StatusCode::NOT_FOUND, body), &cookies);
         }
     };
 }
@@ -224,41 +183,12 @@ pub async fn folder_handler(
     headers: HeaderMap,
     Query(payload): Query<FolderRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let parent_folder_id = payload.parent_folder_id;
     let folder_query_result = if let Some(parent_id) = parent_folder_id {
@@ -397,7 +327,7 @@ pub async fn folder_handler(
                 "storage_limit": USER_STORAGE_LIMIT,
                 "storage_used": used,
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "folders fetch failed");
@@ -405,7 +335,7 @@ pub async fn folder_handler(
                 "status": "error",
                 "message": "Dossier non trouvé ou accès refusé"
             }));
-            return (StatusCode::NOT_FOUND, body).into_response();
+            return respond_with_cookies((StatusCode::NOT_FOUND, body), &cookies);
         }
     };
 }
@@ -415,41 +345,12 @@ pub async fn files_handler(
     headers: HeaderMap,
     Query(payload): Query<FolderRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let parent_folder_id = payload.parent_folder_id;
 
@@ -492,7 +393,7 @@ pub async fn files_handler(
                 "status": "success",
                 "files": files,
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "files fetch failed");
@@ -500,7 +401,7 @@ pub async fn files_handler(
                 "status": "error",
                 "message": "Fichier non trouvé ou accès refusé"
             }));
-            return (StatusCode::NOT_FOUND, body).into_response();
+            return respond_with_cookies((StatusCode::NOT_FOUND, body), &cookies);
         }
     };
 }
@@ -510,41 +411,12 @@ pub async fn create_folder_handler(
     headers: HeaderMap,
     Json(payload): Json<FolderCreationRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let parent_folder_id = payload.parent_folder_id;
 
@@ -576,7 +448,7 @@ pub async fn create_folder_handler(
                         "status": "success",
                         "folder_id": record.id,
                     }));
-                    return (StatusCode::OK, body).into_response();
+                    return respond_with_cookies((StatusCode::OK, body), &cookies);
                 }
                 Err(e) => {
                     error!(error = ?e, "folder_access insert failed");
@@ -584,7 +456,7 @@ pub async fn create_folder_handler(
                         "status": "error",
                         "message": "Erreur serveur lors de l'insertion de l'accès au dossier"
                     }));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                    return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
                 }
             }
         }
@@ -594,7 +466,7 @@ pub async fn create_folder_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de la création du dossier"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     };
 }
@@ -604,41 +476,12 @@ pub async fn full_path_handler(
     headers: HeaderMap,
     Query(payload): Query<FullPathRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let select_full_path_result = sqlx::query!(
         r#"
@@ -685,7 +528,7 @@ pub async fn full_path_handler(
                 "status": "success",
                 "full_path": full_path,
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "full path fetch failed");
@@ -693,7 +536,7 @@ pub async fn full_path_handler(
                 "status": "error",
                 "message": "Chemin non trouvé ou accès refusé"
             }));
-            return (StatusCode::NOT_FOUND, body).into_response();
+            return respond_with_cookies((StatusCode::NOT_FOUND, body), &cookies);
         }
     };
 }
@@ -703,41 +546,12 @@ pub async fn rename_folder_handler(
     headers: HeaderMap,
     Json(payload): Json<FolderRenameRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let update_folder_result = sqlx::query!(
         r#"
@@ -757,7 +571,7 @@ pub async fn rename_folder_handler(
                 "status": "success",
                 "message": "Dossier renommé avec succès",
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "folder rename failed");
@@ -765,7 +579,7 @@ pub async fn rename_folder_handler(
                 "status": "error",
                 "message": "Erreur serveur lors du renommage du dossier"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     };
 }
@@ -775,42 +589,12 @@ pub async fn open_streaming_upload_handler(
     headers: HeaderMap,
     Json(payload): Json<OpenStreamingUploadRequest>,
 ) -> impl IntoResponse {
-    // Cette requête est bien une POST (Json à la fin)
-    // Vérifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // Requête SQL pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     // verifier que le user a encode de la place pour le fichier
     
@@ -822,14 +606,14 @@ pub async fn open_streaming_upload_handler(
                 "status": "error",
                 "message": "Espace de stockage insuffisant"
             }));
-            return (StatusCode::BAD_REQUEST, body).into_response();
+            return respond_with_cookies((StatusCode::BAD_REQUEST, body), &cookies);
         }
     } else {
         let body = Json(json!({
             "status": "error",
             "message": "Impossible de vérifier l'espace de stockage"
         }));
-        return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
     }
 
     // Création de l'entrée temporaire pour l'upload streaming
@@ -854,7 +638,7 @@ pub async fn open_streaming_upload_handler(
                 "status": "success",
                 "temp_upload_id": record.id,
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "temp upload creation failed");
@@ -862,7 +646,7 @@ pub async fn open_streaming_upload_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de la création de l'upload streaming"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     };
 }
@@ -871,40 +655,11 @@ pub async fn upload_streaming_handler(
     headers: HeaderMap,
     Json(payload): Json<UploadStreamingRequest>,
 ) -> impl IntoResponse {
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // Requete sql pour vérifier la session
-    let _user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let cookies = auth.set_cookies;
 
     // --- CORRECTION : Décodage Base64 ---
     // Le frontend envoie une string Base64. On doit la transformer en octets bruts
@@ -917,7 +672,7 @@ pub async fn upload_streaming_handler(
                 "status": "error",
                 "message": "Format de chunk invalide (Base64 incorrect)"
             }));
-            return (StatusCode::BAD_REQUEST, body).into_response();
+            return respond_with_cookies((StatusCode::BAD_REQUEST, body), &cookies);
         }
     };
 
@@ -939,7 +694,7 @@ pub async fn upload_streaming_handler(
                 "status": "success",
                 "message": "Chunk uploadé avec succès",
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "insert streaming chunk failed");
@@ -947,7 +702,7 @@ pub async fn upload_streaming_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de l'insertion du chunk"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     }
 }
@@ -957,40 +712,12 @@ pub async fn finish_streaming_upload(
     headers: HeaderMap,
     Json(payload): Json<FinishStreamingUploadRequest>,
 ) -> impl IntoResponse {
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let vault_file_insert_result = sqlx::query!(
         r#"
@@ -1031,14 +758,14 @@ pub async fn finish_streaming_upload(
                         "status": "error",
                         "message": "Erreur serveur lors de l'insertion de l'accès au fichier"
                     }));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                    return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
                 }
             }
             let body = Json(json!({
                 "status": "success",
                 "message": "Upload streaming finalisé avec succès",
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "finalize streaming upload failed");
@@ -1046,7 +773,7 @@ pub async fn finish_streaming_upload(
                 "status": "error",
                 "message": "Erreur serveur lors de la finalisation de l'upload streaming"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     }
 }
@@ -1115,41 +842,12 @@ pub async fn delete_file_handler(
     headers: HeaderMap,
     Json(payload): Json<DeleteFileRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let delete_file_result = sqlx::query!(
         r#"
@@ -1168,7 +866,7 @@ pub async fn delete_file_handler(
                 "status": "success",
                 "message": "Fichier supprimé avec succès",
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "delete file failed");
@@ -1176,7 +874,7 @@ pub async fn delete_file_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression du fichier"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     }
 }
@@ -1186,41 +884,12 @@ pub async fn delete_folder_handler(
     headers: HeaderMap,
     Json(payload): Json<DeleteFolderRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let delete_folder_result = sqlx::query!(
         r#"
@@ -1264,7 +933,7 @@ pub async fn delete_folder_handler(
                 "status": "success",
                 "message": "Dossier et fichiers orphelins supprimés avec succès",
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "delete folder failed");
@@ -1272,7 +941,7 @@ pub async fn delete_folder_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression du dossier"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     }
 }
@@ -1282,41 +951,12 @@ pub async fn rename_file_handler(
     headers: HeaderMap,
     Json(payload): Json<FileRenameRequest>,
 ) -> impl IntoResponse {
-    // verifier le token
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let update_file_result = sqlx::query!(
         r#"
@@ -1336,7 +976,7 @@ pub async fn rename_file_handler(
                 "status": "success",
                 "message": "Fichier renommé avec succès",
             }));
-            return (StatusCode::OK, body).into_response();
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
         }
         Err(e) => {
             error!(error = ?e, "file rename failed");
@@ -1344,7 +984,7 @@ pub async fn rename_file_handler(
                 "status": "error",
                 "message": "Erreur serveur lors du renommage du fichier"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     };
 }
@@ -1355,40 +995,11 @@ pub async fn cancel_streaming_upload_handler(
     headers: HeaderMap,
     Json(payload): Json<CancelStreamingUploadRequest>,
 ) -> impl IntoResponse {
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-    // requet sql pour vérifier la session
-    let _user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let cookies = auth.set_cookies;
 
     let delete_chunks_result = sqlx::query!(
         r#"
@@ -1418,7 +1029,7 @@ pub async fn cancel_streaming_upload_handler(
                         "status": "success",
                         "message": "Upload streaming annulé avec succès",
                     }));
-                    return (StatusCode::OK, body).into_response();
+                    return respond_with_cookies((StatusCode::OK, body), &cookies);
                 }
                 Err(e) => {
                     error!(error = ?e, "delete streaming upload failed");
@@ -1426,7 +1037,7 @@ pub async fn cancel_streaming_upload_handler(
                         "status": "error",
                         "message": "Erreur serveur lors de la suppression de l'upload streaming"
                     }));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                    return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
                 }
             }
         }
@@ -1436,7 +1047,7 @@ pub async fn cancel_streaming_upload_handler(
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression des chunks de l'upload streaming"
             }));
-            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
     }
 }
