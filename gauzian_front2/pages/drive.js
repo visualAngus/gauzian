@@ -383,7 +383,7 @@ export default function Drive() {
     console.log(data.folder_id);
     setTimeout(() => {
       rename_folder(data.folder_id, folderName);
-    }, 100);
+    }, 200);
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
