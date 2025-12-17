@@ -1568,6 +1568,34 @@ export default function Drive() {
     notif.style.transform = 'translateX(50%) translateY(-100%)';
   }
 
+  const move_file_to_folder = async (fileId, folderId) => {
+    console.log("Déplacer le fichier", fileId, "vers le dossier", folderId);
+    fetch('/api/drive/move_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_id: fileId,
+        target_folder_id: folderId
+      }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setNotifText("Fichier déplacé avec succès.");
+          // Rafraîchir la vue du dossier courant
+          setTimeout(() => {
+            getFolderStructure(activeFolderId);
+            getFileStructure(activeFolderId);
+          }, 500);
+        } else {
+          console.error("Erreur déplacement fichier :", data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de déplacement :", error);
+      });
+  };
+
   const moveElementMouseDown = (e) => {
     console.log("Déplacement de l'élément :", selectedMoveElement);
     // mettre un listener sur la souris pour bouger l'élément qui est dans SelectedMoveElement
@@ -1597,7 +1625,6 @@ export default function Drive() {
         folder_id = eleme.getAttribute("data-folder-id");
         eleme.classList.add("folder_dragover");
       }else {
-
         document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
           el.classList.remove('folder_dragover');
         });
@@ -1618,8 +1645,9 @@ export default function Drive() {
 
     document.addEventListener('mouseup', () => {
       if (folder_id) {
-        console.log("Déposé sur le dossier :", folder_id);
-        // appeler l'API pour déplacer l'élément
+        if (element.getAttribute("data-type") === "file") {
+          move_file_to_folder(element_id, folder_id);
+        }
       }
       document.removeEventListener('mousemove', onMouseMove);
       element.style.position = '';
