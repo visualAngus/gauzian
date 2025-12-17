@@ -1590,6 +1590,9 @@ export default function Drive() {
       
       if (elementsStack.find(el => el.classList && el.classList.contains('folder_list'))) {
         console.log("Sur la zone des dossiers");
+         document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
+          el.classList.remove('folder_dragover');
+        });
         let eleme = elementsStack.find(el => el.classList && el.classList.contains('folder_list'));
         folder_id = eleme.getAttribute("data-folder-id");
         eleme.classList.add("folder_dragover");
