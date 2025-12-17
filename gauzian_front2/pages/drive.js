@@ -1590,9 +1590,17 @@ export default function Drive() {
       
       if (elementsStack.find(el => el.classList && el.classList.contains('folder_list'))) {
         console.log("Sur la zone des dossiers");
-        folder_id = elementsStack.find(el => el.classList && el.classList.contains('folder_list'))?.id;
+        let eleme = elementsStack.find(el => el.classList && el.classList.contains('folder_list'));
+        folder_id = eleme.getAttribute("data-folder-id");
+        eleme.classList.add("folder_dragover");
       }else {
+
+        document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
+          el.classList.remove('folder_dragover');
+        });
+
         folder_id = null;
+
       }
 
       element.style.width = width + 'px';
