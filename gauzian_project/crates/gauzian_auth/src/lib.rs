@@ -1,3 +1,5 @@
+use std::f32::consts::E;
+
 use axum::http::header::USER_AGENT;
 use axum::http::{HeaderMap, header::ACCEPT_LANGUAGE}; // header constant + HeaderMap extractor
 use axum::{
@@ -35,6 +37,7 @@ use chrono::Utc; // Pour gérer les dates/heures de manière sûre et explicite 
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 
 use bigdecimal::BigDecimal;
+use tracing::{debug, error, info};
 
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
@@ -116,7 +119,7 @@ pub async fn register_handler(
 
     // 2. LOG POUR VÉRIFICATION
     // Regarde ta console serveur quand tu fais une requête
-    println!("🔍 DEBUG IP CLIENT: {}", client_ip);
+    info!(client_ip = %client_ip, "register request received");
 
     // 1. Gestion Locale / Timezone (inchangé)
     let raw_locale = headers
@@ -155,7 +158,7 @@ pub async fn register_handler(
     {
         Ok(Ok(hash)) => hash,
         Ok(Err(e)) => {
-            eprintln!("Erreur lors de l'encodage du mot de passe: {}", e);
+            error!(error = %e, "password hashing failed");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Erreur lors de l'encodage du mot de passe",
@@ -163,7 +166,7 @@ pub async fn register_handler(
                 .into_response();
         }
         Err(e) => {
-            eprintln!("Erreur interne lors de l'exécution de la tâche: {}", e);
+            error!(error = %e, "password hashing task join error");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Erreur interne lors de l'exécution de la tâche",
@@ -239,10 +242,7 @@ pub async fn register_handler(
                             (StatusCode::OK, body).into_response()
                         }
                         Err(e) => {
-                            eprintln!(
-                                "Erreur SQL lors de l'insertion de l'accès au dossier: {:?}",
-                                e
-                            );
+                            error!(error = ?e, "insert folder_access failed");
                             let body = Json(json!({
                                 "status": "error",
                                 "message": "Erreur lors de la création de l'accès au dossier utilisateur."
@@ -252,7 +252,7 @@ pub async fn register_handler(
                     }
                 }
                 Err(e) => {
-                    eprintln!("Erreur SQL lors de l'insertion du dossier: {:?}", e);
+                    error!(error = ?e, "insert root folder failed");
                     let body = Json(json!({
                         "status": "error",
                         "message": "Erreur lors de la création du dossier utilisateur."
@@ -262,7 +262,7 @@ pub async fn register_handler(
             }
         }
         Err(e) => {
-            eprintln!("Erreur SQL: {:?}", e);
+            error!(error = ?e, "insert user failed");
             // Vérifie si c'est une erreur de duplicata (code 23505 en Postgres)
             let body = Json(json!({
                 "status": "error",
@@ -323,12 +323,12 @@ pub async fn login_handler(
             return (StatusCode::UNAUTHORIZED, "Email ou mot de passe invalide").into_response();
         }
         Err(e) => {
-            eprintln!("Erreur SQL Login: {:?}", e);
+            error!(error = ?e, "login query failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
 
-    println!("Utilisateur trouvé avec ID: {}", user.id);
+    debug!(user_id = %user.id, "user found for login");
 
     // Cloner le mot de passe hashé pour le déplacer dans le bloc async
     let password_hash_clone = user.password_hash.clone();
@@ -336,7 +336,8 @@ pub async fn login_handler(
     // Convertir le mot de passe hashé en String pour éviter les problèmes de durée de vie
     let password_hash_str = match String::from_utf8(password_hash_clone) {
         Ok(s) => s,
-        Err(_) => {
+            Err(e) => {
+            error!(error = ?e, "Erreur lors de la conversion du hash de mot de passe en String");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
@@ -352,7 +353,7 @@ pub async fn login_handler(
 
     match verify_result {
         Ok(Ok(())) => {
-            println!("Mot de passe vérifié pour l'utilisateur ID: {}", user.id);
+            debug!(user_id = %user.id, "password verified");
         }
         _ => {
             return (StatusCode::UNAUTHORIZED, "Email ou mot de passe invalide").into_response();
@@ -363,7 +364,7 @@ pub async fn login_handler(
     let token_raw = match create_token(&user.id.to_string()) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("Erreur lors de la création du token: {}", e);
+            error!(error = %e, "session token creation failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
@@ -385,7 +386,7 @@ pub async fn login_handler(
     let keys = match user_keys_result {
         Ok(ref keys) => keys,
         Err(e) => {
-            eprintln!("Erreur SQL Récupération Clés Utilisateur: {:?}", e);
+            error!(error = ?e, "fetch user keys failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
@@ -536,7 +537,7 @@ pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> 
             (StatusCode::OK, body).into_response()
         }
         Err(e) => {
-            eprintln!("Erreur SQL Récupération Infos Utilisateur: {:?}", e);
+            error!(error = ?e, "fetch user info failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur lors de la récupération des informations utilisateur"
@@ -576,10 +577,7 @@ pub async fn get_storage_usage_handler(
             row.storage_limit,
         )),
         Err(e) => {
-            eprintln!(
-                "Erreur SQL Récupération Usage Stockage Utilisateur: {:?}",
-                e
-            );
+            error!(error = ?e, "fetch user storage usage failed");
             None
         }
     }
@@ -625,10 +623,7 @@ pub async fn get_storage_usage_by_file_type_handler(
             Some(result)
         }
         Err(e) => {
-            eprintln!(
-                "Erreur SQL Récupération Usage Stockage par Type de Fichier: {:?}",
-                e
-            );
+            error!(error = ?e, "fetch storage usage by type failed");
             None
         }
     }
