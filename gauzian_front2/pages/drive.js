@@ -1583,7 +1583,21 @@ export default function Drive() {
 
 
     const onMouseMove = (e) => {
-      console.log("Mouse move:", e.pageX, e.pageY);
+
+      // regarder si il y a un dossier sous l'élément déplacer pour potentiellement deplacer le fichier dedans
+
+      let elementUnder = document.elementFromPoint(e.clientX, e.clientY);
+      if (elementUnder) {
+        let folderGraph = elementUnder.closest('.folder_graph');
+        document.querySelectorAll('.folder_graph').forEach((el) => {
+          el.classList.remove('highlighted_folder');
+        });
+        if (folderGraph) {
+          folderGraph.classList.add('highlighted_folder');
+        }
+      }
+
+
       element.style.width = width + 'px';
       element.style.height = height + 'px';
       element.style.position = 'absolute';

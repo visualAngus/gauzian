@@ -561,3 +561,8 @@ nav ul li a.active {
     opacity: 1;
     transform: translateX(50%) scale(1.05);
 }
+
+.highlighted_folder {
+    background-color: red !important;
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
+}
