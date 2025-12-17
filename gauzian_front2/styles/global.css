@@ -352,6 +352,7 @@ nav ul li a.active {
     align-items: center;
     gap: 10px;
     width: fit-content;
+    min-width: 150px;
 }
 
 .additional_info {
