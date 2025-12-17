@@ -1977,8 +1977,6 @@ export default function Drive() {
                   <div
                     className="div_folder_path_grap"
                     onClick={() => handlePathClick(part, index)} /* Lines 1752-1753 omitted */
-                      // pour les appareils tactiles
-                    onTouchEnd={() => handlePathClick(part, index)}
                     style={{ cursor: 'pointer' }}
                     id={part.id}
                     consolelog={part}
@@ -2023,9 +2021,6 @@ export default function Drive() {
 
                       onClick={() => handleSelection(folder.folder_id)}
                       onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
-                      // pour les appareils tactiles
-                      onTouchEnd={() => handleSelection(folder.folder_id)}
-                      onDoubleTouchEnd={() => handleFolderClick(folder.folder_id, folder.name)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         handleSelection(folder.folder_id);
@@ -2058,10 +2053,6 @@ export default function Drive() {
                       onMouseDown={() => {
                         setSelectedMoveElement(file.file_id);
                       }}
-                      // pour les appareils tactiles
-                      onTouchStart={() => {
-                        setSelectedMoveElement(file.file_id);
-                      }}
 
                       // Data attributes conservés
                       data-file-id={file.file_id || ''}
@@ -2073,22 +2064,12 @@ export default function Drive() {
                       data-encrypted-file-key={file.encrypted_file_key || ''}
 
                       onClick={() => handleSelection(file.file_id)}
-                      // pour les appareils tactiles
-                      onTouchEnd={() => handleSelection(file.file_id)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         handleSelection(file.file_id);
                         open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
                       }}
                       onDoubleClick={() => {
-                        if (file.is_chunked) {
-                          handleDownloadChunked(file.file_id, file.name);
-                        } else {
-                          handleDownload(file.file_id, file.name);
-                        }
-                      }}
-                      // pour les appareils tactiles
-                      onDoubleTouchEnd={() => {
                         if (file.is_chunked) {
                           handleDownloadChunked(file.file_id, file.name);
                         } else {
@@ -2163,30 +2144,9 @@ export default function Drive() {
                           setSelectedMoveElement(currentId);
                         }
                       }}
-                      // pour les appareils tactiles
-                      onTouchStart={() => {
-                        if (content.type === 'file'){
-                          setSelectedMoveElement(currentId);
-                        }
-                      }}
 
                       onClick={() => handleSelection(currentId)}
-                      // pour les appareils tactiles
-                      onTouchEnd={() => handleSelection(currentId)}
-
                       onDoubleClick={() => {
-                        if (content.type === 'file') {
-                          if (content.is_chunked) {
-                            handleDownloadChunked(content.file_id, content.name);
-                          } else {
-                            handleDownload(content.file_id, content.name);
-                          }
-                        } else if (content.type === 'folder') {
-                          handleFolderClick(content.folder_id, content.name);
-                        }
-                      }}
-                      // pour les appareils tactiles
-                      onDoubleTouchEnd={() => {
                         if (content.type === 'file') {
                           if (content.is_chunked) {
                             handleDownloadChunked(content.file_id, content.name);
