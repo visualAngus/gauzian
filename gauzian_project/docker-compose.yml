@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # --- Service 1 : La Base de Données (Inchangé) ---
+  # --- Base de données ---
   db:
     image: postgres:15-alpine
     container_name: gauzian_db
@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- Service 2 : Ton API Rust (Inchangé) ---
+  # --- API Rust ---
   api:
     build:
       context: .
@@ -33,43 +33,33 @@ services:
     environment:
       - RUST_LOG=debug
       - DATABASE_URL=postgres://gauzian_user:gauzian_password@db:5432/gauzian_db
-      - PORT=3000 
+      - PORT=3000
     depends_on:
       db:
         condition: service_healthy
 
-  # --- Service 3 : Ton Frontend Next.js (CORRIGÉ) ---
+  # --- Frontend Next.js ---
   nextjs:
     build:
-      # Chemin corrigé : le docker-compose est à la racine, le front dans gauzian_front2
-      context: ../gauzian_front2 
+      context: ../gauzian_front2
       dockerfile: Dockerfile
     container_name: gauzian_nextjs
     environment:
       - PORT=3001
       - NODE_ENV=development
       - HOST=0.0.0.0
-    # Pour le développement on publie le port afin d'y accéder directement
     ports:
       - "3001:3001"
     volumes:
-      # Volume pour le rechargement à chaud en dev
       - ../gauzian_front2:/app
-      # Volume anonyme pour les node_modules, pour ne pas les remplacer par ceux de l'hôte
       - /app/node_modules
-    # En dev, utilise le serveur Next en mode "dev" (hot-reload)
     command: npm run dev
     restart: unless-stopped
     depends_on:
-      - api # Le front a souvent besoin de l'API pour s'initialiser
+      - api
 
-  # --- Service 4 : Caddy (Reverse Proxy) ---
-# ... (les autres services ne changent pas)
-
-  # --- Service 4 : Caddy (Reverse Proxy) ---
+  # --- Reverse Proxy Caddy ---
   caddy:
-    # REMPLACE : image: caddy:latest
-    # PAR :
     build:
       context: .
       dockerfile: Dockerfile.caddy
@@ -85,7 +75,41 @@ services:
       - api
       - nextjs
 
+  # ===============================
+  # ======= LOGGING STACK =========
+  # ===============================
+
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: gauzian_loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki:/etc/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: gauzian_promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail:/etc/promtail
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: gauzian_grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  grafana_data:
