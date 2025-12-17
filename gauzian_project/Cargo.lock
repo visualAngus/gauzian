@@ -1191,7 +1191,6 @@ dependencies = [
  "dotenvy",
  "gauzian_core",
  "getrandom 0.2.16",
- "hex",
  "ipnetwork 0.20.0",
  "jsonwebtoken",
  "rand 0.8.5",
