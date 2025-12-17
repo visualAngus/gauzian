@@ -1598,12 +1598,14 @@ export default function Drive() {
         document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
           el.classList.remove('folder_dragover');
         });
-
         folder_id = null;
-
       }
 
-      element.style.width = width + 'px';
+      element.style.width = '200px';
+      element.style.minWidth = '200px';
+      element.style.overflow = 'hidden';
+      element.style.whiteSpace = 'nowrap';
+      element.style.textOverflow = 'ellipsis';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
       element.style.left = (e.pageX - diff_souris_corner_element_x) + 'px';
@@ -1620,6 +1622,16 @@ export default function Drive() {
       element.style.position = '';
       element.style.left = '';
       element.style.top = '';
+      element.style.width = '';
+      element.style.minWidth = '';
+      element.style.height = '';
+      element.style.overflow = '';
+      element.style.whiteSpace = '';
+      element.style.textOverflow = '';
+
+      document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
+        el.classList.remove('folder_dragover');
+      });
       setSelectedMoveElement(null);
     }, { once: true });
 
