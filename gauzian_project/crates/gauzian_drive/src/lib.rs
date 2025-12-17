@@ -20,6 +20,7 @@ use serde_json::json;
 use futures::stream::Stream; // Nécessaire pour le trait object
 use std::io;
 use std::pin::Pin;
+use tracing::error;
 
 pub async fn upload_handler(
     State(state): State<AppState>,
@@ -118,7 +119,7 @@ pub async fn upload_handler(
                     return (StatusCode::OK, body).into_response();
                 }
                 Err(e) => {
-                    eprintln!("Erreur insertion accès fichier dans la BDD: {:?}", e);
+                    error!(error = ?e, "file_access insert failed");
                     let body = Json(json!({
                         "status": "error",
                         "message": "Erreur serveur lors de l'insertion de l'accès au fichier"
@@ -128,7 +129,7 @@ pub async fn upload_handler(
             }
         }
         Err(e) => {
-            eprintln!("Erreur insertion fichier dans la BDD: {:?}", e);
+            error!(error = ?e, "vault_files insert failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de l'insertion du fichier"
@@ -208,7 +209,7 @@ pub async fn download_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur récupération fichier dans la BDD: {:?}", e);
+            error!(error = ?e, "vault_file fetch failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Fichier non trouvé ou accès refusé"
@@ -399,7 +400,7 @@ pub async fn folder_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur récupération dossier dans la BDD: {:?}", e);
+            error!(error = ?e, "folders fetch failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Dossier non trouvé ou accès refusé"
@@ -494,7 +495,7 @@ pub async fn files_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur récupération fichier dans la BDD: {:?}", e);
+            error!(error = ?e, "files fetch failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Fichier non trouvé ou accès refusé"
@@ -578,7 +579,7 @@ pub async fn create_folder_handler(
                     return (StatusCode::OK, body).into_response();
                 }
                 Err(e) => {
-                    eprintln!("Erreur insertion accès dossier dans la BDD: {:?}", e);
+                    error!(error = ?e, "folder_access insert failed");
                     let body = Json(json!({
                         "status": "error",
                         "message": "Erreur serveur lors de l'insertion de l'accès au dossier"
@@ -588,7 +589,7 @@ pub async fn create_folder_handler(
             }
         }
         Err(e) => {
-            eprintln!("Erreur création dossier dans la BDD: {:?}", e);
+            error!(error = ?e, "folder creation failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la création du dossier"
@@ -687,7 +688,7 @@ pub async fn full_path_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur récupération chemin complet dans la BDD: {:?}", e);
+            error!(error = ?e, "full path fetch failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Chemin non trouvé ou accès refusé"
@@ -759,7 +760,7 @@ pub async fn rename_folder_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur renommage dossier dans la BDD: {:?}", e);
+            error!(error = ?e, "folder rename failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors du renommage du dossier"
@@ -856,7 +857,7 @@ pub async fn open_streaming_upload_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur création upload streaming dans la BDD: {:?}", e);
+            error!(error = ?e, "temp upload creation failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la création de l'upload streaming"
@@ -911,7 +912,7 @@ pub async fn upload_streaming_handler(
     let chunk_data = match general_purpose::STANDARD.decode(&payload.encrypted_chunk) {
         Ok(bytes) => bytes,
         Err(e) => {
-            eprintln!("Erreur décodage Base64: {:?}", e);
+            error!(error = ?e, "chunk base64 decode failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Format de chunk invalide (Base64 incorrect)"
@@ -941,7 +942,7 @@ pub async fn upload_streaming_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur insertion chunk dans la BDD: {:?}", e);
+            error!(error = ?e, "insert streaming chunk failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de l'insertion du chunk"
@@ -1025,7 +1026,7 @@ pub async fn finish_streaming_upload(
             match create_access_result {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("Erreur insertion accès fichier dans la BDD: {:?}", e);
+                    error!(error = ?e, "file_access insert failed (finish streaming)");
                     let body = Json(json!({
                         "status": "error",
                         "message": "Erreur serveur lors de l'insertion de l'accès au fichier"
@@ -1040,7 +1041,7 @@ pub async fn finish_streaming_upload(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur finalisation upload streaming dans la BDD: {:?}", e);
+            error!(error = ?e, "finalize streaming upload failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la finalisation de l'upload streaming"
@@ -1087,7 +1088,7 @@ pub async fn download_raw_handler(
                         yield Bytes::from(record.encrypted_chunk.unwrap_or_default());
                     }
                     Err(e) => {
-                        eprintln!("Erreur Streaming SQL: {:?}", e);
+                        error!(error = ?e, "streaming chunk fetch failed");
                         Err(io::Error::new(io::ErrorKind::Other, e))?;
                     }
                 }
@@ -1170,7 +1171,7 @@ pub async fn delete_file_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur suppression fichier dans la BDD: {:?}", e);
+            error!(error = ?e, "delete file failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression du fichier"
@@ -1254,7 +1255,7 @@ pub async fn delete_folder_handler(
             match delete_orphaned_files_result {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("Erreur suppression fichiers orphelins dans la BDD: {:?}", e);
+                    error!(error = ?e, "delete orphaned files failed");
                 }
             }
 
@@ -1266,7 +1267,7 @@ pub async fn delete_folder_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur suppression dossier dans la BDD: {:?}", e);
+            error!(error = ?e, "delete folder failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression du dossier"
@@ -1338,7 +1339,7 @@ pub async fn rename_file_handler(
             return (StatusCode::OK, body).into_response();
         }
         Err(e) => {
-            eprintln!("Erreur renommage fichier dans la BDD: {:?}", e);
+            error!(error = ?e, "file rename failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors du renommage du fichier"
@@ -1420,7 +1421,7 @@ pub async fn cancel_streaming_upload_handler(
                     return (StatusCode::OK, body).into_response();
                 }
                 Err(e) => {
-                    eprintln!("Erreur suppression upload streaming dans la BDD: {:?}", e);
+                    error!(error = ?e, "delete streaming upload failed");
                     let body = Json(json!({
                         "status": "error",
                         "message": "Erreur serveur lors de la suppression de l'upload streaming"
@@ -1430,10 +1431,7 @@ pub async fn cancel_streaming_upload_handler(
             }
         }
         Err(e) => {
-            eprintln!(
-                "Erreur suppression chunks upload streaming dans la BDD: {:?}",
-                e
-            );
+            error!(error = ?e, "delete streaming chunks failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la suppression des chunks de l'upload streaming"
