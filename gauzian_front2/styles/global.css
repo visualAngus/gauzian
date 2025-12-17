@@ -321,7 +321,7 @@ nav ul li a.active {
     background-color: var(--colored-orange-gray-color);
     border-radius: 15px;
     cursor: pointer;
-    transition: all 0.2s ease-in-out, transform 0.0001s ease;
+    transition: background-color 0.2s ease-in-out, width 0.2s ease-in-out;
 
     padding: 10px 15px;
     display: flex;
