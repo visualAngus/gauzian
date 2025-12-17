@@ -1618,18 +1618,18 @@ export default function Drive() {
       
       // Check for both grid and list view folder elements
       const folderElement = elementsStack.find(el => 
-        el.classList && (el.classList.contains('folder_list') || el.classList.contains('folder_graph'))
+        el.classList && (el.classList.contains('folder_list') || el.classList.contains('folder_graph') || el.classList.contains('div_folder_path_graph'))
       );
       
       if (folderElement) {
         console.log("Sur la zone des dossiers");
-        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover').forEach((el) => {
+        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
           el.classList.remove('folder_dragover');
         });
         folder_id = folderElement.getAttribute("data-folder-id");
         folderElement.classList.add("folder_dragover");
       } else {
-        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover').forEach((el) => {
+        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
           el.classList.remove('folder_dragover');
         });
         folder_id = null;
@@ -1672,7 +1672,7 @@ export default function Drive() {
       element.style.whiteSpace = '';
       element.style.textOverflow = '';
 
-      document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover').forEach((el) => {
+      document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
         el.classList.remove('folder_dragover');
       });
       setSelectedMoveElement(null);
@@ -1975,10 +1975,11 @@ export default function Drive() {
               {path.map((part, index) => (
                 <React.Fragment key={index}> {/* Line 1749 omitted */}
                   <div
-                    className="div_folder_path_grap"
+                    className="div_folder_path_graph"
                     onClick={() => handlePathClick(part, index)} /* Lines 1752-1753 omitted */
                     style={{ cursor: 'pointer' }}
                     id={part.id}
+                    data-folder-id={part.id}
                     consolelog={part}
                   /* Lines 1756-1757 omitted */
                   >

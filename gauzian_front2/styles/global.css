@@ -225,7 +225,7 @@ nav ul li a.active {
     margin-bottom: 1rem;
 }
 
-.div_folder_path_grap {
+.div_folder_path_graph {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -234,12 +234,12 @@ nav ul li a.active {
     transition: 0.1s ease;
 }
 
-.div_folder_path_grap:hover {
+.div_folder_path_graph:hover {
     cursor: pointer;
     background-color: var(--light-gray-color);
 }
 
-.div_folder_path_grap span {
+.div_folder_path_graph span {
     font-size: 1.6rem;
     font-weight: 500;
     color: var(--dark-color);
