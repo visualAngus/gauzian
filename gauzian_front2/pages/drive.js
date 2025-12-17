@@ -1617,8 +1617,8 @@ export default function Drive() {
     const getFolderElUnderPoint = (clientX, clientY) => {
       const node = document.elementFromPoint(clientX, clientY);
       if (!node) return null;
-      // Grid: .folder_graph, List: .content_graph_list portant data-folder-id
-      const folderEl = node.closest('.folder_graph, .content_graph_list');
+      // Cherche le plus proche élément qui porte un data-folder-id (grille ou liste)
+      const folderEl = node.closest('[data-folder-id]');
       if (!folderEl) return null;
       const fid = folderEl.getAttribute('data-folder-id');
       return fid ? folderEl : null;
@@ -1645,6 +1645,8 @@ export default function Drive() {
       element.style.width = width + 'px';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
+      element.style.zIndex = '1000';
+      element.style.pointerEvents = 'none';
       element.style.left = (e.pageX - diff_souris_corner_element_x) + 'px';
       element.style.top = (e.pageY - diff_souris_corner_element_y) + 'px';
     };
@@ -1673,6 +1675,8 @@ export default function Drive() {
       element.style.top = '';
       element.style.width = '';
       element.style.height = '';
+      element.style.zIndex = '';
+      element.style.pointerEvents = '';
       setSelectedMoveElement(null);
     }, { once: true });
 
@@ -2011,7 +2015,7 @@ export default function Drive() {
                       id={folder.folder_id}
 
                       // Data attributes conservés
-                      data-folder-id={folder.id || ''}
+                      data-folder-id={folder.folder_id || folder.id || ''}
                       data-folder-name={folder.name || ''}
                       data-folder-created-at={folder.created_at || ''}
                       data-folder-updated-at={folder.updated_at || ''}
@@ -2057,7 +2061,7 @@ export default function Drive() {
                       data-file-updated-at={file.updated_at || ''}
                       data-encrypted-file-key={file.encrypted_file_key || ''}
 
-                      onMouseDown={() => setSelectedMoveElement(file.file_id)}
+                      onMouseDown={(e) => { setSelectedMoveElement(file.file_id); moveElementMouseDown(e); }}
                       onClick={() => handleSelection(file.file_id)}
                       onContextMenu={(e) => {
                         e.preventDefault();
@@ -2133,7 +2137,7 @@ export default function Drive() {
                       )}
 
                       // clique de souris down
-                      onMouseDown={() => setSelectedMoveElement(currentId)}
+                      onMouseDown={(e) => { if (content.type === 'file') { setSelectedMoveElement(currentId); moveElementMouseDown(e); } }}
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
