@@ -1616,16 +1616,20 @@ export default function Drive() {
       let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
       // console.log("Éléments sous la souris :", elementsStack);
       
-      if (elementsStack.find(el => el.classList && el.classList.contains('folder_list'))) {
+      // Check for both grid and list view folder elements
+      const folderElement = elementsStack.find(el => 
+        el.classList && (el.classList.contains('folder_list') || el.classList.contains('folder_graph'))
+      );
+      
+      if (folderElement) {
         console.log("Sur la zone des dossiers");
-         document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
+        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover').forEach((el) => {
           el.classList.remove('folder_dragover');
         });
-        let eleme = elementsStack.find(el => el.classList && el.classList.contains('folder_list'));
-        folder_id = eleme.getAttribute("data-folder-id");
-        eleme.classList.add("folder_dragover");
-      }else {
-        document.querySelectorAll('.folder_list.folder_dragover').forEach((el) => {
+        folder_id = folderElement.getAttribute("data-folder-id");
+        folderElement.classList.add("folder_dragover");
+      } else {
+        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover').forEach((el) => {
           el.classList.remove('folder_dragover');
         });
         folder_id = null;
@@ -2035,6 +2039,10 @@ export default function Drive() {
                       key={file.file_id}
                       className={`file_graph ${selectedId === file.file_id ? 'selected_file' : ''}`}
                       id={file.file_id}
+
+                      onMouseDown={() => {
+                        setSelectedMoveElement(file.file_id);
+                      }}
 
                       // Data attributes conservés
                       data-file-id={file.file_id || ''}
