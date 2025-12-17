@@ -156,3 +156,9 @@ pub struct Claims {
     pub exp: usize,  // Expiration (timestamp unix)
     pub iat: usize,  // Issued At (date de création)
 }
+
+#[derive(Deserialize, Debug)]
+pub struct MoveFileToFolderRequest {
+    pub file_id: Uuid,
+    pub target_folder_id: Uuid,
+}

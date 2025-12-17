@@ -1599,6 +1599,36 @@ export default function Drive() {
     notif.style.transform = 'translateX(50%) translateY(-100%)';
   }
 
+  const moveFileToFolder = async (fileId, targetFolderId) => {
+    console.log(`Déplacer le fichier ${fileId} vers le dossier ${targetFolderId}`);
+    fetch('/api/drive/move_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_id: fileId,
+        target_folder_id: targetFolderId
+      }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          console.log("Fichier déplacé avec succès.");
+          // Mettre à jour l'état des fichiers
+          setFiles(prevFiles => prevFiles.filter(f => f.file_id !== fileId));
+          // Rafraîchir la vue du dossier courant
+          setTimeout(() => {
+            getFolderStructure(activeFolderId);
+            getFileStructure(activeFolderId);
+          }, 500);
+        } else {
+          console.error("Erreur déplacement fichier :", data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de déplacement :", error);
+      });
+  };
+
   const moveElementMouseDown = (e) => {
     console.log("Déplacement de l'élément :", selectedMoveElement);
     // mettre un listener sur la souris pour bouger l'élément qui est dans SelectedMoveElement
