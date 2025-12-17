@@ -1575,13 +1575,13 @@ export default function Drive() {
     let element = document.getElementById(element_id);
     if (!element) return;
     
+    let width = element.offsetWidth;
+    let height = element.offsetHeight;
+    let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
+    let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
     const onMouseMove = (e) => {
       console.log("Mouse move:", e.pageX, e.pageY);
 
-      let width = element.offsetWidth;
-      let height = element.offsetHeight;
-      let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
-      let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
 
       element.style.width = width + 'px';
       element.style.height = height + 'px';
