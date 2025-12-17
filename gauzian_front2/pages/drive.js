@@ -1585,6 +1585,9 @@ export default function Drive() {
 
     document.addEventListener('mouseup', () => {
       document.removeEventListener('mousemove', onMouseMove);
+      element.style.position = '';
+      element.style.left = '';
+      element.style.top = '';
       setSelectedMoveElement(null);
     }, { once: true });
 
