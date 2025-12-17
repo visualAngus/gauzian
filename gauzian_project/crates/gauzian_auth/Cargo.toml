@@ -51,3 +51,7 @@ bigdecimal = { version = "0.3", features = ["serde"] }
 
 # Observability
 tracing = "0.1"
+
+getrandom = "0.2"
+axum-extra = { version = "0.9", features = ["cookie"] }
+hex = "0.4.3"
