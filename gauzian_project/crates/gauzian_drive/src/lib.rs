@@ -43,8 +43,8 @@ pub async fn upload_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -152,8 +152,8 @@ pub async fn download_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -231,8 +231,8 @@ pub async fn folder_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -422,8 +422,8 @@ pub async fn files_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -517,8 +517,8 @@ pub async fn create_folder_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -611,8 +611,8 @@ pub async fn full_path_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -710,8 +710,8 @@ pub async fn rename_folder_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -783,8 +783,8 @@ pub async fn open_streaming_upload_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -877,8 +877,8 @@ pub async fn upload_streaming_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -963,8 +963,8 @@ pub async fn finish_streaming_upload(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -1122,8 +1122,8 @@ pub async fn delete_file_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -1193,8 +1193,8 @@ pub async fn delete_folder_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -1289,8 +1289,8 @@ pub async fn rename_file_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
@@ -1361,8 +1361,8 @@ pub async fn cancel_streaming_upload_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
