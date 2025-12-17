@@ -1568,7 +1568,7 @@ export default function Drive() {
     notif.style.transform = 'translateX(50%) translateY(-100%)';
   }
 
-  const moveElementMouseDown = () => {
+  const moveElementMouseDown = (e) => {
     console.log("Déplacement de l'élément :", selectedMoveElement);
     // mettre un listener sur la souris pour bouger l'élément qui est dans SelectedMoveElement
     let element_id = selectedMoveElement;
@@ -1579,10 +1579,11 @@ export default function Drive() {
     let height = element.offsetHeight;
     let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
     let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
+
+
+
     const onMouseMove = (e) => {
       console.log("Mouse move:", e.pageX, e.pageY);
-
-
       element.style.width = width + 'px';
       element.style.height = height + 'px';
       element.style.position = 'absolute';
@@ -1604,7 +1605,8 @@ export default function Drive() {
 
   useEffect(() => {
     if (selectedMoveElement) {
-      moveElementMouseDown();
+      let e = window.event;
+      moveElementMouseDown(e);
     }
   }, [selectedMoveElement]);
 
