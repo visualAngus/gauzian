@@ -1577,9 +1577,17 @@ export default function Drive() {
     
     const onMouseMove = (e) => {
       console.log("Mouse move:", e.pageX, e.pageY);
+
+      let width = element.offsetWidth;
+      let height = element.offsetHeight;
+      let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
+      let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
+
+      element.style.width = width + 'px';
+      element.style.height = height + 'px';
       element.style.position = 'absolute';
-      element.style.left = e.pageX + 'px';
-      element.style.top = e.pageY + 'px';
+      element.style.left = (e.pageX - diff_souris_corner_element_x) + 'px';
+      element.style.top = (e.pageY - diff_souris_corner_element_y) + 'px';
     };
     document.addEventListener('mousemove', onMouseMove);
 
