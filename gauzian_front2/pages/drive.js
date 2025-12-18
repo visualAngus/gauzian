@@ -1124,7 +1124,7 @@ export default function Drive() {
 
       const newUrl = new URL(window.location);
       newUrl.searchParams.set('folderId', rootId);
-      window.history.pushState({}, '', newUrl);
+      window.history.pushState({ folderId: rootId }, '', newUrl);
 
       // CORRECTION ICI : On met un tableau d'objets
       setPath([{ id: rootId, name: 'Mon Drive' }]);
@@ -1210,7 +1210,7 @@ export default function Drive() {
     newUrl.searchParams.delete('folderId'); // Supprimer folderId pour les sections spéciales
     // Ajoute un hash pour indiquer la section active dans l'URL
     newUrl.hash = `#${sectionId}`;
-    window.history.pushState({}, '', newUrl);
+    window.history.pushState({ sectionId }, '', newUrl);
 
   };
 
@@ -1221,7 +1221,7 @@ export default function Drive() {
 
     const newUrl = new URL(window.location);
     newUrl.searchParams.set('folderId', item.id);
-    window.history.pushState({}, '', newUrl);
+    window.history.pushState({ folderId: item.id }, '', newUrl);
 
 
     // On charge le dossier correspondant
@@ -1238,7 +1238,7 @@ export default function Drive() {
     // rajoute dans l'url le folderId
     const newUrl = new URL(window.location);
     newUrl.searchParams.set('folderId', folderId);
-    window.history.pushState({}, '', newUrl);
+    window.history.pushState({ folderId }, '', newUrl);
 
     // CORRECTION : On ajoute un objet au tableau existant
     setPath((prevPath) => [
@@ -1881,6 +1881,33 @@ export default function Drive() {
 
 
   }, [activeFolderId, token, tokenReady]);
+
+  useEffect(() => {
+    const onPopState = (event) => {
+      const url = new URL(window.location);
+      const folderIdParam = url.searchParams.get('folderId');
+      const hash = url.hash ? url.hash.substring(1) : '';
+
+      // Priorité au hash pour les sections spéciales
+      if (hash && hash !== activeSection) {
+        setActiveSection(hash);
+      }
+
+      if (folderIdParam) {
+        // Si on a un folderId dans l'URL, on recharge le path et le contenu
+        setActiveFolderId(folderIdParam);
+        loadFullPathFromFolderId(folderIdParam);
+        getFolderStructure(folderIdParam);
+        getFileStructure(folderIdParam);
+      } else if (hash === 'mon_drive' || hash === '') {
+        // Retour à la racine
+        getRootFolder();
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [activeSection, tokenReady, token]);
 
   // Met à jour `contents` dès que `folders` ou `files` changent
   useEffect(() => {
