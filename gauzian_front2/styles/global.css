@@ -573,5 +573,5 @@ nav ul li a.active {
 
 .uploading_file {
     position: relative;
-    opacity: 0.6;
+    opacity: 0.6 !important;
 }
