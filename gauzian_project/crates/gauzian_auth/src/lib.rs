@@ -181,7 +181,7 @@ pub async fn refresh_session(
     }
 
     let user_id = token_data.user_id;
-
+    println!("Refresh token valid for user_id: {}", user_id);
     // 3. Rotation : suppression de l'ancien token
     sqlx::query!(
         "DELETE FROM refresh_tokens WHERE token_hash = $1",

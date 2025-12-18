@@ -1025,7 +1025,7 @@ export default function Drive() {
 
       return data.folders[0];
     }
-    throw new Error('Impossible de récupérer le dossier racine.');
+    throw new Error('Erreur récupération dossier racine');
   };
 
   const loadFullPathFromFolderId = async (folderId) => {
