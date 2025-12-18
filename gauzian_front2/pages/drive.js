@@ -482,6 +482,17 @@ export default function Drive() {
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
 
+
+    const nameFile = selectedFile.name;
+    const random_tmp_id = Math.random().toString(36).substring(2, 15);
+
+    setFiles((prev) => [...prev, {
+      id: `uploading-${random_tmp_id}`,
+      name: nameFile,
+      size: selectedFile.size,
+      uploading: true,
+    }]);
+
     while (uploadingCountRef.current >= 3) {
       if (stopallUploadsRef.current) {
         console.log("Upload arrêté par l'utilisateur pendant l'attente pour:", selectedFile.name);
@@ -511,6 +522,8 @@ export default function Drive() {
       // 2. Choix de la méthode selon la taille
       // 0.9 Mo = 0.9 * 1024 * 1024 octets
       const LIMIT_SIZE = 0.9 * 1024 * 1024;
+
+
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
