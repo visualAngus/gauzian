@@ -2219,7 +2219,7 @@ export default function Drive() {
                   </div>
                 </div>
 
-                {contents.map((content) => {
+                {[...contents, ...filesUpload].map((content) => {
                   // Détermination de l'ID unique et de la classe CSS selon le type
                   const currentId = content.type === 'folder' ? content.folder_id : content.file_id;
                   const isSelected = selectedId === currentId;
@@ -2228,7 +2228,7 @@ export default function Drive() {
                   return (
                     <div
                       key={content.id}
-                      className={`content_graph_list ${selectionClass} ${content.type === 'folder' ? 'folder_list' : 'file_list'}`}
+                      className={`content_graph_list ${selectionClass} ${content.type === 'folder' ? 'folder_list' : 'file_list'} ${content.type === 'uploading' ? 'uploading_file' : ''}`}
                       id={currentId}
 
                       // Data attributes conservés
