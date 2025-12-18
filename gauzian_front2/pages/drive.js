@@ -2219,7 +2219,7 @@ export default function Drive() {
                   </div>
                 </div>
 
-                {[...contents, ...filesUpload].map((content) => {
+                {contents.map((content) => {
                   // Détermination de l'ID unique et de la classe CSS selon le type
                   const currentId = content.type === 'folder' ? content.folder_id : content.file_id;
                   const isSelected = selectedId === currentId;
