@@ -529,7 +529,7 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey,tmp_id);
+        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey,random_tmp_id);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
