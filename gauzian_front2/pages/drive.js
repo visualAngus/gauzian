@@ -493,6 +493,7 @@ export default function Drive() {
       size: selectedFile.size,
       uploading: true,
       uploadProgress: 0,
+      parent_folder_id: uploadFolderId,
     }]);
 
     while (uploadingCountRef.current >= 3) {
@@ -2235,7 +2236,13 @@ export default function Drive() {
                   const isSelected = selectedId === currentId;
                   const selectionClass = isSelected ? (content.type === 'folder' ? 'selected_folder' : 'selected_file') : '';
 
+                  // si le content n'est pas dans le bon dissier ne rien afficher
+                  if (content.parent_folder_id !== activeFolderId) {
+                    return null;
+                  }
+
                   return (
+                    
                     <div
                       key={content.id}
                       className={`content_graph_list ${selectionClass} ${content.type === 'folder' ? 'folder_list' : 'file_list'} ${content.type === 'uploading' ? 'uploading_file' : ''}`}
