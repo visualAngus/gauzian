@@ -120,6 +120,17 @@ export default function Drive() {
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
+  const authFetch = (url, options = {}) => {
+    return fetch(url, {
+      credentials: 'include',
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    });
+  };
+
   const handleFileChange = async (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
@@ -142,7 +153,7 @@ export default function Drive() {
   };
   const handleDownload = async (id_file) => {
     try {
-      const response = await fetch(`/api/drive/download?id_file=${id_file}`, {
+      const response = await authFetch(`/api/drive/download?id_file=${id_file}`, {
         method: 'GET',
       });
       if (!response.ok) throw new Error('Erreur lors du téléchargement du fichier.');
@@ -231,7 +242,7 @@ export default function Drive() {
       const sodium = _sodium;
 
       // 1. Métadonnées
-      const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
+      const metaResponse = await authFetch(`/api/drive/download?id_file=${id_file}`);
       if (!metaResponse.ok) throw new Error("Erreur métadonnées");
       const data = await metaResponse.json();
 
@@ -267,7 +278,7 @@ export default function Drive() {
       const writer = fileStream.getWriter();
 
       // 4. Flux Réseau
-      const response = await fetch(`/api/drive/download_raw?id_file=${id_file}`);
+      const response = await authFetch(`/api/drive/download_raw?id_file=${id_file}`);
       const reader = response.body.getReader();
 
       // 5. Configuration (A VÉRIFIER AVEC TON UPLOAD)
@@ -973,10 +984,9 @@ export default function Drive() {
   const getFolderStructure = async (id_parent) => {
     let url = `/api/drive/folders?parent_folder_id=${id_parent}`;
     if (id_parent) {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1017,10 +1027,9 @@ export default function Drive() {
   const getFileStructure = async (id_parent) => {
     let url = `/api/drive/files?parent_folder_id=${id_parent}`;
     if (id_parent) {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1043,10 +1052,9 @@ export default function Drive() {
   }
 
   const getRootFolder = async () => {
-    const res = await fetch('/api/drive/folders', {
+    const res = await authFetch('/api/drive/folders', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
@@ -1078,10 +1086,9 @@ export default function Drive() {
     else {
       let url = `/api/drive/full_path?folder_id=${folderIdParam}`;
       console.log("Fetching full path for folder ID:", folderIdParam);
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1573,10 +1580,9 @@ export default function Drive() {
 
   const getUserInfo = async () => {
     try {
-      const res = await fetch('/api/auth/info', {
+      const res = await authFetch('/api/auth/info', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1616,7 +1622,7 @@ export default function Drive() {
 
   const move_file_to_folder = async (fileId, folderId) => {
     console.log("Déplacer le fichier", fileId, "vers le dossier", folderId);
-    fetch('/api/drive/move_file', {
+    authFetch('/api/drive/move_file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
