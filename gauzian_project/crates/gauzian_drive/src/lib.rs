@@ -486,19 +486,19 @@ pub async fn full_path_handler(
     let select_full_path_result = sqlx::query!(
         r#"
         WITH RECURSIVE folder_path AS (
-            SELECT id, parent_id, encrypted_metadata, fa.encrypted_folder_key , is_root
+            SELECT id, parent_id, encrypted_metadata, fa.encrypted_folder_key , is_root, 0 AS depth
             FROM folders
             inner join folder_access fa on fa.folder_id = folders.id 
             WHERE id = $1 AND fa.user_id = $2
             UNION ALL
-            SELECT f.id, f.parent_id, f.encrypted_metadata, fa.encrypted_folder_key , f.is_root
+            SELECT f.id, f.parent_id, f.encrypted_metadata, fa.encrypted_folder_key , f.is_root, fp.depth + 1
             FROM folders f
             inner join folder_access fa on fa.folder_id = f.id 
             INNER JOIN folder_path fp ON f.id = fp.parent_id
         )
         SELECT id, parent_id, encrypted_metadata, encrypted_folder_key , is_root 
         FROM folder_path
-        ORDER BY parent_id NULLS FIRST
+        ORDER BY depth DESC
         "#,
         payload.folder_id,
         user_id,
