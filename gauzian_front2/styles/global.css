@@ -325,6 +325,9 @@ nav ul li a.active {
     cursor: pointer;
     transition: background-color 0.2s ease-in-out, width 0.2s ease-in-out;
 
+    position: relative;
+    overflow: hidden;
+
     padding: 10px 15px;
     display: flex;
     align-items: center;
@@ -481,6 +484,33 @@ nav ul li a.active {
     height: 100%;
     background-color: var(--orange-color);
     transition: width 0.3s ease-in-out;
+}
+
+.uploading_overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 15px;
+    overflow: hidden;
+    pointer-events: none;
+    background: linear-gradient(120deg, rgba(249, 115, 22, 0.12), rgba(253, 186, 116, 0.14));
+    backdrop-filter: blur(2px);
+}
+
+.uploading_progress_bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(90deg, #f97316 0%, #f9a44a 40%, #f97316 80%);
+    box-shadow: 0 4px 18px rgba(249, 115, 22, 0.25);
+    animation: uploading-sheen 1.4s ease-in-out infinite;
+    transition: width 0.25s ease;
+}
+
+@keyframes uploading-sheen {
+    0% { filter: brightness(0.98); }
+    50% { filter: brightness(1.08); }
+    100% { filter: brightness(0.98); }
 }
 
 /* Storage Used Bar */
