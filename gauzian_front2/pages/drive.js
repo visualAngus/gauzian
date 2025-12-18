@@ -51,6 +51,7 @@ export default function Drive() {
   const fileInputRef = useRef(null); // Pour déclencher l'input file caché
   const stopallUploadsRef = useRef(false); // Ref pour arrêter tous les uploads
   const abortControllerRef = useRef(null); // AbortController pour annuler les requêtes fetch
+  const [filesUpload, setFilesUpload] = useState([]); // Liste des fichiers en cours d'upload
 
 
   // Gestion upload de plusieurs fichiers
@@ -486,7 +487,7 @@ export default function Drive() {
     const nameFile = selectedFile.name;
     const random_tmp_id = Math.random().toString(36).substring(2, 15);
 
-    setFiles((prev) => [...prev, {
+    setFilesUpload((prev) => [...prev, {
       id: `uploading-${random_tmp_id}`,
       name: nameFile,
       size: selectedFile.size,
@@ -1882,9 +1883,15 @@ export default function Drive() {
         type: 'file',
         name: file.name,
       })),
+      ...filesUpload.map((file) => ({
+        ...file,
+        id: file.tempId,
+        type: 'uploading',
+        name: file.name,
+      })),
     ];
     setContents(unified);
-  }, [folders, files]);
+  }, [folders, files, filesUpload]);
 
   // Ajoutez ceci à l'intérieur de votre composant, avant le return
   const [selectedId, setSelectedId] = useState(null);
@@ -2148,10 +2155,11 @@ export default function Drive() {
 
                 {/* --- FICHIERS (GRILLE) --- */}
                 <div className="div_contenue_file" style={{ display: 'flex' }}>
-                  {files.map((file) => (
+                  {/* map files et filesUpload */}
+                  {[...files, ...filesUpload].map((file) => (
                     <div
                       key={file.file_id}
-                      className={`file_graph ${selectedId === file.file_id ? 'selected_file' : ''}`}
+                      className={`file_graph ${selectedId === file.file_id ? 'selected_file' : ''} ${file.uploading ? 'uploading_file' : ''}`}
                       id={file.file_id}
 
                       onMouseDown={() => {

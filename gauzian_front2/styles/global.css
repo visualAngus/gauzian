@@ -570,3 +570,8 @@ nav ul li a.active {
     box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
     border: 2px dashed var(--orange-color);
 }
+
+.uploading_file {
+    position: relative;
+    opacity: 0.6;
+}
