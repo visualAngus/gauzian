@@ -548,6 +548,9 @@ export default function Drive() {
         }
       }
 
+      // remove from filesUpload
+      setFilesUpload((prev) => prev.filter((f) => f.id !== `uploading-${random_tmp_id}`));  
+
       // 3. Fin commune
       // setUploading(false);
       uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
