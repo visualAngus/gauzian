@@ -352,6 +352,8 @@ nav ul li a.active {
 }
 
 .icon_and_name {
+    position: relative;
+    z-index: 2;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -361,6 +363,8 @@ nav ul li a.active {
 }
 
 .additional_info {
+    position: relative;
+    z-index: 2;
     font-size: 0.8rem;
     color: var(--dark-gray-color);
     display: flex;
@@ -505,6 +509,7 @@ nav ul li a.active {
     box-shadow: 0 4px 18px rgba(249, 115, 22, 0.25);
     animation: uploading-sheen 1.4s ease-in-out infinite;
     transition: width 0.25s ease;
+    z-index: 1;
 }
 
 @keyframes uploading-sheen {
