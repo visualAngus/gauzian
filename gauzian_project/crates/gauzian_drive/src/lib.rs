@@ -491,6 +491,7 @@ pub async fn full_path_handler(
             inner join folder_access fa on fa.folder_id = folders.id 
             WHERE id = $1 AND fa.user_id = $2
             UNION ALL
+            
             SELECT f.id, f.parent_id, f.encrypted_metadata, fa.encrypted_folder_key , f.is_root, fp.depth + 1
             FROM folders f
             inner join folder_access fa on fa.folder_id = f.id 

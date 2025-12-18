@@ -319,7 +319,7 @@ nav ul li a.active {
 
 .content_graph_list {
     width: 100%;
-    height: 60px;
+    height:40px;
     background-color: var(--colored-orange-gray-color);
     border-radius: 15px;
     cursor: pointer;
