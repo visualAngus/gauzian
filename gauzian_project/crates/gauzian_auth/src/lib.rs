@@ -255,22 +255,37 @@ pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::E
     }
 }
 
-fn build_access_cookie(token: &str) -> Option<HeaderValue> {
+fn allow_insecure_cookies() -> bool {
+    std::env::var("ALLOW_INSECURE_COOKIES").map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn build_cookie(name: &str, token: &str, max_age: i64) -> Option<HeaderValue> {
+    let insecure = allow_insecure_cookies();
+    let (secure_flag, same_site, partitioned) = if insecure {
+        ("", "SameSite=Lax", "")
+    } else {
+        ("; Secure", "SameSite=None", "; Partitioned")
+    };
+
     HeaderValue::from_str(&format!(
-        "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        "{}={}; Max-Age={}; Path=/; HttpOnly; {}{}{}",
+        name,
         token,
-        5 * 60
+        max_age,
+        same_site,
+        secure_flag,
+        partitioned
     ))
     .ok()
 }
 
+fn build_access_cookie(token: &str) -> Option<HeaderValue> {
+    build_cookie("access_token", token, 5 * 60)
+}
+
 fn build_refresh_cookie(token: &str) -> Option<HeaderValue> {
-    HeaderValue::from_str(&format!(
-        "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
-        token,
-        7 * 24 * 3600
-    ))
-    .ok()
+    build_cookie("refresh_token", token, 7 * 24 * 3600)
 }
 
 fn parse_cookies(headers: &HeaderMap) -> (Option<String>, Option<String>) {
