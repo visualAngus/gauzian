@@ -37,7 +37,8 @@ export default function Drive() {
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
   const activeFolderIdRef = useRef(null); // Garde la dernière valeur pour les callbacks async
-  const token = typeof window !== 'undefined' ? localStorage.getItem('storageKey') : null;
+  const [token, setToken] = useState(null);
+  const [tokenReady, setTokenReady] = useState(false);
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
 
@@ -75,6 +76,47 @@ export default function Drive() {
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
   }, [activeFolderId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedToken = localStorage.getItem('storageKey');
+    if (storedToken) {
+      setToken(storedToken);
+    }
+
+    // Retry a few times in case the token is written slightly later
+    let retryTimer = null;
+    let stopRetryTimer = null;
+    if (!storedToken) {
+      retryTimer = setInterval(() => {
+        const nextToken = localStorage.getItem('storageKey');
+        if (nextToken) {
+          setToken(nextToken);
+          clearInterval(retryTimer);
+          clearTimeout(stopRetryTimer);
+        }
+      }, 200);
+      stopRetryTimer = setTimeout(() => {
+        clearInterval(retryTimer);
+      }, 4000);
+    }
+
+    setTokenReady(true);
+
+    const handleStorage = (event) => {
+      if (event.key === 'storageKey') {
+        setToken(event.newValue);
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      if (retryTimer) clearInterval(retryTimer);
+      if (stopRetryTimer) clearTimeout(stopRetryTimer);
+    };
+  }, []);
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
@@ -1715,14 +1757,17 @@ export default function Drive() {
   }, [notifText]);
 
   useEffect(() => {
+    if (!tokenReady) return;
     if (!token) {
       window.location.href = '/login';
-    } else {
-      getUserInfo();
+      return;
     }
-  }, [token]);
+    getUserInfo();
+  }, [token, tokenReady]);
 
   useEffect(() => {
+    if (!tokenReady || !token) return;
+
     const hash = window.location.hash.substring(1);
     if (hash) {
       setActiveSection(hash);
@@ -1774,7 +1819,7 @@ export default function Drive() {
     };
 
 
-  }, [activeFolderId, token]);
+  }, [activeFolderId, token, tokenReady]);
 
   // Met à jour `contents` dès que `folders` ou `files` changent
   useEffect(() => {
