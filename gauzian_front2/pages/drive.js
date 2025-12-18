@@ -2237,6 +2237,7 @@ export default function Drive() {
                   const selectionClass = isSelected ? (content.type === 'folder' ? 'selected_folder' : 'selected_file') : '';
 
                   // si le content n'est pas dans le bon dissier ne rien afficher
+                  console.log("Content Folder ID:", content.folder_id, "Active Folder ID:", activeFolderId);
                   if (content.parent_folder_id !== activeFolderId) {
                     return null;
                   }
