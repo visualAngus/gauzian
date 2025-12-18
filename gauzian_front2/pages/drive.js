@@ -740,11 +740,38 @@ export default function Drive() {
 
     // Nombre d'envois simultanés (3 est un bon équilibre, max 5)
     const MAX_CONCURRENT_UPLOADS = 3;
+    const MAX_RETRIES = 3; // Tentatives par chunk avant abandon
+    const RETRY_BASE_DELAY_MS = 400;
+
+    let hasFailed = false;
+    let failureMessage = '';
+
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const markFailure = (message, err) => {
+      console.error(message, err);
+      setNotifText(`Erreur upload: ${message}`);
+      hasFailed = true;
+      failureMessage = message;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      // Marquer le fichier en erreur dans l'UI
+      setFilesUpload((prev) => prev.map((f) => {
+        if (f.id === `uploading-${tmp_id}`) {
+          return { ...f, uploadProgress: f.uploadProgress || 0, uploading: false, error: true };
+        }
+        return f;
+      }));
+    };
 
     nbFilesUploadedRef.current += 1;
     // La fonction que chaque "Worker" va exécuter en boucle
     const processNextChunk = async () => {
       while (nextChunkIndexToProcess < totalChunks) {
+        if (hasFailed || stopallUploadsRef.current) {
+          return;
+        }
 
         // 1. On "réserve" le morceau actuel et on incrémente le compteur global
         const currentIndex = nextChunkIndexToProcess;
@@ -768,33 +795,45 @@ export default function Drive() {
 
           // Upload
           let uploadRes;
-          try {
-            uploadRes = await fetch('/api/drive/upload_chunk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                temp_upload_id: temp_upload_id,
-                chunk_index: currentIndex, // Important : envoyer le bon index !
-                total_chunks: totalChunks,
-                encrypted_chunk: bufToB64(finalChunk)
-              }),
-              signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
-            });
-          } catch (e) {
-            if (e.name === 'AbortError') {
-              console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
-              // Nettoyer côté serveur
-              fetch('/api/drive/cancel_streaming_upload', {
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              uploadRes = await fetch('/api/drive/upload_chunk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ temp_upload_id: temp_upload_id })
-              }).catch(err => console.error('Erreur lors du nettoyage:', err));
-              return; // Sortir de la fonction processNextChunk
-            }
-            throw e;
-          }
+                body: JSON.stringify({
+                  temp_upload_id: temp_upload_id,
+                  chunk_index: currentIndex, // Important : envoyer le bon index !
+                  total_chunks: totalChunks,
+                  encrypted_chunk: bufToB64(finalChunk)
+                }),
+                signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
+              });
 
-          if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
+              if (!uploadRes.ok) {
+                throw new Error(`Serveur a retourné ${uploadRes.status}`);
+              }
+              break; // Succès, on sort de la boucle de retry
+            } catch (e) {
+              if (e.name === 'AbortError') {
+                console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
+                await fetch('/api/drive/cancel_streaming_upload', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ temp_upload_id: temp_upload_id })
+                }).catch(err => console.error('Erreur lors du nettoyage:', err));
+                return; // Sortir de la fonction processNextChunk
+              }
+
+              if (attempt === MAX_RETRIES) {
+                markFailure(`Echec envoi chunk ${currentIndex} après ${MAX_RETRIES} tentatives`, e);
+                return;
+              }
+
+              const backoff = RETRY_BASE_DELAY_MS * attempt;
+              console.warn(`Retry chunk ${currentIndex} (tentative ${attempt}/${MAX_RETRIES}) dans ${backoff}ms`);
+              await wait(backoff);
+            }
+          }
 
           if (stopallUploadsRef.current) {
             console.log("Upload arrêté par l'utilisateur.");
@@ -843,7 +882,8 @@ export default function Drive() {
 
         } catch (error) {
           console.error(`Erreur sur le chunk ${currentIndex}`, error);
-          throw error; // Cela arrêtera Promise.all
+          markFailure(`Erreur sur le chunk ${currentIndex}`, error);
+          return;
         }
       }
     };
@@ -856,6 +896,20 @@ export default function Drive() {
 
     // On attend que TOUS les workers aient fini (quand il n'y a plus de chunks)
     await Promise.all(workers);
+
+    if (hasFailed) {
+      try {
+        await fetch('/api/drive/cancel_streaming_upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ temp_upload_id: temp_upload_id })
+        });
+      } catch (cleanupErr) {
+        console.error('Erreur lors du nettoyage après échec:', cleanupErr);
+      }
+      setNotifText(failureMessage || 'Upload interrompu suite à une erreur de chunk.');
+      return false;
+    }
 
     console.log("Tous les chunks sont envoyés !");
 
