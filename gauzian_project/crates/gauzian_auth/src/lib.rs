@@ -79,6 +79,23 @@ impl AuthSessionError {
     }
 }
 
+fn respond_with_cookies<T: IntoResponse>(resp: T, cookies: &[HeaderValue]) -> Response {
+    let mut response = resp.into_response();
+    for cookie in cookies {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, cookie.clone());
+    }
+    response
+}
+async fn require_auth(headers: &HeaderMap, state: &AppState) -> Result<AuthSession, Response> {
+    match ensure_session(headers, state).await {
+        Ok(ctx) => Ok(ctx),
+        Err(err) => Err(err.to_response()),
+    }
+}
+
+
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
 fn get_secret_key() -> Vec<u8> {
@@ -764,41 +781,12 @@ pub async fn logout_handler(
 }
 
 pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    // recuperer le cookie de session
-    let session_cookie = headers
-        .get(axum::http::header::COOKIE)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|cookies| {
-            for cookie in cookies.split(';') {
-                let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie.trim_start_matches("access_token=").to_string());
-                }
-            }
-            None
-        });
-    let session_token = match session_cookie {
-        Some(token) => token,
-        None => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Pas de cookie de session trouvé"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
+   let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
-
-    // Validate the token and get the user ID
-    let user_id = match verify_session_token(&session_token) {
-        Ok(user_id) => user_id,
-        Err(_) => {
-            let body = Json(json!({
-                "status": "error",
-                "message": "Session invalide ou expirée"
-            }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
-        }
-    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
     let storage_param = get_storage_usage_handler(user_id, &state).await;
     let (storage_used, nb_folder, nb_file, storage_limit) = storage_param.unwrap_or((0, 0, 0, 0));
@@ -834,7 +822,7 @@ pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> 
                     "storageByFileType": media_type_usage.unwrap_or_default()
                 }
             }));
-            (StatusCode::OK, body).into_response()
+            respond_with_cookies((StatusCode::OK, body), &cookies)
         }
         Err(e) => {
             error!(error = ?e, "fetch user info failed");
@@ -842,7 +830,7 @@ pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> 
                 "status": "error",
                 "message": "Erreur lors de la récupération des informations utilisateur"
             }));
-            (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+            respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies)
         }
     }
 }
@@ -955,7 +943,7 @@ pub async fn autologin_handler(
                 "status": "error",
                 "message": "Non authentifié"
             }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
+            return respond_with_cookies((StatusCode::UNAUTHORIZED, body), &[]);
         }
     };
 
@@ -970,7 +958,7 @@ pub async fn autologin_handler(
                         "status": "error",
                         "message": "Erreur lors de la vérification du token"
                     }));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                    return respond_with_cookies((StatusCode::UNAUTHORIZED, body), &[]);
                 }
             };
 
