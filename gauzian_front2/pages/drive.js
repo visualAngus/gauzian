@@ -131,6 +131,34 @@ export default function Drive() {
     });
   };
 
+  const fetchJsonWithRetry = async (url, options = {}, retries = 2, delayMs = 400) => {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        const res = await authFetch(url, options);
+        const data = await res.json().catch(() => null);
+
+        const message = data?.message?.toLowerCase?.() || '';
+        const sessionLikelyExpired = message.includes('session invalide') || message.includes('expirée');
+
+        if (res.ok && data && data.status !== 'error') {
+          return data;
+        }
+
+        if (attempt < retries && (sessionLikelyExpired || res.status === 401)) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        // Dernière tentative : renvoyer ce qu'on a pour log éventuel
+        return data || { status: 'error', message: 'unknown error' };
+      } catch (e) {
+        if (attempt === retries) throw e;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    return null;
+  };
+
   const handleFileChange = async (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
@@ -1086,14 +1114,13 @@ export default function Drive() {
     else {
       let url = `/api/drive/full_path?folder_id=${folderIdParam}`;
       console.log("Fetching full path for folder ID:", folderIdParam);
-      const res = await authFetch(url, {
+      const data = await fetchJsonWithRetry(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
         }
       });
-      const data = await res.json();
-      if (data.status === 'success') {
+      if (data && data.status === 'success') {
         const fullPathArray = data.full_path;
         console.log("Full path data received:", fullPathArray);
 
@@ -1122,7 +1149,7 @@ export default function Drive() {
         setActiveFolderId(folderIdParam);
         return;
       }
-      console.error("Erreur récupération full path:", data.message);
+      if (data) console.error("Erreur récupération full path:", data.message);
 
     };
   };
