@@ -493,7 +493,7 @@ nav ul li a.active {
     overflow: hidden;
     pointer-events: none;
     background: linear-gradient(120deg, rgba(249, 115, 22, 0.12), rgba(253, 186, 116, 0.14));
-    backdrop-filter: blur(2px);
+    /* backdrop-filter: blur(2px); */
 }
 
 .uploading_progress_bar {
