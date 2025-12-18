@@ -162,3 +162,4 @@ pub struct MoveFileToFolderRequest {
     pub file_id: Uuid,
     pub target_folder_id: Uuid,
 }
+
