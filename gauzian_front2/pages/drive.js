@@ -709,7 +709,7 @@ export default function Drive() {
           file_size: file.size,
           parent_folder_id: activeFolderId
         }),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
       });
 
       if (!openRes.ok) {
@@ -777,7 +777,7 @@ export default function Drive() {
                 total_chunks: totalChunks,
                 encrypted_chunk: bufToB64(finalChunk)
               }),
-              signal: abortControllerRef.current.signal,
+              signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
             });
           } catch (e) {
             if (e.name === 'AbortError') {
@@ -883,7 +883,7 @@ export default function Drive() {
           parent_folder_id: activeFolderId
 
         }),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
       });
 
       if (!finalizeRes.ok) throw new Error("Erreur lors de la finalisation de l'upload streaming");
