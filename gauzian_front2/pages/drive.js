@@ -492,6 +492,7 @@ export default function Drive() {
       name: nameFile,
       size: selectedFile.size,
       uploading: true,
+      uploadProgress: 0,
     }]);
 
     while (uploadingCountRef.current >= 3) {
@@ -528,7 +529,7 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
+        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey,tmp_id);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -669,7 +670,7 @@ export default function Drive() {
     }
   };
 
-  const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
+  const uploadLargeFileStreaming = async (file, sodium, encryptionKey, tmp_id) => {
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le gros fichier:", file.name);
       return false; // Annuler l'upload de ce fichier
@@ -821,8 +822,17 @@ export default function Drive() {
 
           // Mise à jour progression UI
           chunksFinished++;
-          let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
 
+          
+          let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
+          // recupérer dans fileUpload le pourcentage et le mettre a jour
+          setFilesUpload((prev) => prev.map((f) => {
+            if (f.id === `uploading-${tmp_id}`) {
+              return { ...f, uploadProgress: percent };
+            }
+            return f;
+          }));
+          
           UploadProcesses[file.name] = percent;
           setUploadProcesses({ ...UploadProcesses });
           setCurentUploadingFilesNames(Object.keys(UploadProcesses));
@@ -2283,6 +2293,8 @@ export default function Drive() {
                         }
                       }}
                     >
+
+
                       <div className="icon_and_name">
                         <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
                           {content.type === 'folder'
@@ -2310,6 +2322,15 @@ export default function Drive() {
                           {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </span>
                       </div>
+                      {/* si le fichier est en cours d'upload alors creer une div qui va etre en fond et qui évolura au cours de l'upload */}
+                      {content.type === 'uploading' && (
+                        <div className="uploading_overlay">
+                          <div
+                            className="uploading_progress_bar"
+                            style={{ width: `${content.uploadProgress || 0}%` }}
+                          ></div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
