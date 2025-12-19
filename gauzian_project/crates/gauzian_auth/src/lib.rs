@@ -199,26 +199,22 @@ pub async fn refresh_session(
 
     let user_id = token_data.user_id;
     println!("Refresh token valid for user_id: {}", user_id);
-    // 3. Rotation : suppression de l'ancien token
+    // 3. Prolongation : on réutilise le même refresh token mais on prolonge son expiration
+    let new_expires_at = Utc::now() + ChronoDuration::days(7);
     sqlx::query!(
-        "DELETE FROM refresh_tokens WHERE token_hash = $1",
+        "UPDATE refresh_tokens SET expires_at = $1 WHERE token_hash = $2",
+        new_expires_at,
         token_hash
     )
     .execute(pool)
     .await
-    .map_err(|e| format!("Erreur lors de la suppression: {}", e))?;
+    .map_err(|e| format!("Erreur lors de la mise à jour du refresh token: {}", e))?;
 
-    // 4. Génération de la nouvelle paire
+    // 4. Génération d'un nouvel access token (le refresh reste identique)
     let new_access_token = create_access_token(&user_id)
         .map_err(|e| format!("Erreur création access token: {}", e))?;
-    let new_refresh_token = generate_refresh_token();
 
-    // 5. Sauvegarde du nouveau refresh token
-    save_refresh_token(pool, &user_id, &new_refresh_token)
-        .await
-        .map_err(|e| format!("Erreur sauvegarde refresh token: {}", e))?;
-
-    Ok((new_access_token, new_refresh_token))
+    Ok((new_access_token, old_refresh_token.to_string()))
 }
 
 // Révoque le refresh token (logout)
@@ -707,6 +703,7 @@ pub async fn refresh_handler(
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
+    
 
     // Rafraîchir la session
     match refresh_session(&state.db_pool, &refresh_token).await {
