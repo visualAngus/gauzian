@@ -12,6 +12,35 @@ export default function ProfilePage() {
     // Stats
     const [stats, setStats] = useState({});
 
+    const refreshAccessToken = async () => {
+        try {
+            const res = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            return res.ok;
+        } catch (err) {
+            console.error('Refresh token request failed', err);
+            return false;
+        }
+    };
+
+    const fetchWithRefresh = async (url, options = {}, attempt = 0) => {
+        const response = await fetch(url, {
+            credentials: 'include',
+            ...options,
+        });
+
+        if (response.status === 401 && attempt === 0) {
+            const refreshed = await refreshAccessToken();
+            if (refreshed) {
+                return fetchWithRefresh(url, options, 1);
+            }
+        }
+
+        return response;
+    };
+
     useEffect(() => {
         const storageKey = localStorage.getItem('storageKey');
         if (!storageKey) {
@@ -25,18 +54,18 @@ export default function ProfilePage() {
 
     const fetchUserData = async (storageKey) => {
         try {
-            // TODO: Remplacer par votre endpoint réel
-            const response = await fetch('/api/auth/info', {
-                headers: {
-                    'Authorization': `Bearer ${storageKey}`
-                }
+            const response = await fetchWithRefresh('/api/auth/info', {
+                headers: storageKey ? { 'Authorization': `Bearer ${storageKey}` } : {},
             });
+
+            if (response.status === 401) {
+                router.push('/login');
+                return;
+            }
 
             if (response.ok) {
                 const data = await response.json();
                 setUserData(data.user_info);
-                // data.user_info.storageLimit est en Go
-                //
                 let octet_limit = data.user_info.storageLimit || 1;
                 octet_limit = octet_limit * 1024 * 1024 * 1024; // Convertir en octets
                 setStats({
@@ -50,7 +79,6 @@ export default function ProfilePage() {
             }
         } catch (error) {
             console.error('Erreur lors de la récupération du profil:', error);
-            // Données de démo si l'API n'est pas prête
             setUserData({
                 firstName: 'Jean',
                 lastName: 'Dupont',
@@ -64,12 +92,14 @@ export default function ProfilePage() {
 
     const fetchStorageStats = async (storageKey) => {
         try {
-            // TODO: Remplacer par votre endpoint réel
-            const response = await fetch('/api/storage/stats', {
-                headers: {
-                    'Authorization': `Bearer ${storageKey}`
-                }
+            const response = await fetchWithRefresh('/api/storage/stats', {
+                headers: storageKey ? { 'Authorization': `Bearer ${storageKey}` } : {},
             });
+
+            if (response.status === 401) {
+                router.push('/login');
+                return;
+            }
 
             if (response.ok) {
                 const data = await response.json();
@@ -77,7 +107,6 @@ export default function ProfilePage() {
             }
         } catch (error) {
             console.error('Erreur lors de la récupération des stats:', error);
-            // Stats de démo
             setStats({
                 filesCount: 24,
                 foldersCount: 8,

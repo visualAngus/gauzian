@@ -121,8 +121,21 @@ export default function Drive() {
 
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
 
-  const authFetch = (url, options = {}) => {
-    return fetch(url, {
+  const refreshAccessToken = async () => {
+    try {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch (err) {
+      console.error('refresh token request failed', err);
+      return false;
+    }
+  };
+
+  const authFetch = async (url, options = {}, attempt = 0) => {
+    const response = await fetch(url, {
       credentials: 'include',
       ...options,
       headers: {
@@ -130,6 +143,15 @@ export default function Drive() {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
     });
+
+    if (response.status === 401 && attempt === 0) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return authFetch(url, options, 1);
+      }
+    }
+
+    return response;
   };
 
   const fetchJsonWithRetry = async (url, options = {}, retries = 2, delayMs = 400) => {
@@ -444,7 +466,7 @@ export default function Drive() {
     // 7. Envoi API
     // Assure-toi que activeFolderId est bien défini (passé en argument ou via un hook/store)
     if (!activeFolderId) throw new Error("Aucun dossier parent sélectionné");
-    const res = await fetch('/api/drive/new_folder', {
+    const res = await authFetch('/api/drive/new_folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -650,7 +672,7 @@ export default function Drive() {
         parent_folder_id: activeFolderId,
       };
 
-      const response = await fetch('/api/drive/upload', {
+      const response = await authFetch('/api/drive/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -700,7 +722,7 @@ export default function Drive() {
     // --- 2. Initialisation Serveur ---
     let temp_upload_id;
     try {
-      const openRes = await fetch('/api/drive/open_streaming_upload', {
+      const openRes = await authFetch('/api/drive/open_streaming_upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -797,7 +819,7 @@ export default function Drive() {
           let uploadRes;
           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-              uploadRes = await fetch('/api/drive/upload_chunk', {
+              uploadRes = await authFetch('/api/drive/upload_chunk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -816,7 +838,7 @@ export default function Drive() {
             } catch (e) {
               if (e.name === 'AbortError') {
                 console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
-                await fetch('/api/drive/cancel_streaming_upload', {
+                await authFetch('/api/drive/cancel_streaming_upload', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ temp_upload_id: temp_upload_id })
@@ -837,7 +859,7 @@ export default function Drive() {
 
           if (stopallUploadsRef.current) {
             console.log("Upload arrêté par l'utilisateur.");
-            fetch('/api/drive/cancel_streaming_upload', {
+            authFetch('/api/drive/cancel_streaming_upload', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ temp_upload_id: temp_upload_id })
@@ -899,7 +921,7 @@ export default function Drive() {
 
     if (hasFailed) {
       try {
-        await fetch('/api/drive/cancel_streaming_upload', {
+        await authFetch('/api/drive/cancel_streaming_upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ temp_upload_id: temp_upload_id })
@@ -926,7 +948,7 @@ export default function Drive() {
     //     pub parent_folder_id: Uuid,
     // }
     try {
-      const finalizeRes = await fetch('/api/drive/finish_streaming_upload', {
+      const finalizeRes = await authFetch('/api/drive/finish_streaming_upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1396,7 +1418,7 @@ export default function Drive() {
         console.log("Renommer le dossier :", folderId, "en", newName);
         folderName.classList.remove("editing_folder_name");
 
-        fetch('/api/drive/rename_folder', {
+        authFetch('/api/drive/rename_folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1429,7 +1451,7 @@ export default function Drive() {
 
   const delete_folder = async (folderId) => {
     console.log("Supprimer le dossier :", folderId);
-    fetch('/api/drive/delete_folder', {
+    authFetch('/api/drive/delete_folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1497,7 +1519,7 @@ export default function Drive() {
 
   const delete_file = async (fileId) => {
     console.log("Supprimer le fichier :", fileId);
-    fetch('/api/drive/delete_file', {
+    authFetch('/api/drive/delete_file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1616,7 +1638,7 @@ export default function Drive() {
         console.log("Renommer le fichier :", fileId, "en", newName);
         fileName.classList.remove("editing_file_name");
 
-        fetch('/api/drive/rename_file', {
+        authFetch('/api/drive/rename_file', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
