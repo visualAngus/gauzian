@@ -2376,9 +2376,13 @@ export default function Drive() {
                       )}
 
                       // clique de souris down
-                      onMouseDown={() => {
-                        if (content.type === 'file'){
+                      onMouseDown={(e) => {
+                        // que le clique gauche pour déplacer
 
+                        if (e.button !== 0) return;
+
+
+                        if (content.type === 'file'){
                           setSelectedMoveElement(currentId);
                         }
                       }}
