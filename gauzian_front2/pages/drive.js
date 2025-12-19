@@ -148,6 +148,8 @@ export default function Drive() {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
         return authFetch(url, options, 1);
+      }else {
+        window.location.href = '/login';
       }
     }
 
