@@ -1,5 +1,3 @@
-use std::sync;
-
 use sqlx::{PgPool, types::uuid};
 use serde::Deserialize;
 use serde::Serialize;
@@ -23,10 +21,11 @@ pub struct RegisterRequest {
     pub password: String,
     pub salt_e2e: String,
     pub salt_auth: String,
-    pub storage_key_encrypted: String,
     pub storage_key_encrypted_recuperation: String,
     pub folder_key_encrypted: String,
     pub folder_metadata_encrypted: String,
+    pub public_key: String,
+    pub private_key_encrypted: String,
 
     pub last_name: Option<String>,
     pub first_name: Option<String>,

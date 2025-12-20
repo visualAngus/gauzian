@@ -161,7 +161,7 @@ export default function LoginPage() {
 
       if (!res.ok) throw new Error(data.message || 'Erreur');
       // Si le serveur nous renvoie le coffre (vault), on l'ouvre !
-      if (data.salt_e2e && data.storage_key_encrypted && data.salt_auth) {
+      if (data.salt_e2e && data.salt_auth && data.public_key && data.private_key_encrypted) {
         setMessage({ type: 'success', text: 'Connexion Déchiffrement des clés...' });
         setIsLoadingPage(true);
 
@@ -203,31 +203,31 @@ export default function LoginPage() {
           // Debug: show derived key and salts (prefixes) to compare with register
 
           // déchiffrement de storage_key_encrypted
-          const encryptedDataBuf = b64ToBuf(data.storage_key_encrypted);
+          const encryptedDataBuf = b64ToBuf(data.private_key_encrypted);
 
           const npubBytes = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES || 24;
           if (!encryptedDataBuf || encryptedDataBuf.length <= npubBytes) {
-            throw new Error(`Donnée chiffrée trop courte: ${encryptedDataBuf.length} bytes (expected > ${npubBytes})`);
             setIsLoadingPage(false);
+            throw new Error(`Donnée chiffrée trop courte: ${encryptedDataBuf.length} bytes (expected > ${npubBytes})`);
           }
 
           const nonce = encryptedDataBuf.slice(0, npubBytes);
           const ciphertext = encryptedDataBuf.slice(npubBytes);
 
           if (ciphertext == null) {
-            throw new Error('ciphertext is null or undefined after slicing encrypted data');
             setIsLoadingPage(false);
+            throw new Error('ciphertext is null or undefined after slicing encrypted data');
           }
 
           const ciphertextU8 = new Uint8Array(ciphertext);
           const nonceU8 = new Uint8Array(nonce);
           const keyU8 = new Uint8Array(derivedKey);
 
-          let decryptedStorageKey = null;
+          let decryptedPrivateKey = null;
           try {
             // libsodium binding expects (nsec, ciphertext, ad, nonce, key)
             // nsec is unused for XChaCha20-Poly1305; pass null
-            decryptedStorageKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            decryptedPrivateKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
               null,
               ciphertextU8,
               null,
@@ -240,11 +240,11 @@ export default function LoginPage() {
             throw innerErr;
           }
 
-          const storageKeyHex = buf2hex(decryptedStorageKey.buffer);
+          const privateKeyHex = buf2hex(decryptedPrivateKey.buffer);
 
-          // Ici, vous pouvez stocker storageKeyHex dans le contexte global, localStorage, etc.
+          // Ici, vous pouvez stocker privateKeyHex dans le contexte global, localStorage, etc.
           // Par exemple :
-          localStorage.setItem('storageKey', storageKeyHex);
+          localStorage.setItem('privateKey', privateKeyHex);
         } catch (e) {
           setIsLoadingPage(false);
           throw new Error("Erreur lors du déchiffrement des clés : " + e.message);
