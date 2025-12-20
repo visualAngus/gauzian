@@ -245,6 +245,7 @@ export default function LoginPage() {
 
           // Stocker la clé privée au même format qu'à l'inscription (base64 PKCS#8)
           const privateKeyB64 = bufToB64(decryptedPrivateKey);
+          console.log('Déchiffrement réussi, clé privée (prefix 80):', privateKeyB64.slice(0, 80));
           sessionStorage.setItem('privateKey', privateKeyB64);
         } catch (e) {
           setIsLoadingPage(false);
@@ -252,7 +253,7 @@ export default function LoginPage() {
         }
         // redirigé vers la page d'accueil ou tableau de bord
         // Par exemple, utiliser router.push('/') si vous utilisez Next.js router
-        window.location.href = '/';
+        // window.location.href = '/';
 
       } else {
         setIsLoadingPage(false);
