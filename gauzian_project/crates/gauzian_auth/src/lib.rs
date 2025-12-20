@@ -863,7 +863,8 @@ pub async fn get_storage_usage_handler(
         LEFT JOIN file_access fa2 ON fa2.folder_id = fa.folder_id 
         LEFT JOIN vault_files vf ON fa2.file_id = vf.id 
         inner join users u on u.id = fa.user_id 
-        WHERE fa.user_id = $1
+        INNER JOIN folders f ON fa.folder_id = f.id
+        WHERE fa.user_id = $1 and fa.permission_level IN ('owner', 'editor') and f.is_root = false
         group by u.id
         "#,
         user_id,
