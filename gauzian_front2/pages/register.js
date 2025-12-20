@@ -202,19 +202,19 @@ export default function RegisterPage() {
 
 
             // Clé de récupération 
-            const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32)); // Dummy random pour l'exemple
+            const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32));
 
             // encoder userPrivateKey avec userRestoreKey pour ensuite envoyer au serveur
-            const privateKeyBytes = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
-            const noncePrivKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-            const encryptedPrivateKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-                privateKeyBytes,
+            const privateKeyBytesForRecovery = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
+            const noncePrivKeyRecovery = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedPrivateKeyBlobRecovery = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                privateKeyBytesForRecovery,
                 null,
                 null,
-                noncePrivKey,
+                noncePrivKeyRecovery,
                 userRestoreKey
             );
-            const finalEncryptedPrivateKeyForRecovery = new Uint8Array([...noncePrivKey, ...encryptedPrivateKeyBlob]);
+            const finalEncryptedPrivateKeyForRecovery = new Uint8Array([...noncePrivKeyRecovery, ...encryptedPrivateKeyBlobRecovery]);
 
             // --- 6. PRÉPARATION DU PAYLOAD ---
             const payload = {
