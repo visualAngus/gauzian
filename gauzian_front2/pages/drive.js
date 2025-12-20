@@ -1363,16 +1363,10 @@ export default function Drive() {
         const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+       
         const privateKey = await importPrivateKey(userPrivateKey);
-
-        // // Déchiffrer la clé du dossier
-        const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-          null,
-          ciphertextKey,
-          null,
-          nonceKey,
-          privateKey
-        );
+        const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
+        const folderKey = new Uint8Array(decryptedKeyBuffer);
 
         // // Chiffrer les nouvelles métadonnées avec la clé du dossier
         const metadataStr = JSON.stringify(metadata);
