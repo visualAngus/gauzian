@@ -239,7 +239,7 @@ export default function RegisterPage() {
             setMessage({ type: 'success', text: 'Inscription réussie ! Redirection...' });
             
             // Optionnel : Auto-login ou redirection vers /login
-            // window.location.href = '/login';
+            window.location.href = '/login';
 
         } catch (err) {
             console.error(err);
