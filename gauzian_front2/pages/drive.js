@@ -1012,14 +1012,6 @@ export default function Drive() {
     await _sodium.ready;
     const sodium = _sodium;
 
-    const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) {
-      // window.location.href = '/login';
-      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-    }
-
-    // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
-
     try {
       // --- ÉTAPE A : Déchiffrer la Clé du Dossier (FolderKey) ---
       // On a besoin de folder.encrypted_folder_key renvoyé par le SQL
