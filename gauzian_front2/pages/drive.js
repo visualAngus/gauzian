@@ -116,6 +116,10 @@ export default function Drive() {
 
   const [selectedMoveElement, setSelectedMoveElement] = useState(null);
 
+  // crypto
+  const [userPrivateKey, setUserPrivateKey] = useState(null);
+  const [userPublicKey, setUserPublicKey] = useState(null);
+
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
   }, [activeFolderId]);
@@ -129,13 +133,12 @@ export default function Drive() {
     let stopRetryTimer = null;
     const publicKeyB64 = localStorage.getItem('publicKey');
     const privateKeyB64 = localStorage.getItem('privateKey');
-
-    console.log("Clé publique trouvée :", !!publicKeyB64);
-    console.log("Clé privée trouvée :", !!privateKeyB64);
     
     if (publicKeyB64 && privateKeyB64) {
       console.log("Clés trouvées, accès autorisé.");
       setTokenReady(true);
+      setUserPublicKey(publicKeyB64);
+      setUserPrivateKey(privateKeyB64);
     } else {
       console.log("Clés manquantes, démarrage de la surveillance du localStorage...");
       retryTimer = setInterval(() => {
@@ -145,6 +148,9 @@ export default function Drive() {
           setTokenReady(true);
           clearInterval(retryTimer);
           clearTimeout(stopRetryTimer);
+          console.log("Clés détectées via intervalle, accès autorisé.");
+          setUserPublicKey(nextPub);
+          setUserPrivateKey(nextPriv);
         }
       }, 200);
       
@@ -161,6 +167,8 @@ export default function Drive() {
         const priv = localStorage.getItem('privateKey');
         if (pub && priv) {
           setTokenReady(true);
+          setUserPublicKey(pub);
+          setUserPrivateKey(priv);
         }
       }
     };
@@ -465,26 +473,14 @@ export default function Drive() {
 
     // 2. Récupération de la clé maîtresse depuis localStorage
     // On utilise désormais la clé publique/privée stockée, pas storageKey
-    const publicKeyB64 = localStorage.getItem('publicKey');
-    if (!publicKeyB64) {
-      // window.location.href = '/login';
-      throw new Error('Clé publique manquante. Redirection vers la page de connexion.');
-    }
 
     // 3. A. Génération de la clé UNIQUE pour ce nouveau dossier
     const folderKey = sodium.randombytes_buf(32);
 
-    // 5. C. Chiffrement de la clé du dossier avec la userMasterKey
-    const nonceFolderKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-    const encryptedFolderKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      folderKey,
-      null,
-      null,
-      nonceFolderKey,
-      userMasterKey // On utilise la clé dérivée du storageKey
-    );
-    // Concaténation Nonce + Cipher
-    const finalEncryptedFolderKey = new Uint8Array([...nonceFolderKey, ...encryptedFolderKeyBlob]);
+    // 5. C. Chiffrement de la clé du dossier avec la userPublicKey (RSA)
+    const publicKey = await importPublicKey(userPublicKey);
+    const encryptedFolderKeyBytes = await rsaEncrypt(publicKey, folderKey);
+    const finalEncryptedFolderKey = new Uint8Array(encryptedFolderKeyBytes);
 
     // 6. D. Chiffrement des métadonnées avec la clé DU DOSSIER
     const folderMetadata = JSON.stringify({
@@ -574,13 +570,7 @@ export default function Drive() {
       await _sodium.ready;
       const sodium = _sodium;
 
-      // 1. Récupération de la clé publique (RSA) pour chiffrer les FileKey
-      const publicKeyB64 = localStorage.getItem('publicKey');
-      if (!publicKeyB64) {
-        // window.location.href = '/login';
-        throw new Error('Clé publique manquante.');
-      }
-      const publicKey = await importPublicKey(publicKeyB64);
+      const publicKey = await importPublicKey(userPublicKey);
 
       // 2. Choix de la méthode selon la taille
       // 0.9 Mo = 0.9 * 1024 * 1024 octets
@@ -1029,24 +1019,15 @@ export default function Drive() {
     }
 
     // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
-    const rawStorageKey = sodium.from_hex(storageKeyHex);
-    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
 
     try {
       // --- ÉTAPE A : Déchiffrer la Clé du Dossier (FolderKey) ---
       // On a besoin de folder.encrypted_folder_key renvoyé par le SQL
       const encryptedKeyBuffer = sodium.from_base64(folder.encrypted_folder_key, sodium.base64_variants.ORIGINAL);
 
-      const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
-      const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextKey,
-        null,
-        nonceKey,
-        userMasterKey // On utilise la clé de l'utilisateur ici
-      );
+      const privateKey = await importPrivateKey(userPrivateKey);
+      const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
+      const folderKey = new Uint8Array(decryptedKeyBuffer);
 
       // --- ÉTAPE B : Déchiffrer les Métadonnées avec la FolderKey ---
       const encryptedMetaBuffer = sodium.from_base64(folder.encrypted_metadata, sodium.base64_variants.ORIGINAL);
