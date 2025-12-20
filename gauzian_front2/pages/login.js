@@ -247,6 +247,7 @@ export default function LoginPage() {
           const privateKeyB64 = bufToB64(decryptedPrivateKey);
           console.log('Déchiffrement réussi, clé privée (prefix 80):', privateKeyB64.slice(0, 80));
           localStorage.setItem('privateKey', privateKeyB64);
+          localStorage.setItem('publicKey', data.public_key);
         } catch (e) {
           setIsLoadingPage(false);
           throw new Error("Erreur lors du déchiffrement des clés : " + e.message);
