@@ -116,8 +116,6 @@ export default function RegisterPage() {
             const salt_e2e = sodium.randombytes_buf(16);
             const salt_auth = sodium.randombytes_buf(16);
 
-            // La clé maîtresse brute (160 bytes)
-            const storageKeyRaw = sodium.randombytes_buf(160);
 
             // --- 2. DÉRIVATION DU MOT DE PASSE (Pour protéger la storageKey) ---
             const passwordBytes = enc.encode(password);
@@ -141,21 +139,6 @@ export default function RegisterPage() {
                 sodium.crypto_pwhash_MEMLIMIT_MODERATE,
                 sodium.crypto_pwhash_ALG_ARGON2ID13
             );
-
-            // --- 3. CHIFFREMENT DE LA STORAGE KEY (Le coffre-fort) ---
-            const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-            const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-                storageKeyRaw,
-                null,
-                null,
-                nonce,
-                derivedKey
-            );
-            
-            // Concaténation [Nonce + Cipher]
-            const storageKeyEncrypted = new Uint8Array(nonce.length + ciphertext.length);
-            storageKeyEncrypted.set(nonce, 0);
-            storageKeyEncrypted.set(ciphertext, nonce.length);
 
 
             // --- 4. PRÉPARATION DU DOSSIER RACINE (CORRECTION ICI !) ---
@@ -226,9 +209,6 @@ export default function RegisterPage() {
                 // Les sels
                 salt_e2e: b64NoPadding(salt_e2e),
                 salt_auth: b64NoPadding(salt_auth),
-                
-                // La clé principale chiffrée par le mot de passe
-                storage_key_encrypted: b64(storageKeyEncrypted),
                 
                 // (Optionnel) Clé de récupération - ici on met du dummy random pour l'exemple
                 storage_key_encrypted_recuperation: b64(sodium.randombytes_buf(160)), 
