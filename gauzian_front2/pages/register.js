@@ -200,10 +200,6 @@ export default function RegisterPage() {
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
             const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
 
-
-            // Clé de récupération 
-            const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32));
-
             // encoder userPrivateKey avec userRestoreKey pour ensuite envoyer au serveur
             // Clé de récupération 
             const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32));
