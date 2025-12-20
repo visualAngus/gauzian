@@ -179,7 +179,9 @@ export default function RegisterPage() {
 
             // E. Génération de la paire de clés asymétriques pour l'utilisateur 
             const keyPair = await generateKeyPair();
-            console.log('Paire de clés générée:', keyPair.privateKey);
+            // afficher les clés pour debug
+            console.log('Clé publique générée (prefix 80):', keyPair.publicKey.slice(0, 80));
+            console.log('Clé privée générée (prefix 80):', keyPair.privateKey.slice(0, 80));
             // F. On chiffrera la clé privée avec la userMasterKey avant envoi
             const privateKeyBytes = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
             const noncePrivKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
