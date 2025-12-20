@@ -45,7 +45,7 @@ export default function ProfilePage() {
         const userPublicKey = localStorage.getItem('publicKey');
         const userPrivateKey = localStorage.getItem('privateKey');
 
-        if (!userPublicKey || !storageKey) {
+        if (!userPublicKey || !userPrivateKey) {
             router.push('/login');
             return;
         }
