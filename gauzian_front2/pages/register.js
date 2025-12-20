@@ -179,9 +179,7 @@ export default function RegisterPage() {
 
             // E. Génération de la paire de clés asymétriques pour l'utilisateur 
             const keyPair = await generateKeyPair();
-            // afficher les clés pour debug
-            console.log('Clé publique générée (prefix 80):', keyPair.publicKey.slice(0, 80));
-            console.log('Clé privée générée (prefix 80):', keyPair.privateKey.slice(0, 80));
+
             // F. On chiffrera la clé privée avec la userMasterKey avant envoi
             const privateKeyBytes = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
             const noncePrivKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
@@ -202,6 +200,23 @@ export default function RegisterPage() {
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
             const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
 
+
+            // Clé de récupération 
+            const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32)); // Dummy random pour l'exemple
+
+            // encoder userPrivateKey avec userRestoreKey pour ensuite envoyer au serveur
+            const privateKeyBytes = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
+            const noncePrivKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedPrivateKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                privateKeyBytes,
+                null,
+                null,
+                noncePrivKey,
+                userRestoreKey
+            );
+            const finalEncryptedPrivateKeyForRecovery = new Uint8Array([...noncePrivKey, ...encryptedPrivateKeyBlob]);
+
+            // --- 6. PRÉPARATION DU PAYLOAD ---
             const payload = {
                 first_name: firstName,
                 last_name: lastName,
@@ -212,8 +227,8 @@ export default function RegisterPage() {
                 salt_e2e: b64NoPadding(salt_e2e),
                 salt_auth: b64NoPadding(salt_auth),
                 
-                // (Optionnel) Clé de récupération - ici on met du dummy random pour l'exemple
-                storage_key_encrypted_recuperation: b64(sodium.randombytes_buf(160)), 
+                // Clé de récupération - ici on met du dummy random pour l'exemple
+                storage_key_encrypted_recuperation: b64(finalEncryptedPrivateKeyForRecovery),
                 
                 // Le dossier racine chiffré par la clé principale
                 folder_key_encrypted: b64(finalRootFolderKey),
@@ -237,7 +252,19 @@ export default function RegisterPage() {
             if (!res.ok) throw new Error(data.message || 'Erreur lors de l\'inscription');
 
             setMessage({ type: 'success', text: 'Inscription réussie ! Redirection...' });
+
+
+            // creation d'un ficher .key contenant la clée de récupération
+            const element = document.createElement("a");
+            const file = new Blob([userRestoreKey], {type: 'text/plain'});
+            element.href = URL.createObjectURL(file);
+            element.download = "gauzian_recovery_key.key";
             
+            // téléchargement automatique
+            document.body.appendChild(element); // Nécessaire pour Firefox
+            element.click();
+            document.body.removeChild(element);
+                        
             // Optionnel : Auto-login ou redirection vers /login
             window.location.href = '/login';
 
