@@ -49,10 +49,10 @@ export default function ProfilePage() {
             router.push('/login');
             return;
         }
-        fetchUserData(userPrivateKey);
+        fetchUserData();
     }, []);
 
-    const fetchUserData = async (userPrivateKey) => {
+    const fetchUserData = async () => {
         try {
             const response = await fetchWithRefresh('/api/auth/info', {});
 
