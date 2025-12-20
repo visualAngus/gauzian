@@ -203,7 +203,7 @@ export default function Drive() {
       if (refreshed) {
         return authFetch(url, options, 1);
       }else {
-        window.location.href = '/login';
+        // window.location.href = '/login';
       }
     }
 
@@ -286,7 +286,7 @@ export default function Drive() {
 
       const privateKeyB64 = localStorage.getItem('privateKey');
       if (!privateKeyB64) {
-        window.location.href = '/login';
+        // window.location.href = '/login';
         throw new Error('Clé privée manquante. Veuillez vous reconnecter.');
       }
 
@@ -468,7 +468,7 @@ export default function Drive() {
     // On utilise désormais la clé publique/privée stockée, pas storageKey
     const publicKeyB64 = localStorage.getItem('publicKey');
     if (!publicKeyB64) {
-      window.location.href = '/login';
+      // window.location.href = '/login';
       throw new Error('Clé publique manquante. Redirection vers la page de connexion.');
     }
 
@@ -578,7 +578,7 @@ export default function Drive() {
       // 1. Récupération de la clé publique (RSA) pour chiffrer les FileKey
       const publicKeyB64 = localStorage.getItem('publicKey');
       if (!publicKeyB64) {
-        window.location.href = '/login';
+        // window.location.href = '/login';
         throw new Error('Clé publique manquante.');
       }
       const publicKey = await importPublicKey(publicKeyB64);
@@ -1025,7 +1025,7 @@ export default function Drive() {
 
     const storageKeyHex = localStorage.getItem('storageKey');
     if (!storageKeyHex) {
-      window.location.href = '/login';
+      // window.location.href = '/login';
       throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
     }
 
@@ -1899,7 +1899,7 @@ export default function Drive() {
   useEffect(() => {
     if (!tokenReady) return;
     if (!token) {
-      window.location.href = '/login';
+      // window.location.href = '/login';
       return;
     }
     getUserInfo();
