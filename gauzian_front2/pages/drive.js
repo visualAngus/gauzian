@@ -151,7 +151,7 @@ export default function Drive() {
       stopRetryTimer = setTimeout(() => {
         clearInterval(retryTimer);
         // Après 4 secondes, si toujours rien, redirection
-        window.location.href = '/login';
+        // window.location.href = '/login';
       }, 4000);
     }
   
