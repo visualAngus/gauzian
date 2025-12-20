@@ -200,6 +200,9 @@ export default function LoginPage() {
             sodium.crypto_pwhash_MEMLIMIT_MODERATE,
             sodium.crypto_pwhash_ALG_ARGON2ID13
           );
+
+          // Recompute the user master key exactly like register (hash of the derived key)
+          const userMasterKey = sodium.crypto_generichash(32, derivedKey);
           // Debug: show derived key and salts (prefixes) to compare with register
 
           // déchiffrement de storage_key_encrypted
@@ -221,7 +224,7 @@ export default function LoginPage() {
 
           const ciphertextU8 = new Uint8Array(ciphertext);
           const nonceU8 = new Uint8Array(nonce);
-          const keyU8 = new Uint8Array(derivedKey);
+          const keyU8 = new Uint8Array(userMasterKey);
 
           let decryptedPrivateKey = null;
           try {
