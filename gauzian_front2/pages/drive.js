@@ -2018,6 +2018,7 @@ export default function Drive() {
               onClick={() => {
                 // Annuler tous les uploads en cours
                 stopallUploadsRef.current = true;
+                setFilesUpload([]);
                 if (abortControllerRef.current) {
                   abortControllerRef.current.abort();
                 }
