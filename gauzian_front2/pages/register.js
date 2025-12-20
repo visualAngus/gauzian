@@ -151,16 +151,36 @@ export default function RegisterPage() {
             // B. On crée la clé du dossier racine
             const rootFolderKey = sodium.randombytes_buf(32);
 
-            // C. On chiffre la clé du dossier avec la userMasterKey (et PAS avec derivedKey)
-            const nonceRootKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-            const encryptedRootKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-                rootFolderKey,
-                null,
-                null,
-                nonceRootKey,
-                keyPair.publicKey // <--- Chiffré avec la la clef public du user
+            // C. On chiffre la clé du dossier avec la clé publique RSA de l'utilisateur
+            // Helper pour convertir base64 -> Uint8Array
+            const b64ToBuf = (b64) => {
+                if (!b64) return new Uint8Array();
+                const normalized = b64.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+                const pad = normalized.length % 4;
+                const padded = pad ? normalized + '='.repeat(4 - pad) : normalized;
+                const bin = window.atob(padded);
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                return arr;
+            };
+
+            // Importer la clé publique RSA
+            const raw = b64ToBuf(keyPair.publicKey);
+            const publicKey = await crypto.subtle.importKey(
+                'spki',
+                raw.buffer,
+                { name: 'RSA-OAEP', hash: 'SHA-256' },
+                false,
+                ['encrypt']
             );
-            const finalRootFolderKey = new Uint8Array([...nonceRootKey, ...encryptedRootKeyBlob]);
+
+            // Chiffrer avec RSA-OAEP
+            const encryptedRootKeyBytes = await crypto.subtle.encrypt(
+                { name: 'RSA-OAEP' },
+                publicKey,
+                rootFolderKey
+            );
+            const finalRootFolderKey = new Uint8Array(encryptedRootKeyBytes);
 
             // D. On chiffre les métadonnées du dossier racine avec sa propre clé
             const folderMetadata = JSON.stringify({
