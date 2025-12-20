@@ -80,8 +80,7 @@ export default function Drive() {
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
   const activeFolderIdRef = useRef(null); // Garde la dernière valeur pour les callbacks async
-  const [token, setToken] = useState(null);
-  const [tokenReady, setTokenReady] = useState(false);
+  const [tokenReady, setTokenReady] = useState(false); // indique si le token est prêt
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
 
@@ -124,12 +123,10 @@ export default function Drive() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-
     console.log("Vérification des clés RSA dans le localStorage...");
 
     let retryTimer = null;
     let stopRetryTimer = null;
-    // CORRECTION : On cherche maintenant les clés RSA au lieu de storageKey
     const publicKeyB64 = localStorage.getItem('publicKey');
     const privateKeyB64 = localStorage.getItem('privateKey');
 
@@ -140,8 +137,6 @@ export default function Drive() {
       console.log("Clés trouvées, accès autorisé.");
       setTokenReady(true);
     } else {
-      // Si les clés manquent, redirection vers login
-
       console.log("Clés manquantes, démarrage de la surveillance du localStorage...");
       retryTimer = setInterval(() => {
         const nextPub = localStorage.getItem('publicKey');  
@@ -156,8 +151,7 @@ export default function Drive() {
       stopRetryTimer = setTimeout(() => {
         clearInterval(retryTimer);
         console.log("Clés toujours manquantes après 4 secondes. Redirection vers la page de connexion.");
-        // Après 4 secondes, si toujours rien, redirection
-        // window.location.href = '/login';
+        window.location.href = '/login';
       }, 4000);
     }
   
@@ -200,7 +194,6 @@ export default function Drive() {
       ...options,
       headers: {
         ...(options.headers || {}),
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
     });
 
@@ -208,8 +201,8 @@ export default function Drive() {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
         return authFetch(url, options, 1);
-      }else {
-        // window.location.href = '/login';
+      } else {
+        window.location.href = '/login';
       }
     }
 
@@ -1904,16 +1897,12 @@ export default function Drive() {
 
   useEffect(() => {
     if (!tokenReady) return;
-    if (!token) {
-      // window.location.href = '/login';
-      return;
-    }
     getUserInfo();
-  }, [token, tokenReady]);
+  }, [tokenReady]); // <--- Enlever token
 
   useEffect(() => {
-    console.log("UseEffect actif : activeFolderId ou token changé :", activeFolderId, token);
-    if (!tokenReady || !token) return;
+    console.log("UseEffect actif : activeFolderId ou tokenReady changé :", activeFolderId, tokenReady);
+    if (!tokenReady) return;
     console.log("Token prêt, chargement des données du drive.");
 
     const hash = window.location.hash.substring(1);
@@ -1967,7 +1956,7 @@ export default function Drive() {
     };
 
 
-  }, [activeFolderId, token, tokenReady]);
+  }, [activeFolderId, tokenReady]); // <--- Enlever token
 
   useEffect(() => {
     const onPopState = (event) => {
@@ -1994,7 +1983,7 @@ export default function Drive() {
 
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [activeSection, tokenReady, token]);
+  }, [activeSection, tokenReady]);
 
   // Met à jour `contents` dès que `folders` ou `files` changent
   useEffect(() => {
