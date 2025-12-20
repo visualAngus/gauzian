@@ -205,6 +205,14 @@ export default function RegisterPage() {
             const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32));
 
             // encoder userPrivateKey avec userRestoreKey pour ensuite envoyer au serveur
+            // Clé de récupération 
+            const userRestoreKey = b64NoPadding(sodium.randombytes_buf(32));
+            const userRestoreKeyBytes = sodium.from_base64(
+                userRestoreKey,
+                sodium.base64_variants.ORIGINAL_NO_PADDING
+            );
+
+            // encoder userPrivateKey avec userRestoreKey pour ensuite envoyer au serveur
             const privateKeyBytesForRecovery = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
             const noncePrivKeyRecovery = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
             const encryptedPrivateKeyBlobRecovery = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -212,7 +220,7 @@ export default function RegisterPage() {
                 null,
                 null,
                 noncePrivKeyRecovery,
-                userRestoreKey
+                userRestoreKeyBytes // <--- clé décodée (32 bytes)
             );
             const finalEncryptedPrivateKeyForRecovery = new Uint8Array([...noncePrivKeyRecovery, ...encryptedPrivateKeyBlobRecovery]);
 
