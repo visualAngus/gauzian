@@ -424,8 +424,8 @@ pub async fn register_handler(
     // Insertion dans la base de données
     let insert_result = sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, , storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale, public_key, private_key_encrypted)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale, public_key, private_key_encrypted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         "#,
     )
