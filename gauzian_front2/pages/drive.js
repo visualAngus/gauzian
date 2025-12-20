@@ -123,37 +123,45 @@ export default function Drive() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const storedToken = localStorage.getItem('storageKey');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-
-    // Retry a few times in case the token is written slightly later
-    let retryTimer = null;
-    let stopRetryTimer = null;
-    if (!storedToken) {
+  
+    // CORRECTION : On cherche maintenant les clés RSA au lieu de storageKey
+    const publicKeyB64 = localStorage.getItem('publicKey');
+    const privateKeyB64 = localStorage.getItem('privateKey');
+    
+    if (publicKeyB64 && privateKeyB64) {
+      setTokenReady(true);
+    } else {
+      // Si les clés manquent, redirection vers login
+      let retryTimer = null;
+      let stopRetryTimer = null;
+      
       retryTimer = setInterval(() => {
-        const nextToken = localStorage.getItem('storageKey');
-        if (nextToken) {
-          setToken(nextToken);
+        const nextPub = localStorage.getItem('publicKey');
+        const nextPriv = localStorage.getItem('privateKey');
+        if (nextPub && nextPriv) {
+          setTokenReady(true);
           clearInterval(retryTimer);
           clearTimeout(stopRetryTimer);
         }
       }, 200);
+      
       stopRetryTimer = setTimeout(() => {
         clearInterval(retryTimer);
+        // Après 4 secondes, si toujours rien, redirection
+        window.location.href = '/login';
       }, 4000);
     }
-
-    setTokenReady(true);
-
+  
     const handleStorage = (event) => {
-      if (event.key === 'storageKey') {
-        setToken(event.newValue);
+      if (event.key === 'publicKey' || event.key === 'privateKey') {
+        const pub = localStorage.getItem('publicKey');
+        const priv = localStorage.getItem('privateKey');
+        if (pub && priv) {
+          setTokenReady(true);
+        }
       }
     };
-
+  
     window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('storage', handleStorage);
