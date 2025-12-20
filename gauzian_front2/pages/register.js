@@ -67,6 +67,30 @@ export default function RegisterPage() {
         setIsPasswordMatch(password === newConfirmPassword);
     };
 
+    async function generateKeyPair() {
+        const keyPair = await window.crypto.subtle.generateKey(
+            {
+                name: "RSA-OAEP",
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                hash: "SHA-256",
+            },
+            true,
+            ["encrypt", "decrypt"]
+        );
+
+        const publicKeyBuffer = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
+        const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(publicKeyBuffer)));
+
+        const privateKeyBuffer = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+        const privateKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(privateKeyBuffer)));
+
+        return {
+            publicKey: publicKeyBase64,
+            privateKey: privateKeyBase64,
+        };
+    }
+
     async function handleSubmit(e) {
         e.preventDefault();
         setLoading(true);
@@ -170,6 +194,24 @@ export default function RegisterPage() {
             );
             const finalRootMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
 
+            // E. Génération de la paire de clés asymétriques pour l'utilisateur 
+            const keyPair = await generateKeyPair();
+            console.log('Paire de clés générée:', keyPair.privateKey);
+            // F. On chiffrera la clé privée avec la userMasterKey avant envoi
+            const privateKeyBytes = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
+            const noncePrivKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedPrivateKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                privateKeyBytes,
+                null,
+                null,
+                noncePrivKey,
+                userMasterKey
+            );
+            const finalEncryptedPrivateKey = new Uint8Array([...noncePrivKey, ...encryptedPrivateKeyBlob]);
+
+            // On enverra la clé publique en clair
+            const publicKeyToSend = keyPair.publicKey;
+
 
             // --- 5. ENCODAGE BASE64 POUR L'ENVOI ---
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
@@ -194,6 +236,10 @@ export default function RegisterPage() {
                 // Le dossier racine chiffré par la clé principale
                 folder_key_encrypted: b64(finalRootFolderKey),
                 folder_metadata_encrypted: b64(finalRootMetadata),
+
+                // Clés asymétriques
+                public_key: publicKeyToSend,
+                private_key_encrypted: b64(finalEncryptedPrivateKey),
             };
 
             // --- 6. APPEL API ---
@@ -211,7 +257,7 @@ export default function RegisterPage() {
             setMessage({ type: 'success', text: 'Inscription réussie ! Redirection...' });
             
             // Optionnel : Auto-login ou redirection vers /login
-            window.location.href = '/login';
+            // window.location.href = '/login';
 
         } catch (err) {
             console.error(err);

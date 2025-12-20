@@ -418,15 +418,14 @@ pub async fn register_handler(
         }
     };
 
-    let storage_key_encrypted = payload.storage_key_encrypted.clone();
     let storage_key_encrypted_recuperation = payload.storage_key_encrypted_recuperation.clone();
     let folder_key_encrypted = payload.folder_key_encrypted.clone();
     let folder_metadata_encrypted = payload.folder_metadata_encrypted.clone();
     // Insertion dans la base de données
     let insert_result = sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, storage_key_encrypted, storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, , storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale, public_key, private_key_encrypted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING id
         "#,
     )
@@ -434,13 +433,14 @@ pub async fn register_handler(
     .bind(password_hash.as_bytes())
     .bind(payload.salt_e2e.as_bytes())
     .bind(payload.salt_auth.as_bytes())
-    .bind(storage_key_encrypted.as_bytes())
     .bind(storage_key_encrypted_recuperation.as_bytes())
     .bind(payload.last_name)
     .bind(payload.first_name)
     .bind(payload.date_of_birth)
     .bind(time_zone)
     .bind(locale)
+    .bind(payload.public_key.as_bytes())
+    .bind(payload.private_key_encrypted.as_bytes())
     .fetch_one(&state.db_pool)
     .await;
 
@@ -618,8 +618,8 @@ pub async fn login_handler(
     }
 
     // Récupérer les clés de l'utilisateur
-    let user_keys_result = sqlx::query!(
-        "SELECT salt_e2e, storage_key_encrypted FROM users WHERE id = $1",
+    let user_keys_result: Result<_, _> = sqlx::query!(
+        "SELECT salt_e2e, public_key, private_key_encrypted FROM users WHERE id = $1",
         user.id
     )
     .fetch_one(&state.db_pool)
@@ -635,7 +635,8 @@ pub async fn login_handler(
 
     let salt_e2e = keys.salt_e2e.clone();
     let salt_auth = user.salt_auth.clone();
-    let storage_key_encrypted = keys.storage_key_encrypted.clone();
+    let public_key = keys.public_key.clone();
+    let private_key_encrypted = keys.private_key_encrypted.clone();
 
     // Cookie HttpOnly pour l'Access Token (court)
     let access_cookie = format!(
@@ -656,7 +657,8 @@ pub async fn login_handler(
         "message": "Connexion réussie",
         "salt_auth": String::from_utf8(salt_auth).unwrap_or_default(),
         "salt_e2e": String::from_utf8(salt_e2e).unwrap_or_default(),
-        "storage_key_encrypted": String::from_utf8(storage_key_encrypted).unwrap_or_default(),
+        "public_key": String::from_utf8(public_key).unwrap_or_default(),
+        "private_key_encrypted": String::from_utf8(private_key_encrypted).unwrap_or_default(),
     }));
 
     // Important: append both cookies (access + refresh). Using manual response avoids HeaderMap::extend overwriting.
@@ -976,7 +978,7 @@ pub async fn autologin_handler(
 
             // Récupérer les informations de l'utilisateur
             let user_result = sqlx::query!(
-                "SELECT salt_e2e, storage_key_encrypted, salt_auth FROM users WHERE id = $1",
+                "SELECT salt_e2e, salt_auth, public_key, private_key_encrypted FROM users WHERE id = $1",
                 user_id
             )
             .fetch_one(&state.db_pool)
@@ -1012,7 +1014,6 @@ pub async fn autologin_handler(
                 "message": "Connexion automatique réussie",
                 "salt_auth": String::from_utf8(user.salt_auth).unwrap_or_default(),
                 "salt_e2e": String::from_utf8(user.salt_e2e).unwrap_or_default(),
-                "storage_key_encrypted": String::from_utf8(user.storage_key_encrypted).unwrap_or_default(),
             }));
             let mut response = (StatusCode::OK, body).into_response();
             if let Ok(val) = HeaderValue::from_str(&access_cookie) {
