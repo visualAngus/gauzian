@@ -124,6 +124,9 @@ export default function Drive() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
   
+     let retryTimer = null;
+    let stopRetryTimer = null;
+
     // CORRECTION : On cherche maintenant les clés RSA au lieu de storageKey
     const publicKeyB64 = localStorage.getItem('publicKey');
     const privateKeyB64 = localStorage.getItem('privateKey');
