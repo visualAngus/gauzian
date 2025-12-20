@@ -137,13 +137,14 @@ export default function Drive() {
     console.log("Clé privée trouvée :", !!privateKeyB64);
     
     if (publicKeyB64 && privateKeyB64) {
+      console.log("Clés trouvées, accès autorisé.");
       setTokenReady(true);
     } else {
       // Si les clés manquent, redirection vers login
 
       console.log("Clés manquantes, démarrage de la surveillance du localStorage...");
       retryTimer = setInterval(() => {
-        const nextPub = localStorage.getItem('publicKey');
+        const nextPub = localStorage.getItem('publicKey');  
         const nextPriv = localStorage.getItem('privateKey');
         if (nextPub && nextPriv) {
           setTokenReady(true);
@@ -1911,7 +1912,9 @@ export default function Drive() {
   }, [token, tokenReady]);
 
   useEffect(() => {
+    console.log("UseEffect actif : activeFolderId ou token changé :", activeFolderId, token);
     if (!tokenReady || !token) return;
+    console.log("Token prêt, chargement des données du drive.");
 
     const hash = window.location.hash.substring(1);
     if (hash) {
