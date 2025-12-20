@@ -1363,7 +1363,6 @@ export default function Drive() {
         const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-        const folderKey = null;
         const privateKey = await importPrivateKey(userPrivateKey);
 
         // // Déchiffrer la clé du dossier
