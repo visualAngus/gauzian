@@ -143,6 +143,7 @@ export default function RegisterPage() {
 
             // --- 4. PRÉPARATION DU DOSSIER RACINE (CORRECTION ICI !) ---
             
+            const keyPair = await generateKeyPair();
             // A. On dérive la clé utilisable (32 bytes) à partir de la grosse clé (derivedKey)
             // C'est CRUCIAL pour que ça matche avec ton code de lecture (Drive)
             const userMasterKey = sodium.crypto_generichash(32, derivedKey);
@@ -157,7 +158,7 @@ export default function RegisterPage() {
                 null,
                 null,
                 nonceRootKey,
-                userMasterKey // <--- Utilisation de userMasterKey ici
+                keyPair.publicKey // <--- Chiffré avec la la clef public du user
             );
             const finalRootFolderKey = new Uint8Array([...nonceRootKey, ...encryptedRootKeyBlob]);
 
@@ -178,7 +179,6 @@ export default function RegisterPage() {
             const finalRootMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
 
             // E. Génération de la paire de clés asymétriques pour l'utilisateur 
-            const keyPair = await generateKeyPair();
 
             // F. On chiffrera la clé privée avec la userMasterKey avant envoi
             const privateKeyBytes = Uint8Array.from(atob(keyPair.privateKey), c => c.charCodeAt(0));
