@@ -123,21 +123,25 @@ export default function Drive() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-  
-     let retryTimer = null;
-    let stopRetryTimer = null;
 
+
+    console.log("Vérification des clés RSA dans le localStorage...");
+
+    let retryTimer = null;
+    let stopRetryTimer = null;
     // CORRECTION : On cherche maintenant les clés RSA au lieu de storageKey
     const publicKeyB64 = localStorage.getItem('publicKey');
     const privateKeyB64 = localStorage.getItem('privateKey');
+
+    console.log("Clé publique trouvée :", !!publicKeyB64);
+    console.log("Clé privée trouvée :", !!privateKeyB64);
     
     if (publicKeyB64 && privateKeyB64) {
       setTokenReady(true);
     } else {
       // Si les clés manquent, redirection vers login
-      let retryTimer = null;
-      let stopRetryTimer = null;
-      
+
+      console.log("Clés manquantes, démarrage de la surveillance du localStorage...");
       retryTimer = setInterval(() => {
         const nextPub = localStorage.getItem('publicKey');
         const nextPriv = localStorage.getItem('privateKey');
@@ -150,6 +154,7 @@ export default function Drive() {
       
       stopRetryTimer = setTimeout(() => {
         clearInterval(retryTimer);
+        console.log("Clés toujours manquantes après 4 secondes. Redirection vers la page de connexion.");
         // Après 4 secondes, si toujours rien, redirection
         // window.location.href = '/login';
       }, 4000);
