@@ -1368,7 +1368,7 @@ export default function Drive() {
         const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
         const folderKey = new Uint8Array(decryptedKeyBuffer);
 
-        // // Chiffrer les nouvelles métadonnées avec la clé du dossier
+        // Chiffrer les nouvelles métadonnées avec la clé du dossier
         const metadataStr = JSON.stringify(metadata);
         const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -1381,8 +1381,7 @@ export default function Drive() {
         const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
         const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
 
-
-        console.log("Renommer le dossier :", folderId, "en", newName);
+        // console.log("Renommer le dossier :", folderId, "en", newName);
         folderName.classList.remove("editing_folder_name");
 
         authFetch('/api/drive/rename_folder', {
