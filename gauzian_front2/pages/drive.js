@@ -246,10 +246,8 @@ export default function Drive() {
   };
 
   const decryptFileKey = async (encryptedFileKeyB64, sodium) => {
-    const privateKeyB64 = localStorage.getItem('privateKey');
-    if (!privateKeyB64) throw new Error('Clé privée manquante (privateKey).');
 
-    const privateKey = await importPrivateKey(privateKeyB64);
+    const privateKey = await importPrivateKey(userPrivateKey);
 
     try {
       const encBuf = b64ToBuf(encryptedFileKeyB64);
@@ -291,8 +289,8 @@ export default function Drive() {
       const sodium = _sodium;
       console.log('Sodium ready.');
 
-      const privateKeyB64 = localStorage.getItem('privateKey');
-      if (!privateKeyB64) {
+      const privateKey = await importPrivateKey(userPrivateKey);
+      if (!privateKey) {
         // window.location.href = '/login';
         throw new Error('Clé privée manquante. Veuillez vous reconnecter.');
       }
@@ -1365,63 +1363,59 @@ export default function Drive() {
         const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
-        // IMPORTANT: On doit déchiffrer la clé du dossier
-        // Mais on n'a plus accès au userMasterKey directement ici
-        // Il faut soit passer la clé en mémoire lors du chargement, soit la re-dériver
-        // Pour maintenant, throw une erreur car c'est complex
-        throw new Error('Renommage dossier : nécessite re-architecture pour accès userMasterKey');
+        const folderKey = null;
+        const privateKey = await importPrivateKey(userPrivateKey);
 
         // // Déchiffrer la clé du dossier
-        // const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        //   null,
-        //   ciphertextKey,
-        //   null,
-        //   nonceKey,
-        //   userMasterKey // On utilise la clé de l'utilisateur ici
-        // );
+        const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextKey,
+          null,
+          nonceKey,
+          privateKey
+        );
 
         // // Chiffrer les nouvelles métadonnées avec la clé du dossier
-        // const metadataStr = JSON.stringify(metadata);
-        // const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-        // const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        //   sodium.from_string(metadataStr),
-        //   null,
-        //   null,
-        //   nonceMeta,
-        //   folderKey
-        // );
-        // const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
-        // const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
+        const metadataStr = JSON.stringify(metadata);
+        const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+          sodium.from_string(metadataStr),
+          null,
+          null,
+          nonceMeta,
+          folderKey
+        );
+        const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+        const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
 
 
-        // console.log("Renommer le dossier :", folderId, "en", newName);
-        // folderName.classList.remove("editing_folder_name");
+        console.log("Renommer le dossier :", folderId, "en", newName);
+        folderName.classList.remove("editing_folder_name");
 
-        // authFetch('/api/drive/rename_folder', {
-        //   method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({
-        //     folder_id: folderId,
-        //     new_encrypted_metadata: encryptedMetadataB64
-        //   }),
-        // })
-        //   .then(response => response.json())
-        //   .then(data => {
-        //     if (data.status === 'success') {
-        //       console.log("Dossier renommé avec succès.");
-        //       folder.setAttribute("data-folder-name", newName);
-        //       // Mettre à jour l'état des dossiers
-        //       setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? { ...f, name: newName } : f));
-        //       // Rafraîchir la vue du dossier courant
-        //     } else {
+        authFetch('/api/drive/rename_folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder_id: folderId,
+            new_encrypted_metadata: encryptedMetadataB64
+          }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.status === 'success') {
+              console.log("Dossier renommé avec succès.");
+              folder.setAttribute("data-folder-name", newName);
+              // Mettre à jour l'état des dossiers
+              setFolders(prevFolders => prevFolders.map(f => f.folder_id === folderId ? { ...f, name: newName } : f));
+              // Rafraîchir la vue du dossier courant
+            } else {
 
-        //       console.error("Erreur renommage dossier :", data.message);
-        //     }
-        //   })
-        //   .catch(error => {
-        //     console.error("Erreur lors de la requête de renommage :", error);
-        //   });
+              console.error("Erreur renommage dossier :", data.message);
+            }
+          })
+          .catch(error => {
+            console.error("Erreur lors de la requête de renommage :", error);
+          });
       };
 
     } else {
