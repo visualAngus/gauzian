@@ -143,9 +143,9 @@ export default function RegisterPage() {
 
             // --- 4. PRÉPARATION DU DOSSIER RACINE (CORRECTION ICI !) ---
             
-            // A. On dérive la clé utilisable (32 bytes) à partir de la grosse clé (160 bytes)
+            // A. On dérive la clé utilisable (32 bytes) à partir de la grosse clé (derivedKey)
             // C'est CRUCIAL pour que ça matche avec ton code de lecture (Drive)
-            const userMasterKey = sodium.crypto_generichash(32, storageKeyRaw);
+            const userMasterKey = sodium.crypto_generichash(32, derivedKey);
 
             // B. On crée la clé du dossier racine
             const rootFolderKey = sodium.randombytes_buf(32);
@@ -157,7 +157,7 @@ export default function RegisterPage() {
                 null,
                 null,
                 nonceRootKey,
-                userMasterKey // <--- On utilise bien la clé dérivée du storageKey
+                userMasterKey // <--- Utilisation de userMasterKey ici
             );
             const finalRootFolderKey = new Uint8Array([...nonceRootKey, ...encryptedRootKeyBlob]);
 
