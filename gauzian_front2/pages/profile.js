@@ -42,21 +42,19 @@ export default function ProfilePage() {
     };
 
     useEffect(() => {
-        const storageKey = localStorage.getItem('storageKey');
-        if (!storageKey) {
+        const userPublicKey = localStorage.getItem('publicKey');
+        const userPrivateKey = localStorage.getItem('privateKey');
+
+        if (!userPublicKey || !storageKey) {
             router.push('/login');
             return;
         }
-
-        // Récupérer les infos utilisateur
-        fetchUserData(storageKey);
+        fetchUserData(userPrivateKey);
     }, []);
 
-    const fetchUserData = async (storageKey) => {
+    const fetchUserData = async (userPrivateKey) => {
         try {
-            const response = await fetchWithRefresh('/api/auth/info', {
-                headers: storageKey ? { 'Authorization': `Bearer ${storageKey}` } : {},
-            });
+            const response = await fetchWithRefresh('/api/auth/info', {});
 
             if (response.status === 401) {
                 router.push('/login');
@@ -90,11 +88,9 @@ export default function ProfilePage() {
         }
     };
 
-    const fetchStorageStats = async (storageKey) => {
+    const fetchStorageStats = async () => {
         try {
-            const response = await fetchWithRefresh('/api/storage/stats', {
-                headers: storageKey ? { 'Authorization': `Bearer ${storageKey}` } : {},
-            });
+            const response = await fetchWithRefresh('/api/storage/stats', {});
 
             if (response.status === 401) {
                 router.push('/login');
@@ -117,8 +113,15 @@ export default function ProfilePage() {
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('storageKey');
-        router.push('/login');
+        // Supprimer les tokens d'authentification
+        fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+        }).finally(() => {
+            localStorage.removeItem('publicKey');
+            localStorage.removeItem('privateKey');
+            router.push('/login');
+        });
     };
 
     const formatBytes = (bytes) => {
