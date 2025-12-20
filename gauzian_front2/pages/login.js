@@ -243,11 +243,9 @@ export default function LoginPage() {
             throw innerErr;
           }
 
-          const privateKeyHex = buf2hex(decryptedPrivateKey.buffer);
-
-          // Ici, vous pouvez stocker privateKeyHex dans le contexte global, localStorage, etc.
-          // Par exemple :
-          localStorage.setItem('privateKey', privateKeyHex);
+          // Stocker la clé privée au même format qu'à l'inscription (base64 PKCS#8)
+          const privateKeyB64 = bufToB64(decryptedPrivateKey);
+          sessionStorage.setItem('privateKey', privateKeyB64);
         } catch (e) {
           setIsLoadingPage(false);
           throw new Error("Erreur lors du déchiffrement des clés : " + e.message);
