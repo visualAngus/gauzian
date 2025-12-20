@@ -254,7 +254,7 @@ export default function LoginPage() {
         }
         // redirigé vers la page d'accueil ou tableau de bord
         // Par exemple, utiliser router.push('/') si vous utilisez Next.js router
-        // window.location.href = '/';
+        window.location.href = '/';
 
       } else {
         setIsLoadingPage(false);

@@ -22,6 +22,49 @@ const bufToB64 = (buf) => {
   return window.btoa(binary);
 };
 
+const b64ToBuf = (b64) => {
+  if (!b64) return new Uint8Array();
+  const normalized = b64.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = normalized.length % 4;
+  const padded = pad ? normalized + '='.repeat(4 - pad) : normalized;
+  const bin = window.atob(padded);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+};
+
+const importPublicKey = async (publicKeyB64) => {
+  const raw = b64ToBuf(publicKeyB64);
+  return crypto.subtle.importKey(
+    'spki',
+    raw.buffer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['encrypt']
+  );
+};
+
+const importPrivateKey = async (privateKeyB64) => {
+  const raw = b64ToBuf(privateKeyB64);
+  return crypto.subtle.importKey(
+    'pkcs8',
+    raw.buffer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['decrypt']
+  );
+};
+
+const rsaEncrypt = async (publicKey, dataU8) => {
+  const encrypted = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, dataU8);
+  return new Uint8Array(encrypted);
+};
+
+const rsaDecrypt = async (privateKey, encryptedU8) => {
+  const decrypted = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, encryptedU8);
+  return new Uint8Array(decrypted);
+};
+
 export default function Drive() {
   // --- ÉTATS (STATE) ---
   const [activeSection, setActiveSection] = useState(null);
@@ -184,6 +227,36 @@ export default function Drive() {
     return null;
   };
 
+  const decryptFileKey = async (encryptedFileKeyB64, sodium) => {
+    const privateKeyB64 = localStorage.getItem('privateKey');
+    if (!privateKeyB64) throw new Error('Clé privée manquante (privateKey).');
+
+    const privateKey = await importPrivateKey(privateKeyB64);
+
+    try {
+      const encBuf = b64ToBuf(encryptedFileKeyB64);
+      return await rsaDecrypt(privateKey, encBuf);
+    } catch (err) {
+      // Fallback legacy: ancien chiffrement symétrique avec userMasterKey
+      const storageKey = localStorage.getItem('storageKey');
+      if (!storageKey) throw err;
+      const rawStorageKey = sodium.from_hex(storageKey);
+      const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
+
+      const encryptedKeyBuf = sodium.from_base64(encryptedFileKeyB64, sodium.base64_variants.ORIGINAL);
+      const nonceKey = encryptedKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+      const ciphertextKey = encryptedKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+
+      return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertextKey,
+        null,
+        nonceKey,
+        userMasterKey
+      );
+    }
+  };
+
   const handleFileChange = async (e) => {
     const selectedFiles = e.target.files;
     if (selectedFiles && selectedFiles.length > 0) {
@@ -215,27 +288,15 @@ export default function Drive() {
       const sodium = _sodium;
       console.log('Sodium ready.');
 
-      const storageKey = localStorage.getItem('storageKey');
-      if (!storageKey) {
+      const privateKeyB64 = localStorage.getItem('privateKey');
+      if (!privateKeyB64) {
         window.location.href = '/login';
-        throw new Error('Clé de stockage non trouvée. Veuillez vous connecter.');
+        throw new Error('Clé privée manquante. Veuillez vous reconnecter.');
       }
-
-      const rawStorageKey = sodium.from_hex(storageKey);
-      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
 
       // --- 1. Déchiffrement de la clé du fichier ---
       const encryptedFileKeyB64 = data.encrypted_file_key;
-      const encryptedFileKeyBuf = sodium.from_base64(encryptedFileKeyB64, sodium.base64_variants.ORIGINAL);
-      const nonceKey = encryptedFileKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedFileKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextKey,
-        null,
-        nonceKey,
-        encryptionKey
-      );
+      const fileKey = await decryptFileKey(encryptedFileKeyB64, sodium);
 
       // --- 2. Déchiffrement des métadonnées ---
       const encryptedMetadataB64 = data.encrypted_metadata;
@@ -299,20 +360,8 @@ export default function Drive() {
       if (!metaResponse.ok) throw new Error("Erreur métadonnées");
       const data = await metaResponse.json();
 
-      // 2. Clés
-      const storageKey = localStorage.getItem('storageKey');
-      const rawStorageKey = sodium.from_hex(storageKey);
-      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
-
-      // Clé Fichier
-      const encFileKey = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
-      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        encFileKey.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
-        null,
-        encFileKey.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
-        encryptionKey
-      );
+      // 2. Clé de fichier via RSA (fallback legacy inside helper)
+      const fileKey = await decryptFileKey(data.encrypted_file_key, sodium);
 
       // Métadonnées déchiffrées
       const encMeta = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
@@ -537,14 +586,13 @@ export default function Drive() {
       await _sodium.ready;
       const sodium = _sodium;
 
-      // 1. Récupération des clés
-      const storageKey = localStorage.getItem('storageKey');
-      if (!storageKey) {
+      // 1. Récupération de la clé publique (RSA) pour chiffrer les FileKey
+      const publicKeyB64 = localStorage.getItem('publicKey');
+      if (!publicKeyB64) {
         window.location.href = '/login';
-        throw new Error('Clé de stockage manquante.');
+        throw new Error('Clé publique manquante.');
       }
-      const rawStorageKey = sodium.from_hex(storageKey);
-      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
+      const publicKey = await importPublicKey(publicKeyB64);
 
       // 2. Choix de la méthode selon la taille
       // 0.9 Mo = 0.9 * 1024 * 1024 octets
@@ -554,7 +602,7 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey,random_tmp_id);
+        const success = await uploadLargeFileStreaming(selectedFile, sodium, publicKey,random_tmp_id);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -564,7 +612,7 @@ export default function Drive() {
         }
       } else {
         console.log(`Fichier <= 0.9Mo (${selectedFile.size}). Passage en mode Simple.`);
-        const success = await uploadSmallFile(selectedFile, sodium, encryptionKey);
+        const success = await uploadSmallFile(selectedFile, sodium, publicKey);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -618,7 +666,7 @@ export default function Drive() {
   };
 
   // --- LOGIQUE FICHIERS < 0.9 Mo (En mémoire) ---
-  const uploadSmallFile = async (file, sodium, encryptionKey) => {
+  const uploadSmallFile = async (file, sodium, publicKey) => {
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le petit fichier:", file.name);
       return false; // Annuler l'upload de ce fichier
@@ -657,11 +705,8 @@ export default function Drive() {
       const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
 
       // Chiffrement Clé Fichier
-      const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        fileKey, null, null, nonceKey, encryptionKey
-      );
-      const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
+      const encryptedFileKey = await rsaEncrypt(publicKey, fileKey);
+      const finalFileKey = new Uint8Array(encryptedFileKey);
 
       nbFilesUploadedRef.current += 1;
       // Envoi
@@ -695,7 +740,7 @@ export default function Drive() {
     }
   };
 
-  const uploadLargeFileStreaming = async (file, sodium, encryptionKey, tmp_id) => {
+  const uploadLargeFileStreaming = async (file, sodium, publicKey, tmp_id) => {
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le gros fichier:", file.name);
       return false; // Annuler l'upload de ce fichier
@@ -715,11 +760,8 @@ export default function Drive() {
     );
     const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
 
-    const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-    const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      fileKey, null, null, nonceKey, encryptionKey
-    );
-    const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
+    const encryptedFileKey = await rsaEncrypt(publicKey, fileKey);
+    const finalFileKey = new Uint8Array(encryptedFileKey);
 
     // --- 2. Initialisation Serveur ---
     let temp_upload_id;
@@ -1058,30 +1100,9 @@ export default function Drive() {
     await _sodium.ready;
     const sodium = _sodium;
 
-    const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) {
-      window.location.href = '/login';
-      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-    }
-
-    // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
-    const rawStorageKey = sodium.from_hex(storageKeyHex);
-    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-
     try {
       // --- ÉTAPE A : Déchiffrer la Clé du Fichier (FileKey) ---
-      const encryptedKeyBuffer = sodium.from_base64(file.encrypted_file_key, sodium.base64_variants.ORIGINAL);
-
-      const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
-      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextKey,
-        null,
-        nonceKey,
-        userMasterKey // On utilise la clé de l'utilisateur ici
-      );
+      const fileKey = await decryptFileKey(file.encrypted_file_key, sodium);
 
       // --- ÉTAPE B : Déchiffrer les Métadonnées avec la FileKey ---
       const encryptedMetaBuffer = sodium.from_base64(file.encrypted_metadata, sodium.base64_variants.ORIGINAL);
