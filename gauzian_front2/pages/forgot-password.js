@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Script from 'next/script';
 import Gauzial from '../components/gauzial';
 
 export default function ForgotPasswordPage() {
@@ -43,6 +44,28 @@ export default function ForgotPasswordPage() {
         });
     };
 
+    // FONCTION DE PARSING (100% Client-side)
+    const parsePdf = async (file) => {
+        // On utilise l'objet chargé globalement par le script
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        
+        // Configuration du worker (obligatoire)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(s => s.str).join(' ');
+            fullText += pageText + '\n';
+        }
+        return fullText;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setMessage(null);
@@ -56,9 +79,24 @@ export default function ForgotPasswordPage() {
 
         try {
             let payloadKey = recoveryKey.trim();
+            
             if (recoveryFile && !payloadKey) {
-                const fileContent = await readFileAsText(recoveryFile);
-                payloadKey = fileContent?.toString().trim();
+                if (recoveryFile.type === 'application/pdf') {
+                    const pdfText = await parsePdf(recoveryFile);
+                    payloadKey = pdfText.trim();
+
+                    // la clef est dans la div avec l'id "recovery-key"
+                    const keyMatch = pdfText.match(/<div id="recovery-key"[^>]*>([\s\S]*?)<\/div>/);
+                    if (keyMatch && keyMatch[1]) {
+                        payloadKey = keyMatch[1].trim();
+                    } else {
+                        throw new Error('Cle de recuperation non trouvee dans le PDF.');
+                    }
+                } else {
+                    // Si c'est un fichier .key (texte brut)
+                    const fileContent = await readFileAsText(recoveryFile);
+                    payloadKey = fileContent?.toString().trim();
+                }
             }
 
             if (!payloadKey) {
@@ -79,7 +117,14 @@ export default function ForgotPasswordPage() {
     const statusClass = message?.type === 'error' ? 'err' : message?.type === 'success' ? 'ok' : 'warn';
 
     return (
-        <main className="page">
+        <>
+            {/* ON CHARGE LA LIB ICI - Elle ne passera PAS par Webpack/Docker build */}
+            <Script 
+                src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+                strategy="beforeInteractive" 
+            />
+
+            <main className="page">
             <div className="left-panel">
                 <Gauzial isUnhappy={message?.type === 'error'} lookAway={false} isRequestGood={message?.type !== 'error'} isLoadingPage={false} />
                 <div className="branding">
@@ -369,5 +414,6 @@ export default function ForgotPasswordPage() {
                 }
             `}</style>
         </main>
+        </>
     );
 }
