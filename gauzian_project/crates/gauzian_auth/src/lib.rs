@@ -1046,7 +1046,7 @@ pub async fn get_encrypted_private_key_from_email(
     Json(payload): Json<EmailRequest>,
 ) -> impl IntoResponse {
     let result = sqlx::query!(
-        "SELECT private_key_encrypted FROM users WHERE email = $1",
+        "SELECT storage_key_encrypted_recuperation FROM users WHERE email = $1",
         payload.email
     )
     .fetch_optional(&state.db_pool)
