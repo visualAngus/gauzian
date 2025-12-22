@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
         });
     };
 
-    const decryptPrivateKeyWithRecoveryKey = async (encryptedKeyB64, recoveryKeyRaw) => {
+    const decryptPrivateKeyWithRecoveryKey = async (encryptedKeyB64, recoveryKeyRaw, sourceLabel = 'unknown') => {
         const sodiumLib = await import('libsodium-wrappers-sumo');
         const sodium = sodiumLib.default || sodiumLib;
         await sodium.ready;
@@ -100,15 +100,19 @@ export default function ForgotPasswordPage() {
             throw new Error('Clé de récupération invalide.');
         }
 
-        const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-            null,
-            ciphertext,
-            null,
-            nonce,
-            recoveryKeyBytes
-        );
-
-        return bufToB64(decrypted);
+        try {
+            const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+                null,
+                ciphertext,
+                null,
+                nonce,
+                recoveryKeyBytes
+            );
+            return bufToB64(decrypted);
+        } catch (e) {
+            const info = `source=${sourceLabel}, cipherLen=${encryptedBytes.length}, keyLen=${recoveryKeyBytes.length}`;
+            throw new Error(`Impossible de déchiffrer la clé (${info}).`);
+        }
     };
 
     // FONCTION DE PARSING (100% Client-side)
@@ -146,16 +150,24 @@ export default function ForgotPasswordPage() {
                 throw new Error(data?.message || 'Impossible de recuperer la cle chiffrée.');
             }
 
-            const encryptedKey =
-                data?.storage_key_encrypted_recuperation ||
-                data?.private_key_encrypted ||
-                data?.public_key_encrypted;
-
-            if (!encryptedKey) {
-                throw new Error('Aucune cle chiffrée retournée par le serveur.');
+            const encryptedKey = data?.storage_key_encrypted_recuperation;
+            if (encryptedKey) {
+                return { cipher: encryptedKey, source: 'storage_key_encrypted_recuperation' };
             }
 
-            return encryptedKey;
+            const fallbackPrivate = data?.private_key_encrypted;
+            if (fallbackPrivate) {
+                return { cipher: fallbackPrivate, source: 'private_key_encrypted' };
+            }
+
+            const fallbackPublic = data?.public_key_encrypted;
+            if (fallbackPublic) {
+                return { cipher: fallbackPublic, source: 'public_key_encrypted' };
+            }
+
+            if (!encryptedKey && !fallbackPrivate && !fallbackPublic) {
+                throw new Error('Aucune cle chiffrée retournée par le serveur.');
+            }
         } catch (error) {
             console.error('Error fetching encrypted key:', error);
             throw error;
@@ -204,12 +216,17 @@ export default function ForgotPasswordPage() {
             // TODO: brancher sur l'API de reinitialisation quand disponible
             console.log('Forgot password payload', { email, recovery_key: payloadKey });
 
-            const encryptedKeyFromServer = await getEncryptedKeyFromServer(email);
-            console.log('Encrypted key from server:', encryptedKeyFromServer);
+            const { cipher: encryptedKeyFromServer, source: cipherSource } = await getEncryptedKeyFromServer(email);
+            console.log('Encrypted key from server:', encryptedKeyFromServer, 'source:', cipherSource);
+
+            if (cipherSource !== 'storage_key_encrypted_recuperation') {
+                throw new Error("Le serveur ne renvoie pas 'storage_key_encrypted_recuperation' (reçu: " + cipherSource + "). Impossible de déchiffrer avec la clé de récupération.");
+            }
 
             const decryptedPrivateKeyB64 = await decryptPrivateKeyWithRecoveryKey(
                 encryptedKeyFromServer,
-                payloadKey
+                payloadKey,
+                cipherSource
             );
 
             localStorage.setItem('privateKey', decryptedPrivateKeyB64);
