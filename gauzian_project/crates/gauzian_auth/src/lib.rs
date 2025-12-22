@@ -1054,23 +1054,21 @@ pub async fn get_encrypted_private_key_from_email(
 
     match result {
         Ok(Some(record)) => {
-            let private_key_encrypted = String::from_utf8(record.private_key_encrypted)
-                .unwrap_or_default();
             let body = Json(json!({
                 "status": "success",
-                "private_key_encrypted": private_key_encrypted
+                "storage_key_encrypted_recuperation": String::from_utf8(record.storage_key_encrypted_recuperation).unwrap_or_default(),
             }));
             (StatusCode::OK, body).into_response()
         }
         Ok(None) => {
             let body = Json(json!({
                 "status": "error",
-                "message": "Utilisateur non trouvé"
+                "message": "Email non trouvé"
             }));
             (StatusCode::NOT_FOUND, body).into_response()
         }
         Err(e) => {
-            error!(error = ?e, "fetch private key by email failed");
+            error!(error = ?e, "fetch encrypted private key failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur interne"
