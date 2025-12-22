@@ -59,21 +59,30 @@ export default function ForgotPasswordPage() {
         const normalize = (val) => String(val || '').replace(/\s+/g, '');
 
         const decodeCipher = () => {
-            const normalized = normalize(encryptedKeyB64);
+            const normalized = normalize(encryptedKeyB64).replace(/-/g, '+').replace(/_/g, '/');
+            const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
             try {
-                return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL);
+                return sodium.from_base64(padded, sodium.base64_variants.ORIGINAL);
             } catch (e1) {
-                return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
+                try {
+                    return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
+                } catch (e2) {
+                    return sodium.from_base64(normalized, sodium.base64_variants.URLSAFE_NO_PADDING);
+                }
             }
         };
 
         const decodeRecoveryKey = () => {
             const normalized = normalize(recoveryKeyRaw).replace(/-/g, '+').replace(/_/g, '/');
+            const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
             try {
                 return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
             } catch (e1) {
-                const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-                return sodium.from_base64(padded, sodium.base64_variants.ORIGINAL);
+                try {
+                    return sodium.from_base64(padded, sodium.base64_variants.ORIGINAL);
+                } catch (e2) {
+                    return sodium.from_base64(normalized, sodium.base64_variants.URLSAFE_NO_PADDING);
+                }
             }
         };
 
@@ -166,15 +175,16 @@ export default function ForgotPasswordPage() {
 
         try {
             let payloadKey = recoveryKey.replace(/\s+/g, '').trim();
+            if (payloadKey && payloadKey.length < 40) {
+                throw new Error('Clé de récupération trop courte ou invalide.');
+            }
             
             if (recoveryFile && !payloadKey) {
                 if (recoveryFile.type === 'application/pdf') {
                     const pdfText = await parsePdf(recoveryFile);
                     payloadKey = pdfText.trim();
-                    console.log('PDF TEXT', pdfText);
                     // la clef qui est apres "Clé de récupération :" ou "Cle de recuperation :"
                     const keyMatch = pdfText.match(/(Cl[eé] de r[eé]cup[eé]ration)\s+([A-Za-z0-9+/=_-]{32,})/i);
-                    console.log('KEY MATCH', keyMatch);
                     if (keyMatch && (keyMatch[2] || keyMatch[1])) {
                         payloadKey = (keyMatch[2] || keyMatch[1]).replace(/\s+/g, '').trim();
                     } else {
