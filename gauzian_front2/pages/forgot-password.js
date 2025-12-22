@@ -122,6 +122,7 @@ export default function ForgotPasswordPage() {
             // TODO: brancher sur l'API de reinitialisation quand disponible
             console.log('Forgot password payload', { email, recovery_key: payloadKey });
             setMessage({ type: 'success', text: 'Demande prête à être envoyée. Branchez l’appel API de réinitialisation.' });
+            getEncryptedKeyFromServer(email);
         } catch (err) {
             setMessage({ type: 'error', text: err.message || 'Erreur lors de la preparation de la demande.' });
         } finally {
