@@ -25,7 +25,7 @@ use argon2::{
         SaltString,
     },
 };
-use rand_core::OsRng;
+use rand::rngs::OsRng;
 // On importe le module pour charger les variables d'environnement (si ce n'est pas déjà fait)
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde_json::json; // Import the json! macro
