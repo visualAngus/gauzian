@@ -81,7 +81,7 @@ pub async fn upload_handler(
         "#,
         user_id,
         payload.encrypted_blob.as_bytes(),
-        payload.encrypted_metadata.as_bytes(),
+        payload.encrypted_metadata.as_bytes(), 
         payload.media_type,
         payload.file_size as i64,
     );

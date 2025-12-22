@@ -9,9 +9,11 @@
   },
   "dependencies": {
     "formidable": "^3.5.4",
+    "jspdf": "^3.0.4",
     "libsodium-wrappers": "^0.7.15",
     "libsodium-wrappers-sumo": "^0.7.15",
     "next": "^14.0.0",
+    "qrcode": "^1.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "streamsaver": "^2.0.6"
