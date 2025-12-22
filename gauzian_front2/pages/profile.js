@@ -88,6 +88,25 @@ export default function ProfilePage() {
         }
     };
 
+    const handleLogout = async () => {
+        try {
+            // Appel à l'API de logout
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include',
+            });
+        } catch (error) {
+            console.error('Erreur lors du logout:', error);
+        } finally {
+            // Nettoyer le localStorage
+            localStorage.removeItem('publicKey');
+            localStorage.removeItem('privateKey');
+            
+            // Rediriger vers la page de login
+            router.push('/login');
+        }
+    };
+
     const fetchStorageStats = async () => {
         try {
             const response = await fetchWithRefresh('/api/storage/stats', {});
@@ -110,18 +129,6 @@ export default function ProfilePage() {
                 storageTotal: 5368709120 // 5 GB
             });
         }
-    };
-
-    const handleLogout = () => {
-        // Supprimer les tokens d'authentification
-        fetch('/api/auth/logout', {
-            method: 'POST',
-            credentials: 'include',
-        }).finally(() => {
-            localStorage.removeItem('publicKey');
-            localStorage.removeItem('privateKey');
-            router.push('/login');
-        });
     };
 
     const formatBytes = (bytes) => {
@@ -389,6 +396,21 @@ export default function ProfilePage() {
                                         <span className="session-badge">Actif</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="section-card">
+                                <h3>Déconnexion</h3>
+                                <p className="section-description">
+                                    Quitter votre session et vous déconnecter de votre compte.
+                                </p>
+                                <button className="btn-logout" onClick={handleLogout}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                                        <polyline points="16 17 21 12 16 7" />
+                                        <line x1="21" y1="12" x2="9" y2="12" />
+                                    </svg>
+                                    Se déconnecter
+                                </button>
                             </div>
                         </div>
                     )}
@@ -1047,6 +1069,29 @@ export default function ProfilePage() {
                 .btn-primary:hover {
                     transform: translateY(-2px);
                     box-shadow: 0 6px 16px rgba(249, 115, 22, 0.4);
+                }
+
+                .btn-logout {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    padding: 0.875rem 1.5rem;
+                    background: #FEE2E2;
+                    color: #DC2626;
+                    border: 2px solid #DC2626;
+                    border-radius: 10px;
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    font-family: inherit;
+                }
+
+                .btn-logout:hover {
+                    background: #DC2626;
+                    color: white;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
                 }
 
                 /* Security Badge */
