@@ -341,11 +341,6 @@ export default function ForgotPasswordPage() {
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
             const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
 
-            // génération
-
-
-            // generation du payload
-
             // Générer une nouvelle clé de récupération et le matériel associé
             const newRecoveryKeyBytes = sodium.randombytes_buf(32);
             const newRecoveryKey = b64NoPadding(newRecoveryKeyBytes);
@@ -460,35 +455,37 @@ export default function ForgotPasswordPage() {
                         </div>
 
                         {phase === 'verify' &&  (
-                            <div className="input-group" >
-                                <label>Entrer la cle de récupération</label>
-                                <textarea
-                                    value={recoveryKey}
-                                    onChange={(e) => handleKeyChange(e.target.value)}
-                                    placeholder="Collez votre cle ici"
-                                    rows={3}
-                                    disabled={!!recoveryFile || phase !== 'verify'}
-                                />
-                                <span className="helper-text">Vous pouvez soit coller la cle, soit envoyer le fichier .key ou le PDF.</span>
-                            </div>
-
-                            <div className="input-group">
-                                <label>Ou importer le fichier (.key ou .pdf)</label>
-                                <div className="file-row">
-                                    <input
-                                        type="file"
-                                        accept=".key,.pdf"
-                                        onChange={handleFileChange}
-                                        aria-label="Importer la cle de recuperation"
-                                        disabled={recoveryKey.trim().length > 0 || phase !== 'verify'}
+                            <>
+                                <div className="input-group" >
+                                    <label>Entrer la cle de récupération</label>
+                                    <textarea
+                                        value={recoveryKey}
+                                        onChange={(e) => handleKeyChange(e.target.value)}
+                                        placeholder="Collez votre cle ici"
+                                        rows={3}
+                                        disabled={!!recoveryFile || phase !== 'verify'}
                                     />
-                                    {recoveryFile && <span className="file-name">{recoveryFile.name}</span>}
+                                    <span className="helper-text">Vous pouvez soit coller la cle, soit envoyer le fichier .key ou le PDF.</span>
                                 </div>
-                            </div>
 
-                            <button type="submit" className="submit-btn" disabled={!canSubmit || loading || phase !== 'verify'}>
-                                {loading ? 'Préparation...' : 'Valider la récupération'}
-                            </button>
+                                <div className="input-group">
+                                    <label>Ou importer le fichier (.key ou .pdf)</label>
+                                    <div className="file-row">
+                                        <input
+                                            type="file"
+                                            accept=".key,.pdf"
+                                            onChange={handleFileChange}
+                                            aria-label="Importer la cle de recuperation"
+                                            disabled={recoveryKey.trim().length > 0 || phase !== 'verify'}
+                                        />
+                                        {recoveryFile && <span className="file-name">{recoveryFile.name}</span>}
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="submit-btn" disabled={!canSubmit || loading || phase !== 'verify'}>
+                                    {loading ? 'Préparation...' : 'Valider la récupération'}
+                                </button>
+                            </>
                         )}
                     </form>
 
