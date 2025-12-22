@@ -362,6 +362,14 @@ export default function LoginPage() {
               >
                 Créer un compte
               </button>
+              {/* mdp oublié */}
+              <button 
+                type="button" 
+                className="link"
+                onClick={() => router.push('/forgot-password')}
+              >
+                Mot de passe oublié ?
+              </button>
             </div>
           </form>
         </div>

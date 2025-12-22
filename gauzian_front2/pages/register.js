@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Gauzial from '../components/gauzial';
+import { useEffect } from 'react';
 
 const buf2hex = (buffer) => {
     return [...new Uint8Array(buffer)]
@@ -21,10 +22,13 @@ export default function RegisterPage() {
     const [message, setMessage] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [isEmailValid, setIsEmailValid] = useState(true);
-    const [isPasswordValid, setIsPasswordValid] = useState(true);
+    const [isEmailValid, setIsEmailValid] = useState(false);
+    const [isPasswordValid, setIsPasswordValid] = useState(false);
     const [isPasswordMatch, setIsPasswordMatch] = useState(true);
     const [isRequestGood, setIsRequestGood] = useState(true);
+    const [isAllComplete, setIsAllComplete] = useState(false);
+    // acepter les CGU avant de s'inscrire
+    const [acceptedCGU, setAcceptedCGU] = useState(false);
 
     // Fonction de validation d'email
     const validateEmail = (email) => {
@@ -275,22 +279,15 @@ export default function RegisterPage() {
 
             if (!res.ok) throw new Error(data.message || 'Erreur lors de l\'inscription');
 
-            setMessage({ type: 'success', text: 'Inscription réussie ! Redirection...' });
+            setMessage({ type: 'success', text: 'Inscription réussie ! Sauvegardez votre clé.' });
 
+            // Stocker la clé de récupération pour l'écran dédié de sauvegarde
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem('gauzian_recovery_key', userRestoreKey);
+            }
 
-            // creation d'un ficher .key contenant la clée de récupération
-            const element = document.createElement("a");
-            const file = new Blob([userRestoreKey], {type: 'text/plain'});
-            element.href = URL.createObjectURL(file);
-            element.download = "gauzian_recovery_key.key";
-            
-            // téléchargement automatique
-            document.body.appendChild(element); // Nécessaire pour Firefox
-            element.click();
-            document.body.removeChild(element);
-                        
-            // Optionnel : Auto-login ou redirection vers /login
-            window.location.href = '/login';
+            setIsLoadingPage(false);
+            router.push('/recovery-key');
 
         } catch (err) {
             console.error(err);
@@ -301,6 +298,13 @@ export default function RegisterPage() {
             setLoading(false);
         }
     }
+
+
+    useEffect(() => {
+        // submit desactivé tant que les CGU ne sont pas acceptées et que les champs sont valides
+        console.log(acceptedCGU, isEmailValid, isPasswordValid, isPasswordMatch);
+        setIsAllComplete(acceptedCGU && isEmailValid && isPasswordValid && isPasswordMatch);
+    }, [acceptedCGU, isEmailValid, isPasswordValid, isPasswordMatch]);
 
     return (
         <main className="page">
@@ -446,7 +450,22 @@ export default function RegisterPage() {
                             )}
                         </div>
 
-                        <button type="submit" className="submit-btn" disabled={loading || isLoadingPage}>
+                        <div className="input-group" style={{ marginTop: '1rem' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '500' }}>
+                                <input 
+                                    type="checkbox"
+                                    checked={acceptedCGU}
+                                    onChange={(e) => setAcceptedCGU(e.target.checked)}
+                                    disabled={loading || isLoadingPage}
+                                    style={{ width: 'auto', margin: 0 }}
+                                    required
+                                />
+                                J'accepte les<a href="/cgu" target="_blank" rel="noopener noreferrer">conditions générales d'utilisation</a>
+                            </label>
+                            
+                        </div>
+
+                        <button type="submit" className="submit-btn" disabled={loading || isLoadingPage || !isRequestGood || !isAllComplete} >
                             {loading ? 'Inscription en cours…' : 'S\'inscrire'}
                         </button>
                         
