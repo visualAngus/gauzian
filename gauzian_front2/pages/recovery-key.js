@@ -66,7 +66,7 @@ export default function RecoveryKeyPage() {
                 <html>
                 <head>
                     <meta charset="UTF-8">
-                    <title>Gauzian - Cle de recuperation</title>
+                    <title>Gauzian - Clé de récupération</title>
                     <style>
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         body { font-family: Arial, sans-serif; background: white; }
@@ -94,13 +94,13 @@ export default function RecoveryKeyPage() {
                         </div>
                         
                         <div class="warning">
-                            <div class="warning-title">IMPORTANT - Conservez cette cle !</div>
-                            <p>Cette cle de recuperation est la SEULE facon de recuperer vos donnees si vous perdez votre mot de passe. Sans cette cle, vos donnees sont definitivement perdues. Ne la partagez pas et gardez-la en lieu sur.</p>
+                            <div class="warning-title">IMPORTANT - Conservez cette clé !</div>
+                            <p>Cette clé de récupération est la SEULE façon de récupérer vos données si vous perdez votre mot de passe. Sans cette clé, vos données sont définitivement perdues. Ne la partagez pas et gardez-la en lieu sûr.</p>
                         </div>
                         
                         <div class="section">
-                            <div class="section-title">Cle de recuperation</div>
-                            <div class="key-box">${recoveryKey}</div>
+                            <div class="section-title">Clé de récupération</div>
+                            <div class="key-box" id="recovery-key">${recoveryKey}</div>
                         </div>
                         
                         <div class="section">
@@ -110,12 +110,12 @@ export default function RecoveryKeyPage() {
                         
                         <div class="qr-section">
                             <div class="section-title">Code QR</div>
-                            <p style="text-align: center; margin: 10px 0; font-size: 12px; color: #666;">Scannez ce code pour acceder a la page de restauration</p>
+                            <p style="text-align: center; margin: 10px 0; font-size: 12px; color: #666;">Scannez ce code pour accéder à la page de restauration</p>
                             <img src="${qrDataUrl}" alt="QR code" class="qr-img" />
                         </div>
                         
                         <div class="footer">
-                            Document genere le ${new Date().toLocaleDateString('fr-FR')} a ${new Date().toLocaleTimeString('fr-FR')}
+                            Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
                         </div>
                     </div>
                 </body>
@@ -131,16 +131,16 @@ export default function RecoveryKeyPage() {
             }, 250);
             
             markInteraction();
-            setStatus({ type: 'success', text: 'PDF pret a imprimer. Utilisez Ctrl+P pour sauvegarder.' });
+            setStatus({ type: 'success', text: 'PDF prêt à imprimer. Utilisez Ctrl+P pour sauvegarder.' });
         } catch (err) {
             console.error(err);
-            setStatus({ type: 'error', text: "Erreur lors de la generation du PDF." });
+            setStatus({ type: 'error', text: "Erreur lors de la génération du PDF." });
         }
     };
 
     const handleContinue = () => {
         if (!hasInteracted) {
-            setStatus({ type: 'error', text: "Sauvegardez ou copiez la cle avant de continuer." });
+            setStatus({ type: 'error', text: "Sauvegardez ou copiez la clé avant de continuer." });
             return;
         }
         if (typeof window !== 'undefined') {
