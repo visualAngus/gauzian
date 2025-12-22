@@ -51,16 +51,33 @@ export default function ForgotPasswordPage() {
         });
     };
 
-    const decryptPrivateKeyWithRecoveryKey = async (encryptedKeyB64, recoveryKeyB64) => {
+    const decryptPrivateKeyWithRecoveryKey = async (encryptedKeyB64, recoveryKeyRaw) => {
         const sodiumLib = await import('libsodium-wrappers-sumo');
         const sodium = sodiumLib.default || sodiumLib;
         await sodium.ready;
 
-        const encryptedBytes = sodium.from_base64(
-            encryptedKeyB64,
-            sodium.base64_variants.ORIGINAL
-        );
+        const normalize = (val) => String(val || '').replace(/\s+/g, '');
 
+        const decodeCipher = () => {
+            const normalized = normalize(encryptedKeyB64);
+            try {
+                return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL);
+            } catch (e1) {
+                return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
+            }
+        };
+
+        const decodeRecoveryKey = () => {
+            const normalized = normalize(recoveryKeyRaw).replace(/-/g, '+').replace(/_/g, '/');
+            try {
+                return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
+            } catch (e1) {
+                const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+                return sodium.from_base64(padded, sodium.base64_variants.ORIGINAL);
+            }
+        };
+
+        const encryptedBytes = decodeCipher();
         const nonceLength = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
         if (!encryptedBytes || encryptedBytes.length <= nonceLength) {
             throw new Error('Clé chiffrée invalide renvoyée par le serveur.');
@@ -69,10 +86,7 @@ export default function ForgotPasswordPage() {
         const nonce = encryptedBytes.slice(0, nonceLength);
         const ciphertext = encryptedBytes.slice(nonceLength);
 
-        const recoveryKeyBytes = sodium.from_base64(
-            recoveryKeyB64,
-            sodium.base64_variants.ORIGINAL_NO_PADDING
-        );
+        const recoveryKeyBytes = decodeRecoveryKey();
         if (recoveryKeyBytes.length !== 32) {
             throw new Error('Clé de récupération invalide.');
         }
@@ -151,7 +165,7 @@ export default function ForgotPasswordPage() {
         setLoading(true);
 
         try {
-            let payloadKey = recoveryKey.trim();
+            let payloadKey = recoveryKey.replace(/\s+/g, '').trim();
             
             if (recoveryFile && !payloadKey) {
                 if (recoveryFile.type === 'application/pdf') {
@@ -159,17 +173,17 @@ export default function ForgotPasswordPage() {
                     payloadKey = pdfText.trim();
                     console.log('PDF TEXT', pdfText);
                     // la clef qui est apres "Clé de récupération :" ou "Cle de recuperation :"
-                    const keyMatch = pdfText.match(/Clé de récupération\s+([A-Za-z0-9+/=]{43,})/);
+                    const keyMatch = pdfText.match(/(Cl[eé] de r[eé]cup[eé]ration)\s+([A-Za-z0-9+/=_-]{32,})/i);
                     console.log('KEY MATCH', keyMatch);
-                    if (keyMatch && keyMatch[1]) {
-                        payloadKey = keyMatch[1].trim();
+                    if (keyMatch && (keyMatch[2] || keyMatch[1])) {
+                        payloadKey = (keyMatch[2] || keyMatch[1]).replace(/\s+/g, '').trim();
                     } else {
                         throw new Error('Cle de recuperation non trouvee dans le PDF.');
                     }
                 } else {
                     // Si c'est un fichier .key (texte brut)
                     const fileContent = await readFileAsText(recoveryFile);
-                    payloadKey = fileContent?.toString().trim();
+                    payloadKey = fileContent?.toString().replace(/\s+/g, '').trim();
                 }
             }
 
