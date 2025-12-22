@@ -66,6 +66,21 @@ export default function ForgotPasswordPage() {
         return fullText;
     };
 
+    const getEncryptedKeyFromServer = async (email) => {
+        fetch('/api/auth/get-encrypted-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Encrypted key from server:', data.private_key_encrypted);
+        })
+        .catch(error => {
+            console.error('Error fetching encrypted key:', error);
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setMessage(null);
@@ -84,9 +99,10 @@ export default function ForgotPasswordPage() {
                 if (recoveryFile.type === 'application/pdf') {
                     const pdfText = await parsePdf(recoveryFile);
                     payloadKey = pdfText.trim();
-
-                    // la clef est dans la div avec l'id "recovery-key"
-                    const keyMatch = pdfText.match(/<div id="recovery-key"[^>]*>([\s\S]*?)<\/div>/);
+                    console.log('PDF TEXT', pdfText);
+                    // la clef qui est apres "Clé de récupération :" ou "Cle de recuperation :"
+                    const keyMatch = pdfText.match(/Clé de récupération\s+([A-Za-z0-9+/=]{43,})/);
+                    console.log('KEY MATCH', keyMatch);
                     if (keyMatch && keyMatch[1]) {
                         payloadKey = keyMatch[1].trim();
                     } else {

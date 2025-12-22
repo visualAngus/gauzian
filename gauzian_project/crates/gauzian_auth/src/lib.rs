@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_client_ip::InsecureClientIp;
-use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest};
+use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest,EmailRequest};
 
 use uuid::Uuid;
 // Ensure the database connection string is correct in your AppState configuration
@@ -1036,6 +1036,46 @@ pub async fn autologin_handler(
                 "message": "Session expirée, veuillez vous reconnecter"
             }));
             (StatusCode::UNAUTHORIZED, body).into_response()
+        }
+    }
+}
+
+
+pub async fn get_encrypted_private_key_from_email(
+    State(state): State<AppState>,
+    Json(payload): Json<EmailRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query!(
+        "SELECT private_key_encrypted FROM users WHERE email = $1",
+        payload.email
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+
+    match result {
+        Ok(Some(record)) => {
+            let private_key_encrypted = String::from_utf8(record.private_key_encrypted)
+                .unwrap_or_default();
+            let body = Json(json!({
+                "status": "success",
+                "private_key_encrypted": private_key_encrypted
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        Ok(None) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Utilisateur non trouvé"
+            }));
+            (StatusCode::NOT_FOUND, body).into_response()
+        }
+        Err(e) => {
+            error!(error = ?e, "fetch private key by email failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur interne"
+            }));
+            (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
         }
     }
 }
