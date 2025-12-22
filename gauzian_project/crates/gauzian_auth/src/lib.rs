@@ -1056,7 +1056,9 @@ pub async fn get_encrypted_private_key_from_email(
         Ok(Some(record)) => {
             let body = Json(json!({
                 "status": "success",
-                "storage_key_encrypted_recuperation": String::from_utf8(record.storage_key_encrypted_recuperation).unwrap_or_default(),
+                "storage_key_encrypted_recuperation": record.storage_key_encrypted_recuperation
+                    .and_then(|v| String::from_utf8(v).ok())
+                    .unwrap_or_default(),
             }));
             (StatusCode::OK, body).into_response()
         }
