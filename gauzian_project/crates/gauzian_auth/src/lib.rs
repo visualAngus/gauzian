@@ -203,8 +203,9 @@ pub async fn refresh_session(
     // 3. Prolongation : on réutilise le même refresh token mais on prolonge son expiration
     let new_expires_at = Utc::now() + ChronoDuration::days(7);
     sqlx::query!(
-        "UPDATE refresh_tokens SET expires_at = $1 WHERE token_hash = $2",
+        "UPDATE refresh_tokens SET expires_at = $1, last_used_at = $2 WHERE token_hash = $3",
         new_expires_at,
+        Utc::now(),
         token_hash
     )
     .execute(pool)
