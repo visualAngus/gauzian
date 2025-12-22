@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_client_ip::InsecureClientIp;
-use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest,EmailRequest};
+use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest, EmailRequest, RecoveryResetRequest, RecoveryVerifyRequest};
 
 use uuid::Uuid;
 // Ensure the database connection string is correct in your AppState configuration
@@ -25,6 +25,7 @@ use argon2::{
         SaltString,
     },
 };
+use rand_core::OsRng;
 // On importe le module pour charger les variables d'environnement (si ce n'est pas déjà fait)
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde_json::json; // Import the json! macro
@@ -418,14 +419,48 @@ pub async fn register_handler(
         }
     };
 
-    let storage_key_encrypted_recuperation = payload.storage_key_encrypted_recuperation.clone();
+    let recovery_auth = payload.recovery_auth.clone();
+    let recovery_hash = match tokio::task::spawn_blocking(move || {
+        if recovery_auth.is_empty() {
+            return Err("La preuve de récupération est vide".to_string());
+        }
+        let argon2 = Argon2::default();
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = argon2
+            .hash_password(recovery_auth.as_bytes(), &salt)
+            .map_err(|e| format!("Erreur de hachage de la clé de récupération: {}", e))?
+            .to_string();
+        Ok(hash)
+    })
+    .await
+    {
+        Ok(Ok(hash)) => hash,
+        Ok(Err(e)) => {
+            error!(error = %e, "recovery key hashing failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Erreur lors du hachage de la clé de récupération",
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(error = %e, "recovery key hashing task join error");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Erreur interne lors de l'exécution de la tâche",
+            )
+                .into_response();
+        }
+    };
+
+    let private_key_encrypted_recuperation = payload.private_key_encrypted_recuperation.clone();
     let folder_key_encrypted = payload.folder_key_encrypted.clone();
     let folder_metadata_encrypted = payload.folder_metadata_encrypted.clone();
     // Insertion dans la base de données
     let insert_result = sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale, public_key, private_key_encrypted)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, private_key_encrypted_recuperation, recovery_salt, recovery_hash, last_name, first_name, date_of_birth, time_zone, locale, public_key, private_key_encrypted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id
         "#,
     )
@@ -433,7 +468,9 @@ pub async fn register_handler(
     .bind(password_hash.as_bytes())
     .bind(payload.salt_e2e.as_bytes())
     .bind(payload.salt_auth.as_bytes())
-    .bind(storage_key_encrypted_recuperation.as_bytes())
+    .bind(private_key_encrypted_recuperation.as_bytes())
+    .bind(payload.recovery_salt.as_bytes())
+    .bind(recovery_hash.as_bytes())
     .bind(payload.last_name)
     .bind(payload.first_name)
     .bind(payload.date_of_birth)
@@ -1041,12 +1078,12 @@ pub async fn autologin_handler(
 }
 
 
-pub async fn get_encrypted_private_key_from_email(
+pub async fn recovery_challenge_handler(
     State(state): State<AppState>,
     Json(payload): Json<EmailRequest>,
 ) -> impl IntoResponse {
     let result = sqlx::query!(
-        "SELECT storage_key_encrypted_recuperation FROM users WHERE email = $1",
+        "SELECT recovery_salt FROM users WHERE email = $1",
         payload.email
     )
     .fetch_optional(&state.db_pool)
@@ -1054,11 +1091,19 @@ pub async fn get_encrypted_private_key_from_email(
 
     match result {
         Ok(Some(record)) => {
+            let recovery_salt = String::from_utf8(record.recovery_salt).unwrap_or_default();
+
+            if recovery_salt.is_empty() {
+                let body = Json(json!({
+                    "status": "error",
+                    "message": "Clé de récupération indisponible"
+                }));
+                return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            }
+
             let body = Json(json!({
-                "status": "success",
-                "storage_key_encrypted_recuperation": record.storage_key_encrypted_recuperation
-                    .and_then(|v| String::from_utf8(v).ok())
-                    .unwrap_or_default(),
+                "status": "challenge",
+                "recovery_salt": recovery_salt,
             }));
             (StatusCode::OK, body).into_response()
         }
@@ -1070,10 +1115,225 @@ pub async fn get_encrypted_private_key_from_email(
             (StatusCode::NOT_FOUND, body).into_response()
         }
         Err(e) => {
-            error!(error = ?e, "fetch encrypted private key failed");
+            error!(error = ?e, "fetch recovery challenge failed");
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur interne"
+            }));
+            (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        }
+    }
+}
+
+pub async fn recovery_verify_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<RecoveryVerifyRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query!(
+        "SELECT recovery_hash, private_key_encrypted_recuperation FROM users WHERE email = $1",
+        payload.email
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+
+    let record = match result {
+        Ok(Some(record)) => record,
+        Ok(None) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Email non trouvé"
+            }));
+            return (StatusCode::NOT_FOUND, body).into_response();
+        }
+        Err(e) => {
+            error!(error = ?e, "fetch recovery hash failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur interne"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    };
+
+    let recovery_hash = match String::from_utf8(record.recovery_hash) {
+        Ok(hash) if !hash.is_empty() => hash,
+        _ => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Données de récupération manquantes"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    };
+
+    let proof = payload.recovery_auth.clone();
+    let verify_result = tokio::task::spawn_blocking(move || {
+        let parsed_hash = PasswordHash::new(&recovery_hash).map_err(|e| e.to_string())?;
+        let argon2 = Argon2::default();
+        argon2
+            .verify_password(proof.as_bytes(), &parsed_hash)
+            .map_err(|_| "Preuve de récupération invalide".to_string())
+    })
+    .await;
+
+    match verify_result {
+        Ok(Ok(())) => {
+            let encrypted_for_recovery = record
+                .private_key_encrypted_recuperation
+                .and_then(|v| String::from_utf8(v).ok())
+                .unwrap_or_default();
+
+            if encrypted_for_recovery.is_empty() {
+                let body = Json(json!({
+                    "status": "error",
+                    "message": "Clé chiffrée indisponible"
+                }));
+                return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            }
+
+            let body = Json(json!({
+                "status": "success",
+                "private_key_encrypted_recuperation": encrypted_for_recovery,
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        _ => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Preuve de récupération invalide"
+            }));
+            (StatusCode::UNAUTHORIZED, body).into_response()
+        }
+    }
+}
+
+pub async fn recovery_reset_password_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<RecoveryResetRequest>,
+) -> impl IntoResponse {
+    // 1. Vérifier la preuve de récupération
+    let verify_result = sqlx::query!(
+        "SELECT recovery_hash FROM users WHERE email = $1",
+        payload.email
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+
+    let recovery_hash = match verify_result {
+        Ok(Some(record)) => String::from_utf8(record.recovery_hash).ok(),
+        Ok(None) => None,
+        Err(e) => {
+            error!(error = ?e, "fetch recovery hash failed during reset");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Erreur interne"})),
+            )
+                .into_response();
+        }
+    };
+
+    let recovery_hash = match recovery_hash {
+        Some(hash) if !hash.is_empty() => hash,
+        _ => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"status": "error", "message": "Preuve de récupération invalide"})),
+            )
+                .into_response();
+        }
+    };
+
+    let proof = payload.recovery_auth.clone();
+    let proof_verification = tokio::task::spawn_blocking(move || {
+        let parsed_hash = PasswordHash::new(&recovery_hash).map_err(|e| e.to_string())?;
+        let argon2 = Argon2::default();
+        argon2
+            .verify_password(proof.as_bytes(), &parsed_hash)
+            .map_err(|_| "Preuve de récupération invalide".to_string())
+    })
+    .await;
+
+    if !matches!(proof_verification, Ok(Ok(()))) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"status": "error", "message": "Preuve de récupération invalide"})),
+        )
+            .into_response();
+    }
+
+    // 2. Recalculer le hash du mot de passe avec les nouveaux sels
+    let salt_auth_clone = payload.salt_auth.clone();
+    let new_password = payload.new_password.clone();
+    let new_password_hash = match tokio::task::spawn_blocking(move || {
+        if salt_auth_clone.is_empty() {
+            return Err("Le sel d'authentification est vide".to_string());
+        }
+        let salt = SaltString::from_b64(salt_auth_clone.as_str())
+            .map_err(|e| format!("Sel invalide: {}", e))?;
+        if new_password.is_empty() {
+            return Err("Le mot de passe est vide".to_string());
+        }
+        let argon2 = Argon2::default();
+        let password_hash = argon2
+            .hash_password(new_password.as_bytes(), &salt)
+            .map_err(|e| format!("Erreur de hachage: {}", e))?
+            .to_string();
+        Ok(password_hash)
+    })
+    .await
+    {
+        Ok(Ok(hash)) => hash,
+        Ok(Err(e)) => {
+            error!(error = %e, "password hashing failed during reset");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Erreur lors de l'encodage du mot de passe"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(error = %e, "password hashing task join error during reset");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Erreur interne lors de l'exécution de la tâche"})),
+            )
+                .into_response();
+        }
+    };
+
+    // 3. Mise à jour des secrets d'authentification
+    let update_result = sqlx::query!(
+        r#"
+        UPDATE users
+        SET password_hash = $1,
+            salt_auth = $2,
+            salt_e2e = $3,
+            private_key_encrypted = $4,
+            updated_at = NOW()
+        WHERE email = $5
+        "#,
+        new_password_hash.as_bytes(),
+        payload.salt_auth.as_bytes(),
+        payload.salt_e2e.as_bytes(),
+        payload.private_key_encrypted.as_bytes(),
+        payload.email,
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match update_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Mot de passe mis à jour"
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        Err(e) => {
+            error!(error = ?e, "update password via recovery failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur lors de la mise à jour du mot de passe"
             }));
             (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
         }
