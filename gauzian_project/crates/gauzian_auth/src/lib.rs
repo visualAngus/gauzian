@@ -398,21 +398,6 @@ pub async fn register_handler(
     // Regarde ta console serveur quand tu fais une requête
     info!(client_ip = %client_ip, "register request received");
 
-    // 1. Gestion Locale / Timezone (inchangé)
-    let raw_locale = headers
-        .get(ACCEPT_LANGUAGE)
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    let locale = raw_locale
-        .as_deref()
-        .and_then(|s| s.split(',').next())
-        .and_then(|s| s.split('-').next())
-        .unwrap_or("en")
-        .to_string();
-
-    let time_zone = payload.time_zone.unwrap_or("UTC".to_string());
-
     let salt_auth = payload.salt_auth.clone();
 
     let password_hash = match tokio::task::spawn_blocking(move || {
@@ -492,8 +477,8 @@ pub async fn register_handler(
     // Insertion dans la base de données
     let insert_result = sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, private_key_encrypted_recuperation, recovery_salt, recovery_hash, last_name, first_name, date_of_birth, time_zone, locale, public_key, private_key_encrypted)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, private_key_encrypted_recuperation, recovery_salt, recovery_hash, last_name, first_name, date_of_birth, public_key, private_key_encrypted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         "#,
     )
@@ -507,8 +492,6 @@ pub async fn register_handler(
     .bind(payload.last_name)
     .bind(payload.first_name)
     .bind(payload.date_of_birth)
-    .bind(time_zone)
-    .bind(locale)
     .bind(payload.public_key.as_bytes())
     .bind(payload.private_key_encrypted.as_bytes())
     .fetch_one(&state.db_pool)
