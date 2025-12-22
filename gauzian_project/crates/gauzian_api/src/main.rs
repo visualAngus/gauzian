@@ -17,8 +17,17 @@ use axum::body::Body;
 use axum::http::Request;
 use axum::middleware::Next;
 use axum::response::Response;
-use gauzian_auth::{autologin_handler, login_handler, register_handler, info_handler,refresh_handler,logout_handler,
-    get_encrypted_private_key_from_email};
+use gauzian_auth::{
+    autologin_handler,
+    login_handler,
+    recovery_challenge_handler,
+    recovery_reset_password_handler,
+    recovery_verify_handler,
+    register_handler,
+    info_handler,
+    refresh_handler,
+    logout_handler,
+};
     
 use gauzian_drive::{
     create_folder_handler, download_handler, files_handler, finish_streaming_upload,
@@ -126,7 +135,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/refresh", post(refresh_handler))
         .route("/auth/logout", post(logout_handler))
         .route("/auth/info", get(info_handler))
-        .route("/auth/get-encrypted-key", post(get_encrypted_private_key_from_email))
+        .route("/auth/recovery/challenge", post(recovery_challenge_handler))
+        .route("/auth/recovery/verify", post(recovery_verify_handler))
+        .route("/auth/recovery/reset-password", post(recovery_reset_password_handler))
         .route("/drive/upload", post(upload_handler))
         .route("/drive/download", get(download_handler))
         .route("/drive/folders", get(folder_handler))
