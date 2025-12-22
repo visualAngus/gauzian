@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import Script from 'next/script';
 import Gauzial from '../components/gauzial';
 
+const bufToB64 = (buf) => {
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+};
+
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState('');
     const [recoveryKey, setRecoveryKey] = useState('');
@@ -44,6 +51,43 @@ export default function ForgotPasswordPage() {
         });
     };
 
+    const decryptPrivateKeyWithRecoveryKey = async (encryptedKeyB64, recoveryKeyB64) => {
+        const sodiumLib = await import('libsodium-wrappers-sumo');
+        const sodium = sodiumLib.default || sodiumLib;
+        await sodium.ready;
+
+        const encryptedBytes = sodium.from_base64(
+            encryptedKeyB64,
+            sodium.base64_variants.ORIGINAL
+        );
+
+        const nonceLength = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+        if (!encryptedBytes || encryptedBytes.length <= nonceLength) {
+            throw new Error('Clé chiffrée invalide renvoyée par le serveur.');
+        }
+
+        const nonce = encryptedBytes.slice(0, nonceLength);
+        const ciphertext = encryptedBytes.slice(nonceLength);
+
+        const recoveryKeyBytes = sodium.from_base64(
+            recoveryKeyB64,
+            sodium.base64_variants.ORIGINAL_NO_PADDING
+        );
+        if (recoveryKeyBytes.length !== 32) {
+            throw new Error('Clé de récupération invalide.');
+        }
+
+        const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+            null,
+            ciphertext,
+            null,
+            nonce,
+            recoveryKeyBytes
+        );
+
+        return bufToB64(decrypted);
+    };
+
     // FONCTION DE PARSING (100% Client-side)
     const parsePdf = async (file) => {
         // On utilise l'objet chargé globalement par le script
@@ -67,18 +111,32 @@ export default function ForgotPasswordPage() {
     };
 
     const getEncryptedKeyFromServer = async (email) => {
-        fetch('/api/auth/get-encrypted-key', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Encrypted key from server:', data.private_key_encrypted);
-        })
-        .catch(error => {
+        try {
+            const res = await fetch('/api/auth/get-encrypted-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data?.message || 'Impossible de recuperer la cle chiffrée.');
+            }
+
+            const encryptedKey =
+                data?.storage_key_encrypted_recuperation ||
+                data?.private_key_encrypted ||
+                data?.public_key_encrypted;
+
+            if (!encryptedKey) {
+                throw new Error('Aucune cle chiffrée retournée par le serveur.');
+            }
+
+            return encryptedKey;
+        } catch (error) {
             console.error('Error fetching encrypted key:', error);
-        });
+            throw error;
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -121,8 +179,21 @@ export default function ForgotPasswordPage() {
 
             // TODO: brancher sur l'API de reinitialisation quand disponible
             console.log('Forgot password payload', { email, recovery_key: payloadKey });
-            setMessage({ type: 'success', text: 'Demande prête à être envoyée. Branchez l’appel API de réinitialisation.' });
-            getEncryptedKeyFromServer(email);
+
+            const encryptedKeyFromServer = await getEncryptedKeyFromServer(email);
+            console.log('Encrypted key from server:', encryptedKeyFromServer);
+
+            const decryptedPrivateKeyB64 = await decryptPrivateKeyWithRecoveryKey(
+                encryptedKeyFromServer,
+                payloadKey
+            );
+
+            localStorage.setItem('privateKey', decryptedPrivateKeyB64);
+            setMessage({
+                type: 'success',
+                text: 'Clé déchiffrée avec succès. Sauvegardez-la en lieu sûr.'
+            });
+
         } catch (err) {
             setMessage({ type: 'error', text: err.message || 'Erreur lors de la preparation de la demande.' });
         } finally {
