@@ -234,11 +234,21 @@ pub async fn refresh_session(
     println!("Refresh token valid for user_id: {}", user_id);
     // 3. Prolongation : on réutilise le même refresh token mais on prolonge son expiration
     let new_expires_at = Utc::now() + ChronoDuration::days(7);
+    let now = Utc::now();
+
     sqlx::query!(
-        "UPDATE refresh_tokens SET expires_at = $1, last_used_at = $2 WHERE token_hash = $3",
-        new_expires_at,
-        Utc::now(),
-        token_hash
+        r#"
+        WITH cleanup AS (
+            DELETE FROM refresh_tokens 
+            WHERE expires_at < $2
+        )
+        UPDATE refresh_tokens 
+        SET expires_at = $1, last_used_at = $2 
+        WHERE token_hash = $3
+        "#,
+        new_expires_at, // $1
+        now,            // $2 (Utilisé pour mettre à jour last_used_at ET pour le filtre du delete)
+        token_hash      // $3
     )
     .execute(pool)
     .await
