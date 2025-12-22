@@ -14,6 +14,7 @@ use uuid::Uuid;
 // Ensure the database connection string is correct in your AppState configuration
 // Example: "postgres://username:password@localhost/database_name"
 use woothee::parser::Parser;
+use ipnetwork::IpNetwork;
 
 // On ajoute les imports pour l'identité
 use argon2::{
@@ -144,18 +145,49 @@ async fn save_refresh_token(
     pool: &sqlx::PgPool,
     user_id: &Uuid,
     token: &str,
+    headers: &HeaderMap,
 ) -> Result<(), sqlx::Error> {
     let token_hash = hash_refresh_token(token);
     let expires_at = Utc::now() + ChronoDuration::days(7);
+    let payload_client_ip_str = headers
+        .get("x-real-ip")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("127.0.0.1");
+    
+    let payload_client_ip: IpNetwork = payload_client_ip_str
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1".parse().unwrap());
+
+    let raw_user_agent = headers
+        .get(USER_AGENT)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    let parser = Parser::new();
+    let formatted_user_agent = match parser.parse(raw_user_agent) {
+        Some(result) => format!("{} {} sur {}", result.name, result.version, result.os),
+        None => {
+            if raw_user_agent.is_empty() {
+                "Inconnu".to_string()
+            } else {
+                format!(
+                    "Autre ({})",
+                    &raw_user_agent.chars().take(20).collect::<String>()
+                )
+            }
+        }
+    };
 
     sqlx::query!(
         r#"
-        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-        VALUES ($1, $2, $3)
+        INSERT INTO refresh_tokens (user_id, token_hash, expires_at,ip, user_agent)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
         user_id,
         token_hash,
-        expires_at
+        expires_at,
+        payload_client_ip,
+        formatted_user_agent
     )
     .execute(pool)
     .await?;
@@ -556,36 +588,9 @@ pub async fn register_handler(
 
 pub async fn login_handler(
     State(state): State<AppState>,
-    headers: HeaderMap,
-    InsecureClientIp(ip): InsecureClientIp,
+    headers: HeaderMap, // FromRequestParts extractors MUST come before body extractors
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    // --- LOGIQUE IP / USER-AGENT (INCHANGÉE) ---
-    let payload_client_ip = headers
-        .get("x-real-ip")
-        .and_then(|val| val.to_str().ok())
-        .unwrap_or("IP Inconnue"); // Fallback si le header est absent
-    // ... (Ton code de log IP reste ici) ...
-
-    let raw_user_agent = headers
-        .get(USER_AGENT)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-
-    let parser = Parser::new();
-    let formatted_user_agent = match parser.parse(raw_user_agent) {
-        Some(result) => format!("{} {} sur {}", result.name, result.version, result.os),
-        None => {
-            if raw_user_agent.is_empty() {
-                "Inconnu".to_string()
-            } else {
-                format!(
-                    "Autre ({})",
-                    &raw_user_agent.chars().take(20).collect::<String>()
-                )
-            }
-        }
-    };
 
     let email = payload.email.clone();
     let password = payload.password.clone();
@@ -650,7 +655,7 @@ pub async fn login_handler(
     let refresh_token = generate_refresh_token();
 
     // Sauvegarde du refresh token en BDD
-    if let Err(e) = save_refresh_token(&state.db_pool, &user.id, &refresh_token).await {
+    if let Err(e) = save_refresh_token(&state.db_pool, &user.id, &refresh_token,&headers).await {
         error!(error = ?e, "refresh token save failed");
         return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
     }
