@@ -339,7 +339,7 @@ export default function ForgotPasswordPage() {
 
 
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
-            const b64NoPadding = (u8) => sodium.to_base64(u8, sodiumde.base64_variants.ORIGINAL).replace(/=+$/, '');
+            const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
 
             // génération
 
