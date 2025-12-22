@@ -9,7 +9,6 @@ export default function RecoveryKeyPage() {
     const [qrDataUrl, setQrDataUrl] = useState('');
     const [status, setStatus] = useState({ type: 'warning', text: "Sauvegardez cette cle avant de continuer." });
     const [hasInteracted, setHasInteracted] = useState(false);
-
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
@@ -23,21 +22,17 @@ export default function RecoveryKeyPage() {
         const url = `${window.location.origin}/recover#k=${encodeURIComponent(storedKey)}`;
         setShareUrl(url);
 
-        // Appeler l'API pour generer le QR code
-        fetch('/api/generate-qr', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.qrDataUrl) {
-                    setQrDataUrl(data.qrDataUrl);
-                }
-            })
-            .catch(() => {
-                console.error('QR generation failed');
-            });
+        const generateQR = async () => {
+            try {
+                const QRCode = await import('qrcode');
+                const dataUrl = await QRCode.toDataURL(url);
+                setQrDataUrl(dataUrl);
+            } catch (err) {
+                setStatus({ type: 'error', text: 'Generation du QR code impossible. Copiez la cle ou telechargez-la.' });
+            }
+        };
+
+        generateQR();
     }, []);
 
     const markInteraction = () => setHasInteracted(true);
