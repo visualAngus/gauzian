@@ -162,3 +162,8 @@ pub struct MoveFileToFolderRequest {
     pub target_folder_id: Uuid,
 }
 
+
+#[derive(Deserialize, Debug)]
+pub struct EmailRequest {
+    pub email: String,
+}
