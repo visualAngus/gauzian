@@ -9,6 +9,21 @@ const bufToB64 = (buf) => {
     return btoa(binary);
 };
 
+const decodeRecoveryKeyBytes = (sodium, recoveryKeyRaw) => {
+    const normalize = (val) => String(val || '').replace(/\s+/g, '');
+    const normalized = normalize(recoveryKeyRaw).replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+    try {
+        return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
+    } catch (e1) {
+        try {
+            return sodium.from_base64(padded, sodium.base64_variants.ORIGINAL);
+        } catch (e2) {
+            return sodium.from_base64(normalized, sodium.base64_variants.URLSAFE_NO_PADDING);
+        }
+    }
+};
+
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState('');
     const [recoveryKey, setRecoveryKey] = useState('');
@@ -16,11 +31,22 @@ export default function ForgotPasswordPage() {
     const [message, setMessage] = useState(null);
     const [loading, setLoading] = useState(false);
     const [isEmailValid, setIsEmailValid] = useState(false);
+    const [phase, setPhase] = useState('verify');
+    const [recoveryAuthProof, setRecoveryAuthProof] = useState('');
+    const [decryptedPrivateKeyB64, setDecryptedPrivateKeyB64] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isPasswordValid, setIsPasswordValid] = useState(false);
+    const [isPasswordMatch, setIsPasswordMatch] = useState(true);
 
     const validateEmail = (value) => {
         if (value === '') return false;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(value);
+    };
+
+    const validatePassword = (value) => {
+        return /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(value);
     };
 
     useEffect(() => {
@@ -40,6 +66,19 @@ export default function ForgotPasswordPage() {
         if (value) {
             setRecoveryFile(null);
         }
+    };
+
+    const handleNewPasswordChange = (value) => {
+        setNewPassword(value);
+        setIsPasswordValid(validatePassword(value));
+        if (confirmPassword) {
+            setIsPasswordMatch(value === confirmPassword);
+        }
+    };
+
+    const handleConfirmPasswordChange = (value) => {
+        setConfirmPassword(value);
+        setIsPasswordMatch(value === newPassword);
     };
 
     const readFileAsText = (file) => {
@@ -72,20 +111,6 @@ export default function ForgotPasswordPage() {
             }
         };
 
-        const decodeRecoveryKey = () => {
-            const normalized = normalize(recoveryKeyRaw).replace(/-/g, '+').replace(/_/g, '/');
-            const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-            try {
-                return sodium.from_base64(normalized, sodium.base64_variants.ORIGINAL_NO_PADDING);
-            } catch (e1) {
-                try {
-                    return sodium.from_base64(padded, sodium.base64_variants.ORIGINAL);
-                } catch (e2) {
-                    return sodium.from_base64(normalized, sodium.base64_variants.URLSAFE_NO_PADDING);
-                }
-            }
-        };
-
         const encryptedBytes = decodeCipher();
         const nonceLength = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
         if (!encryptedBytes || encryptedBytes.length <= nonceLength) {
@@ -95,7 +120,7 @@ export default function ForgotPasswordPage() {
         const nonce = encryptedBytes.slice(0, nonceLength);
         const ciphertext = encryptedBytes.slice(nonceLength);
 
-        const recoveryKeyBytes = decodeRecoveryKey();
+        const recoveryKeyBytes = decodeRecoveryKeyBytes(sodium, recoveryKeyRaw);
         if (recoveryKeyBytes.length !== 32) {
             throw new Error('Clé de récupération invalide.');
         }
@@ -137,44 +162,58 @@ export default function ForgotPasswordPage() {
         return fullText;
     };
 
-    const getEncryptedKeyFromServer = async (email) => {
-        try {
-            const res = await fetch('/api/auth/get-encrypted-key', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email }),
-            });
-
-            const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data?.message || 'Impossible de recuperer la cle chiffrée.');
-            }
-
-            const encryptedKey = data?.storage_key_encrypted_recuperation;
-            if (encryptedKey) {
-                return { cipher: encryptedKey, source: 'storage_key_encrypted_recuperation' };
-            }
-
-            const fallbackPrivate = data?.private_key_encrypted;
-            if (fallbackPrivate) {
-                return { cipher: fallbackPrivate, source: 'private_key_encrypted' };
-            }
-
-            const fallbackPublic = data?.public_key_encrypted;
-            if (fallbackPublic) {
-                return { cipher: fallbackPublic, source: 'public_key_encrypted' };
-            }
-
-            if (!encryptedKey && !fallbackPrivate && !fallbackPublic) {
-                throw new Error('Aucune cle chiffrée retournée par le serveur.');
-            }
-        } catch (error) {
-            console.error('Error fetching encrypted key:', error);
-            throw error;
-        }
+    const deriveRecoveryProof = (sodium, recoveryKeyRaw, saltB64) => {
+        const saltNormalized = (saltB64 || '').replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+        const saltPad = saltNormalized.length % 4;
+        const saltPadded = saltPad ? saltNormalized + '='.repeat(4 - saltPad) : saltNormalized;
+        const saltBytes = sodium.from_base64(saltPadded, sodium.base64_variants.ORIGINAL);
+        const keyBytes = decodeRecoveryKeyBytes(sodium, recoveryKeyRaw);
+        const proof = sodium.crypto_generichash(32, new Uint8Array([...keyBytes, ...saltBytes]));
+        return sodium
+            .to_base64(proof, sodium.base64_variants.ORIGINAL)
+            .replace(/=+$/, '');
     };
 
-    const handleSubmit = async (e) => {
+    const fetchRecoverySalt = async (email) => {
+        const res = await fetch('/api/auth/recovery/challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data?.message || 'Impossible de récupérer le challenge.');
+        }
+
+        if (!data?.recovery_salt) {
+            throw new Error('Challenge de récupération incomplet.');
+        }
+
+        return data.recovery_salt;
+    };
+
+    const requestRecoveryCipher = async (email, recoveryAuth) => {
+        const res = await fetch('/api/auth/recovery/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, recovery_auth: recoveryAuth }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data?.message || "Preuve de récupération invalide.");
+        }
+
+        const encryptedKey = data?.private_key_encrypted_recuperation;
+        if (!encryptedKey) {
+            throw new Error('Aucune clé chiffrée retournée par le serveur.');
+        }
+
+        return encryptedKey;
+    };
+
+    const handleVerifySubmit = async (e) => {
         e.preventDefault();
         setMessage(null);
 
@@ -190,12 +229,11 @@ export default function ForgotPasswordPage() {
             if (payloadKey && payloadKey.length < 40) {
                 throw new Error('Clé de récupération trop courte ou invalide.');
             }
-            
+
             if (recoveryFile && !payloadKey) {
                 if (recoveryFile.type === 'application/pdf') {
                     const pdfText = await parsePdf(recoveryFile);
                     payloadKey = pdfText.trim();
-                    // la clef qui est apres "Clé de récupération :" ou "Cle de recuperation :"
                     const keyMatch = pdfText.match(/(Cl[eé] de r[eé]cup[eé]ration)\s+([A-Za-z0-9+/=_-]{32,})/i);
                     if (keyMatch && (keyMatch[2] || keyMatch[1])) {
                         payloadKey = (keyMatch[2] || keyMatch[1]).replace(/\s+/g, '').trim();
@@ -203,7 +241,6 @@ export default function ForgotPasswordPage() {
                         throw new Error('Cle de recuperation non trouvee dans le PDF.');
                     }
                 } else {
-                    // Si c'est un fichier .key (texte brut)
                     const fileContent = await readFileAsText(recoveryFile);
                     payloadKey = fileContent?.toString().replace(/\s+/g, '').trim();
                 }
@@ -213,36 +250,126 @@ export default function ForgotPasswordPage() {
                 throw new Error('Impossible de lire la cle depuis le fichier.');
             }
 
-            // TODO: brancher sur l'API de reinitialisation quand disponible
-            console.log('Forgot password payload', { email, recovery_key: payloadKey });
+            const sodiumLib = await import('libsodium-wrappers-sumo');
+            const sodium = sodiumLib.default || sodiumLib;
+            await sodium.ready;
 
-            const { cipher: encryptedKeyFromServer, source: cipherSource } = await getEncryptedKeyFromServer(email);
-            console.log('Encrypted key from server:', encryptedKeyFromServer, 'source:', cipherSource);
-
-            if (cipherSource !== 'storage_key_encrypted_recuperation') {
-                throw new Error("Le serveur ne renvoie pas 'storage_key_encrypted_recuperation' (reçu: " + cipherSource + "). Impossible de déchiffrer avec la clé de récupération.");
-            }
+            const challengeSalt = await fetchRecoverySalt(email);
+            const proof = deriveRecoveryProof(sodium, payloadKey, challengeSalt);
+            const encryptedKeyFromServer = await requestRecoveryCipher(email, proof);
 
             const decryptedPrivateKeyB64 = await decryptPrivateKeyWithRecoveryKey(
                 encryptedKeyFromServer,
                 payloadKey,
-                cipherSource
+                'private_key_encrypted_recuperation'
             );
 
-            localStorage.setItem('privateKey', decryptedPrivateKeyB64);
+            setRecoveryAuthProof(proof);
+            setDecryptedPrivateKeyB64(decryptedPrivateKeyB64);
+            setPhase('reset');
             setMessage({
                 type: 'success',
-                text: 'Clé déchiffrée avec succès. Sauvegardez-la en lieu sûr.'
+                text: 'Clé validée. Choisissez un nouveau mot de passe.',
             });
-
         } catch (err) {
-            setMessage({ type: 'error', text: err.message || 'Erreur lors de la preparation de la demande.' });
+            setMessage({ type: 'error', text: err.message || 'Erreur lors de la préparation de la demande.' });
         } finally {
             setLoading(false);
         }
     };
 
-    const canSubmit = isEmailValid && (recoveryKey.trim().length > 0 || recoveryFile);
+    const handleResetSubmit = async (e) => {
+        e.preventDefault();
+        setMessage(null);
+
+        if (!decryptedPrivateKeyB64 || !recoveryAuthProof) {
+            setMessage({ type: 'error', text: 'Validez d’abord votre clé de récupération.' });
+            return;
+        }
+
+        if (!validatePassword(newPassword) || !isPasswordMatch) {
+            setMessage({ type: 'error', text: 'Mot de passe invalide ou non confirmé.' });
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const sodiumLib = await import('libsodium-wrappers-sumo');
+            const sodium = sodiumLib.default || sodiumLib;
+            await sodium.ready;
+
+            const enc = new TextEncoder();
+            const saltAuth = sodium.randombytes_buf(16);
+            const saltE2e = sodium.randombytes_buf(16);
+            const passwordBytes = enc.encode(newPassword);
+
+            const encryptedPassword = sodium.crypto_pwhash(
+                32,
+                passwordBytes,
+                saltAuth,
+                sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+                sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+                sodium.crypto_pwhash_ALG_ARGON2ID13
+            );
+
+            const derivedKey = sodium.crypto_pwhash(
+                32,
+                encryptedPassword,
+                saltE2e,
+                sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+                sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+                sodium.crypto_pwhash_ALG_ARGON2ID13
+            );
+
+            const userMasterKey = sodium.crypto_generichash(32, derivedKey);
+
+            const privateKeyBytes = Uint8Array.from(atob(decryptedPrivateKeyB64), c => c.charCodeAt(0));
+            const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedPrivateKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                privateKeyBytes,
+                null,
+                null,
+                nonce,
+                userMasterKey
+            );
+            const finalEncryptedPrivateKey = new Uint8Array([...nonce, ...encryptedPrivateKeyBlob]);
+
+            const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
+            const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
+
+            const payload = {
+                email,
+                recovery_auth: recoveryAuthProof,
+                new_password: newPassword,
+                salt_auth: b64NoPadding(saltAuth),
+                salt_e2e: b64NoPadding(saltE2e),
+                private_key_encrypted: b64(finalEncryptedPrivateKey),
+            };
+
+            const res = await fetch('/api/auth/recovery/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.message || 'Erreur lors de la mise à jour du mot de passe.');
+
+            setMessage({
+                type: 'success',
+                text: 'Mot de passe mis à jour. Vous pouvez vous reconnecter.',
+            });
+            setPhase('done');
+        } catch (err) {
+            setMessage({ type: 'error', text: err.message || 'Erreur lors de la mise à jour du mot de passe.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const canSubmit = phase === 'verify' && isEmailValid && (recoveryKey.trim().length > 0 || recoveryFile);
+    const canReset = phase !== 'verify' && isPasswordValid && isPasswordMatch && newPassword.length > 0;
     const statusClass = message?.type === 'error' ? 'err' : message?.type === 'success' ? 'ok' : 'warn';
 
     return (
@@ -273,7 +400,7 @@ export default function ForgotPasswordPage() {
                         <div className={`alert ${statusClass}`}>{message.text}</div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="form">
+                    <form onSubmit={handleVerifySubmit} className="form">
                         <div className="input-group">
                             <label>Email</label>
                             <input
@@ -283,6 +410,7 @@ export default function ForgotPasswordPage() {
                                 placeholder="vous@email.com"
                                 className={!isEmailValid && email.length > 0 ? 'input-error' : ''}
                                 required
+                                disabled={phase !== 'verify'}
                             />
                             {!isEmailValid && email.length > 0 && (
                                 <span className="error-text">Email invalide</span>
@@ -296,7 +424,7 @@ export default function ForgotPasswordPage() {
                                 onChange={(e) => handleKeyChange(e.target.value)}
                                 placeholder="Collez votre cle ici"
                                 rows={3}
-                                disabled={!!recoveryFile}
+                                disabled={!!recoveryFile || phase !== 'verify'}
                             />
                             <span className="helper-text">Vous pouvez soit coller la cle, soit envoyer le fichier .key ou le PDF.</span>
                         </div>
@@ -309,16 +437,60 @@ export default function ForgotPasswordPage() {
                                     accept=".key,.pdf"
                                     onChange={handleFileChange}
                                     aria-label="Importer la cle de recuperation"
-                                    disabled={recoveryKey.trim().length > 0}
+                                    disabled={recoveryKey.trim().length > 0 || phase !== 'verify'}
                                 />
                                 {recoveryFile && <span className="file-name">{recoveryFile.name}</span>}
                             </div>
                         </div>
 
-                        <button type="submit" className="submit-btn" disabled={!canSubmit || loading}>
+                        <button type="submit" className="submit-btn" disabled={!canSubmit || loading || phase !== 'verify'}>
                             {loading ? 'Préparation...' : 'Valider la récupération'}
                         </button>
                     </form>
+
+                    {phase !== 'verify' && (
+                        <form onSubmit={handleResetSubmit} className="form secondary-form">
+                            <div className="input-group">
+                                <label>Nouveau mot de passe</label>
+                                <input
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(e) => handleNewPasswordChange(e.target.value)}
+                                    placeholder="Mot de passe fort"
+                                    className={!isPasswordValid && newPassword.length > 0 ? 'input-error' : ''}
+                                    required
+                                    disabled={phase === 'done'}
+                                />
+                                {!isPasswordValid && newPassword.length > 0 && (
+                                    <span className="error-text">8+ caractères, 1 majuscule, 1 chiffre, 1 spécial.</span>
+                                )}
+                            </div>
+
+                            <div className="input-group">
+                                <label>Confirmer le mot de passe</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => handleConfirmPasswordChange(e.target.value)}
+                                    placeholder="Confirmez"
+                                    className={!isPasswordMatch && confirmPassword.length > 0 ? 'input-error' : ''}
+                                    required
+                                    disabled={phase === 'done'}
+                                />
+                                {!isPasswordMatch && confirmPassword.length > 0 && (
+                                    <span className="error-text">Les mots de passe ne correspondent pas.</span>
+                                )}
+                            </div>
+
+                            <button
+                                type="submit"
+                                className="submit-btn"
+                                disabled={!canReset || loading || phase === 'done'}
+                            >
+                                {loading ? 'Mise à jour...' : 'Mettre à jour le mot de passe'}
+                            </button>
+                        </form>
+                    )}
                 </div>
             </div>
 

@@ -21,7 +21,9 @@ pub struct RegisterRequest {
     pub password: String,
     pub salt_e2e: String,
     pub salt_auth: String,
-    pub storage_key_encrypted_recuperation: String,
+    pub private_key_encrypted_recuperation: String,
+    pub recovery_auth: String,
+    pub recovery_salt: String,
     pub folder_key_encrypted: String,
     pub folder_metadata_encrypted: String,
     pub public_key: String,
@@ -32,6 +34,22 @@ pub struct RegisterRequest {
 
     pub date_of_birth: Option<NaiveDate>,
     pub time_zone: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RecoveryVerifyRequest {
+    pub email: String,
+    pub recovery_auth: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RecoveryResetRequest {
+    pub email: String,
+    pub recovery_auth: String,
+    pub new_password: String,
+    pub salt_auth: String,
+    pub salt_e2e: String,
+    pub private_key_encrypted: String,
 }
 
 #[derive(Deserialize, Debug)]

@@ -244,6 +244,15 @@ export default function RegisterPage() {
             );
             const finalEncryptedPrivateKeyForRecovery = new Uint8Array([...noncePrivKeyRecovery, ...encryptedPrivateKeyBlobRecovery]);
 
+            // Preuve de récupération (Hash(recoveryKey + salt))
+            const recoverySaltBytes = sodium.randombytes_buf(16);
+            const recoverySalt = b64NoPadding(recoverySaltBytes);
+            const recoveryProof = sodium.crypto_generichash(
+                32,
+                new Uint8Array([...userRestoreKeyBytes, ...recoverySaltBytes])
+            );
+            const recoveryAuth = b64NoPadding(recoveryProof);
+
             // --- 6. PRÉPARATION DU PAYLOAD ---
             const payload = {
                 first_name: firstName,
@@ -254,10 +263,12 @@ export default function RegisterPage() {
                 // Les sels
                 salt_e2e: b64NoPadding(salt_e2e),
                 salt_auth: b64NoPadding(salt_auth),
-                
-                // Clé de récupération - ici on met du dummy random pour l'exemple
-                storage_key_encrypted_recuperation: b64(finalEncryptedPrivateKeyForRecovery),
-                
+
+                // Clé de récupération et preuve côté serveur
+                private_key_encrypted_recuperation: b64(finalEncryptedPrivateKeyForRecovery),
+                recovery_auth: recoveryAuth,
+                recovery_salt: recoverySalt,
+
                 // Le dossier racine chiffré par la clé principale
                 folder_key_encrypted: b64(finalRootFolderKey),
                 folder_metadata_encrypted: b64(finalRootMetadata),
