@@ -1301,7 +1301,47 @@ pub async fn recovery_reset_password_handler(
         }
     };
 
-    // 3. Mise à jour des secrets d'authentification
+    // 3. Hacher la nouvelle preuve de récupération si fournie
+    let new_recovery_hash = if !payload.new_recovery_auth.is_empty() {
+        let auth_clone = payload.new_recovery_auth.clone();
+        let salt_str = payload.new_recovery_salt.clone();
+        match tokio::task::spawn_blocking(move || {
+            if salt_str.is_empty() {
+                return Err("Le sel de récupération est vide".to_string());
+            }
+            let salt = SaltString::from_b64(salt_str.as_str())
+                .map_err(|e| format!("Sel de récupération invalide: {}", e))?;
+            let argon2 = Argon2::default();
+            argon2
+                .hash_password(auth_clone.as_bytes(), &salt)
+                .map(|h| h.to_string())
+                .map_err(|e| format!("Erreur de hachage de la clé de récupération: {}", e))
+        })
+        .await
+        {
+            Ok(Ok(hash)) => Some(hash),
+            Ok(Err(e)) => {
+                error!(error = %e, "recovery hashing failed during reset");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"status": "error", "message": "Erreur lors du hachage de la nouvelle clé de récupération"})),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                error!(error = %e, "recovery hashing task join error during reset");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"status": "error", "message": "Erreur interne"})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        None
+    };
+
+    // 4. Mise à jour des secrets d'authentification et de récupération
     let update_result = sqlx::query!(
         r#"
         UPDATE users
@@ -1309,14 +1349,20 @@ pub async fn recovery_reset_password_handler(
             salt_auth = $2,
             salt_e2e = $3,
             private_key_encrypted = $4,
+            private_key_encrypted_recuperation = COALESCE($5, private_key_encrypted_recuperation),
+            recovery_salt = COALESCE($6, recovery_salt),
+            recovery_hash = COALESCE($7, recovery_hash),
             updated_at = NOW()
-        WHERE email = $5
+        WHERE email = $8
         "#,
         new_password_hash.as_bytes(),
         payload.salt_auth.as_bytes(),
         payload.salt_e2e.as_bytes(),
         payload.private_key_encrypted.as_bytes(),
-        payload.email,
+        if payload.private_key_encrypted_recuperation.is_empty() { None } else { Some(payload.private_key_encrypted_recuperation.as_bytes()) },
+        if payload.new_recovery_salt.is_empty() { None } else { Some(payload.new_recovery_salt.as_bytes()) },
+        new_recovery_hash.as_ref().map(|h| h.as_bytes()),
+        payload.email
     )
     .execute(&state.db_pool)
     .await;

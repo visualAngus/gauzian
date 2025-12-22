@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import Script from 'next/script';
 import Gauzial from '../components/gauzial';
 
@@ -25,6 +26,7 @@ const decodeRecoveryKeyBytes = (sodium, recoveryKeyRaw) => {
 };
 
 export default function ForgotPasswordPage() {
+    const router = useRouter();
     const [email, setEmail] = useState('');
     const [recoveryKey, setRecoveryKey] = useState('');
     const [recoveryFile, setRecoveryFile] = useState(null);
@@ -335,8 +337,33 @@ export default function ForgotPasswordPage() {
             );
             const finalEncryptedPrivateKey = new Uint8Array([...nonce, ...encryptedPrivateKeyBlob]);
 
+
             const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
-            const b64NoPadding = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL).replace(/=+$/, '');
+            const b64NoPadding = (u8) => sodium.to_base64(u8, sodiumde.base64_variants.ORIGINAL).replace(/=+$/, '');
+
+            // génération
+
+
+            // generation du payload
+
+            // Générer une nouvelle clé de récupération et le matériel associé
+            const newRecoveryKeyBytes = sodium.randombytes_buf(32);
+            const newRecoveryKey = b64NoPadding(newRecoveryKeyBytes);
+
+            const newRecoverySalt = sodium.randombytes_buf(16);
+            const newRecoverySaltB64 = b64NoPadding(newRecoverySalt);
+            const newRecoveryProof = deriveRecoveryProof(sodium, newRecoveryKey, newRecoverySaltB64);
+
+            // Chiffrer la clé privée pour la récupération
+            const newRecoveryNonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+            const encryptedForRecovery = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+                privateKeyBytes,
+                null,
+                null,
+                newRecoveryNonce,
+                newRecoveryKeyBytes
+            );
+            const finalRecoveryCipher = new Uint8Array([...newRecoveryNonce, ...encryptedForRecovery]);
 
             const payload = {
                 email,
@@ -345,6 +372,9 @@ export default function ForgotPasswordPage() {
                 salt_auth: b64NoPadding(saltAuth),
                 salt_e2e: b64NoPadding(saltE2e),
                 private_key_encrypted: b64(finalEncryptedPrivateKey),
+                private_key_encrypted_recuperation: b64(finalRecoveryCipher),
+                new_recovery_salt: newRecoverySaltB64,
+                new_recovery_auth: newRecoveryProof,
             };
 
             const res = await fetch('/api/auth/recovery/reset-password', {
@@ -356,17 +386,29 @@ export default function ForgotPasswordPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data?.message || 'Erreur lors de la mise à jour du mot de passe.');
 
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem('gauzian_recovery_key', newRecoveryKey);
+            }
+
             setMessage({
                 type: 'success',
-                text: 'Mot de passe mis à jour. Vous pouvez vous reconnecter.',
+                text: 'Mot de passe mis à jour. Sauvegardez votre nouvelle clé.',
             });
             setPhase('done');
+
+            router.push('/recovery-key');
+
         } catch (err) {
             setMessage({ type: 'error', text: err.message || 'Erreur lors de la mise à jour du mot de passe.' });
         } finally {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        setIsPasswordValid(validatePassword(newPassword));
+        setIsPasswordMatch(newPassword === confirmPassword);
+    }, [newPassword, confirmPassword]);
 
     const canSubmit = phase === 'verify' && isEmailValid && (recoveryKey.trim().length > 0 || recoveryFile);
     const canReset = phase !== 'verify' && isPasswordValid && isPasswordMatch && newPassword.length > 0;
@@ -417,35 +459,37 @@ export default function ForgotPasswordPage() {
                             )}
                         </div>
 
-                        <div className="input-group">
-                            <label>Entrer la cle de récupération</label>
-                            <textarea
-                                value={recoveryKey}
-                                onChange={(e) => handleKeyChange(e.target.value)}
-                                placeholder="Collez votre cle ici"
-                                rows={3}
-                                disabled={!!recoveryFile || phase !== 'verify'}
-                            />
-                            <span className="helper-text">Vous pouvez soit coller la cle, soit envoyer le fichier .key ou le PDF.</span>
-                        </div>
-
-                        <div className="input-group">
-                            <label>Ou importer le fichier (.key ou .pdf)</label>
-                            <div className="file-row">
-                                <input
-                                    type="file"
-                                    accept=".key,.pdf"
-                                    onChange={handleFileChange}
-                                    aria-label="Importer la cle de recuperation"
-                                    disabled={recoveryKey.trim().length > 0 || phase !== 'verify'}
+                        {phase === 'verify' &&  (
+                            <div className="input-group" >
+                                <label>Entrer la cle de récupération</label>
+                                <textarea
+                                    value={recoveryKey}
+                                    onChange={(e) => handleKeyChange(e.target.value)}
+                                    placeholder="Collez votre cle ici"
+                                    rows={3}
+                                    disabled={!!recoveryFile || phase !== 'verify'}
                                 />
-                                {recoveryFile && <span className="file-name">{recoveryFile.name}</span>}
+                                <span className="helper-text">Vous pouvez soit coller la cle, soit envoyer le fichier .key ou le PDF.</span>
                             </div>
-                        </div>
 
-                        <button type="submit" className="submit-btn" disabled={!canSubmit || loading || phase !== 'verify'}>
-                            {loading ? 'Préparation...' : 'Valider la récupération'}
-                        </button>
+                            <div className="input-group">
+                                <label>Ou importer le fichier (.key ou .pdf)</label>
+                                <div className="file-row">
+                                    <input
+                                        type="file"
+                                        accept=".key,.pdf"
+                                        onChange={handleFileChange}
+                                        aria-label="Importer la cle de recuperation"
+                                        disabled={recoveryKey.trim().length > 0 || phase !== 'verify'}
+                                    />
+                                    {recoveryFile && <span className="file-name">{recoveryFile.name}</span>}
+                                </div>
+                            </div>
+
+                            <button type="submit" className="submit-btn" disabled={!canSubmit || loading || phase !== 'verify'}>
+                                {loading ? 'Préparation...' : 'Valider la récupération'}
+                            </button>
+                        )}
                     </form>
 
                     {phase !== 'verify' && (

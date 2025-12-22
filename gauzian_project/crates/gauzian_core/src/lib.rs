@@ -50,6 +50,9 @@ pub struct RecoveryResetRequest {
     pub salt_auth: String,
     pub salt_e2e: String,
     pub private_key_encrypted: String,
+    pub private_key_encrypted_recuperation: String,
+    pub new_recovery_salt: String,
+    pub new_recovery_auth: String,
 }
 
 #[derive(Deserialize, Debug)]
