@@ -2541,7 +2541,7 @@ export default function Drive() {
                           {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </span>
                         <span>
-                          {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          {activeSection === 'partages' ? new Date(content.expiration_date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
                         </span>
                       </div>
                       {/* si le fichier est en cours d'upload alors creer une div qui va etre en fond et qui évolura au cours de l'upload */}
