@@ -1200,7 +1200,7 @@ pub async fn get_share_invites_handler(
 
     let select_invites_result = sqlx::query!(
         r#"
-        SELECT fsi.id, fsi.file_id, fsi.sender_id, fsi.encrypted_file_key, fsi.created_at, fsi.expires_at,
+        SELECT fsi.id, fsi.file_id, fsi.sender_id, fsi.encrypted_file_key, fsi.created_at, fsi.expires_at, CONCAT(u.first_name, ' ', u.last_name) AS sender_name,
         u.email AS sender_email, vf.encrypted_metadata
         FROM file_share_invites fsi
         INNER JOIN users u ON fsi.sender_id = u.id
@@ -1224,6 +1224,7 @@ pub async fn get_share_invites_handler(
                     "encrypted_metadata": String::from_utf8(record.encrypted_metadata).unwrap_or_default(),
                     "created_at": record.created_at,
                     "expires_at": record.expires_at,
+                    "sender_name": record.sender_name.unwrap_or_default(),
                 })
             }).collect();
 
