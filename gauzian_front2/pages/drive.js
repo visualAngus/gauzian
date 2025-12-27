@@ -1258,13 +1258,12 @@ export default function Drive() {
       } else {
         getRootFolder();
       }
-    } else if (sectionId === 'partages_avec_moi') {
+    } else if (sectionId === 'partages') {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
       setFiles([]);
       setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);  
     } else {
-
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
       setFiles([]);
