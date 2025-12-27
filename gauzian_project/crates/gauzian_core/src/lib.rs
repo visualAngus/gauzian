@@ -188,3 +188,15 @@ pub struct MoveFileToFolderRequest {
 pub struct EmailRequest {
     pub email: String,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct ShareFileRequest {
+    pub file_id: Uuid,
+    pub receiver_id: Uuid,
+    pub encrypted_file_key: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PrepareShareFileRequest {
+    pub reciver_email: String,
+}

@@ -13,7 +13,8 @@ use gauzian_core::{
     AppState, CancelStreamingUploadRequest, DeleteFileRequest, DeleteFolderRequest, DownloadQuery,
     DownloadRequest, FileRenameRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
-    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,MoveFileToFolderRequest,
+    USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,MoveFileToFolderRequest,ShareFileRequest,
+    PrepareShareFileRequest,
 };
 use serde_json::json;
 
@@ -1091,6 +1092,148 @@ pub async fn move_file_to_folder_handler(
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors du déplacement du fichier"
+            }));
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
+        }
+    }
+}
+
+pub async fn prepare_share_file_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<PrepareShareFileRequest>,
+) -> impl IntoResponse {
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let cookies = auth.set_cookies;
+
+    let select_id_and_public_key_result = sqlx::query!(
+        r#"
+        SELECT id, public_key
+        FROM users
+        WHERE email = $1
+        "#,
+        payload.reciver_email,
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match select_id_and_public_key_result {
+        Ok(record) => {
+            let body = Json(json!({
+                "status": "success",
+                "user_id": record.id,
+                "public_key": String::from_utf8(record.public_key).unwrap_or_default(),
+            }));
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
+        }
+        Err(e) => {
+            error!(error = ?e, "prepare share file failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Utilisateur non trouvé"
+            }));
+            return respond_with_cookies((StatusCode::NOT_FOUND, body), &cookies);
+        }
+    }
+}
+    
+
+pub async fn share_file_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ShareFileRequest>,
+) -> impl IntoResponse {
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
+
+    let share_file_insert_result = sqlx::query!(
+        r#"
+        INSERT INTO file_share_invites (file_id, sender_id, receiver_id, encrypted_file_key, created_at, expires_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '7 days')
+        "#,
+        payload.file_id,
+        user_id,
+        payload.receiver_id,
+        payload.encrypted_file_key.as_bytes(),
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match share_file_insert_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Fichier partagé avec succès",
+            }));
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
+        }
+        Err(e) => {
+            error!(error = ?e, "share file failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors du partage du fichier"
+            }));
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
+        }
+    }
+}
+
+pub async fn get_share_invites_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
+
+    let select_invites_result = sqlx::query!(
+        r#"
+        SELECT fsi.id, fsi.file_id, fsi.sender_id, fsi.encrypted_file_key, fsi.created_at, fsi.expires_at,
+        u.email AS sender_email
+        FROM file_share_invites fsi
+        INNER JOIN users u ON fsi.sender_id = u.id
+        WHERE fsi.receiver_id = $1 AND fsi.expires_at > NOW()
+        "#,
+        user_id,
+    )
+    .fetch_all(&state.db_pool)
+    .await;
+
+    match select_invites_result {
+        Ok(records) => {
+            let invites: Vec<_> = records.into_iter().map(|record| {
+                json!({
+                    "invite_id": record.id,
+                    "file_id": record.file_id,
+                    "sender_id": record.sender_id,
+                    "sender_email": record.sender_email,
+                    "encrypted_file_key": String::from_utf8(record.encrypted_file_key).unwrap_or_default(),
+                    "created_at": record.created_at,
+                    "expires_at": record.expires_at,
+                })
+            }).collect();
+
+            let body = Json(json!({
+                "status": "success",
+                "invites": invites,
+            }));
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
+        }
+        Err(e) => {
+            error!(error = ?e, "get share invites failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors de la récupération des invitations de partage"
             }));
             return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }

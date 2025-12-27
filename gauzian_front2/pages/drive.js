@@ -120,6 +120,9 @@ export default function Drive() {
   const [userPrivateKey, setUserPrivateKey] = useState(null);
   const [userPublicKey, setUserPublicKey] = useState(null);
 
+  // share menu state
+  const [shareMenuState, setShareMenuState] = useState({ isOpen: false, elementId: null, elementType: null });
+
   useEffect(() => {
     activeFolderIdRef.current = activeFolderId;
   }, [activeFolderId]);
@@ -133,7 +136,7 @@ export default function Drive() {
     let stopRetryTimer = null;
     const publicKeyB64 = localStorage.getItem('publicKey');
     const privateKeyB64 = localStorage.getItem('privateKey');
-    
+
     if (publicKeyB64 && privateKeyB64) {
       console.log("Clés trouvées, accès autorisé.");
       setTokenReady(true);
@@ -142,7 +145,7 @@ export default function Drive() {
     } else {
       console.log("Clés manquantes, démarrage de la surveillance du localStorage...");
       retryTimer = setInterval(() => {
-        const nextPub = localStorage.getItem('publicKey');  
+        const nextPub = localStorage.getItem('publicKey');
         const nextPriv = localStorage.getItem('privateKey');
         if (nextPub && nextPriv) {
           setTokenReady(true);
@@ -153,14 +156,14 @@ export default function Drive() {
           setUserPrivateKey(nextPriv);
         }
       }, 200);
-      
+
       stopRetryTimer = setTimeout(() => {
         clearInterval(retryTimer);
         console.log("Clés toujours manquantes après 4 secondes. Redirection vers la page de connexion.");
-        window.location.href = '/login';
+        // window.location.href = '/login';
       }, 4000);
     }
-  
+
     const handleStorage = (event) => {
       if (event.key === 'publicKey' || event.key === 'privateKey') {
         const pub = localStorage.getItem('publicKey');
@@ -172,7 +175,7 @@ export default function Drive() {
         }
       }
     };
-  
+
     window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener('storage', handleStorage);
@@ -578,7 +581,7 @@ export default function Drive() {
 
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        const success = await uploadLargeFileStreaming(selectedFile, sodium, publicKey,random_tmp_id);
+        const success = await uploadLargeFileStreaming(selectedFile, sodium, publicKey, random_tmp_id);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -599,7 +602,7 @@ export default function Drive() {
       }
 
       // remove from filesUpload
-      setFilesUpload((prev) => prev.filter((f) => f.id !== `uploading-${random_tmp_id}`));  
+      setFilesUpload((prev) => prev.filter((f) => f.id !== `uploading-${random_tmp_id}`));
 
       // 3. Fin commune
       // setUploading(false);
@@ -905,7 +908,7 @@ export default function Drive() {
           // Mise à jour progression UI
           chunksFinished++;
 
-          
+
           let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
           // recupérer dans fileUpload le pourcentage et le mettre a jour
           setFilesUpload((prev) => prev.map((f) => {
@@ -914,7 +917,7 @@ export default function Drive() {
             }
             return f;
           }));
-          
+
           UploadProcesses[file.name] = percent;
           setUploadProcesses({ ...UploadProcesses });
           setCurentUploadingFilesNames(Object.keys(UploadProcesses));
@@ -1363,7 +1366,7 @@ export default function Drive() {
         const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-       
+
         const privateKey = await importPrivateKey(userPrivateKey);
         const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
         const folderKey = new Uint8Array(decryptedKeyBuffer);
@@ -1630,6 +1633,84 @@ export default function Drive() {
     }
   }
 
+  const share_item = (itemId, itemType, email) => {
+    console.log("Partager l'élément :", itemId, "de type :", itemType, "avec :", email);
+
+    fetch('/api/drive/prepare_share_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reciver_email: email
+      }),
+    })
+      .then(response => response.json())
+      .then(async data => {
+        if (data.status === 'success') {
+          console.log("Préparation du partage réussie.", data);
+
+          await _sodium.ready;
+          const sodium = _sodium;
+
+          // Récupérer la clé publique du destinataire
+          const reciverPublicKeyB64 = data.public_key;
+          const reciverPublicKeyBuffer = sodium.from_base64(reciverPublicKeyB64, sodium.base64_variants.ORIGINAL);
+          const reciverPublicKey = await importPublicKey(reciverPublicKeyBuffer);
+
+          // Récupérer la clé de l'élément à partager
+          let item = null;
+          item = files.find(f => f.file_id === itemId);
+
+          if (!item) {
+            console.error("Élément à partager non trouvé :", itemId);
+            setNotifText("Élément à partager non trouvé : " + itemId);
+            return;
+          }
+
+          const encryptedItemKeyB64 = itemType === 'file' ? item.encrypted_file_key : item.encrypted_folder_key;
+          const encryptedItemKeyBuffer = sodium.from_base64(encryptedItemKeyB64, sodium.base64_variants.ORIGINAL);
+
+          // Déchiffrer la clé de l'élément avec la clé privée de l'utilisateur
+          const privateKey = await importPrivateKey(userPrivateKey);
+          const decryptedItemKeyBuffer = await rsaDecrypt(privateKey, encryptedItemKeyBuffer);
+          // Chiffrer la clé de l'élément avec la clé publique du destinataire
+          const reEncryptedItemKeyBuffer = await rsaEncrypt(reciverPublicKey, new Uint8Array(decryptedItemKeyBuffer));
+          const reEncryptedItemKeyB64 = sodium.to_base64(new Uint8Array(reEncryptedItemKeyBuffer), sodium.base64_variants.ORIGINAL);
+
+          // Envoyer la clé ré-encryptée au serveur pour finaliser le partage
+          fetch('/api/drive/share_file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              file_id: itemId,
+              receiver_id: data.user_id,
+              encrypted_file_key: reEncryptedItemKeyB64,
+            }),
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success') {
+                console.log("Partage de l'élément réussi.");
+                setNotifText("Partage de l'élément réussi.");
+              } else {
+                console.error("Erreur partage élément :", data.message);
+                setNotifText("Erreur partage élément : " + data.message);
+              }
+            })
+            .catch(error => {
+              console.error("Erreur lors de la requête de partage final :", error);
+              setNotifText("Erreur lors de la requête de partage final : " + error.message);
+            });
+        } else {
+          console.error("Erreur préparation partage :", data.message);
+          setNotifText("Erreur préparation partage : " + data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de partage :", error);
+        setNotifText("Erreur lors de la requête de partage : " + error.message);
+      });
+  };
+
   const open_menu_contextual_file = (fileId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
@@ -1665,7 +1746,8 @@ export default function Drive() {
 
     let shareOption = menu.querySelector("#share_folder_option");
     shareOption.onclick = () => {
-      console.log("Partager le fichier :", fileId);
+      menu.style.display = "none";
+      setShareMenuState({ isOpen: true, itemId: fileId, itemType: 'file' });
     }
 
   }
@@ -1705,12 +1787,12 @@ export default function Drive() {
   const hideNotification = () => {
     const notif = document.getElementById('notification_area');
     if (notif) {
-        notif.style.top = '-0px';
-        notif.style.transform = 'translateX(50%) translateY(-100%)';
+      notif.style.top = '-0px';
+      notif.style.transform = 'translateX(50%) translateY(-100%)';
     } else {
-        console.warn('Notification area not found');
+      console.warn('Notification area not found');
     }
-}
+  }
 
   const move_file_to_folder = async (fileId, folderId) => {
     console.log("Déplacer le fichier", fileId, "vers le dossier", folderId);
@@ -1759,12 +1841,12 @@ export default function Drive() {
       // récupérer la liste de tous les éléments sous la souris
       let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
       // console.log("Éléments sous la souris :", elementsStack);
-      
+
       // Check for both grid and list view folder elements
-      const folderElement = elementsStack.find(el => 
+      const folderElement = elementsStack.find(el =>
         el.classList && (el.classList.contains('folder_list') || el.classList.contains('folder_graph') || el.classList.contains('div_folder_path_graph'))
       );
-      
+
       if (folderElement) {
         console.log("Sur la zone des dossiers");
         document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
@@ -1787,7 +1869,7 @@ export default function Drive() {
         element.style.overflow = 'hidden';
         element.style.whiteSpace = 'nowrap';
         element.style.textOverflow = 'ellipsis';
-      }else {
+      } else {
         element.style.width = width + 'px';
       }
       element.style.zIndex = 1000;
@@ -1842,7 +1924,7 @@ export default function Drive() {
         hideNotification();
         // Réinitialiser notifText après la notification
         setTimeout(() => {
-          
+
           setNotifText('');
         }, 800);
       }, 3000); // Durée d'affichage de la notification (3 secondes)
@@ -1987,6 +2069,30 @@ export default function Drive() {
       </div>
 
       <section>
+
+        <div className="div_share_contextual_menu" style={{ display: shareMenuState.isOpen ? 'flex' : 'none' }}>
+          <form id="share_form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              share_item(shareMenuState.itemId, shareMenuState.itemType, document.getElementById('share_email_input').value);
+              setShareMenuState({ isOpen: false, itemId: null, itemType: null });
+            }}>
+            <h3>Partager</h3>
+            <label>Adresse e-mail :</label>
+            <input type="email" id="share_email_input" placeholder="Adresse e-mail du destinataire" />
+            <label>Permissions :</label>
+            <select id="share_permission_select">
+              <option value="view">Lecture seule</option>
+              <option value="edit">Lecture et écriture</option>
+            </select>
+            <div className="share_form_buttons">
+              <button type="button" id="share_cancel_button">Annuler</button>
+              <button type="submit" id="share_submit_button">Partager</button>
+            </div>
+          </form>
+
+        </div>
+
         <div id='contextual_menu_folder' >
           <div className="option_menu_contextual" id="rename_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M15.7279 9.57627L14.3137 8.16206L5 17.4758V18.89H6.41421L15.7279 9.57627ZM17.1421 8.16206L18.5563 6.74785L17.1421 5.33363L15.7279 6.74785L17.1421 8.16206ZM7.24264 20.89H3V16.6473L16.435 3.21231C16.8256 2.82179 17.4587 2.82179 17.8492 3.21231L20.6777 6.04074C21.0682 6.43126 21.0682 7.06443 20.6777 7.45495L7.24264 20.89Z"></path></svg>
@@ -2306,7 +2412,7 @@ export default function Drive() {
                   }
 
                   return (
-                    
+
                     <div
                       key={content.id}
                       className={`content_graph_list ${selectionClass} ${content.type === 'folder' ? 'folder_list' : 'file_list'} ${content.type === 'uploading' ? 'uploading_file' : ''}`}
@@ -2340,7 +2446,7 @@ export default function Drive() {
                         if (e.button !== 0) return;
 
 
-                        if (content.type === 'file'){
+                        if (content.type === 'file') {
                           setSelectedMoveElement(currentId);
                         }
                       }}
