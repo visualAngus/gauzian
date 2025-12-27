@@ -1263,6 +1263,8 @@ export default function Drive() {
       setFolders([]);
       setFiles([]);
       setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);  
+      getSharedWithMeFiles();
+      
     } else {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
@@ -2000,9 +2002,7 @@ export default function Drive() {
       // Pour l'instant, on ne gère pas les fichiers spéciaux
       setFolders([]);
       setFiles([]);
-    }else if (hash === 'partages') {
-      getSharedWithMeFiles();
-    }    
+    }  
     else {
       // Par défaut, on charge le dossier actif
       if (activeFolderId === null) {
