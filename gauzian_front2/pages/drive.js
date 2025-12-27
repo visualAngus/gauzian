@@ -1262,9 +1262,9 @@ export default function Drive() {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
       setFiles([]);
-      setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);
+      setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);  
       getSharedWithMeFiles();
-
+      
     } else {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
@@ -2002,7 +2002,7 @@ export default function Drive() {
       // Pour l'instant, on ne gère pas les fichiers spéciaux
       setFolders([]);
       setFiles([]);
-    }
+    }  
     else {
       // Par défaut, on charge le dossier actif
       if (activeFolderId === null) {
@@ -2434,14 +2434,8 @@ export default function Drive() {
                     <span>Propriétaire</span>
                     <span>Taille</span>
                     <span>Créé le</span>
-                    {activeSection === 'partages' ? (
-                      <span>Expire le</span>
-                    ) : (
-                      <>
-                        <span>Créé le</span>
-                        <span>Modifié le</span>
-                      </>
-                    )}
+                    {/* si c'est partages alors ce sera la date d'expiration sinon c'est mise a jour */}
+                    <span>{activeSection === 'partages' ? "Expiration" : "Mis à jour"}</span>
                   </div>
                 </div>
 
