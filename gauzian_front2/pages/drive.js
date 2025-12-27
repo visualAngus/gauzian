@@ -1653,8 +1653,7 @@ export default function Drive() {
 
           // Récupérer la clé publique du destinataire
           const reciverPublicKeyB64 = data.public_key;
-          const reciverPublicKeyBuffer = sodium.from_base64(reciverPublicKeyB64, sodium.base64_variants.ORIGINAL);
-          const reciverPublicKey = await importPublicKey(reciverPublicKeyBuffer);
+          const reciverPublicKey = await importPublicKey(reciverPublicKeyB64);
 
           // Récupérer la clé de l'élément à partager
           let item = null;
