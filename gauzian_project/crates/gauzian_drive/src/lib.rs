@@ -1155,8 +1155,8 @@ pub async fn share_file_handler(
 
     let share_file_insert_result = sqlx::query!(
         r#"
-        INSERT INTO file_share_invites (file_id, sender_id, receiver_id, encrypted_file_key, created_at, expires_at)
-        VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '7 days')
+        INSERT INTO file_share_invites (file_id, sender_id, receiver_id, encrypted_file_key, created_at, expires_at,permission_level)
+        VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '7 days','read')
         "#,
         payload.file_id,
         user_id,
