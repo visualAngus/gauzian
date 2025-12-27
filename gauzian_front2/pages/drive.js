@@ -1262,9 +1262,9 @@ export default function Drive() {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
       setFiles([]);
-      setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);  
+      setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);
       getSharedWithMeFiles();
-      
+
     } else {
       // Sections spéciales : cacher les dossiers et fichiers
       setFolders([]);
@@ -1775,8 +1775,8 @@ export default function Drive() {
           encrypted_file_key: invite.encrypted_file_key,
           encrypted_metadata: invite.encrypted_metadata,
           created_at: invite.created_at,
+          sender_name: invite.sender_name,
           expires_at: invite.expires_at,
-          // ajouter d'autres champs si nécessaire
         };
 
         const cleanFile = await processFile(fileLike);
@@ -2002,7 +2002,7 @@ export default function Drive() {
       // Pour l'instant, on ne gère pas les fichiers spéciaux
       setFolders([]);
       setFiles([]);
-    }  
+    }
     else {
       // Par défaut, on charge le dossier actif
       if (activeFolderId === null) {
@@ -2434,7 +2434,14 @@ export default function Drive() {
                     <span>Propriétaire</span>
                     <span>Taille</span>
                     <span>Créé le</span>
-                    <span>Modifié le</span>
+                    {activeSection === 'partages' ? (
+                      <span>Expire le</span>
+                    ) : (
+                      <>
+                        <span>Créé le</span>
+                        <span>Modifié le</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
