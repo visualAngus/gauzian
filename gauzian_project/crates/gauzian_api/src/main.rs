@@ -157,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/move_file", post(move_file_to_folder_handler)) 
         .route("/drive/share_file", post(share_file_handler))
         .route("/drive/prepare_share_file", post(prepare_share_file_handler))
-        .route("/drive/get_share_invites_handler", get(get_share_invites_handler))
+        .route("/drive/get_share_invites", get(get_share_invites_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
         .layer(tower_http::add_extension::AddExtensionLayer::new(
