@@ -1754,6 +1754,7 @@ export default function Drive() {
     }
 
   }
+
   const getSharedWithMeFiles = async () => {
     const res = await authFetch('/api/drive/get_share_invites', {
       method: 'GET',
@@ -1763,57 +1764,24 @@ export default function Drive() {
     });
     const data = await res.json();
     if (data.status === 'success') {
-      console.log("Invitations de partage reçues :", data.invites);
-      
-      await _sodium.ready;
-      const sodium = _sodium;
-      const privateKey = await importPrivateKey(userPrivateKey);
-      
+      console.log("Invites reçues :", data.invites);
       const decryptedFiles = [];
-      
       for (const invite of data.invites) {
-        try {
-          // Déchiffrer la clé du fichier avec la clé privée
-          const encryptedKeyBuffer = sodium.from_base64(invite.encrypted_file_key, sodium.base64_variants.ORIGINAL);
-          const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
-          const fileKey = new Uint8Array(decryptedKeyBuffer);
-          
-          // Récupérer les métadonnées du fichier
-          const fileRes = await authFetch(`/api/drive/download?id_file=${invite.file_id}`, {
-            method: 'GET',
-          });
-          
-          if (fileRes.ok) {
-            const fileData = await fileRes.json();
-            
-            // Déchiffrer les métadonnées
-            const encMeta = sodium.from_base64(fileData.encrypted_metadata, sodium.base64_variants.ORIGINAL);
-            const metadataBuf = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-              null,
-              encMeta.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
-              null,
-              encMeta.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
-              fileKey
-            );
-            const metadata = JSON.parse(sodium.to_string(metadataBuf));
-            
-            decryptedFiles.push({
-              file_id: invite.file_id,
-              name: metadata.filename,
-              total_size: metadata.filesize,
-              type: metadata.filetype,
-              shared_by: invite.sender_email,
-              created_at: invite.created_at,
-              updated_at: invite.created_at,
-              is_chunked: fileData.is_chunked || false,
-              encrypted_file_key: invite.encrypted_file_key,
-            });
-          }
-        } catch (error) {
-          console.error("Erreur déchiffrement fichier partagé :", invite.file_id, error);
-        }
+        // Construire un objet "file-like" attendu par processFile
+        const fileLike = {
+          file_id: invite.file_id,
+          encrypted_file_key: invite.encrypted_file_key,
+          encrypted_metadata: invite.encrypted_metadata,
+          created_at: invite.created_at,
+          expires_at: invite.expires_at,
+          // ajouter d'autres champs si nécessaire
+        };
+
+        const cleanFile = await processFile(fileLike);
+        cleanFile.shared_by = invite.sender_email || invite.sender_id;
+        decryptedFiles.push(cleanFile);
       }
-      
+
       setFiles(decryptedFiles);
     } else {
       console.error("Erreur récupération invitations de partage :", data.message);
