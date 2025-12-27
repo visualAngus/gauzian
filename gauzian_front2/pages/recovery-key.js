@@ -19,7 +19,7 @@ export default function RecoveryKeyPage() {
         }
 
         setRecoveryKey(storedKey);
-        const url = `${window.location.origin}/recover#k=${encodeURIComponent(storedKey)}`;
+        const url = `${window.location.origin}/forgot-password#k=${encodeURIComponent(storedKey)}`;
         setShareUrl(url);
 
         const generateQR = async () => {

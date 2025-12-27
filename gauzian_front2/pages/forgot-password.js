@@ -409,6 +409,17 @@ export default function ForgotPasswordPage() {
     const canReset = phase !== 'verify' && isPasswordValid && isPasswordMatch && newPassword.length > 0;
     const statusClass = message?.type === 'error' ? 'err' : message?.type === 'success' ? 'ok' : 'warn';
 
+    // recuperer dans l'url le param #k= si il existe
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const hash = window.location.hash;
+            if (hash.startsWith('#k=')) {
+                const keyFromUrl = decodeURIComponent(hash.slice(3));
+                setRecoveryKey(keyFromUrl);
+            }
+        }
+    }, []);
+
     return (
         <>
             {/* ON CHARGE LA LIB ICI - Elle ne passera PAS par Webpack/Docker build */}
