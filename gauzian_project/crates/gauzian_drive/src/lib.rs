@@ -1153,10 +1153,12 @@ pub async fn share_file_handler(
     let user_id = auth.user_id;
     let cookies = auth.set_cookies;
 
+    // permission_level text NOT NULL CHECK (permission_level IN ('viewer', 'editor', 'admin')),
+
     let share_file_insert_result = sqlx::query!(
         r#"
         INSERT INTO file_share_invites (file_id, sender_id, receiver_id, encrypted_file_key, created_at, expires_at,permission_level)
-        VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '7 days','read')
+        VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '7 days','viewer')
         "#,
         payload.file_id,
         user_id,
