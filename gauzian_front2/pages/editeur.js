@@ -35,10 +35,27 @@ const Tiptap = () => {
     const docId = 'shared-document'
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
+    
+    console.log('🔧 Creating WebsocketProvider with:', {
+      url: `${protocol}//${host}/ws`,
+      docId,
+    })
+    
     // On empêche la connexion auto pour rafraîchir le cookie avant
     const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc, {
       connect: false,
     })
+    
+    // Debug: vérifier que le provider écoute bien les updates du doc
+    ydoc.on('update', (update, origin, doc, transaction) => {
+      console.log('🔍 Doc update event caught by provider?', {
+        bytes: update.length,
+        origin,
+        providerSynced: provider.synced,
+        wsReady: provider.ws?.readyState,
+      })
+    })
+    
     ydocRef.current = ydoc
     providerRef.current = provider
     awarenessRef.current = provider.awareness
