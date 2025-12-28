@@ -4,17 +4,65 @@ import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
-import { useRef, useState } from 'react'
+import Highlight from '@tiptap/extension-highlight'
+import Underline from '@tiptap/extension-underline'
+import TextAlign from '@tiptap/extension-text-align'
+import Color from '@tiptap/extension-color'
+import TextStyle from '@tiptap/extension-text-style'
+import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
+import { WebsocketProvider } from 'y-websocket'
+import * as Y from 'yjs'
+import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/editeur.module.css'
 
 const Tiptap = () => {
   const [title, setTitle] = useState('Document sans titre')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const ydocRef = useRef(null)
+  const providerRef = useRef(null)
+  const awarenessRef = useRef(null)
   const fileInputRef = useRef(null)
+
+  const [localUser] = useState(() => {
+    const colors = ['#f97316', '#2563eb', '#10b981', '#7c3aed', '#dc2626', '#0ea5e9']
+    const name = `User-${Math.floor(Math.random() * 900 + 100)}`
+    const color = colors[Math.floor(Math.random() * colors.length)]
+    return { name, color }
+  })
+
+  if (!ydocRef.current) {
+    const ydoc = new Y.Doc()
+    const provider = new WebsocketProvider('wss://demos.yjs.dev', 'gauzian-editeur', ydoc)
+    ydocRef.current = ydoc
+    providerRef.current = provider
+    awarenessRef.current = provider.awareness
+    awarenessRef.current.setLocalStateField('user', {
+      name: localUser.name,
+      color: localUser.color,
+    })
+  }
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        history: false,
+      }),
+      Underline,
+      TextStyle,
+      Color.configure({ types: ['textStyle'] }),
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
+      Collaboration.configure({
+        document: ydocRef.current,
+      }),
+      CollaborationCursor.configure({
+        provider: providerRef.current,
+        user: {
+          name: localUser.name,
+          color: localUser.color,
+        },
+      }),
       Link.configure({
         openOnClick: true,
         autolink: true,
@@ -30,9 +78,23 @@ const Tiptap = () => {
     editorProps: {
       attributes: {
         class: styles.proseEditor,
+        spellCheck: 'true',
+      },
+      handleDOMEvents: {
+        contextmenu: (_view, event) => {
+          event.stopPropagation()
+          return false
+        },
       },
     },
   })
+
+  useEffect(() => {
+    return () => {
+      providerRef.current?.destroy()    
+      ydocRef.current?.destroy()
+    }
+  }, [])
 
   if (!editor) return null
 
@@ -45,12 +107,22 @@ const Tiptap = () => {
   const toggleBlockquote = () => editor.chain().focus().toggleBlockquote().run()
   const setHorizontalRule = () => editor.chain().focus().setHorizontalRule().run()
   const toggleCodeBlock = () => editor.chain().focus().toggleCodeBlock().run()
+  const toggleUnderline = () => editor.chain().focus().toggleUnderline().run()
+  const toggleHighlight = () => editor.chain().focus().toggleHighlight().run()
+  const setHighlightColor = (color) => editor.chain().focus().setHighlight({ color }).run()
+  const unsetHighlight = () => editor.chain().focus().unsetHighlight().run()
+  const setTextColor = (color) => editor.chain().focus().setColor(color).run()
+  const unsetTextColor = () => editor.chain().focus().unsetColor().run()
+  const setTextAlign = (alignment) => editor.chain().focus().setTextAlign(alignment).run()
   const undo = () => editor.chain().focus().undo().run()
   const redo = () => editor.chain().focus().redo().run()
 
+  const textColors = ['#0f172a', '#dc2626', '#16a34a', '#2563eb', '#7c3aed', '#f97316']
+  const highlightColors = ['#fef08a', '#fde68a', '#bbf7d0', '#bae6fd', '#e9d5ff', '#ffe4e6']
+
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href
-    const url = window.prompt('URL du lien', previousUrl || 'https://')
+    const url = window.prompt('URL du lien', previousUrl || 'https://') 
     if (url === null) return
     if (url === '') {
       editor.chain().focus().unsetLink().run()
@@ -175,6 +247,56 @@ const Tiptap = () => {
               <path d="M10 19h4v-3h-4v3zM5 4v3h5v3h4V7h5V4H5zM3 14h18v-2H3v2z"/>
             </svg>
           </button>
+          <button
+            onClick={toggleUnderline}
+            className={`${styles.toolbarBtn} ${editor.isActive('underline') ? styles.active : ''}`}
+            title="Souligné"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 4v6a6 6 0 1 0 12 0V4h-2v6a4 4 0 1 1-8 0V4H6zm-1 16v-2h14v2H5z" />
+            </svg>
+          </button>
+          <button
+            onClick={toggleHighlight}
+            className={`${styles.toolbarBtn} ${editor.isActive('highlight') ? styles.active : ''}`}
+            title="Surligner"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25 12.06 8.2l3.74 3.74L6.74 21H3v-3.75zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-2.27 2.27 3.75 3.75 2.27-2.27z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className={styles.toolbarDivider}></div>
+
+        <div className={styles.toolbarGroup}>
+          {textColors.map((color) => (
+            <button
+              key={color}
+              onClick={() => setTextColor(color)}
+              className={`${styles.toolbarBtn} ${styles.colorSwatch} ${editor.isActive('textStyle', { color }) ? styles.active : ''}`}
+              style={{ color, borderColor: 'transparent' }}
+              title={`Texte ${color}`}
+            >
+              A
+            </button>
+          ))}
+          <button onClick={unsetTextColor} className={styles.toolbarBtn} title="Réinitialiser couleur texte">✕</button>
+        </div>
+
+        <div className={styles.toolbarGroup}>
+          {highlightColors.map((color) => (
+            <button
+              key={color}
+              onClick={() => setHighlightColor(color)}
+              className={`${styles.toolbarBtn} ${styles.colorSwatch}`}
+              style={{ backgroundColor: color, color: '#0f172a', borderColor: 'transparent' }}
+              title={`Surlignage ${color}`}
+            >
+              ■
+            </button>
+          ))}
+          <button onClick={unsetHighlight} className={styles.toolbarBtn} title="Retirer surlignage">✕</button>
         </div>
 
         <div className={styles.toolbarDivider}></div>
@@ -264,6 +386,38 @@ const Tiptap = () => {
             </svg>
           </button>
         </div>
+
+        <div className={styles.toolbarDivider}></div>
+
+        <div className={styles.toolbarGroup}>
+          <button
+            onClick={() => setTextAlign('left')}
+            className={`${styles.toolbarBtn} ${editor.isActive({ textAlign: 'left' }) ? styles.active : ''}`}
+            title="Aligner à gauche"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 6h16v2H4V6zm0 4h12v2H4v-2zm0 4h16v2H4v-2zm0 4h12v2H4v-2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setTextAlign('center')}
+            className={`${styles.toolbarBtn} ${editor.isActive({ textAlign: 'center' }) ? styles.active : ''}`}
+            title="Centrer"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 6h12v2H6V6zm-2 4h16v2H4v-2zm2 4h12v2H6v-2zm-2 4h16v2H4v-2z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setTextAlign('right')}
+            className={`${styles.toolbarBtn} ${editor.isActive({ textAlign: 'right' }) ? styles.active : ''}`}
+            title="Aligner à droite"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 6h16v2H4V6zm4 4h12v2H8v-2zm-4 4h16v2H4v-2zm4 4h12v2H8v-2z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Éditeur principal */}
@@ -291,6 +445,12 @@ const Tiptap = () => {
         </button>
         <button onClick={toggleStrike} className={editor.isActive('strike') ? styles.active : ''}>
           <s>S</s>
+        </button>
+        <button onClick={toggleUnderline} className={editor.isActive('underline') ? styles.active : ''}>
+          <u>S</u>
+        </button>
+        <button onClick={toggleHighlight} className={editor.isActive('highlight') ? styles.active : ''}>
+          ✺
         </button>
         <button onClick={setLink} className={editor.isActive('link') ? styles.active : ''}>
           🔗
