@@ -30,23 +30,15 @@ const Tiptap = () => {
     return { name, color }
   })
 
-  // Initialize Y.Doc and WebSocket provider ONCE
-  useEffect(() => {
-    if (ydocRef.current) {
-      console.log('⚠️ Y.Doc already initialized, skipping...')
-      return
-    }
-    
-    console.log('🚀 Initializing Y.Doc and WebSocket provider')
+  if (!ydocRef.current) {
     const ydoc = new Y.Doc()
     const docId = 'shared-document'
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    
+    // On empêche la connexion auto pour rafraîchir le cookie avant
     const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc, {
       connect: false,
     })
-    
     ydocRef.current = ydoc
     providerRef.current = provider
     awarenessRef.current = provider.awareness
@@ -54,13 +46,7 @@ const Tiptap = () => {
       name: localUser.name,
       color: localUser.color,
     })
-
-    return () => {
-      console.log('🧹 Cleaning up Y.Doc')
-      providerRef.current?.destroy()
-      ydocRef.current?.destroy()
-    }
-  }, [localUser])
+  }
 
   // Debug connexion WS : status / close / error
   useEffect(() => {
@@ -146,19 +132,16 @@ const Tiptap = () => {
 
     const refreshAndConnect = async () => {
       try {
-        console.log('🔐 Refreshing auth before WS connect...')
         await fetch('/api/auth/autologin', {
           method: 'POST',
           credentials: 'include',
         })
-        console.log('✅ Auth refreshed')
       } catch (err) {
         console.warn('Autologin failed before WS connect:', err)
       }
 
-      if (!cancelled && providerRef.current) {
-        console.log('📡 Connecting WebSocket...')
-        providerRef.current.connect()
+      if (!cancelled) {
+        providerRef.current?.connect()
       }
     }
 
@@ -194,7 +177,6 @@ const Tiptap = () => {
 
   useEffect(() => {
     return () => {
-      console.log('🧹 Component unmounting, cleaning up WebSocket')
       providerRef.current?.destroy()
       ydocRef.current?.destroy()
     }
