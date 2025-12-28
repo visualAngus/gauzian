@@ -2417,8 +2417,8 @@ export default function Drive() {
                 S'affiche uniquement si viewType est 'list'
                ================================================================================= */}
             {viewType === 'list' && (
-              <div className='div_contenue_list' style={ activeSection === 'mon_drive' ? { display: 'flex' } : { display: 'none' }}>
-                <div className="content_list_header">
+              <div className='div_contenue_list'>
+                <div className="content_list_header" style={ activeSection === 'mon_drive' ? { display: 'flex' } : { display: 'none' }}>
                   <div className="header_name">Nom</div>
                   <div className="header_additional_info">
                     <span>Propriétaire</span>
@@ -2527,10 +2527,10 @@ export default function Drive() {
                           })()}
                         </span>
                         <span>
-                          {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
                         </span>
                         <span>
-                          {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
                         </span>
                       </div>
                       {/* si le fichier est en cours d'upload alors creer une div qui va etre en fond et qui évolura au cours de l'upload */}
@@ -2545,6 +2545,8 @@ export default function Drive() {
                     </div>
                   );
                 })}
+
+                
               </div>
             )}
           </div>
