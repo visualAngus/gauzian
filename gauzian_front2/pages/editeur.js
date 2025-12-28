@@ -2,15 +2,29 @@ import dynamic from 'next/dynamic'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
-import { useState } from 'react'
+import Image from '@tiptap/extension-image'
+import Link from '@tiptap/extension-link'
+import { useRef, useState } from 'react'
 import styles from '../styles/editeur.module.css'
 
 const Tiptap = () => {
   const [title, setTitle] = useState('Document sans titre')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const fileInputRef = useRef(null)
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Link.configure({
+        openOnClick: true,
+        autolink: true,
+        HTMLAttributes: { class: styles.editorLink },
+      }),
+      Image.configure({
+        allowBase64: true,
+        HTMLAttributes: { class: styles.editorImage },
+      }),
+    ],
     content: '<p>Commencez à écrire votre document...</p>',
     immediatelyRender: false,
     editorProps: {
@@ -30,8 +44,45 @@ const Tiptap = () => {
   const toggleOrderedList = () => editor.chain().focus().toggleOrderedList().run()
   const toggleBlockquote = () => editor.chain().focus().toggleBlockquote().run()
   const setHorizontalRule = () => editor.chain().focus().setHorizontalRule().run()
+  const toggleCodeBlock = () => editor.chain().focus().toggleCodeBlock().run()
   const undo = () => editor.chain().focus().undo().run()
   const redo = () => editor.chain().focus().redo().run()
+
+  const setLink = () => {
+    const previousUrl = editor.getAttributes('link').href
+    const url = window.prompt('URL du lien', previousUrl || 'https://')
+    if (url === null) return
+    if (url === '') {
+      editor.chain().focus().unsetLink().run()
+      return
+    }
+    editor.chain().focus().setLink({ href: url, target: '_blank' }).run()
+  }
+
+  const addImageFromUrl = () => {
+    const url = window.prompt("URL de l'image")
+    if (!url) return
+    editor.chain().focus().setImage({ src: url }).run()
+  }
+
+  const addImageFromFile = (file) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      editor.chain().focus().setImage({ src: reader.result }).run()
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    addImageFromFile(file)
+    event.target.value = ''
+  }
+
+  const triggerFilePicker = () => {
+    fileInputRef.current?.click()
+  }
 
   return (
     <div className={styles.editorContainer}>
@@ -170,6 +221,48 @@ const Tiptap = () => {
               <path d="M19 13H5v-2h14v2z"/>
             </svg>
           </button>
+          <button
+            onClick={toggleCodeBlock}
+            className={`${styles.toolbarBtn} ${editor.isActive('codeBlock') ? styles.active : ''}`}
+            title="Bloc de code"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9.4 16.6 5.8 13l3.6-3.6L8 8l-5 5 5 5 1.4-1.4zm5.2 0L18.2 13l-3.6-3.6L16 8l5 5-5 5-1.4-1.4z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className={styles.toolbarDivider}></div>
+
+        <div className={styles.toolbarGroup}>
+          <button
+            onClick={setLink}
+            className={`${styles.toolbarBtn} ${editor.isActive('link') ? styles.active : ''}`}
+            title="Ajouter un lien"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10.59 13.41a1.99 1.99 0 0 0 2.82 0l4.24-4.24a2 2 0 0 0-2.83-2.83l-1.06 1.06-1.41-1.41 1.06-1.06a4 4 0 1 1 5.66 5.66l-4.24 4.24a4 4 0 0 1-5.66 0l-1.06-1.06 1.41-1.41 1.06 1.06z" />
+              <path d="M13.41 10.59a1.99 1.99 0 0 0-2.82 0L6.35 14.83a2 2 0 1 0 2.83 2.83l1.06-1.06 1.41 1.41-1.06 1.06a4 4 0 1 1-5.66-5.66l4.24-4.24a4 4 0 0 1 5.66 0l1.06 1.06-1.41 1.41-1.06-1.06z" />
+            </svg>
+          </button>
+          <button
+            onClick={addImageFromUrl}
+            className={styles.toolbarBtn}
+            title="Image via URL"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 5v14H3V5h18zm-2 2H5v10h14V7zm-6.5 3.5 2.5 3.01 1.5-1.76L19 17H7l3-4 1.5 1.8 1-1.2z" />
+            </svg>
+          </button>
+          <button
+            onClick={triggerFilePicker}
+            className={styles.toolbarBtn}
+            title="Importer une image"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 19H5c-1.1 0-2-.9-2-2V7c0-1.1.9-2 2-2h4l2 2h8c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2zm-8-4 2.03-2.71 1.43 1.8L16 12l3 4H11z" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -179,6 +272,14 @@ const Tiptap = () => {
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className={styles.hiddenInput}
+        onChange={handleFileChange}
+      />
 
       {/* Menu bulle pour sélection */}
       <BubbleMenu editor={editor} className={styles.bubbleMenu}>
@@ -190,6 +291,9 @@ const Tiptap = () => {
         </button>
         <button onClick={toggleStrike} className={editor.isActive('strike') ? styles.active : ''}>
           <s>S</s>
+        </button>
+        <button onClick={setLink} className={editor.isActive('link') ? styles.active : ''}>
+          🔗
         </button>
       </BubbleMenu>
     </div>
