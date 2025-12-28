@@ -144,17 +144,26 @@ const Tiptap = () => {
         const provider = providerRef.current
         const ydoc = ydocRef.current
         if (provider && ydoc) {
+          // Listen to sync events
+          provider.on('sync', (isSynced) => {
+            console.log('🔄 Provider sync event:', isSynced)
+          })
+          
           provider.connect()
           console.log('✅ Provider connected')
-          console.log('📊 Provider state:', {
-            connected: provider.shouldConnect,
-            wsConnected: provider.ws ? 'yes' : 'no',
-            docSync: ydoc,
-          })
-          // Test: manually send a ping-like message
+          
+          // Force a manual update to test
           setTimeout(() => {
             if (provider.ws && provider.ws.readyState === WebSocket.OPEN) {
-              console.log('🔍 WebSocket is OPEN, state ready')
+              console.log('🔍 WebSocket is OPEN')
+              // Try to manually insert text into the Yjs doc to force an update
+              try {
+                const ytext = ydoc.getText('shared-text')
+                ytext.insert(0, 'test-')
+                console.log('✏️ Inserted test text into Yjs doc')
+              } catch (e) {
+                console.error('❌ Error inserting test:', e)
+              }
             } else {
               console.log('⚠️ WebSocket NOT open:', provider.ws?.readyState)
             }
