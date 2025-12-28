@@ -87,6 +87,7 @@ async fn ws_handler(
 
 async fn handle_socket(socket: WebSocket, room_id: String, store: CollabStore) {
     // ... (Le reste du code est identique à avant) ...
+    info!("🔗 Socket connected for room: {}", room_id);
     let (mut sender, mut receiver) = socket.split();
 
     let tx = {
@@ -119,6 +120,7 @@ async fn handle_socket(socket: WebSocket, room_id: String, store: CollabStore) {
     });
 
     while let Some(Ok(msg)) = receiver.next().await {
+        info!("📨 Received message from {} (type: {:?})", room_id, msg);
         if matches!(msg, Message::Binary(_) | Message::Text(_)) {
             match &msg {
                 Message::Binary(bin) => {
@@ -135,7 +137,10 @@ async fn handle_socket(socket: WebSocket, room_id: String, store: CollabStore) {
             }
             let _ = tx.send(msg);
         } else if matches!(msg, Message::Close(_)) {
+            info!("📤 Close message received for {}", room_id);
             break;
+        } else {
+            info!("❓ Other message type for {}: {:?}", room_id, msg);
         }
     }
 
