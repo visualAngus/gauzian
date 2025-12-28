@@ -373,13 +373,14 @@ nav ul li a.active {
     align-items: center;
     gap: 50px;
     width: fit-content;
+    margin-right: 15px
 }
 
 .additional_info span {
     font-size: 0.9rem;
     font-weight: 500;
     color: var(--dark-gray-color);
-    width: 90px;
+    width: 100px;
 }
 
 .content_list_header {
