@@ -44,7 +44,8 @@ gauzian.pupin.fr {
     }
 
     # Websocket collaboration (Yjs) -> API (axum)
-    handle_path /ws/* {
+    # Use handle to keep the /ws prefix (handle_path would strip it and break axum's /ws/:room_id route)
+    handle /ws/* {
         reverse_proxy api:3000 {
             header_up Host {host}
             header_up X-Real-IP {client_ip}
