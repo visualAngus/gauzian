@@ -35,8 +35,10 @@ const Tiptap = () => {
     const docId = 'shared-document'
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    // Le backend expose le websocket sur /ws/:room_id (voir gauzian_collab::router)
-    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc)
+    // On empêche la connexion auto pour rafraîchir le cookie avant
+    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc, {
+      connect: false,
+    })
     ydocRef.current = ydoc
     providerRef.current = provider
     awarenessRef.current = provider.awareness
@@ -45,6 +47,36 @@ const Tiptap = () => {
       color: localUser.color,
     })
   }
+
+  // Debug connexion WS : status / close / error
+  useEffect(() => {
+    const provider = providerRef.current
+    if (!provider) return
+
+    const onStatus = ({ status }) => {
+      console.debug('WS status', status)
+    }
+    const onClose = (event) => {
+      console.debug('WS connection-close', {
+        code: event?.code,
+        reason: event?.reason,
+        wasClean: event?.wasClean,
+      })
+    }
+    const onError = (event) => {
+      console.debug('WS connection-error', event)
+    }
+
+    provider.on('status', onStatus)
+    provider.on('connection-close', onClose)
+    provider.on('connection-error', onError)
+
+    return () => {
+      provider.off('status', onStatus)
+      provider.off('connection-close', onClose)
+      provider.off('connection-error', onError)
+    }
+  }, [])
 
   const editor = useEditor({
     extensions: [
