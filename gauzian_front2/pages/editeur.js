@@ -36,7 +36,9 @@ const Tiptap = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     // Le backend expose le websocket sur /ws/:room_id (voir gauzian_collab::router)
-    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc)
+    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc, {
+      connect: false, // on connecte après avoir rafraîchi les cookies
+    })
     ydocRef.current = ydoc
     providerRef.current = provider
     awarenessRef.current = provider.awareness
@@ -115,6 +117,20 @@ const Tiptap = () => {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Debug : log chaque mise à jour locale envoyée via Yjs
+  useEffect(() => {
+    if (!ydocRef.current) return
+    const handler = (update, origin) => {
+      // update est un Uint8Array Yjs déjà envoyé par le provider
+      console.debug('Yjs update (local change)', {
+        bytes: update?.length,
+        origin,
+      })
+    }
+    ydocRef.current.on('update', handler)
+    return () => ydocRef.current.off('update', handler)
   }, [])
 
   useEffect(() => {

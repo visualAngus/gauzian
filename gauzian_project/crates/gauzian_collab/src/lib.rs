@@ -120,6 +120,16 @@ async fn handle_socket(socket: WebSocket, room_id: String, store: CollabStore) {
 
     while let Some(Ok(msg)) = receiver.next().await {
         if matches!(msg, Message::Binary(_) | Message::Text(_)) {
+            match &msg {
+                Message::Binary(bin) => {
+                    info!("📩 WS update doc {} ({} bytes, binary)", room_id, bin.len());
+                }
+                Message::Text(txt) => {
+                    info!("📩 WS update doc {} (text, {} chars)", room_id, txt.len());
+                }
+                _ => {}
+            }
+
             if let Some(mut room) = store.rooms.get_mut(&room_id) {
                 room.history.push(msg.clone());
             }
