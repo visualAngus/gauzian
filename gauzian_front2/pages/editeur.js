@@ -142,17 +142,23 @@ const Tiptap = () => {
 
       if (!cancelled) {
         const provider = providerRef.current
-        if (provider) {
-          // Log when provider sends data
-          const originalSend = provider.ws?.send
-          if (originalSend) {
-            provider.ws.send = function(data) {
-              console.log('📤 Provider sending via WS:', data)
-              return originalSend.call(this, data)
-            }
-          }
+        const ydoc = ydocRef.current
+        if (provider && ydoc) {
           provider.connect()
           console.log('✅ Provider connected')
+          console.log('📊 Provider state:', {
+            connected: provider.shouldConnect,
+            wsConnected: provider.ws ? 'yes' : 'no',
+            docSync: ydoc,
+          })
+          // Test: manually send a ping-like message
+          setTimeout(() => {
+            if (provider.ws && provider.ws.readyState === WebSocket.OPEN) {
+              console.log('🔍 WebSocket is OPEN, state ready')
+            } else {
+              console.log('⚠️ WebSocket NOT open:', provider.ws?.readyState)
+            }
+          }, 500)
         }
       }
     }
