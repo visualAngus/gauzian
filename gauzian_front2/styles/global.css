@@ -454,6 +454,9 @@ nav ul li a.active {
     gap: 95px;
     width: fit-content;
 }
+.header_additional_info span {
+    width: 90px;
+}
 
 .header_name {
     margin-left: 20px;
