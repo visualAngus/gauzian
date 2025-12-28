@@ -1981,6 +1981,7 @@ export default function Drive() {
 
     if (hash === 'mon_drive') {
       console.log("Active Folder ID changed:", activeFolderId);
+      setSharedFiles([]); 
       if (activeFolderId === null) {
         loadFullPathFromFolderId();
         getFileStructure(activeFolderId);
@@ -1992,6 +1993,7 @@ export default function Drive() {
       // Pour l'instant, on ne gère pas les fichiers spéciaux
       setFolders([]);
       setFiles([]);
+      setSharedFiles([]);
     }  
     else {
       // Par défaut, on charge le dossier actif
