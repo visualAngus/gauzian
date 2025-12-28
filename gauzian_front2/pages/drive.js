@@ -1774,7 +1774,7 @@ export default function Drive() {
         decryptedFiles.push(cleanFile);
       }
 
-      sharedFiles(decryptedFiles);
+      setSharedFiles(decryptedFiles);
     } else {
       console.error("Erreur récupération invitations de partage :", data.message);
     }
