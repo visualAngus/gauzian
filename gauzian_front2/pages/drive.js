@@ -2548,13 +2548,88 @@ export default function Drive() {
                   );
                 })}
 
-                {sharedFiles.map((file) => 
-                  activeSection === 'partages' ? (
-                    <div key={file.file_id} className="shared_file_list">
-                      <span>{file.name} (partagé par {file.shared_by})</span>
+                {activeSection === 'partages' && sharedFiles.map((file) => {
+                  const currentId = file.file_id;
+                  const isSelected = selectedId === currentId;
+                  const selectionClass = isSelected ? 'selected_file' : '';
+
+                  return (
+                    <div
+                      key={file.id}
+                      className={`content_graph_list ${selectionClass} shared_file_list`}
+                      id={currentId}
+
+                      // Data attributes conservés
+                      {...{
+                        'data-file-id': file.file_id || '',
+                        'data-file-name': file.name || '',
+                        'data-file-size': file.total_size || '',
+                        'data-file-type': file.type || '',
+                        'data-file-created-at': file.created_at || '',
+                        'data-file-updated-at': file.updated_at || '',
+                        'data-encrypted-file-key': file.encrypted_file_key || '',
+                      }}
+
+                      // clique de souris down
+                      onMouseDown={(e) => {
+                        // que le clique gauche pour déplacer
+                        if (e.button !== 0) return;
+                        setSelectedMoveElement(currentId);
+                      }}
+
+                      onClick={() => handleSelection(currentId)}
+                      onDoubleClick={() => {
+                        if (file.is_chunked) {
+                          handleDownloadChunked(file.file_id, file.name);
+                        } else {
+                          handleDownload(file.file_id, file.name);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(currentId);
+                        open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
+                      }}
+                    >
+
+
+                      <div className="icon_and_name">
+                        <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+                        </svg>
+                        <span className="file_name">{file.name}</span>
+                      </div>
+                      <div className="additional_info">
+                        <span>{file.owner || ''}</span>
+                        <span>
+                          {(() => {
+                            const size = file.total_size || 0;
+                            if (size === 0) return "--";
+                            if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
+                            if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
+                            if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
+                            return size + ' B';
+                          })()}
+                        </span>
+                        <span>
+                          {new Date(file.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
+                        </span>
+                        <span>
+                          {new Date(file.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
+                        </span>
+                      </div>
+                      {file.type === 'uploading' && (
+                        <div className="uploading_overlay">
+                          <div
+                            className="uploading_progress_bar"
+                            style={{ width: `${file.uploadProgress || 0}%` }}
+                          ></div>
+                        </div>
+                      )}
                     </div>
-                  ) : null
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
