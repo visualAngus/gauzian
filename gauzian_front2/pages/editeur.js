@@ -36,9 +36,7 @@ const Tiptap = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     // Le backend expose le websocket sur /ws/:room_id (voir gauzian_collab::router)
-    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc, {
-      connect: false, // on connecte après avoir rafraîchi les cookies
-    })
+    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc)
     ydocRef.current = ydoc
     providerRef.current = provider
     awarenessRef.current = provider.awareness
