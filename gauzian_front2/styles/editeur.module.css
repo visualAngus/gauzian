@@ -2,7 +2,7 @@
 .editorContainer {
     width: 100%;
     min-height: 100vh;
-    background: radial-gradient(circle at 12% 20%, #fff5eb 0, #fffaf2 22%, #f8fbff 60%, #f8fafc 100%);
+    background: radial-gradient(circle at 12% 20%, #fff2e6 0, #fff7ed 20%, #f5f8ff 55%, #f7f9fb 100%);
     display: flex;
     flex-direction: column;
     user-select: text;
@@ -16,15 +16,15 @@
 .editorHeader {
     width: 100%;
     padding: 1.5rem 3rem;
-    background: rgba(255, 255, 255, 0.9);
-    border-bottom: 1px solid rgba(51, 65, 85, 0.08);
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
     display: flex;
     justify-content: space-between;
     align-items: center;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
     backdrop-filter: blur(8px);
 }
 
@@ -101,21 +101,21 @@
 .editorToolbar {
     width: 100%;
     padding: 0.85rem 3rem;
-    background: rgba(255, 255, 255, 0.92);
-    border-bottom: 1px solid rgba(51, 65, 85, 0.08);
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
     display: flex;
     gap: 1rem;
     align-items: center;
     position: sticky;
     top: 73px;
     z-index: 99;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
     backdrop-filter: blur(8px);
 }
 
 .toolbarGroup {
     display: flex;
-    gap: 0.25rem;
+    gap: 0.35rem;
     align-items: center;
 }
 
@@ -126,21 +126,31 @@
     min-width: 38px;
     height: 38px;
     padding: 0 0.6rem;
-    border: 1px solid transparent;
+    border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 10px;
-    background-color: rgba(15, 23, 42, 0.03);
-    color: var(--dark-gray-color);
+    background-color: #f8fafc;
+    color: #0f172a;
     cursor: pointer;
     transition: all 0.15s ease;
     font-size: 0.92rem;
     font-weight: 600;
 }
 
+.colorSwatch {
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    background-color: #fff;
+    border: 1px solid rgba(15, 23, 42, 0.16);
+    box-shadow: none;
+}
+
 .toolbarBtn:hover {
     background-color: #fff;
-    color: var(--dark-color);
-    border-color: rgba(51, 65, 85, 0.12);
-    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    color: #0b1220;
+    border-color: rgba(15, 23, 42, 0.18);
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.1);
     transform: translateY(-1px);
 }
 
@@ -148,8 +158,8 @@
     background: linear-gradient(135deg, var(--orange-color) 0%, var(--light-orange-color) 100%);
     color: #0b1120;
     font-weight: 700;
-    border-color: rgba(249, 115, 22, 0.35);
-    box-shadow: 0 12px 22px rgba(249, 115, 22, 0.22);
+    border-color: rgba(249, 115, 22, 0.48);
+    box-shadow: 0 14px 24px rgba(249, 115, 22, 0.24);
 }
 
 .toolbarBtn:active {
@@ -173,7 +183,7 @@
     flex: 1;
     width: 100%;
     padding: 2rem 3rem;
-    background: linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(247, 250, 255, 0.9) 100%);
+    background: linear-gradient(180deg, rgba(247, 249, 252, 0.9) 0%, rgba(244, 247, 252, 0.95) 100%);
     overflow-y: auto;
 }
 
@@ -181,16 +191,16 @@
     max-width: 880px;
     margin: 0 auto;
     background-color: #fff;
-    border-radius: 14px;
-    border: 1px solid rgba(51, 65, 85, 0.08);
-    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08), 0 8px 20px rgba(15, 23, 42, 0.04);
+    border-radius: 16px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 22px 44px rgba(15, 23, 42, 0.1), 0 10px 24px rgba(15, 23, 42, 0.06);
     padding: 3.2rem 4.2rem;
     min-height: calc(100vh - 320px);
     transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .editorContentWrapper:hover {
-    box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12), 0 10px 24px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 26px 54px rgba(15, 23, 42, 0.14), 0 12px 26px rgba(15, 23, 42, 0.08);
     transform: translateY(-2px);
 }
 
@@ -206,10 +216,17 @@
 .proseEditor :global(*) {
     user-select: text;
 }
+.proseEditor :global(.ProseMirror) {
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    cursor: text;
+}
 
 .proseEditor :global(p) {
     margin-bottom: 1rem;
-    color: #0f172a;
+    color: #0b1220;
 }
 
 .proseEditor :global(h1),
@@ -297,7 +314,7 @@
 
 .proseEditor :global(hr) {
     border: none;
-    border-top: 2px solid var(--light-gray-color);
+    border-top: 2px solid rgba(15, 23, 42, 0.08);
     margin: 2rem 0;
 }
 
@@ -327,6 +344,34 @@
     padding: 0;
 }
 
+.proseEditor :global(mark) {
+    background: #fef08a;
+    color: #0b1220;
+    padding: 0.05rem 0.08rem;
+    border-radius: 2px;
+}
+
+.proseEditor :global(u) {
+    text-decoration-thickness: 0.12em;
+    text-underline-offset: 0.18em;
+}
+
+.proseEditor :global(img) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 12px;
+    margin: 1rem 0;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.proseEditor :global(a) {
+    color: var(--orange-color);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+}
 .proseEditor :global(img) {
     display: block;
     max-width: 100%;
@@ -347,22 +392,23 @@
 /* Menu bulle */
 .bubbleMenu {
     display: flex;
-    background-color: var(--dark-color);
-    border-radius: 8px;
-    padding: 0.25rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
-    gap: 0.25rem;
+    background-color: #0b1220;
+    border-radius: 10px;
+    padding: 0.35rem;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+    gap: 0.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .bubbleMenu button {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 32px;
-    height: 32px;
-    padding: 0 0.5rem;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 0.55rem;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     background-color: transparent;
     color: var(--white-color);
     cursor: pointer;
@@ -371,7 +417,7 @@
 }
 
 .bubbleMenu button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.14);
 }
 
 .bubbleMenu button.active {

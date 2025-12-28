@@ -8,8 +8,15 @@
     "start": "next start"
   },
   "dependencies": {
+    "@tiptap/extension-collaboration": "^2.8.0",
+    "@tiptap/extension-collaboration-cursor": "^2.8.0",
+    "@tiptap/extension-color": "^3.14.0",
+    "@tiptap/extension-highlight": "^3.14.0",
     "@tiptap/extension-image": "^3.14.0",
     "@tiptap/extension-link": "^3.14.0",
+    "@tiptap/extension-text-align": "^3.14.0",
+    "@tiptap/extension-text-style": "^3.14.0",
+    "@tiptap/extension-underline": "^3.14.0",
     "@tiptap/pm": "^3.14.0",
     "@tiptap/react": "^3.14.0",
     "@tiptap/starter-kit": "^3.14.0",
@@ -22,6 +29,9 @@
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "streamsaver": "^2.0.6"
+    "streamsaver": "^2.0.6",
+    "y-prosemirror": "^1.2.9",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.28"
   }
 }
