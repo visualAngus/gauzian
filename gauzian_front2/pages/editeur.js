@@ -152,14 +152,18 @@ const Tiptap = () => {
   // Debug : log chaque mise à jour locale envoyée via Yjs
   useEffect(() => {
     if (!ydocRef.current) return
+    let lastLogMs = 0
     const handler = (update, origin) => {
-      // update est un Uint8Array Yjs déjà envoyé par le provider
+      // Throttle logging so it doesn't spam on every keystroke
+      const now = Date.now()
+      if (now - lastLogMs < 1000) return
+      lastLogMs = now
       console.debug('Yjs update (local change)', {
         bytes: update?.length,
         origin,
       })
     }
-    console.debug('Attaching Yjs update logger')
+    console.debug('Attaching Yjs update logger (throttled)')
     ydocRef.current.on('update', handler)
     return () => ydocRef.current.off('update', handler)
   }, [])
