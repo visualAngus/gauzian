@@ -141,7 +141,19 @@ const Tiptap = () => {
       }
 
       if (!cancelled) {
-        providerRef.current?.connect()
+        const provider = providerRef.current
+        if (provider) {
+          // Log when provider sends data
+          const originalSend = provider.ws?.send
+          if (originalSend) {
+            provider.ws.send = function(data) {
+              console.log('📤 Provider sending via WS:', data)
+              return originalSend.call(this, data)
+            }
+          }
+          provider.connect()
+          console.log('✅ Provider connected')
+        }
       }
     }
 
