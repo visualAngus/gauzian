@@ -36,12 +36,12 @@ const Tiptap = () => {
   return (
     <div className={styles.editorContainer}>
       {/* Header avec titre et actions */}
-      <div className="editor-header">
-        <div className="editor-title-section">
+      <div className={styles.editorHeader}>
+        <div className={styles.editorTitleSection}>
           {isEditingTitle ? (
             <input
               type="text"
-              className="editor-title-input"
+              className={styles.editorTitleInput}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => setIsEditingTitle(false)}
@@ -49,18 +49,18 @@ const Tiptap = () => {
               autoFocus
             />
           ) : (
-            <h1 className="editor-title" onClick={() => setIsEditingTitle(true)}>
+            <h1 className={styles.editorTitle} onClick={() => setIsEditingTitle(true)}>
               {title}
             </h1>
           )}
         </div>
-        <div className="editor-actions">
-          <button className="btn-action" onClick={undo} title="Annuler">
+        <div className={styles.editorActions}>
+          <button className={styles.btnAction} onClick={undo} title="Annuler">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-9 9"></path>
             </svg>
           </button>
-          <button className="btn-action" onClick={redo} title="Rétablir">
+          <button className={styles.btnAction} onClick={redo} title="Rétablir">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 019 9"></path>
             </svg>
@@ -69,37 +69,37 @@ const Tiptap = () => {
       </div>
 
       {/* Barre d'outils */}
-      <div className="editor-toolbar">
-        <div className="toolbar-group">
+      <div className={styles.editorToolbar}>
+        <div className={styles.toolbarGroup}>
           <button
             onClick={() => toggleHeading(1)}
-            className={`toolbar-btn ${editor.isActive('heading', { level: 1 }) ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('heading', { level: 1 }) ? styles.active : ''}`}
             title="Titre 1"
           >
-            <span className="toolbar-text">T1</span>
+            <span className={styles.toolbarText}>T1</span>
           </button>
           <button
             onClick={() => toggleHeading(2)}
-            className={`toolbar-btn ${editor.isActive('heading', { level: 2 }) ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('heading', { level: 2 }) ? styles.active : ''}`}
             title="Titre 2"
           >
-            <span className="toolbar-text">T2</span>
+            <span className={styles.toolbarText}>T2</span>
           </button>
           <button
             onClick={() => toggleHeading(3)}
-            className={`toolbar-btn ${editor.isActive('heading', { level: 3 }) ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('heading', { level: 3 }) ? styles.active : ''}`}
             title="Titre 3"
           >
-            <span className="toolbar-text">T3</span>
+            <span className={styles.toolbarText}>T3</span>
           </button>
         </div>
 
-        <div className="toolbar-divider"></div>
+        <div className={styles.toolbarDivider}></div>
 
-        <div className="toolbar-group">
+        <div className={styles.toolbarGroup}>
           <button
             onClick={toggleBold}
-            className={`toolbar-btn ${editor.isActive('bold') ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('bold') ? styles.active : ''}`}
             title="Gras"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -108,7 +108,7 @@ const Tiptap = () => {
           </button>
           <button
             onClick={toggleItalic}
-            className={`toolbar-btn ${editor.isActive('italic') ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('italic') ? styles.active : ''}`}
             title="Italique"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -117,7 +117,7 @@ const Tiptap = () => {
           </button>
           <button
             onClick={toggleStrike}
-            className={`toolbar-btn ${editor.isActive('strike') ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('strike') ? styles.active : ''}`}
             title="Barré"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -126,12 +126,12 @@ const Tiptap = () => {
           </button>
         </div>
 
-        <div className="toolbar-divider"></div>
+        <div className={styles.toolbarDivider}></div>
 
-        <div className="toolbar-group">
+        <div className={styles.toolbarGroup}>
           <button
             onClick={toggleBulletList}
-            className={`toolbar-btn ${editor.isActive('bulletList') ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('bulletList') ? styles.active : ''}`}
             title="Liste à puces"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -140,7 +140,7 @@ const Tiptap = () => {
           </button>
           <button
             onClick={toggleOrderedList}
-            className={`toolbar-btn ${editor.isActive('orderedList') ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('orderedList') ? styles.active : ''}`}
             title="Liste numérotée"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -149,12 +149,12 @@ const Tiptap = () => {
           </button>
         </div>
 
-        <div className="toolbar-divider"></div>
+        <div className={styles.toolbarDivider}></div>
 
-        <div className="toolbar-group">
+        <div className={styles.toolbarGroup}>
           <button
             onClick={toggleBlockquote}
-            className={`toolbar-btn ${editor.isActive('blockquote') ? 'active' : ''}`}
+            className={`${styles.toolbarBtn} ${editor.isActive('blockquote') ? styles.active : ''}`}
             title="Citation"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -163,7 +163,7 @@ const Tiptap = () => {
           </button>
           <button
             onClick={setHorizontalRule}
-            className="toolbar-btn"
+            className={styles.toolbarBtn}
             title="Ligne horizontale"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -174,21 +174,21 @@ const Tiptap = () => {
       </div>
 
       {/* Éditeur principal */}
-      <div className="editor-wrapper">
-        <div className="editor-content-wrapper">
+      <div className={styles.editorWrapper}>
+        <div className={styles.editorContentWrapper}>
           <EditorContent editor={editor} />
         </div>
       </div>
 
       {/* Menu bulle pour sélection */}
-      <BubbleMenu editor={editor} className="bubble-menu">
-        <button onClick={toggleBold} className={editor.isActive('bold') ? 'active' : ''}>
+      <BubbleMenu editor={editor} className={styles.bubbleMenu}>
+        <button onClick={toggleBold} className={editor.isActive('bold') ? styles.active : ''}>
           <strong>G</strong>
         </button>
-        <button onClick={toggleItalic} className={editor.isActive('italic') ? 'active' : ''}>
+        <button onClick={toggleItalic} className={editor.isActive('italic') ? styles.active : ''}>
           <em>I</em>
         </button>
-        <button onClick={toggleStrike} className={editor.isActive('strike') ? 'active' : ''}>
+        <button onClick={toggleStrike} className={editor.isActive('strike') ? styles.active : ''}>
           <s>S</s>
         </button>
       </BubbleMenu>

@@ -24,6 +24,15 @@
     --white-color: #F8FAFC;
 
 
+
+    --dark-color: #0B1120;
+    --dark-gray-color: #334155;
+    --light-gray-color: #E2E8F0;
+    --colored-orange-gray-color: #ebedf1;
+    --orange-color: #F97316;
+    --light-orange-color: #FDBA74;
+    --ultra-light-orange-color: #FFF7ED;
+    --white-color: #F8FAFC;
 }
 
 body {
