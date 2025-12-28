@@ -8,7 +8,11 @@ const Tiptap = () => {
   const editor = useEditor({
     extensions: [StarterKit],
     content: '<p>Hello World!</p>',
+    // Avoid hydration mismatch: wait to render on client
+    immediatelyRender: false,
   })
+
+  if (!editor) return null
 
   return (
     <>
