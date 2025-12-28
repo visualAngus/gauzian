@@ -43,6 +43,16 @@ gauzian.pupin.fr {
         }
     }
 
+    # Websocket collaboration (Yjs) -> API (axum)
+    handle_path /ws/* {
+        reverse_proxy api:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {client_ip}
+            header_up X-Forwarded-For {client_ip}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
     # Frontend Next.js
     handle {
         reverse_proxy nextjs:3001 {
