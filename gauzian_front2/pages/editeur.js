@@ -152,20 +152,22 @@ const Tiptap = () => {
           provider.connect()
           console.log('✅ Provider connected')
           
-          // Force a manual update to test
           setTimeout(() => {
             if (provider.ws && provider.ws.readyState === WebSocket.OPEN) {
-              console.log('🔍 WebSocket is OPEN')
-              // Try to manually insert text into the Yjs doc to force an update
-              try {
-                const ytext = ydoc.getText('shared-text')
-                ytext.insert(0, 'test-')
-                console.log('✏️ Inserted test text into Yjs doc')
-              } catch (e) {
-                console.error('❌ Error inserting test:', e)
+              console.log('🔍 WebSocket URL:', provider.ws.url)
+              console.log('🔍 WebSocket readyState:', provider.ws.readyState)
+              
+              // Intercept WebSocket send
+              const originalSend = provider.ws.send.bind(provider.ws)
+              provider.ws.send = function(data) {
+                console.log('📤 WS SEND:', data)
+                return originalSend(data)
               }
-            } else {
-              console.log('⚠️ WebSocket NOT open:', provider.ws?.readyState)
+              
+              // Try manual insertion
+              const ytext = ydoc.getText('shared-text')
+              ytext.insert(0, 'TEST-')
+              console.log('✏️ Manually inserted TEST- into Yjs doc')
             }
           }, 500)
         }
