@@ -139,7 +139,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
         // --- Fusion des routes Collab (Websocket) ---
         // On fusionne le routeur collab qui contient "/ws/:room_id"
-        .merge(gauzian_collab::router())
+        // Le client appellera /api/ws/shared-document, Caddy forward à /api/ws/shared-document
+        .merge(gauzian_collab::router().nest("/api", Router::new()))
         
         // --- Configuration globale ---
         .with_state(state) // Injecte AppState (DB) partout
