@@ -1706,6 +1706,29 @@ export default function Drive() {
       });
   };
 
+  const acceptSharedFile = async (inviteId) => {
+    console.log("Accepter le fichier partagé :", inviteId);
+    const res = await authFetch('/api/drive/accept_share_invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        invite_id: inviteId
+      })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      console.log("Invitation acceptée avec succès.");
+      setNotifText("Invitation acceptée avec succès.");
+      // Rafraîchir la liste des fichiers partagés avec moi
+      getSharedWithMeFiles();
+    } else {
+      console.error("Erreur acceptation invitation :", data.message);
+      setNotifText("Erreur acceptation invitation : " + data.message);
+    }
+  };
+
   const open_menu_contextual_file = (fileId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
@@ -1767,6 +1790,7 @@ export default function Drive() {
           created_at: invite.created_at,
           sender_name: invite.sender_name,
           expires_at: invite.expires_at,
+          invite_id: invite.invite_id,
         };
 
         const cleanFile = await processFile(fileLike);
@@ -2591,7 +2615,7 @@ export default function Drive() {
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
-                        acceptSharedFile(file.file_id);
+                        acceptSharedFile(file.invite_id);
                       }}
                       style={{ cursor: 'pointer' }}
                       onContextMenu={(e) => {
@@ -2631,7 +2655,7 @@ export default function Drive() {
                             className="btn_shared_accept"
                             onClick={(e) => {
                               e.stopPropagation();
-                              acceptSharedFile(file.file_id);
+                              acceptSharedFile(file.invite_id);
                             }}
                             title="Accepter le fichier"
                           >
@@ -2642,7 +2666,7 @@ export default function Drive() {
                             className="btn_shared_decline"
                             onClick={(e) => {
                               e.stopPropagation();
-                              declineSharedFile(file.file_id);
+                              declineSharedFile(file.invite_id);
                             }}
                             title="Refuser le fichier"
                           >

@@ -35,6 +35,7 @@ use gauzian_drive::{
     upload_handler, upload_streaming_handler,download_raw_handler,delete_file_handler,
     delete_folder_handler,rename_file_handler,cancel_streaming_upload_handler,
     move_file_to_folder_handler, share_file_handler, prepare_share_file_handler,get_share_invites_handler,
+    accept_share_file_invite_handler,
     
 };
 
@@ -158,9 +159,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/drive/share_file", post(share_file_handler))
         .route("/drive/prepare_share_file", post(prepare_share_file_handler))
         .route("/drive/get_share_invites", get(get_share_invites_handler))
+        .route("/drive/accept_share_invite", post(accept_share_file_invite_handler))
         .with_state(state)
         .layer(axum::middleware::from_fn(log_origin))
-        .layer(tower_http::add_extension::AddExtensionLayer::new(
+        .layer(tower_http::add_extension::AddExtensionLayer::new(   
             SecureClientIpSource::ConnectInfo,
         ))
         .layer(cors);
