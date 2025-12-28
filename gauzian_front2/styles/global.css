@@ -455,7 +455,12 @@ nav ul li a.active {
     width: fit-content;
 }
 .header_additional_info span {
-    width: 90px;
+    width: 100px;
+    text-align: right;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .header_name {
