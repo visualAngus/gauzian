@@ -200,3 +200,8 @@ pub struct ShareFileRequest {
 pub struct PrepareShareFileRequest {
     pub reciver_email: String,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AcceptShareInviteRequest {
+    pub invite_id: Uuid,
+}

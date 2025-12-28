@@ -14,7 +14,7 @@ use gauzian_core::{
     DownloadRequest, FileRenameRequest, FinishStreamingUploadRequest, FolderCreationRequest,
     FolderRecord, FolderRenameRequest, FolderRequest, FullPathRequest, OpenStreamingUploadRequest,
     USER_STORAGE_LIMIT, UploadRequest, UploadStreamingRequest,MoveFileToFolderRequest,ShareFileRequest,
-    PrepareShareFileRequest,
+    PrepareShareFileRequest,AcceptShareInviteRequest,
 };
 use serde_json::json;
 
@@ -1240,6 +1240,68 @@ pub async fn get_share_invites_handler(
             let body = Json(json!({
                 "status": "error",
                 "message": "Erreur serveur lors de la récupération des invitations de partage"
+            }));
+            return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
+        }
+    }
+}
+
+pub async fn accept_share_file_invite_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<AcceptShareInviteRequest>,
+) -> impl IntoResponse {
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
+
+    let accept_invite_result = sqlx::query!(
+        r#"
+        INSERT INTO file_access (file_id, user_id, encrypted_file_key, permission_level, joined_at, folder_id)
+        SELECT fsi.file_id, fsi.receiver_id, fsi.encrypted_file_key, fsi.permission_level, NOW(), (SELECT id FROM folders WHERE owner_id = $2 AND is_root = true LIMIT 1)
+        FROM file_share_invites fsi
+        WHERE fsi.id = $1 AND fsi.receiver_id = $2 AND fsi.expires_at > NOW()
+        RETURNING file_id
+        "#,
+        payload.invite_id,
+        user_id,
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match accept_invite_result {
+        Ok(_) => {
+            let delete_invite_result = sqlx::query!(
+                r#"
+                DELETE FROM file_share_invites
+                WHERE id = $1
+                "#,
+                payload.invite_id,
+            )
+            .execute(&state.db_pool)
+            .await;
+
+            match delete_invite_result {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(error = ?e, "delete share invite failed");
+                }
+            }
+
+            let body = Json(json!({
+                "status": "success",
+                "message": "Invitation de partage acceptée avec succès",
+            }));
+            return respond_with_cookies((StatusCode::OK, body), &cookies);
+        }
+        Err(e) => {
+            error!(error = ?e, "accept share invite failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur serveur lors de l'acceptation de l'invitation de partage"
             }));
             return respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies);
         }
