@@ -399,6 +399,7 @@ nav ul li a.active {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 130px;
 }
 
 .shared_actions button {

@@ -2614,7 +2614,9 @@ export default function Drive() {
                         <span className="file_name">{file.name}</span>
                       </div>
                       <div className="additional_info">
-                        <span>{file.owner || ''}</span>
+
+                        <span>{file.sender_name || ''}</span>
+                        <span>{file.permissions || ''}</span>
                         <span>
                           {(() => {
                             const size = file.total_size || 0;
