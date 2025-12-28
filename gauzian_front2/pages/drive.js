@@ -2546,7 +2546,11 @@ export default function Drive() {
                   );
                 })}
 
-                
+                {sharedFiles.map((file) => (
+                  <div key={file.file_id} className="shared_file_list">
+                    <span>{file.name} (partagé par {file.shared_by})</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
