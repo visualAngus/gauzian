@@ -159,6 +159,7 @@ const Tiptap = () => {
         origin,
       })
     }
+    console.debug('Attaching Yjs update logger')
     ydocRef.current.on('update', handler)
     return () => ydocRef.current.off('update', handler)
   }, [])
