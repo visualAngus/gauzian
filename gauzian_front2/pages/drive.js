@@ -2417,7 +2417,7 @@ export default function Drive() {
                 S'affiche uniquement si viewType est 'list'
                ================================================================================= */}
             {viewType === 'list' && (
-              <div className='div_contenue_list' style={{ display: 'flex' }}>
+              <div className='div_contenue_list' style={ activeSection === 'mon_drive' ? { display: 'flex' } : { display: 'none' }}>
                 <div className="content_list_header">
                   <div className="header_name">Nom</div>
                   <div className="header_additional_info">
