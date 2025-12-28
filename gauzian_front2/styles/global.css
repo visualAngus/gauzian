@@ -373,7 +373,7 @@ nav ul li a.active {
     align-items: center;
     gap: 50px;
     width: fit-content;
-    margin-right: 15px
+    margin-right: 7px
 }
 
 .additional_info span {
@@ -400,7 +400,7 @@ nav ul li a.active {
     display: flex;
     align-items: center;
     gap: 8px;
-    width: 130px;
+    width: 100px;
 }
 
 .shared_actions button {
@@ -452,7 +452,7 @@ nav ul li a.active {
     flex-direction: row;
     justify-content: flex-end;
     align-items: flex-end;
-    gap: 95px;
+    gap: 50px;
     width: fit-content;
 }
 .header_additional_info span {
