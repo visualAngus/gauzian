@@ -395,6 +395,50 @@ nav ul li a.active {
     gap: 50px;
 }
 
+.shared_actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shared_actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background-color: var(--colored-orange-gray-color);
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    padding: 6px;
+}
+
+.shared_actions button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.btn_shared_accept {
+    color: var(--emmerald-color);
+}
+
+.btn_shared_decline {
+    color: var(--orange-color);
+}
+
+.shared_actions button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    background-color: var(--light-gray-color);
+}
+
+.shared_actions button:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
 .content_list_header span {
     font-size: 0.9rem;
     font-weight: 600;
