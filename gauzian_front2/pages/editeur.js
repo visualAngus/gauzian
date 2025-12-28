@@ -54,29 +54,32 @@ const Tiptap = () => {
     if (!provider) return
 
     const onStatus = ({ status }) => {
-      console.debug('WS status', status)
+      console.log('🌐 WS status:', status)
     }
     const onClose = (event) => {
-      console.debug('WS connection-close', {
+      console.log('🔌 WS connection-close', {
         code: event?.code,
         reason: event?.reason,
         wasClean: event?.wasClean,
       })
     }
     const onError = (event) => {
-      console.debug('WS connection-error', event)
+      console.error('⚠️ WS connection-error', event)
     }
 
     provider.on('status', onStatus)
     provider.on('connection-close', onClose)
     provider.on('connection-error', onError)
 
+    // Log initial state
+    console.log('🔌 WebSocket provider initialized, awaiting connection...')
+
     return () => {
       provider.off('status', onStatus)
       provider.off('connection-close', onClose)
       provider.off('connection-error', onError)
     }
-  }, [])
+  }, [providerRef])
 
   const editor = useEditor({
     extensions: [
