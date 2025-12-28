@@ -3,7 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import { useState } from 'react'
-import '../styles/editeur.css'
+import styles from '../styles/editeur.module.css'
 
 const Tiptap = () => {
   const [title, setTitle] = useState('Document sans titre')
@@ -15,7 +15,7 @@ const Tiptap = () => {
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: 'prose-editor',
+        class: styles.proseEditor,
       },
     },
   })
@@ -34,7 +34,7 @@ const Tiptap = () => {
   const redo = () => editor.chain().focus().redo().run()
 
   return (
-    <div className="editor-container">
+    <div className={styles.editorContainer}>
       {/* Header avec titre et actions */}
       <div className="editor-header">
         <div className="editor-title-section">
