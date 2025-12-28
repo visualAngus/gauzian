@@ -456,7 +456,7 @@ nav ul li a.active {
 }
 .header_additional_info span {
     width: 100px;
-    text-align: right;
+        text-align: left;
 
     overflow: hidden;
     text-overflow: ellipsis;
