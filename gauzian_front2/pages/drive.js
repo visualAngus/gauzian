@@ -2526,7 +2526,7 @@ export default function Drive() {
                         <span className={content.type === 'file' ? 'file_name' : 'folder_name'}>{content.name}</span>
                       </div>
                       <div className="additional_info">
-                        <span>{content.owner || ''}</span>
+                        <span>{content.owner || content.sender_name || ''}</span>
                         <span>
                           {(() => {
                             const size = content.total_size || 0;
