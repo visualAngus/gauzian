@@ -1580,58 +1580,49 @@ export default function Drive() {
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
 
-        // PROBLÈME : On ne peut plus déchiffrer avec userMasterKey sans le stocker
-        // Il faut re-architecture cela
-        throw new Error('Renommage fichier : nécessite re-architecture pour accès userMasterKey');
+        const privateKey = await importPrivateKey(userPrivateKey);
+        const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
+        const fileKey = new Uint8Array(decryptedKeyBuffer);
 
-        // // Déchiffrer la clé du fichier
-        // const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        //   null,
-        //   ciphertextKey,
-        //   null,
-        //   nonceKey,
-        //   userMasterKey
-        // );
+        // Chiffrer les nouvelles métadonnées avec la clé du fichier
+        const metadataStr = JSON.stringify(metadata);
+        const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+        const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+          sodium.from_string(metadataStr),
+          null,
+          null,
+          nonceMeta,
+          fileKey
+        );
+        const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
+        const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
 
-        // // Chiffrer les nouvelles métadonnées avec la FileKey
-        // const metadataStr = JSON.stringify(metadata);
-        // const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-        // const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        //   sodium.from_string(metadataStr),
-        //   null,
-        //   null,
-        //   nonceMeta,
-        //   fileKey
-        // );
-        // const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
-        // const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
-        // console.log("Renommer le fichier :", fileId, "en", newName);
-        // fileName.classList.remove("editing_file_name");
+        console.log("Renommer le fichier :", fileId, "en", newName);
+        fileName.classList.remove("editing_file_name");
 
-        // authFetch('/api/drive/rename_file', {
-        //   method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({
-        //     file_id: fileId,
-        //     new_encrypted_metadata: encryptedMetadataB64
-        //   }),
-        // })
-        //   .then(response => response.json())
-        //   .then(data => {
-        //     if (data.status === 'success') {
-        //       console.log("Fichier renommé avec succès.");
-        //       file.setAttribute("data-file-name", newName);
-        //       // Mettre à jour l'état des fichiers
-        //       setFiles(prevFiles => prevFiles.map(f => f.file_id === fileId ? { ...f, name: newName } : f));
-        //       // Rafraîchir la vue du dossier courant
-        //     } else {
-
-        //       console.error("Erreur renommage fichier :", data.message);
-        //     }
-        //   })
-        //   .catch(error => {
-        //     console.error("Erreur lors de la requête de renommage :", error);
-        //   });
+        authFetch('/api/drive/rename_file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_id: fileId,
+            new_encrypted_metadata: encryptedMetadataB64
+          }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.status === 'success') {
+              console.log("Fichier renommé avec succès.");
+              file.setAttribute("data-file-name", newName);
+              // Mettre à jour l'état des fichiers
+              setFiles(prevFiles => prevFiles.map(f => f.file_id === fileId ? { ...f, name: newName } : f));
+              // Rafraîchir la vue du dossier courant
+            } else {
+              console.error("Erreur renommage fichier :", data.message);
+            }
+          })
+          .catch(error => {
+            console.error("Erreur lors de la requête de renommage :", error);
+          });
       };
 
     } else {
