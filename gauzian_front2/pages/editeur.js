@@ -33,9 +33,12 @@ const Tiptap = () => {
   if (!ydocRef.current) {
     const ydoc = new Y.Doc()
     const docId = 'shared-document'
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = 'gauzian.pupin.fr'; // ou window.location.host en prod
-    const provider = new WebsocketProvider(`${protocol}//${host}/api/ws`, docId, ydoc);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    // Le backend expose le websocket sur /ws/:room_id (voir gauzian_collab::router)
+    const provider = new WebsocketProvider(`${protocol}//${host}/ws`, docId, ydoc, {
+      connect: false, // on connecte après avoir rafraîchi les cookies
+    })
     ydocRef.current = ydoc
     providerRef.current = provider
     awarenessRef.current = provider.awareness
@@ -90,6 +93,31 @@ const Tiptap = () => {
       },
     },
   })
+
+  useEffect(() => {
+    let cancelled = false
+
+    const refreshAndConnect = async () => {
+      try {
+        await fetch('/api/auth/autologin', {
+          method: 'POST',
+          credentials: 'include',
+        })
+      } catch (err) {
+        console.warn('Autologin failed before WS connect:', err)
+      }
+
+      if (!cancelled) {
+        providerRef.current?.connect()
+      }
+    }
+
+    refreshAndConnect()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     return () => {
