@@ -1,12 +1,13 @@
-// src/Tiptap.tsx
+// Client-only Tiptap editor to avoid `document` access during SSR/static export.
+import dynamic from 'next/dynamic'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { FloatingMenu, BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 
 const Tiptap = () => {
   const editor = useEditor({
-    extensions: [StarterKit], // define your extension array
-    content: '<p>Hello World!</p>', // initial content
+    extensions: [StarterKit],
+    content: '<p>Hello World!</p>',
   })
 
   return (
@@ -18,4 +19,5 @@ const Tiptap = () => {
   )
 }
 
-export default Tiptap
+// Disable SSR so Tiptap only runs in the browser (avoids `document` on the server)
+export default dynamic(() => Promise.resolve(Tiptap), { ssr: false })
