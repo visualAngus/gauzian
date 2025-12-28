@@ -2585,24 +2585,19 @@ export default function Drive() {
 
                       // clique de souris down
                       onMouseDown={(e) => {
-                        // que le clique gauche pour déplacer
                         if (e.button !== 0) return;
                         setSelectedMoveElement(currentId);
                       }}
 
                       onClick={() => handleSelection(currentId)}
                       onDoubleClick={() => {
-                        if (file.is_chunked) {
-                          handleDownloadChunked(file.file_id, file.name);
-                        } else {
-                          handleDownload(file.file_id, file.name);
-                        }
+                        acceptSharedFile(file.file_id);
                       }}
                       style={{ cursor: 'pointer' }}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         handleSelection(currentId);
-                        open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
+                        // open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
                       }}
                     >
 

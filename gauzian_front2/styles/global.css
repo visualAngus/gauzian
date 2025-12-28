@@ -767,3 +767,7 @@ nav ul li a.active {
 #share_submit_button:active {
     transform: translateY(0);
 }
+
+.selected_file{
+    background-color: var(--light-orange-color) !important;
+}
