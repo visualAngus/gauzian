@@ -1720,7 +1720,7 @@ export default function Drive() {
     const data = await res.json();
     if (data.status === 'success') {
       console.log("Invitation acceptée avec succès.");
-      setNotifText("Invitation acceptée avec succès.");
+      setNotifText("Invitation acceptée avec succès. Le fichier est maintenant dans votre Drive.");
       // Rafraîchir la liste des fichiers partagés avec moi
       getSharedWithMeFiles();
     } else {

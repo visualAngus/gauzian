@@ -8,6 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
+    "@tiptap/pm": "^3.14.0",
+    "@tiptap/react": "^3.14.0",
+    "@tiptap/starter-kit": "^3.14.0",
     "formidable": "^3.5.4",
     "jspdf": "^3.0.4",
     "libsodium-wrappers": "^0.7.15",
