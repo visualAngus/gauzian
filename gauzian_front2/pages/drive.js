@@ -84,9 +84,8 @@ export default function Drive() {
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
 
-  // upload pourcentage
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [curentFileUploadName, setCurentFileUploadName] = useState("");
+  // sharedFiles
+  const [sharedFiles, setSharedFiles] = useState([]);
 
   // États pour l'upload (venant de votre code React)
   const [uploading, setUploading] = useState(false);
@@ -1775,7 +1774,7 @@ export default function Drive() {
         decryptedFiles.push(cleanFile);
       }
 
-      setFiles(decryptedFiles);
+      sharedFiles(decryptedFiles);
     } else {
       console.error("Erreur récupération invitations de partage :", data.message);
     }
@@ -2425,8 +2424,7 @@ export default function Drive() {
                     <span>Propriétaire</span>
                     <span>Taille</span>
                     <span>Créé le</span>
-                    {/* si c'est partages alors ce sera la date d'expiration sinon c'est mise a jour */}
-                    <span>{activeSection === 'partages' ? "Expiration" : "Mis à jour"}</span>
+                    <span>Mis à jour</span>
                   </div>
                 </div>
 
@@ -2517,7 +2515,7 @@ export default function Drive() {
                         <span className={content.type === 'file' ? 'file_name' : 'folder_name'}>{content.name}</span>
                       </div>
                       <div className="additional_info">
-                        <span>{content.owner || content.sender_name || ''}</span>
+                        <span>{content.owner || ''}</span>
                         <span>
                           {(() => {
                             const size = content.total_size || 0;
