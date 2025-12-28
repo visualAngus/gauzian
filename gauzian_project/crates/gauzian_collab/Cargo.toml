@@ -1,0 +1,15 @@
+[package]
+name = "gauzian_collab"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+axum = { version = "0.7", features = ["ws"] }
+futures = "0.3"
+dashmap = "5.5"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+gauzian_core = { path = "../gauzian_core" } # Pour accéder à AppState
+
+axum-extra = { version = "0.9", features = ["cookie"] }
