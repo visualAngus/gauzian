@@ -8,6 +8,7 @@ edition = "2021"
 gauzian_core = { path = "../gauzian_core" }
 gauzian_auth = { path = "../gauzian_auth" }
 gauzian_drive = { path = "../gauzian_drive" }
+gauzian_collab = { path = "../gauzian_collab" }
 
 # --- Framework Web ---
 axum = "0.7"
