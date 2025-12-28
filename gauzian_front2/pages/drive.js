@@ -2028,7 +2028,7 @@ export default function Drive() {
     };
 
 
-  }, [activeFolderId, tokenReady]); // <--- Enlever token
+  }, [activeFolderId, tokenReady]);
 
   useEffect(() => {
     const onPopState = (event) => {
@@ -2548,11 +2548,13 @@ export default function Drive() {
                   );
                 })}
 
-                {sharedFiles.map((file) => (
-                  <div key={file.file_id} className="shared_file_list">
-                    <span>{file.name} (partagé par {file.shared_by})</span>
-                  </div>
-                ))}
+                {sharedFiles.map((file) => 
+                  activeSection === 'partages' ? (
+                    <div key={file.file_id} className="shared_file_list">
+                      <span>{file.name} (partagé par {file.shared_by})</span>
+                    </div>
+                  ) : null
+                )}
               </div>
             )}
           </div>
