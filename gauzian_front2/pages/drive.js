@@ -2430,6 +2430,17 @@ export default function Drive() {
                   </div>
                 </div>
 
+                <div className="content_list_header" style={ activeSection === 'partages' ? { display: 'flex' } : { display: 'none' }}>
+                  <div className="header_name">Nom</div>
+                  <div className="header_additional_info">
+                    <span>Partagé par</span>
+                    <span>Permissions</span>
+                    <span>Taille</span>
+                    <span>Expire à</span>
+                    <span>Accepter / Refuser</span>
+                  </div>
+                </div>
+
                 {contents.map((content) => {
                   // Détermination de l'ID unique et de la classe CSS selon le type
                   const currentId = content.type === 'folder' ? content.folder_id : content.file_id;
@@ -2547,6 +2558,8 @@ export default function Drive() {
                     </div>
                   );
                 })}
+
+
 
                 {activeSection === 'partages' && sharedFiles.map((file) => {
                   const currentId = file.file_id;
