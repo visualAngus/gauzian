@@ -1,17 +1,5 @@
-/* Variables de couleur Gauzian */
-:root {
-    --dark-color: #0B1120;
-    --dark-gray-color: #334155;
-    --light-gray-color: #E2E8F0;
-    --colored-orange-gray-color: #ebedf1;
-    --orange-color: #F97316;
-    --light-orange-color: #FDBA74;
-    --ultra-light-orange-color: #FFF7ED;
-    --white-color: #F8FAFC;
-}
-
 /* Conteneur principal */
-.editor-container {
+.editorContainer {
     width: 100%;
     min-height: 100vh;
     background-color: var(--white-color);
@@ -20,7 +8,7 @@
 }
 
 /* Header avec titre */
-.editor-header {
+.editorHeader {
     width: 100%;
     padding: 1.5rem 3rem;
     background-color: #fff;
@@ -34,11 +22,11 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
-.editor-title-section {
+.editorTitleSection {
     flex: 1;
 }
 
-.editor-title {
+.editorTitle {
     font-size: 1.5rem;
     font-weight: 500;
     color: var(--dark-color);
@@ -49,11 +37,11 @@
     width: fit-content;
 }
 
-.editor-title:hover {
+.editorTitle:hover {
     background-color: var(--colored-orange-gray-color);
 }
 
-.editor-title-input {
+.editorTitleInput {
     font-size: 1.5rem;
     font-weight: 500;
     color: var(--dark-color);
@@ -65,16 +53,16 @@
     min-width: 300px;
 }
 
-.editor-title-input:focus {
+.editorTitleInput:focus {
     outline: none;
 }
 
-.editor-actions {
+.editorActions {
     display: flex;
     gap: 0.5rem;
 }
 
-.btn-action {
+.btnAction {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -88,17 +76,17 @@
     transition: all 0.2s ease;
 }
 
-.btn-action:hover {
+.btnAction:hover {
     background-color: var(--colored-orange-gray-color);
     color: var(--orange-color);
 }
 
-.btn-action:active {
+.btnAction:active {
     transform: scale(0.95);
 }
 
 /* Barre d'outils */
-.editor-toolbar {
+.editorToolbar {
     width: 100%;
     padding: 0.75rem 3rem;
     background-color: #fff;
@@ -112,13 +100,13 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
-.toolbar-group {
+.toolbarGroup {
     display: flex;
     gap: 0.25rem;
     align-items: center;
 }
 
-.toolbar-btn {
+.toolbarBtn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -135,27 +123,27 @@
     font-weight: 500;
 }
 
-.toolbar-btn:hover {
+.toolbarBtn:hover {
     background-color: var(--colored-orange-gray-color);
     color: var(--dark-color);
 }
 
-.toolbar-btn.active {
+.toolbarBtn.active {
     background-color: var(--ultra-light-orange-color);
     color: var(--orange-color);
     font-weight: 600;
 }
 
-.toolbar-btn:active {
+.toolbarBtn:active {
     transform: scale(0.95);
 }
 
-.toolbar-text {
+.toolbarText {
     font-weight: 600;
     font-size: 0.85rem;
 }
 
-.toolbar-divider {
+.toolbarDivider {
     width: 1px;
     height: 24px;
     background-color: var(--light-gray-color);
@@ -163,7 +151,7 @@
 }
 
 /* Zone d'écriture */
-.editor-wrapper {
+.editorWrapper {
     flex: 1;
     width: 100%;
     padding: 2rem 3rem;
@@ -171,7 +159,7 @@
     overflow-y: auto;
 }
 
-.editor-content-wrapper {
+.editorContentWrapper {
     max-width: 850px;
     margin: 0 auto;
     background-color: #fff;
@@ -182,23 +170,23 @@
 }
 
 /* Styles de l'éditeur */
-.prose-editor {
+.proseEditor {
     outline: none;
     font-size: 1rem;
     line-height: 1.75;
     color: var(--dark-color);
 }
 
-.prose-editor p {
+.proseEditor :global(p) {
     margin-bottom: 1rem;
 }
 
-.prose-editor h1,
-.prose-editor h2,
-.prose-editor h3,
-.prose-editor h4,
-.prose-editor h5,
-.prose-editor h6 {
+.proseEditor :global(h1),
+.proseEditor :global(h2),
+.proseEditor :global(h3),
+.proseEditor :global(h4),
+.proseEditor :global(h5),
+.proseEditor :global(h6) {
     font-weight: 600;
     color: var(--dark-color);
     margin-top: 1.5rem;
@@ -206,41 +194,41 @@
     line-height: 1.3;
 }
 
-.prose-editor h1 {
+.proseEditor :global(h1) {
     font-size: 2.25rem;
     border-bottom: 3px solid var(--orange-color);
     padding-bottom: 0.5rem;
 }
 
-.prose-editor h2 {
+.proseEditor :global(h2) {
     font-size: 1.875rem;
     border-bottom: 2px solid var(--light-orange-color);
     padding-bottom: 0.4rem;
 }
 
-.prose-editor h3 {
+.proseEditor :global(h3) {
     font-size: 1.5rem;
 }
 
-.prose-editor h4 {
+.proseEditor :global(h4) {
     font-size: 1.25rem;
 }
 
-.prose-editor strong {
+.proseEditor :global(strong) {
     font-weight: 600;
     color: var(--dark-color);
 }
 
-.prose-editor em {
+.proseEditor :global(em) {
     font-style: italic;
 }
 
-.prose-editor s {
+.proseEditor :global(s) {
     text-decoration: line-through;
     color: var(--dark-gray-color);
 }
 
-.prose-editor blockquote {
+.proseEditor :global(blockquote) {
     border-left: 4px solid var(--orange-color);
     padding-left: 1.5rem;
     margin: 1.5rem 0;
@@ -251,38 +239,38 @@
     border-radius: 0 8px 8px 0;
 }
 
-.prose-editor ul,
-.prose-editor ol {
+.proseEditor :global(ul),
+.proseEditor :global(ol) {
     padding-left: 2rem;
     margin: 1rem 0;
 }
 
-.prose-editor ul li {
+.proseEditor :global(ul li) {
     list-style-type: disc;
     margin-bottom: 0.5rem;
 }
 
-.prose-editor ol li {
+.proseEditor :global(ol li) {
     list-style-type: decimal;
     margin-bottom: 0.5rem;
 }
 
-.prose-editor ul li::marker {
+.proseEditor :global(ul li::marker) {
     color: var(--orange-color);
 }
 
-.prose-editor ol li::marker {
+.proseEditor :global(ol li::marker) {
     color: var(--orange-color);
     font-weight: 600;
 }
 
-.prose-editor hr {
+.proseEditor :global(hr) {
     border: none;
     border-top: 2px solid var(--light-gray-color);
     margin: 2rem 0;
 }
 
-.prose-editor code {
+.proseEditor :global(code) {
     background-color: var(--colored-orange-gray-color);
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
@@ -291,7 +279,7 @@
     color: var(--orange-color);
 }
 
-.prose-editor pre {
+.proseEditor :global(pre) {
     background-color: var(--dark-color);
     color: var(--white-color);
     padding: 1rem;
@@ -300,14 +288,14 @@
     margin: 1rem 0;
 }
 
-.prose-editor pre code {
+.proseEditor :global(pre code) {
     background-color: transparent;
     color: var(--white-color);
     padding: 0;
 }
 
 /* Menu bulle */
-.bubble-menu {
+.bubbleMenu {
     display: flex;
     background-color: var(--dark-color);
     border-radius: 8px;
@@ -316,7 +304,7 @@
     gap: 0.25rem;
 }
 
-.bubble-menu button {
+.bubbleMenu button {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -332,22 +320,22 @@
     font-size: 0.9rem;
 }
 
-.bubble-menu button:hover {
+.bubbleMenu button:hover {
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-.bubble-menu button.active {
+.bubbleMenu button.active {
     background-color: var(--orange-color);
     color: var(--white-color);
 }
 
 /* Focus de l'éditeur */
-.ProseMirror:focus {
+.proseEditor :global(.ProseMirror:focus) {
     outline: none;
 }
 
 /* Placeholder */
-.ProseMirror p.is-editor-empty:first-child::before {
+.proseEditor :global(.ProseMirror p.is-editor-empty:first-child::before) {
     content: attr(data-placeholder);
     float: left;
     color: var(--dark-gray-color);
@@ -358,29 +346,29 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-    .editor-header {
+    .editorHeader {
         padding: 1rem 1.5rem;
     }
 
-    .editor-toolbar {
+    .editorToolbar {
         padding: 0.5rem 1rem;
         overflow-x: auto;
         flex-wrap: nowrap;
     }
 
-    .editor-wrapper {
+    .editorWrapper {
         padding: 1rem;
     }
 
-    .editor-content-wrapper {
+    .editorContentWrapper {
         padding: 2rem 1.5rem;
     }
 
-    .editor-title {
+    .editorTitle {
         font-size: 1.25rem;
     }
 
-    .toolbar-btn {
+    .toolbarBtn {
         min-width: 32px;
         height: 32px;
     }
@@ -398,12 +386,12 @@
     }
 }
 
-.editor-container {
+.editorContainer {
     animation: fadeIn 0.3s ease-out;
 }
 
 /* Sélection de texte */
-.prose-editor ::selection {
+.proseEditor :global(::selection) {
     background-color: var(--ultra-light-orange-color);
     color: var(--dark-color);
 }
