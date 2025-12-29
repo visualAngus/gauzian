@@ -567,7 +567,17 @@
 }
 
 .proseEditor :global(.collaboration-cursor__label) {
-  opacity: 0;
+    position: absolute;
+    top: -1.6em;
+    left: -1px;
+    background-color: var(--orange-color);
+    color: var(--white-color);
+    padding: 0.1rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
 }
 .collaboration-selection {
   background-color: rgba(249, 115, 22, 0.2);
