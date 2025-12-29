@@ -583,11 +583,9 @@
     transition: opacity 0.2s ease;
 }
 
-/* quand proseEditor :global(.collaboration-cursor__caret) est hover */
-.proseEditor :global(.collaboration-cursor__caret:hover) {
-    .proseEditor :global(.collaboration-cursor__label) {
-        opacity: 1;
-    }
+/* Afficher le label au hover du curseur */
+.proseEditor :global(.collaboration-cursor__caret:hover .collaboration-cursor__label) {
+    opacity: 1;
 }
 
 
