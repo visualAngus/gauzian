@@ -479,11 +479,11 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
 const TiptapCollaborative = () => {
   const [provider, setProvider] = useState(null)
   const [ydoc, setYdoc] = useState(null)
-  const [localUser] = useState(() => {
+  const [localUser, setLocalUser] = useState(() => {
     const colors = ['#f97316', '#2563eb', '#10b981', '#7c3aed', '#dc2626', '#0ea5e9']
-    return { 
-      name: `User-${Math.floor(Math.random() * 900 + 100)}`, 
-      color: colors[Math.floor(Math.random() * colors.length)] 
+    return {
+      name: `User-${Math.floor(Math.random() * 900 + 100)}`,
+      color: colors[Math.floor(Math.random() * colors.length)],
     }
   })
 
@@ -504,27 +504,40 @@ const TiptapCollaborative = () => {
       console.log('🌐 WS Status:', event.status)
     })
 
-    
+    const applyUserToAwareness = (userData) => {
+      wsProvider.awareness.setLocalStateField('user', userData)
+    }
+
     // Connexion après autologin
     const connectProvider = async () => {
       try {
-        let data = await fetch('/api/auth/autologin', {
+        const response = await fetch('/api/auth/autologin', {
           method: 'POST',
           credentials: 'include',
         })
-        if (data.ok) {
-          let result = await data.json()
-          localUser.name = result.full_name || localUser.name
+
+        if (response.ok) {
+          const result = await response.json()
+          const nextUser = {
+            ...localUser,
+            name: result.full_name || result.name || result.username || result.email || localUser.name,
+          }
+
+          setLocalUser(nextUser)
+          applyUserToAwareness(nextUser)
+        } else {
+          applyUserToAwareness(localUser)
         }
       } catch (err) {
         console.warn('Autologin failed before WS connect:', err)
+        applyUserToAwareness(localUser)
       }
+
       wsProvider.connect()
     }
-      
-    wsProvider.awareness.setLocalStateField('user', localUser)
 
-    console.log('localUser:', localUser)
+    // Publier l'état local immédiatement puis mettre à jour après autologin
+    applyUserToAwareness(localUser)
     connectProvider()
 
     setYdoc(doc)
