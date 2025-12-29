@@ -557,7 +557,7 @@
 .proseEditor :global(.collaboration-cursor__caret) {
   position: absolute;
   border-left: 2px solid var(--orange-color);
-  width: 2px;
+  width: 12px;
   /* border-right: 2px solid var(--orange-color); */
   margin: 0 -2px;
   margin-top: -4px;
@@ -573,12 +573,21 @@
     background-color: var(--orange-color);
     color: var(--white-color);
     padding: 0.1rem 0.5rem;
-    border-radius: 4px;
+    border-radius: 4px 4px 4px 0;
     font-size: 0.75rem;
     font-weight: 600;
     white-space: nowrap;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
+
+/* quand proseEditor :global(.collaboration-cursor__caret) est hover */
+.proseEditor :global(.collaboration-cursor__caret:hover + .collaboration-cursor__label) {
+    opacity: 1;
+}
+
+
 .collaboration-selection {
   background-color: rgba(249, 115, 22, 0.2);
   border-radius: 3px;
