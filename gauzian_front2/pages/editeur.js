@@ -504,21 +504,26 @@ const TiptapCollaborative = () => {
       console.log('🌐 WS Status:', event.status)
     })
 
-    wsProvider.awareness.setLocalStateField('user', localUser)
-
+    
     // Connexion après autologin
     const connectProvider = async () => {
       try {
-        await fetch('/api/auth/autologin', {
+        let data = await fetch('/api/auth/autologin', {
           method: 'POST',
           credentials: 'include',
         })
-      } catch (err) {
-        console.warn('Autologin failed before WS connect:', err)
+        if (data.ok) {
+          let result = await data.json()
+          localUser.name = result.full_name || localUser.name
+        } catch (err) {
+          console.warn('Autologin failed before WS connect:', err)
+        }
+        wsProvider.connect()
       }
-      wsProvider.connect()
-    }
+      
+    wsProvider.awareness.setLocalStateField('user', localUser)
 
+    console.log('localUser:', localUser)
     connectProvider()
 
     setYdoc(doc)
