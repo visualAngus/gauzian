@@ -124,54 +124,8 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
     fileInputRef.current?.click()
   }
 
-  // Styles CSS injectés pour les curseurs de collaboration
-  const collaborationStyles = `
-    .collaboration-selection {
-      background-color: rgba(0, 0, 0, 0.1);
-      border-radius: 2px;
-    }
-    
-    .y-collaborator {
-      position: relative;
-    }
-    
-    .y-collaborator__cursor {
-      border-left: 3px solid currentColor;
-      border-top: 2px solid currentColor;
-      border-right: 1px solid currentColor;
-      border-bottom: 1px solid currentColor;
-      border-radius: 50%;
-      width: 12px;
-      height: 12px;
-      margin-top: -1px;
-      margin-left: -1px;
-      animation: pulse 2s infinite;
-    }
-    
-    .y-collaborator__label {
-      position: absolute;
-      top: -1.4em;
-      left: -1px;
-      font-size: 0.75rem;
-      background-color: currentColor;
-      color: white;
-      padding: 2px 6px;
-      border-radius: 3px;
-      white-space: nowrap;
-      z-index: 100;
-      font-weight: 600;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-  `
-
   return (
-    <>
-      <style>{collaborationStyles}</style>
-    < className={styles.editorContainer}>
+    <div className={styles.editorContainer}>
       {/* Header avec titre et actions */}
       <div className={styles.editorHeader}>
         <div className={styles.editorTitleSection}>
@@ -470,7 +424,7 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
           🔗
         </button>
       </BubbleMenu>
-    </>
+    </div>
   )
 }
 
