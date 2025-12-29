@@ -498,8 +498,15 @@
 
 
 /* Curseurs de collaboration */
-.collaboration-selection {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
+.collaboration-cursor__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 6px;
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-
