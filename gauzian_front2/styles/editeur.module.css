@@ -562,7 +562,6 @@
   margin: 0 -2px;
   margin-top: -4px;
   height: 1.2em;
-  pointer-events: none;
   animation: blink 1s infinite;
   cursor: pointer;
   transform: translateY(50%);
@@ -579,14 +578,16 @@
     font-size: 0.75rem;
     font-weight: 600;
     white-space: nowrap;
-    pointer-events: none;
+    user-select: none;  
     opacity: 0;
     transition: opacity 0.2s ease;
 }
 
 /* quand proseEditor :global(.collaboration-cursor__caret) est hover */
-.proseEditor :global(.collaboration-cursor__caret:hover + .collaboration-cursor__label) {
-    opacity: 1;
+.proseEditor :global(.collaboration-cursor__caret:hover) {
+    .proseEditor :global(.collaboration-cursor__label) {
+        opacity: 1;
+    }
 }
 
 
