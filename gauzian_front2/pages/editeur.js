@@ -68,22 +68,29 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
 
   // Tracker les utilisateurs actifs
   useEffect(() => {
-    if (!provider) return
+    if (!provider || !provider.awareness) return
 
     const handleSync = () => {
-      const states = provider.awareness.getStates()
-      const users = Array.from(states.values()).map((state) => state.user)
-      setActiveUsers(users.filter(Boolean))
+      try {
+        const states = provider.awareness.getStates()
+        const users = Array.from(states.values())
+          .map((state) => state.user)
+          .filter(Boolean)
+        setActiveUsers(users)
+      } catch (error) {
+        console.error('Erreur lors de la mise à jour des utilisateurs actifs:', error)
+      }
     }
 
-    provider.awareness.on('sync', handleSync)
-    provider.awareness.on('change', handleSync)
+    const handleAwarenessUpdate = () => {
+      handleSync()
+    }
 
+    provider.awareness.on('update', handleAwarenessUpdate)
     handleSync()
 
     return () => {
-      provider.awareness.off('sync', handleSync)
-      provider.awareness.off('change', handleSync)
+      provider.awareness.off('update', handleAwarenessUpdate)
     }
   }, [provider])
 
