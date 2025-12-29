@@ -2,7 +2,17 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    user-select: none;
+}
+
+/* Override user-select: none for editor-related elements */
+.ProseMirror,
+.proseEditor,
+[data-editor],
+[contenteditable] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
 }
 
 :root {

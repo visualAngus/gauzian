@@ -498,15 +498,60 @@
 
 
 /* Curseurs de collaboration */
-.collaboration-cursor__label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.15rem 0.4rem;
-    border-radius: 6px;
-    color: #fff;
-    white-space: nowrap;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    width: 10px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.proseEditor :global(.collaboration-cursor) {
+  border-left: 2px solid var(--orange-color);
+  border-right: 2px solid var(--orange-color);
+  margin: 0 -2px;
+  pointer-events: none;
+  word-break: break-word;
 }
+
+.proseEditor :global(.collaboration-cursor__caret) {
+  position: absolute;
+  border-left: 2px solid var(--orange-color);
+  border-right: 2px solid var(--orange-color);
+  margin: 0 -2px;
+  margin-top: -4px;
+  height: 1.2em;
+  pointer-events: none;
+  animation: blink 1s infinite;
+}
+
+.proseEditor :global(.collaboration-cursor__label) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  background-color: var(--orange-color);
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.collaboration-selection {
+  background-color: rgba(249, 115, 22, 0.2);
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  49% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
