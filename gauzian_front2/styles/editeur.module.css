@@ -97,54 +97,6 @@
     transform: scale(0.95);
 }
 
-/* Utilisateurs actifs */
-.activeUsersContainer {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    margin-left: 1rem;
-    padding-left: 1rem;
-    border-left: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.activeUserBadge {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.8rem;
-    border-radius: 20px;
-    color: white;
-    font-weight: 600;
-    font-size: 0.85rem;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
-    transition: all 0.2s ease;
-    min-width: fit-content;
-}
-
-.activeUserBadge:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.15);
-}
-
-.userInitial {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.25);
-    font-weight: 700;
-    font-size: 0.75rem;
-}
-
-.userName {
-    white-space: nowrap;
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 /* Barre d'outils */
 .editorToolbar {
     width: 100%;
