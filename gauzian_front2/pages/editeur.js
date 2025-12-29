@@ -19,6 +19,7 @@ import styles from '../styles/editeur.module.css'
 const TiptapEditor = ({ provider, ydoc, user }) => {
   const [title, setTitle] = useState('Document sans titre')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [activeUsers, setActiveUsers] = useState([])
   const fileInputRef = useRef(null)
 
   const editor = useEditor({
@@ -64,6 +65,34 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
       },
     },
   })
+
+  // Tracker les utilisateurs actifs
+  useEffect(() => {
+    if (!provider || !provider.awareness) return
+
+    const handleSync = () => {
+      try {
+        const states = provider.awareness.getStates()
+        const users = Array.from(states.values())
+          .map((state) => state.user)
+          .filter(Boolean)
+        setActiveUsers(users)
+      } catch (error) {
+        console.error('Erreur lors de la mise à jour des utilisateurs actifs:', error)
+      }
+    }
+
+    const handleAwarenessUpdate = () => {
+      handleSync()
+    }
+
+    provider.awareness.on('update', handleAwarenessUpdate)
+    handleSync()
+
+    return () => {
+      provider.awareness.off('update', handleAwarenessUpdate)
+    }
+  }, [provider])
 
   if (!editor) return null
 
@@ -157,6 +186,23 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
               <path d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 019 9"></path>
             </svg>
           </button>
+          
+          {/* Affichage des utilisateurs actifs */}
+          <div className={styles.activeUsersContainer}>
+            {activeUsers.map((u, idx) => (
+              <div
+                key={idx}
+                className={styles.activeUserBadge}
+                style={{ backgroundColor: u.color || '#F97316' }}
+                title={u.name}
+              >
+                <span className={styles.userInitial}>
+                  {u.name?.charAt(0).toUpperCase() || 'U'}
+                </span>
+                <span className={styles.userName}>{u.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
