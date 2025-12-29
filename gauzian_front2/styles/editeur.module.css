@@ -495,3 +495,40 @@
 .hiddenInput {
     display: none;
 }
+
+
+/* Curseurs de collaboration */
+.collaboration-selection {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+}
+
+/* Curseur des autres utilisateurs */
+:global(.y-collaborator) {
+  position: relative;
+}
+
+:global(.y-collaborator__cursor) {
+  border-left: 3px solid currentColor;
+  border-top: 2px solid currentColor;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -1px;
+  margin-left: -1px;
+}
+
+:global(.y-collaborator__label) {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 0.75rem;
+  background-color: currentColor;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  z-index: 100;
+}
