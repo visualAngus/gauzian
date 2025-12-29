@@ -515,11 +515,12 @@ const TiptapCollaborative = () => {
         if (data.ok) {
           let result = await data.json()
           localUser.name = result.full_name || localUser.name
-        } catch (err) {
-          console.warn('Autologin failed before WS connect:', err)
         }
-        wsProvider.connect()
+      } catch (err) {
+        console.warn('Autologin failed before WS connect:', err)
       }
+      wsProvider.connect()
+    }
       
     wsProvider.awareness.setLocalStateField('user', localUser)
 
