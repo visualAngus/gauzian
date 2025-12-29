@@ -37,7 +37,8 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
       CollaborationCursor.configure({
         provider: provider,
         user: user,
-        selectionClassName: 'collaboration-selection',
+        selectionClassName: styles['collaboration-selection'],
+        cursorClassName: styles['collaboration-cursor'],
       }),
       Link.configure({
         openOnClick: true,
