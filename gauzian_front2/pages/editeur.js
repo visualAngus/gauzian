@@ -516,8 +516,8 @@ const TiptapCollaborative = () => {
       } catch (err) {
         console.warn('Autologin failed before WS connect:', err)
       }
+      wsProvider.connect()
     }
-    wsProvider.connect()
 
     connectProvider()
 
