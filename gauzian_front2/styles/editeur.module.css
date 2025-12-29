@@ -564,6 +564,8 @@
   height: 1.2em;
   pointer-events: none;
   animation: blink 1s infinite;
+  cursor: pointer;
+  transform: translateY(50%);
 }
 
 .proseEditor :global(.collaboration-cursor__label) {
@@ -593,7 +595,6 @@
   border-radius: 3px;
   transition: background-color 0.15s ease;
   user-select: none;
-  transform: translateY(50%);
 }
 
 @keyframes blink {
