@@ -504,17 +504,33 @@ const TiptapCollaborative = () => {
       console.log('🌐 WS Status:', event.status)
     })
 
-    wsProvider.awareness.setLocalStateField('user', localUser)
-
-    // Connexion après autologin
+    // Connexion après autologin et récupération du vrai nom
     const connectProvider = async () => {
       try {
-        await fetch('/api/auth/autologin', {
+        const response = await fetch('/api/auth/autologin', {
           method: 'POST',
           credentials: 'include',
         })
+        
+        if (response.ok) {
+          const userData = await response.json()
+          const colors = ['#f97316', '#2563eb', '#10b981', '#7c3aed', '#dc2626', '#0ea5e9']
+          
+          // Utiliser le vrai nom de l'utilisateur
+          const userInfo = {
+            name: userData.username || localUser.name,
+            color: colors[Math.floor(Math.random() * colors.length)]
+          }
+          
+          wsProvider.awareness.setLocalStateField('user', userInfo)
+          console.log('👤 Utilisateur connecté:', userInfo.name)
+        } else {
+          // Fallback au nom par défaut si l'autologin échoue
+          wsProvider.awareness.setLocalStateField('user', localUser)
+        }
       } catch (err) {
         console.warn('Autologin failed before WS connect:', err)
+        wsProvider.awareness.setLocalStateField('user', localUser)
       }
       wsProvider.connect()
     }
