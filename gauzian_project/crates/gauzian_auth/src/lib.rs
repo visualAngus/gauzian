@@ -1003,7 +1003,7 @@ pub async fn autologin_handler(
 
             // Récupérer les informations de l'utilisateur
             let user_result = sqlx::query!(
-                "SELECT salt_e2e, salt_auth, public_key, private_key_encrypted FROM users WHERE id = $1",
+                "SELECT salt_e2e, salt_auth, public_key, private_key_encrypted, id, CONCAT(first_name, ' ', last_name) AS full_name FROM users WHERE id = $1",
                 user_id
             )
             .fetch_one(&state.db_pool)
@@ -1039,6 +1039,8 @@ pub async fn autologin_handler(
                 "message": "Connexion automatique réussie",
                 "salt_auth": String::from_utf8(user.salt_auth).unwrap_or_default(),
                 "salt_e2e": String::from_utf8(user.salt_e2e).unwrap_or_default(),
+                "id": user.id,
+                "full_name": user.full_name,
             }));
             let mut response = (StatusCode::OK, body).into_response();
             if let Ok(val) = HeaderValue::from_str(&access_cookie) {
