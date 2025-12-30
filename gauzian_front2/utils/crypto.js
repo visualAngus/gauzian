@@ -16,13 +16,20 @@ export async function generateKey() {
 // 2. Exporter la clé en base64 (pour la mettre dans l'URL après le #)
 export async function exportKey(key) {
   const exported = await window.crypto.subtle.exportKey('raw', key)
-  return btoa(String.fromCharCode(...new Uint8Array(exported)))
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(exported)))
+  // Rendre URL-safe: remplacer + / et supprimer =
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 // 3. Importer la clé depuis l'URL (base64 -> CryptoKey)
 export async function importKey(base64Key) {
   try {
-    const raw = Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0))
+    // Restaurer le base64 standard depuis la version URL-safe
+    const base64 = base64Key.replace(/-/g, '+').replace(/_/g, '/')
+    const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+    const normalized = base64 + padding
+
+    const raw = Uint8Array.from(atob(normalized), (c) => c.charCodeAt(0))
     return await window.crypto.subtle.importKey(
       'raw',
       raw,
