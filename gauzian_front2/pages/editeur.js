@@ -487,20 +487,11 @@ const TiptapCollaborative = () => {
     }
   })
 
-  // Références pour persister la connexion
+  // Références pour persister la connexion sans re-créer
   const providerRef = useRef(null)
   const docRef = useRef(null)
-  const isInitializedRef = useRef(false)
 
   useEffect(() => {
-    // Ne créer la connexion qu'une seule fois
-    if (isInitializedRef.current) {
-      console.log('⏭️ Connexion WebSocket déjà initialisée, skip')
-      return
-    }
-
-    isInitializedRef.current = true
-
     const doc = new Y.Doc()
     docRef.current = doc
 
@@ -529,9 +520,14 @@ const TiptapCollaborative = () => {
     // Point de DÉCODAGE (E2EE): écouter wsProvider.ws.onmessage / addEventListener('message', ...) pour déchiffrer avant de passer à Yjs.
     // Exemple: wsProvider.ws.addEventListener('message', (evt) => { const plain = decrypt(new Uint8Array(evt.data)); /* feed plain to Yjs */ })
 
-    wsProvider.on('status', event => {
+    let statusHandler = (event) => {
       console.log('🌐 WS Status:', event.status)
-    })
+      if (event.status === 'connected') {
+        console.log('✅ Connecté au serveur')
+      }
+    }
+    
+    wsProvider.on('status', statusHandler)
 
     const applyUserToAwareness = (userData) => {
       wsProvider.awareness.setLocalStateField('user', userData)
@@ -569,6 +565,7 @@ const TiptapCollaborative = () => {
     applyUserToAwareness(localUser)
     connectProvider()
 
+    // Mettre à jour l'état APRÈS connexion
     setYdoc(doc)
     setProvider(wsProvider)
 
@@ -582,46 +579,36 @@ const TiptapCollaborative = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
 
+    // Cleanup SEUL et UNIQUE - au vrai démontage du composant
     return () => {
-      // Ne détruire que si on quitte vraiment la page (pas pour StrictMode)
-      console.log('🧹 Effect cleanup appelé')
-      window.removeEventListener('beforeunload', handleBeforeUnload)
+      console.log('🛑 Démontage du composant - destruction WebSocket')
       
-      // Ne rien détruire ici - laisser la connexion active
-    }
-  }, [])
-
-  // Cleanup final uniquement au vrai unmount
-  useEffect(() => {
-    return () => {
-      // Ceci s'exécute vraiment au unmount du composant
-      if (!isInitializedRef.current) return
-
-      console.log('🛑 Vrai unmount - destruction')
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      wsProvider.off('status', statusHandler)
       
       try {
-        if (providerRef.current) {
-          if (providerRef.current.ws && providerRef.current.ws.readyState === WebSocket.OPEN) {
-            console.log('🔌 Fermeture du WebSocket...')
-            providerRef.current.ws.close()
-          }
-          
-          if (providerRef.current.awareness) {
-            try {
-              providerRef.current.awareness.setLocalStateField('user', null)
-            } catch (e) {
-              console.warn('Erreur awareness cleanup:', e)
-            }
-          }
-          
-          providerRef.current.destroy()
-          console.log('✅ WebSocket provider détruit')
+        // Arrêter la connexion proprement
+        if (wsProvider.ws && wsProvider.ws.readyState === WebSocket.OPEN) {
+          console.log('🔌 Fermeture du WebSocket...')
+          wsProvider.ws.close()
         }
         
-        if (docRef.current) {
-          docRef.current.destroy()
-          console.log('✅ Document Yjs détruit')
+        // Nettoyer l'awareness
+        if (wsProvider.awareness) {
+          try {
+            wsProvider.awareness.setLocalStateField('user', null)
+          } catch (e) {
+            console.warn('Erreur awareness cleanup:', e)
+          }
         }
+        
+        // Destruction du provider
+        wsProvider.destroy()
+        console.log('✅ WebSocket provider détruit')
+        
+        // Destruction du document
+        doc.destroy()
+        console.log('✅ Document Yjs détruit')
       } catch (err) {
         console.error('❌ Erreur lors du cleanup:', err)
       }
