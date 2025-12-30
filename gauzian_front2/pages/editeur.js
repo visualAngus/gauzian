@@ -523,30 +523,44 @@ const TiptapCollaborative = () => {
 
     const initSequence = async () => {
       // 1. GESTION DE LA CLÉ DE CHIFFREMENT (URL HASH)
-      let hash = window.location.hash.slice(1) // Enlever le #
+      let rawHash = window.location.hash.slice(1) // Enlever le #
+      let hash = decodeURIComponent(rawHash || '').trim()
       let key = null
       let docId = 'default-doc'
 
-      // Format attendu: #DOC_ID:BASE64_KEY
-      if (!hash) {
-        console.log("🔑 Génération d'une nouvelle clé de chiffrement...")
+      const regenerateKey = async () => {
         const newKey = await generateKey()
         const keyString = await exportKey(newKey)
         const newDocId = crypto.randomUUID()
-        
         window.history.replaceState(null, '', `#${newDocId}:${keyString}`)
-        
-        key = newKey
-        docId = newDocId
+        return { key: newKey, docId: newDocId }
+      }
+
+      if (!hash) {
+        console.log("🔑 Génération d'une nouvelle clé de chiffrement...")
+        const res = await regenerateKey()
+        key = res.key
+        docId = res.docId
       } else {
+        // Format attendu: #DOC_ID:BASE64_KEY (URL-safe)
         const parts = hash.split(':')
-        if (parts.length === 2) {
+        if (parts.length === 2 && parts[0] && parts[1]) {
           docId = parts[0]
           key = await importKey(parts[1])
+
+          // Si import échoue -> régénérer
+          if (!key) {
+            console.warn('⚠️ Clé invalide détectée, régénération...')
+            const res = await regenerateKey()
+            key = res.key
+            docId = res.docId
+          }
         } else {
           console.error("❌ URL malformée. Format attendu: #DOC_ID:KEY")
-          alert("Lien invalide : clé de déchiffrement manquante.")
-          return
+          alert("Lien invalide : clé de déchiffrement manquante ou invalide. Nouvelle clé générée.")
+          const res = await regenerateKey()
+          key = res.key
+          docId = res.docId
         }
       }
 
