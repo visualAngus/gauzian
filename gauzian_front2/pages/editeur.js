@@ -524,7 +524,13 @@ const TiptapCollaborative = () => {
     const initSequence = async () => {
       // 1. GESTION DE LA CLÉ DE CHIFFREMENT (URL HASH)
       let rawHash = window.location.hash.slice(1) // Enlever le #
-      let hash = decodeURIComponent(rawHash || '').trim()
+      let hash = ''
+      try {
+        hash = decodeURIComponent(rawHash || '').trim()
+      } catch (e) {
+        console.warn('Hash illisible, on génère une nouvelle clé:', e)
+        hash = ''
+      }
       let key = null
       let docId = 'default-doc'
 
