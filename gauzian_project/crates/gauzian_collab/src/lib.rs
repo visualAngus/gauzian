@@ -8,7 +8,6 @@ use axum::{
     routing::get,
     Router,
 };
-use axum_extra::extract::cookie::CookieJar; // <--- Import Important
 use dashmap::DashMap;
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::sync::Arc;
@@ -16,7 +15,6 @@ use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 
 use gauzian_core::AppState;
-use gauzian_auth::require_auth;
 
 // --- Structures ---
 
@@ -45,35 +43,27 @@ pub fn router() -> Router<AppState> {
 
 // --- Handler ---
 
+#[axum::debug_handler]
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    headers: axum::http::HeaderMap,
-    state: AppState,
     Path(room_id): Path<String>,
-    State(_app_state): State<AppState>, // Pour vérifier l'accès DB plus tard
+    State(state): State<AppState>,
     Extension(collab_store): Extension<CollabStore>,
-    jar: CookieJar, // <--- Axum récupère les cookies ici
 ) -> impl IntoResponse {
-    // 1. Récupération du Token depuis le Cookie
-    // Remplace "access_token" par le nom réel de ton cookie (ex: "auth-token", "jwt", etc.)
-    let auth = match require_auth(&headers, &state).await {
-        Ok(ctx) => ctx,
-        Err(resp) => return resp,
-    };
-    let user_id = auth.user_id;
-    let cookies = auth.set_cookies;
-
+    // 1. Vérification de l'authentification via le state
+    // (L'authentification middleware doit être appliqué à la route)
+    
     info!(
         "🔗 Connexion WS acceptée pour doc {} (Token présent)",
         room_id
     );
 
-    // 3. Upgrade vers WebSocket
-    ws.on_upgrade(move |socket| handle_socket(socket, room_id, collab_store))
+    // 2. Upgrade vers WebSocket
+    ws.on_upgrade(move |socket| handle_socket(socket, room_id, collab_store, state))
 }
 
-async fn handle_socket(socket: WebSocket, room_id: String, store: CollabStore) {
-    // ... (Le reste du code est identique à avant) ...
+async fn handle_socket(socket: WebSocket, room_id: String, store: CollabStore, _state: AppState) {
+    // _state peut être utilisé plus tard pour DB queries
     info!("🔗 Socket connected for room: {}", room_id);
     let (mut sender, mut receiver) = socket.split();
 
