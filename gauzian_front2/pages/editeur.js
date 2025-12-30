@@ -487,13 +487,19 @@ const TiptapCollaborative = () => {
     }
   })
 
-  // Références pour s'assurer du cleanup même avec React StrictMode
+  // Références pour persister la connexion
   const providerRef = useRef(null)
   const docRef = useRef(null)
-  const isMountedRef = useRef(true)
+  const isInitializedRef = useRef(false)
 
   useEffect(() => {
-    isMountedRef.current = true
+    // Ne créer la connexion qu'une seule fois
+    if (isInitializedRef.current) {
+      console.log('⏭️ Connexion WebSocket déjà initialisée, skip')
+      return
+    }
+
+    isInitializedRef.current = true
 
     const doc = new Y.Doc()
     docRef.current = doc
@@ -533,8 +539,6 @@ const TiptapCollaborative = () => {
 
     // Connexion après autologin
     const connectProvider = async () => {
-      if (!isMountedRef.current) return
-
       try {
         const response = await fetch('/api/auth/autologin', {
           method: 'POST',
@@ -558,19 +562,15 @@ const TiptapCollaborative = () => {
         applyUserToAwareness(localUser)
       }
 
-      if (isMountedRef.current) {
-        wsProvider.connect()
-      }
+      wsProvider.connect()
     }
 
     // Publier l'état local immédiatement puis mettre à jour après autologin
     applyUserToAwareness(localUser)
     connectProvider()
 
-    if (isMountedRef.current) {
-      setYdoc(doc)
-      setProvider(wsProvider)
-    }
+    setYdoc(doc)
+    setProvider(wsProvider)
 
     // Gestionnaire pour empêcher la fermeture accidentelle
     const handleBeforeUnload = (event) => {
@@ -583,21 +583,29 @@ const TiptapCollaborative = () => {
     window.addEventListener('beforeunload', handleBeforeUnload)
 
     return () => {
-      console.log('🧹 Cleanup WebSocket provider')
-      
-      isMountedRef.current = false
+      // Ne détruire que si on quitte vraiment la page (pas pour StrictMode)
+      console.log('🧹 Effect cleanup appelé')
       window.removeEventListener('beforeunload', handleBeforeUnload)
       
+      // Ne rien détruire ici - laisser la connexion active
+    }
+  }, [])
+
+  // Cleanup final uniquement au vrai unmount
+  useEffect(() => {
+    return () => {
+      // Ceci s'exécute vraiment au unmount du composant
+      if (!isInitializedRef.current) return
+
+      console.log('🛑 Vrai unmount - destruction')
+      
       try {
-        // Arrêter immédiatement la connexion
         if (providerRef.current) {
-          // Déconnecter le WebSocket d'abord
           if (providerRef.current.ws && providerRef.current.ws.readyState === WebSocket.OPEN) {
             console.log('🔌 Fermeture du WebSocket...')
             providerRef.current.ws.close()
           }
           
-          // Nettoyer l'awareness
           if (providerRef.current.awareness) {
             try {
               providerRef.current.awareness.setLocalStateField('user', null)
@@ -606,27 +614,13 @@ const TiptapCollaborative = () => {
             }
           }
           
-          // Destruction complète du provider
-          setTimeout(() => {
-            try {
-              providerRef.current.destroy()
-              console.log('✅ WebSocket provider détruit proprement')
-            } catch (err) {
-              console.warn('Erreur destroy provider:', err)
-            }
-          }, 100)
+          providerRef.current.destroy()
+          console.log('✅ WebSocket provider détruit')
         }
         
-        // Destruction du document
         if (docRef.current) {
-          setTimeout(() => {
-            try {
-              docRef.current.destroy()
-              console.log('✅ Document Yjs détruit')
-            } catch (err) {
-              console.warn('Erreur destroy doc:', err)
-            }
-          }, 150)
+          docRef.current.destroy()
+          console.log('✅ Document Yjs détruit')
         }
       } catch (err) {
         console.error('❌ Erreur lors du cleanup:', err)
