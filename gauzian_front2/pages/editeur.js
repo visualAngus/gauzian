@@ -489,7 +489,14 @@ const TiptapCollaborative = () => {
 
   useEffect(() => {
     const doc = new Y.Doc()
-    const docId = 'shared-document'
+
+    // hash l'url pour avoir #docId 
+    let urlHash = window.location.hash.slice(1)
+    let docId = urlHash.length > 0 ? urlHash : 'shared-document'
+    if (urlHash.length === 0) {
+      window.location.hash = docId
+    }
+    console.log(`📄 Utilisation du document ID: ${docId}`)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const wsUrl = `${protocol}//${host}/api/ws`
@@ -499,6 +506,12 @@ const TiptapCollaborative = () => {
     const wsProvider = new WebsocketProvider(wsUrl, docId, doc, {
       connect: false,
     })
+
+    // Point d'ENCODAGE (E2EE): enrober wsProvider.ws.send pour chiffrer les bytes (Uint8Array) avant envoi.
+    // Exemple: const originalSend = wsProvider.ws.send.bind(wsProvider.ws); wsProvider.ws.send = (data) => originalSend(encrypt(data));
+
+    // Point de DÉCODAGE (E2EE): écouter wsProvider.ws.onmessage / addEventListener('message', ...) pour déchiffrer avant de passer à Yjs.
+    // Exemple: wsProvider.ws.addEventListener('message', (evt) => { const plain = decrypt(new Uint8Array(evt.data)); /* feed plain to Yjs */ })
 
     wsProvider.on('status', event => {
       console.log('🌐 WS Status:', event.status)
