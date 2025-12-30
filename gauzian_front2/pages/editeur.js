@@ -575,7 +575,7 @@ const TiptapCollaborative = () => {
           const result = await response.json()
           const nextUser = {
             ...localUser,
-            name: result.fullName || localUser.name,
+            name: result.full_name || localUser.name,
             id: result.id,
           }
 
