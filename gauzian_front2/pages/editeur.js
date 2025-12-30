@@ -14,6 +14,7 @@ import { WebsocketProvider } from 'y-websocket'
 import * as Y from 'yjs'
 import { useEffect, useRef, useState } from 'react'
 import styles from '../styles/editeur.module.css'
+import { generateKey, exportKey, importKey, encrypt, decrypt } from '../utils/crypto'
 
 // --- Composant Éditeur (UI) ---
 const TiptapEditor = ({ provider, ydoc, user }) => {
@@ -494,22 +495,21 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
   )
 }
 
-// --- Composant Wrapper de Connexion (Logique) ---
+// --- Composant Wrapper de Connexion (Logique E2EE) ---
 const TiptapCollaborative = () => {
   const [provider, setProvider] = useState(null)
   const [ydoc, setYdoc] = useState(null)
+  const [encryptionReady, setEncryptionReady] = useState(false)
+  
   const [localUser, setLocalUser] = useState(() => {
-    // Essayer de récupérer l'utilisateur depuis le localStorage
-    const savedUser = localStorage.getItem('collaborativeEditorUser')
+    const savedUser = typeof window !== 'undefined' ? localStorage.getItem('collaborativeEditorUser') : null
     if (savedUser) {
-      try {
-        return JSON.parse(savedUser)
+      try { 
+        return JSON.parse(savedUser) 
       } catch (e) {
-        console.warn('Erreur lecture utilisateur sauvegardé:', e)
+        console.warn('Erreur lecture utilisateur:', e)
       }
     }
-
-    // Sinon créer un nouvel utilisateur
     const colors = ['#f97316', '#2563eb', '#10b981', '#7c3aed', '#dc2626', '#0ea5e9']
     return {
       name: `User-${Math.floor(Math.random() * 900 + 100)}`,
@@ -517,256 +517,195 @@ const TiptapCollaborative = () => {
     }
   })
 
-  // Références pour persister la connexion sans re-créer
-  const providerRef = useRef(null)
-  const docRef = useRef(null)
-  const cryptoKeyRef = useRef(null)
-
-  // Fonction pour dériver une clé de chiffrement à partir du docId
-  const deriveCryptoKey = async (docId) => {
-    const encoder = new TextEncoder()
-    const salt = encoder.encode('gauzian-collab-salt')
-    
-    // Importer la docId comme clé maître
-    const masterKey = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(docId),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits', 'deriveKey']
-    )
-
-    // Dériver une clé AES-256-GCM
-    return crypto.subtle.deriveKey(
-      {
-        name: 'PBKDF2',
-        salt: salt,
-        iterations: 100000,
-        hash: 'SHA-256',
-      },
-      masterKey,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    )
-  }
-
-  // Fonction de chiffrement
-  const encryptData = async (data, key) => {
-    if (!key) return data // Fallback si pas de clé
-    
-    try {
-      const iv = crypto.getRandomValues(new Uint8Array(12)) // IV de 12 bytes pour GCM
-      const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        data
-      )
-      
-      // Retourner IV + données chiffrées
-      const result = new Uint8Array(iv.length + encrypted.byteLength)
-      result.set(iv, 0)
-      result.set(new Uint8Array(encrypted), iv.length)
-      return result
-    } catch (err) {
-      console.error('Erreur chiffrement:', err)
-      return data
-    }
-  }
-
-  // Fonction de déchiffrement
-  const decryptData = async (data, key) => {
-    if (!key) return data // Fallback si pas de clé
-    
-    try {
-      const iv = data.slice(0, 12) // Récupérer l'IV (12 premiers bytes)
-      const encryptedData = data.slice(12) // Le reste est chiffré
-      
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encryptedData
-      )
-      
-      return decrypted
-    } catch (err) {
-      console.error('Erreur déchiffrement:', err)
-      return data
-    }
-  }
-
   useEffect(() => {
-    const doc = new Y.Doc()
-    docRef.current = doc
+    let wsProvider = null
+    let doc = new Y.Doc()
 
-    // hash l'url pour avoir #docId 
-    let urlHash = window.location.hash.slice(1)
-    let docId = urlHash.length > 0 ? urlHash : 'shared-document'
-    if (urlHash.length === 0) {
-      window.location.hash = docId
-    }
-    console.log(`📄 Utilisation du document ID: ${docId}`)
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/api/ws`
+    const initSequence = async () => {
+      // 1. GESTION DE LA CLÉ DE CHIFFREMENT (URL HASH)
+      let hash = window.location.hash.slice(1) // Enlever le #
+      let key = null
+      let docId = 'default-doc'
 
-    console.log(`🔌 Initialisation WebSocket vers: ${wsUrl} (Doc: ${docId})`)
-
-    const wsProvider = new WebsocketProvider(wsUrl, docId, doc, {
-      connect: false,
-    })
-    
-    providerRef.current = wsProvider
-
-    // Point d'ENCODAGE (E2EE): Chiffrer les bytes avant envoi
-    (async () => {
-      const key = await deriveCryptoKey(docId)
-      cryptoKeyRef.current = key
-      
-      // Intercepter l'envoi de données
-      const originalSend = wsProvider.ws.send.bind(wsProvider.ws)
-      wsProvider.ws.send = async (data) => {
-        if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
-          const uint8Data = new Uint8Array(data)
-          const encrypted = await encryptData(uint8Data, key)
-          console.log(`🔐 Chiffrement: ${uint8Data.length} bytes → ${encrypted.length} bytes`)
-          originalSend(encrypted)
+      // Format attendu: #DOC_ID:BASE64_KEY
+      if (!hash) {
+        console.log("🔑 Génération d'une nouvelle clé de chiffrement...")
+        const newKey = await generateKey()
+        const keyString = await exportKey(newKey)
+        const newDocId = crypto.randomUUID()
+        
+        window.history.replaceState(null, '', `#${newDocId}:${keyString}`)
+        
+        key = newKey
+        docId = newDocId
+      } else {
+        const parts = hash.split(':')
+        if (parts.length === 2) {
+          docId = parts[0]
+          key = await importKey(parts[1])
         } else {
-          originalSend(data)
+          console.error("❌ URL malformée. Format attendu: #DOC_ID:KEY")
+          alert("Lien invalide : clé de déchiffrement manquante.")
+          return
         }
       }
-    })()
 
-    // Point de DÉCODAGE (E2EE): Déchiffrer les bytes reçus
-    wsProvider.ws.addEventListener('message', async (event) => {
-      if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
-        try {
-          const key = cryptoKeyRef.current
-          if (!key) return
+      if (!key) {
+        console.error("❌ Impossible d'initialiser la crypto.")
+        return
+      }
+
+      setEncryptionReady(true)
+      console.log(`🔐 Crypto prête. DocID: ${docId}`)
+
+      // 2. CRÉATION DU POLYFILL WEBSOCKET CHIFFRÉ
+      class EncryptedWebSocket extends WebSocket {
+        constructor(url) {
+          super(url)
+          this.binaryType = 'arraybuffer'
+        }
+
+        // Interception de l'ENVOI
+        send(data) {
+          encrypt(data, key).then((encryptedData) => {
+            console.log(`🔐 Envoi chiffré: ${data.byteLength || data.length} bytes → ${encryptedData.length} bytes`)
+            super.send(encryptedData)
+          }).catch(err => console.error("Erreur chiffrement send:", err))
+        }
+
+        // Interception de la RÉCEPTION
+        set onmessage(callback) {
+          this._originalOnMessage = callback
           
-          let data = event.data
-          if (data instanceof Blob) {
-            data = await data.arrayBuffer()
+          super.onmessage = async (event) => {
+            try {
+              if (!event.data || typeof event.data === 'string') {
+                if (this._originalOnMessage) this._originalOnMessage(event)
+                return
+              }
+
+              const decryptedData = await decrypt(event.data, key)
+              console.log(`🔓 Réception déchiffrée: ${event.data.byteLength} bytes → ${decryptedData.byteLength} bytes`)
+              
+              const decryptedEvent = {
+                data: decryptedData,
+                target: this,
+                type: 'message'
+              }
+              
+              if (this._originalOnMessage) this._originalOnMessage(decryptedEvent)
+
+            } catch (err) {
+              console.error("⚠️ Message ignoré (échec déchiffrement):", err)
+            }
           }
-          
-          const uint8Data = new Uint8Array(data)
-          const decrypted = await decryptData(uint8Data, key)
-          
-          console.log(`🔓 Déchiffrement: ${uint8Data.length} bytes → ${decrypted.byteLength} bytes`)
-          
-          // Créer un nouvel événement avec les données déchiffrées
-          const newEvent = new MessageEvent('message', {
-            data: decrypted,
-          })
-          
-          // Dispatch l'événement déchiffré
-          wsProvider.ws.dispatchEvent(newEvent)
-        } catch (err) {
-          console.warn('Erreur déchiffrement message:', err)
+        }
+        
+        get onmessage() {
+          return this._originalOnMessage
         }
       }
-    })
 
-    let statusHandler = (event) => {
-      console.log('🌐 WS Status:', event.status)
-      if (event.status === 'connected') {
-        console.log('✅ Connecté au serveur')
+      // 3. INITIALISATION DU PROVIDER
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = window.location.host
+      const wsUrl = `${protocol}//${host}/api/ws`
+
+      wsProvider = new WebsocketProvider(wsUrl, docId, doc, {
+        connect: false,
+        WebSocketPolyfill: EncryptedWebSocket // 🔐 Injection du WebSocket chiffré
+      })
+
+      wsProvider.on('status', event => {
+        console.log('🌐 WS Status:', event.status)
+      })
+
+      // 4. AUTOLOGIN & CONNEXION
+      const applyUserToAwareness = (u) => {
+        wsProvider.awareness.setLocalStateField('user', u)
       }
-    }
-    
-    wsProvider.on('status', statusHandler)
 
-    const applyUserToAwareness = (userData) => {
-      wsProvider.awareness.setLocalStateField('user', userData)
-    }
-
-    // Connexion après autologin
-    const connectProvider = async () => {
       try {
-        const response = await fetch('/api/auth/autologin', {
+        const response = await fetch('/api/auth/autologin', { 
           method: 'POST',
-          credentials: 'include',
+          credentials: 'include' 
         })
-
         if (response.ok) {
-          const result = await response.json()
-          const nextUser = {
-            ...localUser,
-            name: result.full_name || localUser.name,
-            id: result.id,
+          const res = await response.json()
+          const updatedUser = { 
+            ...localUser, 
+            name: res.full_name || localUser.name, 
+            id: res.id 
           }
-
-          setLocalUser(nextUser)
-          // Sauvegarder l'utilisateur pour les reconnexions futures
-          localStorage.setItem('collaborativeEditorUser', JSON.stringify(nextUser))
-          applyUserToAwareness(nextUser)
+          setLocalUser(updatedUser)
+          localStorage.setItem('collaborativeEditorUser', JSON.stringify(updatedUser))
+          applyUserToAwareness(updatedUser)
         } else {
           applyUserToAwareness(localUser)
         }
-      } catch (err) {
-        console.warn('Autologin failed before WS connect:', err)
+      } catch (e) {
+        console.warn('Autologin failed:', e)
         applyUserToAwareness(localUser)
       }
 
+      // Gestionnaire pour empêcher la fermeture accidentelle
+      const handleBeforeUnload = (event) => {
+        event.preventDefault()
+        event.returnValue = 'Vous avez des modifications en cours. Êtes-vous sûr de vouloir quitter ?'
+        return event.returnValue
+      }
+
+      window.addEventListener('beforeunload', handleBeforeUnload)
+
+      // Lancer la connexion
       wsProvider.connect()
+      setProvider(wsProvider)
+      setYdoc(doc)
+
+      // CLEANUP du beforeunload
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+      }
     }
 
-    // Publier l'état local immédiatement puis mettre à jour après autologin
-    applyUserToAwareness(localUser)
-    connectProvider()
+    initSequence()
 
-    // Mettre à jour l'état APRÈS connexion
-    setYdoc(doc)
-    setProvider(wsProvider)
-
-    // Gestionnaire pour empêcher la fermeture accidentelle
-    const handleBeforeUnload = (event) => {
-      console.warn('⚠️ Tentative de fermeture - affichage de l\'avertissement')
-      event.preventDefault()
-      event.returnValue = 'Vous avez des modifications en cours. Êtes-vous sûr de vouloir quitter ?'
-      return event.returnValue
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-
-    // Cleanup SEUL et UNIQUE - au vrai démontage du composant
+    // CLEANUP PRINCIPAL
     return () => {
-      console.log('🛑 Démontage du composant - destruction WebSocket')
-      
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      wsProvider.off('status', statusHandler)
-      
-      try {
-        // Arrêter la connexion proprement
-        if (wsProvider.ws && wsProvider.ws.readyState === WebSocket.OPEN) {
-          console.log('🔌 Fermeture du WebSocket...')
-          wsProvider.ws.close()
-        }
-        
-        // Nettoyer l'awareness
-        if (wsProvider.awareness) {
-          try {
-            wsProvider.awareness.setLocalStateField('user', null)
-          } catch (e) {
-            console.warn('Erreur awareness cleanup:', e)
+      console.log('🛑 Cleanup complet - destruction WebSocket')
+      if (wsProvider) {
+        try {
+          if (wsProvider.ws && wsProvider.ws.readyState === WebSocket.OPEN) {
+            wsProvider.ws.close()
           }
+          if (wsProvider.awareness) {
+            wsProvider.awareness.setLocalStateField('user', null)
+          }
+          wsProvider.destroy()
+          console.log('✅ WebSocket provider détruit')
+        } catch (err) {
+          console.error('Erreur cleanup provider:', err)
         }
-        
-        // Destruction du provider
-        wsProvider.destroy()
-        console.log('✅ WebSocket provider détruit')
-        
-        // Destruction du document
-        doc.destroy()
-        console.log('✅ Document Yjs détruit')
-      } catch (err) {
-        console.error('❌ Erreur lors du cleanup:', err)
+      }
+      if (doc) {
+        try {
+          doc.destroy()
+          console.log('✅ Document Yjs détruit')
+        } catch (err) {
+          console.error('Erreur cleanup doc:', err)
+        }
       }
     }
   }, [])
 
-  if (!provider || !ydoc) {
-    return <div className={styles.loading}>Chargement de l'éditeur...</div>
+  // Attente du chargement
+  if (!provider || !ydoc || !encryptionReady) {
+    return (
+      <div className={styles.loading}>
+        <div className={styles.spinner}></div>
+        <p style={{ marginTop: '20px' }}>🔐 Initialisation du chiffrement...</p>
+      </div>
+    )
   }
 
   return <TiptapEditor provider={provider} ydoc={ydoc} user={localUser} />
