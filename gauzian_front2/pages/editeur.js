@@ -571,18 +571,22 @@ const TiptapCollaborative = () => {
       
       window.removeEventListener('beforeunload', handleBeforeUnload)
       
-      // Déconnexion propre du WebSocket
-      if (wsProvider && wsProvider.ws) {
-        if (wsProvider.ws.readyState === WebSocket.OPEN) {
-          wsProvider.disconnect()
-          console.log('✅ WebSocket déconnecté proprement')
+      try {
+        // Détacher les listeners d'awareness avant destruction
+        if (wsProvider && wsProvider.awareness) {
+          wsProvider.awareness.setLocalStateField('user', null)
         }
+        
+        // Destruction du provider WebSocket (gère la déconnexion automatiquement)
+        wsProvider.destroy()
+        console.log('✅ WebSocket provider détruit proprement')
+        
+        // Destruction du document
+        doc.destroy()
+        console.log('✅ Document Yjs détruit')
+      } catch (err) {
+        console.error('❌ Erreur lors du cleanup:', err)
       }
-      
-      // Destruction des ressources
-      wsProvider.destroy()
-      doc.destroy()
-      console.log('✅ Ressources détruites')
     }
   }, [])
 
