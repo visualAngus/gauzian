@@ -487,8 +487,16 @@ const TiptapCollaborative = () => {
     }
   })
 
+  // Références pour s'assurer du cleanup même avec React StrictMode
+  const providerRef = useRef(null)
+  const docRef = useRef(null)
+  const isMountedRef = useRef(true)
+
   useEffect(() => {
+    isMountedRef.current = true
+
     const doc = new Y.Doc()
+    docRef.current = doc
 
     // hash l'url pour avoir #docId 
     let urlHash = window.location.hash.slice(1)
@@ -506,6 +514,8 @@ const TiptapCollaborative = () => {
     const wsProvider = new WebsocketProvider(wsUrl, docId, doc, {
       connect: false,
     })
+    
+    providerRef.current = wsProvider
 
     // Point d'ENCODAGE (E2EE): enrober wsProvider.ws.send pour chiffrer les bytes (Uint8Array) avant envoi.
     // Exemple: const originalSend = wsProvider.ws.send.bind(wsProvider.ws); wsProvider.ws.send = (data) => originalSend(encrypt(data));
@@ -523,6 +533,8 @@ const TiptapCollaborative = () => {
 
     // Connexion après autologin
     const connectProvider = async () => {
+      if (!isMountedRef.current) return
+
       try {
         const response = await fetch('/api/auth/autologin', {
           method: 'POST',
@@ -546,15 +558,19 @@ const TiptapCollaborative = () => {
         applyUserToAwareness(localUser)
       }
 
-      wsProvider.connect()
+      if (isMountedRef.current) {
+        wsProvider.connect()
+      }
     }
 
     // Publier l'état local immédiatement puis mettre à jour après autologin
     applyUserToAwareness(localUser)
     connectProvider()
 
-    setYdoc(doc)
-    setProvider(wsProvider)
+    if (isMountedRef.current) {
+      setYdoc(doc)
+      setProvider(wsProvider)
+    }
 
     // Gestionnaire pour empêcher la fermeture accidentelle
     const handleBeforeUnload = (event) => {
@@ -569,21 +585,49 @@ const TiptapCollaborative = () => {
     return () => {
       console.log('🧹 Cleanup WebSocket provider')
       
+      isMountedRef.current = false
       window.removeEventListener('beforeunload', handleBeforeUnload)
       
       try {
-        // Détacher les listeners d'awareness avant destruction
-        if (wsProvider && wsProvider.awareness) {
-          wsProvider.awareness.setLocalStateField('user', null)
+        // Arrêter immédiatement la connexion
+        if (providerRef.current) {
+          // Déconnecter le WebSocket d'abord
+          if (providerRef.current.ws && providerRef.current.ws.readyState === WebSocket.OPEN) {
+            console.log('🔌 Fermeture du WebSocket...')
+            providerRef.current.ws.close()
+          }
+          
+          // Nettoyer l'awareness
+          if (providerRef.current.awareness) {
+            try {
+              providerRef.current.awareness.setLocalStateField('user', null)
+            } catch (e) {
+              console.warn('Erreur awareness cleanup:', e)
+            }
+          }
+          
+          // Destruction complète du provider
+          setTimeout(() => {
+            try {
+              providerRef.current.destroy()
+              console.log('✅ WebSocket provider détruit proprement')
+            } catch (err) {
+              console.warn('Erreur destroy provider:', err)
+            }
+          }, 100)
         }
         
-        // Destruction du provider WebSocket (gère la déconnexion automatiquement)
-        wsProvider.destroy()
-        console.log('✅ WebSocket provider détruit proprement')
-        
         // Destruction du document
-        doc.destroy()
-        console.log('✅ Document Yjs détruit')
+        if (docRef.current) {
+          setTimeout(() => {
+            try {
+              docRef.current.destroy()
+              console.log('✅ Document Yjs détruit')
+            } catch (err) {
+              console.warn('Erreur destroy doc:', err)
+            }
+          }, 150)
+        }
       } catch (err) {
         console.error('❌ Erreur lors du cleanup:', err)
       }
