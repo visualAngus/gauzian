@@ -520,6 +520,80 @@ const TiptapCollaborative = () => {
   // Références pour persister la connexion sans re-créer
   const providerRef = useRef(null)
   const docRef = useRef(null)
+  const cryptoKeyRef = useRef(null)
+
+  // Fonction pour dériver une clé de chiffrement à partir du docId
+  const deriveCryptoKey = async (docId) => {
+    const encoder = new TextEncoder()
+    const salt = encoder.encode('gauzian-collab-salt')
+    
+    // Importer la docId comme clé maître
+    const masterKey = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(docId),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits', 'deriveKey']
+    )
+
+    // Dériver une clé AES-256-GCM
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      masterKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    )
+  }
+
+  // Fonction de chiffrement
+  const encryptData = async (data, key) => {
+    if (!key) return data // Fallback si pas de clé
+    
+    try {
+      const iv = crypto.getRandomValues(new Uint8Array(12)) // IV de 12 bytes pour GCM
+      const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        data
+      )
+      
+      // Retourner IV + données chiffrées
+      const result = new Uint8Array(iv.length + encrypted.byteLength)
+      result.set(iv, 0)
+      result.set(new Uint8Array(encrypted), iv.length)
+      return result
+    } catch (err) {
+      console.error('Erreur chiffrement:', err)
+      return data
+    }
+  }
+
+  // Fonction de déchiffrement
+  const decryptData = async (data, key) => {
+    if (!key) return data // Fallback si pas de clé
+    
+    try {
+      const iv = data.slice(0, 12) // Récupérer l'IV (12 premiers bytes)
+      const encryptedData = data.slice(12) // Le reste est chiffré
+      
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encryptedData
+      )
+      
+      return decrypted
+    } catch (err) {
+      console.error('Erreur déchiffrement:', err)
+      return data
+    }
+  }
 
   useEffect(() => {
     const doc = new Y.Doc()
@@ -544,11 +618,54 @@ const TiptapCollaborative = () => {
     
     providerRef.current = wsProvider
 
-    // Point d'ENCODAGE (E2EE): enrober wsProvider.ws.send pour chiffrer les bytes (Uint8Array) avant envoi.
-    // Exemple: const originalSend = wsProvider.ws.send.bind(wsProvider.ws); wsProvider.ws.send = (data) => originalSend(encrypt(data));
+    // Point d'ENCODAGE (E2EE): Chiffrer les bytes avant envoi
+    (async () => {
+      const key = await deriveCryptoKey(docId)
+      cryptoKeyRef.current = key
+      
+      // Intercepter l'envoi de données
+      const originalSend = wsProvider.ws.send.bind(wsProvider.ws)
+      wsProvider.ws.send = async (data) => {
+        if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+          const uint8Data = new Uint8Array(data)
+          const encrypted = await encryptData(uint8Data, key)
+          console.log(`🔐 Chiffrement: ${uint8Data.length} bytes → ${encrypted.length} bytes`)
+          originalSend(encrypted)
+        } else {
+          originalSend(data)
+        }
+      }
+    })()
 
-    // Point de DÉCODAGE (E2EE): écouter wsProvider.ws.onmessage / addEventListener('message', ...) pour déchiffrer avant de passer à Yjs.
-    // Exemple: wsProvider.ws.addEventListener('message', (evt) => { const plain = decrypt(new Uint8Array(evt.data)); /* feed plain to Yjs */ })
+    // Point de DÉCODAGE (E2EE): Déchiffrer les bytes reçus
+    wsProvider.ws.addEventListener('message', async (event) => {
+      if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
+        try {
+          const key = cryptoKeyRef.current
+          if (!key) return
+          
+          let data = event.data
+          if (data instanceof Blob) {
+            data = await data.arrayBuffer()
+          }
+          
+          const uint8Data = new Uint8Array(data)
+          const decrypted = await decryptData(uint8Data, key)
+          
+          console.log(`🔓 Déchiffrement: ${uint8Data.length} bytes → ${decrypted.byteLength} bytes`)
+          
+          // Créer un nouvel événement avec les données déchiffrées
+          const newEvent = new MessageEvent('message', {
+            data: decrypted,
+          })
+          
+          // Dispatch l'événement déchiffré
+          wsProvider.ws.dispatchEvent(newEvent)
+        } catch (err) {
+          console.warn('Erreur déchiffrement message:', err)
+        }
+      }
+    })
 
     let statusHandler = (event) => {
       console.log('🌐 WS Status:', event.status)
