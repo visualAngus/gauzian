@@ -556,10 +556,33 @@ const TiptapCollaborative = () => {
     setYdoc(doc)
     setProvider(wsProvider)
 
+    // Gestionnaire pour empêcher la fermeture accidentelle
+    const handleBeforeUnload = (event) => {
+      console.warn('⚠️ Tentative de fermeture - affichage de l\'avertissement')
+      event.preventDefault()
+      event.returnValue = 'Vous avez des modifications en cours. Êtes-vous sûr de vouloir quitter ?'
+      return event.returnValue
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     return () => {
       console.log('🧹 Cleanup WebSocket provider')
+      
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      
+      // Déconnexion propre du WebSocket
+      if (wsProvider && wsProvider.ws) {
+        if (wsProvider.ws.readyState === WebSocket.OPEN) {
+          wsProvider.disconnect()
+          console.log('✅ WebSocket déconnecté proprement')
+        }
+      }
+      
+      // Destruction des ressources
       wsProvider.destroy()
       doc.destroy()
+      console.log('✅ Ressources détruites')
     }
   }, [])
 
