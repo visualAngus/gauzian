@@ -90,7 +90,7 @@ fn respond_with_cookies<T: IntoResponse>(resp: T, cookies: &[HeaderValue]) -> Re
     }
     response
 }
-async fn require_auth(headers: &HeaderMap, state: &AppState) -> Result<AuthSession, Response> {
+pub async fn require_auth(headers: &HeaderMap, state: &AppState) -> Result<AuthSession, Response> {
     match ensure_session(headers, state).await {
         Ok(ctx) => Ok(ctx),
         Err(err) => Err(err.to_response()),

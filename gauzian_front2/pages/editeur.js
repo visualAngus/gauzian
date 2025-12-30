@@ -66,16 +66,35 @@ const TiptapEditor = ({ provider, ydoc, user }) => {
     },
   })
 
-  // Tracker les utilisateurs actifs
+  // Tracker les utilisateurs actifs (dédupliqué par ID)
   useEffect(() => {
     if (!provider || !provider.awareness) return
 
     const handleSync = () => {
       try {
         const states = provider.awareness.getStates()
-        const users = Array.from(states.values())
-          .map((state) => state.user)
-          .filter(Boolean)
+        const usersMap = new Map()
+
+        // Dédupliquer par ID - si plusieurs clients ont le même ID, on garde juste un
+        for (const state of states.values()) {
+          if (state.user) {
+            const userId = state.user.id
+            if (userId) {
+              // Si on a un ID, utiliser comme clé de déduplication
+              if (!usersMap.has(userId)) {
+                usersMap.set(userId, state.user)
+              }
+            } else {
+              // Si pas d'ID, utiliser le nom comme fallback (ancien comportement)
+              if (!usersMap.has(state.user.name)) {
+                usersMap.set(state.user.name, state.user)
+              }
+            }
+          }
+        }
+
+        const users = Array.from(usersMap.values())
+        console.log('Utilisateurs actifs (dédupliqués par ID):', users)
         setActiveUsers(users)
       } catch (error) {
         console.error('Erreur lors de la mise à jour des utilisateurs actifs:', error)
@@ -480,6 +499,17 @@ const TiptapCollaborative = () => {
   const [provider, setProvider] = useState(null)
   const [ydoc, setYdoc] = useState(null)
   const [localUser, setLocalUser] = useState(() => {
+    // Essayer de récupérer l'utilisateur depuis le localStorage
+    const savedUser = localStorage.getItem('collaborativeEditorUser')
+    if (savedUser) {
+      try {
+        return JSON.parse(savedUser)
+      } catch (e) {
+        console.warn('Erreur lecture utilisateur sauvegardé:', e)
+      }
+    }
+
+    // Sinon créer un nouvel utilisateur
     const colors = ['#f97316', '#2563eb', '#10b981', '#7c3aed', '#dc2626', '#0ea5e9']
     return {
       name: `User-${Math.floor(Math.random() * 900 + 100)}`,
@@ -545,10 +575,13 @@ const TiptapCollaborative = () => {
           const result = await response.json()
           const nextUser = {
             ...localUser,
-            name: result.full_name || result.name || result.username || result.email || localUser.name,
+            name: result.fullName || localUser.name,
+            id: result.id,
           }
 
           setLocalUser(nextUser)
+          // Sauvegarder l'utilisateur pour les reconnexions futures
+          localStorage.setItem('collaborativeEditorUser', JSON.stringify(nextUser))
           applyUserToAwareness(nextUser)
         } else {
           applyUserToAwareness(localUser)

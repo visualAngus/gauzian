@@ -16,6 +16,7 @@ use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 
 use gauzian_core::AppState;
+use gauzian_auth::require_auth;
 
 // --- Structures ---
 
@@ -46,6 +47,8 @@ pub fn router() -> Router<AppState> {
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
+    headers: axum::http::HeaderMap,
+    state: AppState,
     Path(room_id): Path<String>,
     State(_app_state): State<AppState>, // Pour vérifier l'accès DB plus tard
     Extension(collab_store): Extension<CollabStore>,
@@ -53,29 +56,13 @@ async fn ws_handler(
 ) -> impl IntoResponse {
     // 1. Récupération du Token depuis le Cookie
     // Remplace "access_token" par le nom réel de ton cookie (ex: "auth-token", "jwt", etc.)
-    let token_cookie = jar.get("access_token");
-
-    let token = match token_cookie {
-        Some(cookie) => cookie.value(),
-        None => {
-            warn!(
-                "🛑 Tentative de connexion WS sans cookie auth pour doc: {}",
-                room_id
-            );
-            // On rejette la connexion HTTP avec une erreur 401
-            return StatusCode::UNAUTHORIZED.into_response();
-        }
+    let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
     };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
 
-    // 2. TODO: Validation du Token
-    // Ici, tu dois appeler ta fonction de validation JWT existante dans gauzian_auth/core.
-    // Exemple fictif :
-    // match gauzian_auth::verify_jwt(token) {
-    //     Ok(user_id) => info!("Utilisateur {} connecté au doc {}", user_id, room_id),
-    //     Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
-    // }
-
-    // Pour l'instant, on log juste qu'on a trouvé un token
     info!(
         "🔗 Connexion WS acceptée pour doc {} (Token présent)",
         room_id
