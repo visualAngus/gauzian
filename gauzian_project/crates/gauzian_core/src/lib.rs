@@ -1,7 +1,6 @@
-use std::sync;
-
 use sqlx::{PgPool, types::uuid};
 use serde::Deserialize;
+use serde::Serialize;
 use chrono::NaiveDate;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
@@ -22,16 +21,38 @@ pub struct RegisterRequest {
     pub password: String,
     pub salt_e2e: String,
     pub salt_auth: String,
-    pub storage_key_encrypted: String,
-    pub storage_key_encrypted_recuperation: String,
+    pub private_key_encrypted_recuperation: String,
+    pub recovery_auth: String,
+    pub recovery_salt: String,
     pub folder_key_encrypted: String,
     pub folder_metadata_encrypted: String,
+    pub public_key: String,
+    pub private_key_encrypted: String,
 
     pub last_name: Option<String>,
     pub first_name: Option<String>,
 
     pub date_of_birth: Option<NaiveDate>,
     pub time_zone: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RecoveryVerifyRequest {
+    pub email: String,
+    pub recovery_auth: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RecoveryResetRequest {
+    pub email: String,
+    pub recovery_auth: String,
+    pub new_password: String,
+    pub salt_auth: String,
+    pub salt_e2e: String,
+    pub private_key_encrypted: String,
+    pub private_key_encrypted_recuperation: String,
+    pub new_recovery_salt: String,
+    pub new_recovery_auth: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -88,6 +109,8 @@ pub struct FolderRecord {
     pub updated_at: Option<DateTime<Utc>>, // Option car timestamps parfois nullable par défaut
     pub encrypted_folder_key: Vec<u8>,
     pub is_root: bool,
+    pub total_size: Option<i64>,
+    pub owner: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -145,4 +168,40 @@ pub struct FileRenameRequest {
 #[derive(Deserialize, Debug)]
 pub struct CancelStreamingUploadRequest {
     pub temp_upload_id: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String, // Subject (souvent l'ID utilisateur)
+    pub exp: usize,  // Expiration (timestamp unix)
+    pub iat: usize,  // Issued At (date de création)
+}
+
+#[derive(Deserialize, Debug)]
+pub struct MoveFileToFolderRequest {
+    pub file_id: Uuid,
+    pub target_folder_id: Uuid,
+}
+
+
+#[derive(Deserialize, Debug)]
+pub struct EmailRequest {
+    pub email: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ShareFileRequest {
+    pub file_id: Uuid,
+    pub receiver_id: Uuid,
+    pub encrypted_file_key: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PrepareShareFileRequest {
+    pub reciver_email: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AcceptShareInviteRequest {
+    pub invite_id: Uuid,
 }

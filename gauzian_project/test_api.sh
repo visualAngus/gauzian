@@ -11,7 +11,7 @@ LANG_HEADER="fr"
 
 # Generate realistic random values (base64)
 # - salt_e2e: 32 bytes
-# - storage_key_encrypted, storage_key_encrypted_recuperation: ~160 bytes (nonce+ciphertext simulation)
+# - storage_key_encrypted, private_key_encrypted_recuperation: ~160 bytes (nonce+ciphertext simulation)
 SALT_E2E=$(openssl rand -base64 16 | tr -d '=')
 SALT_AUTH=$(openssl rand -base64 16 | tr -d '=')
 STORAGE_KEY=$(openssl rand -base64 160 | tr -d '\n')
@@ -77,7 +77,7 @@ cat <<JSON | curl -i -X POST "$URL" \
     "salt_e2e": "${SALT_E2E}",  
     "salt_auth": "${SALT_AUTH}",
     "storage_key_encrypted": "${STORAGE_KEY_ENC}",
-    "storage_key_encrypted_recuperation": "${STORAGE_KEY_ENC_REC}",
+    "private_key_encrypted_recuperation": "${STORAGE_KEY_ENC_REC}",
     "last_name": "Dupont",
     "first_name": "Jean",
     "date_of_birth": "${DATE_OF_BIRTH}",

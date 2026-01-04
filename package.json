@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "libsodium-wrappers-sumo": "^0.7.15"
+    "libsodium-wrappers-sumo": "^0.7.15",
+    "qrcode": "^1.5.4",
+    "streamsaver": "^2.0.6"
   }
 }
