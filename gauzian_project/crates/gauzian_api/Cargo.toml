@@ -8,6 +8,7 @@ edition = "2021"
 gauzian_core = { path = "../gauzian_core" }
 gauzian_auth = { path = "../gauzian_auth" }
 gauzian_drive = { path = "../gauzian_drive" }
+gauzian_collab = { path = "../gauzian_collab" }
 
 # --- Framework Web ---
 axum = "0.7"
@@ -26,3 +27,7 @@ woothee = "0.7"
 
 # ipnetwork
 axum-client-ip = "0.6.0"
+ipnetwork = "0.19"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time"] }
+tracing-error = "0.2"

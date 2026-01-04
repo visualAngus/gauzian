@@ -35,3 +35,6 @@ docker-compose.override.yml
 .vscode/
 .idea/
 .DS_Store
+
+gauzian_front2/node_modules/
+.gitignore

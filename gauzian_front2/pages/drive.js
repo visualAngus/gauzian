@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, use } from 'react';
 import _sodium from 'libsodium-wrappers';
+import Header from '../components/header.js';
 
 // Importez vos images si elles sont dans src, sinon utilisez le chemin public
 // import userProfileImg from '../images/user_profile.png'; 
@@ -21,6 +22,49 @@ const bufToB64 = (buf) => {
   return window.btoa(binary);
 };
 
+const b64ToBuf = (b64) => {
+  if (!b64) return new Uint8Array();
+  const normalized = b64.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = normalized.length % 4;
+  const padded = pad ? normalized + '='.repeat(4 - pad) : normalized;
+  const bin = window.atob(padded);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+};
+
+const importPublicKey = async (publicKeyB64) => {
+  const raw = b64ToBuf(publicKeyB64);
+  return crypto.subtle.importKey(
+    'spki',
+    raw.buffer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['encrypt']
+  );
+};
+
+const importPrivateKey = async (privateKeyB64) => {
+  const raw = b64ToBuf(privateKeyB64);
+  return crypto.subtle.importKey(
+    'pkcs8',
+    raw.buffer,
+    { name: 'RSA-OAEP', hash: 'SHA-256' },
+    false,
+    ['decrypt']
+  );
+};
+
+const rsaEncrypt = async (publicKey, dataU8) => {
+  const encrypted = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, dataU8);
+  return new Uint8Array(encrypted);
+};
+
+const rsaDecrypt = async (privateKey, encryptedU8) => {
+  const decrypted = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, privateKey, encryptedU8);
+  return new Uint8Array(decrypted);
+};
+
 export default function Drive() {
   // --- ÉTATS (STATE) ---
   const [activeSection, setActiveSection] = useState(null);
@@ -28,21 +72,27 @@ export default function Drive() {
   const [folders, setFolders] = useState([]); // Pour stocker la liste des dossiers/fichiers
   const [files, setFiles] = useState([]); // Pour stocker la liste des fichiers
   const [imageLoadedState, setImageLoadedState] = useState(false);
+  const [contents, setContents] = useState([]); // Contenu du dossier actif
+
+  // username
+  const [userName, setUserName] = useState("User");
+
   // varible qui contient l'id du dossier dans lequel on est
   const [activeFolderId, setActiveFolderId] = useState(null); // ID du dossier actif
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const activeFolderIdRef = useRef(null); // Garde la dernière valeur pour les callbacks async
+  const [tokenReady, setTokenReady] = useState(false); // indique si le token est prêt
   // root id
   const [rootFolderId, setRootFolderId] = useState(null);
 
-  // upload pourcentage
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [curentFileUploadName, setCurentFileUploadName] = useState("");
+  // sharedFiles
+  const [sharedFiles, setSharedFiles] = useState([]);
 
   // États pour l'upload (venant de votre code React)
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null); // Pour déclencher l'input file caché
   const stopallUploadsRef = useRef(false); // Ref pour arrêter tous les uploads
   const abortControllerRef = useRef(null); // AbortController pour annuler les requêtes fetch
+  const [filesUpload, setFilesUpload] = useState([]); // Liste des fichiers en cours d'upload
 
 
   // Gestion upload de plusieurs fichiers
@@ -53,11 +103,162 @@ export default function Drive() {
   const totalFilesToUploadRef = useRef(0); // Ref pour le total des fichiers à uploader
   const nbFilesUploadedRef = useRef(0); // Ref pour le nombre de fichiers déjà uploadés
 
-
+  // Stockage utilisé
   const [storageUsed, setStorageUsed] = useState(0);
   const [storageLimit, setStorageLimit] = useState(1);
 
+  // notif text
+  const [notifText, setNotifText] = useState("");
+
+  // type de vue (list/grid)
+  const [viewType, setViewType] = useState('list'); // 'grid' ou 'list'
+
+  const [selectedMoveElement, setSelectedMoveElement] = useState(null);
+
+  // crypto
+  const [userPrivateKey, setUserPrivateKey] = useState(null);
+  const [userPublicKey, setUserPublicKey] = useState(null);
+
+  // share menu state
+  const [shareMenuState, setShareMenuState] = useState({ isOpen: false, elementId: null, elementType: null });
+
+  useEffect(() => {
+    activeFolderIdRef.current = activeFolderId;
+  }, [activeFolderId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    console.log("Vérification des clés RSA dans le localStorage...");
+
+    let retryTimer = null;
+    let stopRetryTimer = null;
+    const publicKeyB64 = localStorage.getItem('publicKey');
+    const privateKeyB64 = localStorage.getItem('privateKey');
+
+    if (publicKeyB64 && privateKeyB64) {
+      console.log("Clés trouvées, accès autorisé.");
+      setTokenReady(true);
+      setUserPublicKey(publicKeyB64);
+      setUserPrivateKey(privateKeyB64);
+    } else {
+      console.log("Clés manquantes, démarrage de la surveillance du localStorage...");
+      retryTimer = setInterval(() => {
+        const nextPub = localStorage.getItem('publicKey');
+        const nextPriv = localStorage.getItem('privateKey');
+        if (nextPub && nextPriv) {
+          setTokenReady(true);
+          clearInterval(retryTimer);
+          clearTimeout(stopRetryTimer);
+          console.log("Clés détectées via intervalle, accès autorisé.");
+          setUserPublicKey(nextPub);
+          setUserPrivateKey(nextPriv);
+        }
+      }, 200);
+
+      stopRetryTimer = setTimeout(() => {
+        clearInterval(retryTimer);
+        console.log("Clés toujours manquantes après 4 secondes. Redirection vers la page de connexion.");
+        // window.location.href = '/login';
+      }, 4000);
+    }
+
+    const handleStorage = (event) => {
+      if (event.key === 'publicKey' || event.key === 'privateKey') {
+        const pub = localStorage.getItem('publicKey');
+        const priv = localStorage.getItem('privateKey');
+        if (pub && priv) {
+          setTokenReady(true);
+          setUserPublicKey(pub);
+          setUserPrivateKey(priv);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      if (retryTimer) clearInterval(retryTimer);
+      if (stopRetryTimer) clearTimeout(stopRetryTimer);
+    };
+  }, []);
+
   // --- LOGIQUE METIER (Encryption / Upload / Download) ---
+
+  const refreshAccessToken = async () => {
+    try {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch (err) {
+      console.error('refresh token request failed', err);
+      return false;
+    }
+  };
+
+  const authFetch = async (url, options = {}, attempt = 0) => {
+    const response = await fetch(url, {
+      credentials: 'include',
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+      },
+    });
+
+    if (response.status === 401 && attempt === 0) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return authFetch(url, options, 1);
+      } else {
+        window.location.href = '/login';
+      }
+    }
+
+    return response;
+  };
+
+  const fetchJsonWithRetry = async (url, options = {}, retries = 2, delayMs = 400) => {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        const res = await authFetch(url, options);
+        const data = await res.json().catch(() => null);
+
+        const message = data?.message?.toLowerCase?.() || '';
+        const sessionLikelyExpired = message.includes('session invalide') || message.includes('expirée');
+
+        if (res.ok && data && data.status !== 'error') {
+          return data;
+        }
+
+        if (attempt < retries && (sessionLikelyExpired || res.status === 401)) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        // Dernière tentative : renvoyer ce qu'on a pour log éventuel
+        return data || { status: 'error', message: 'unknown error' };
+      } catch (e) {
+        if (attempt === retries) throw e;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    return null;
+  };
+
+  const decryptFileKey = async (encryptedFileKeyB64, sodium) => {
+
+    const privateKey = await importPrivateKey(userPrivateKey);
+
+    try {
+      const encBuf = b64ToBuf(encryptedFileKeyB64);
+      return await rsaDecrypt(privateKey, encBuf);
+    } catch (err) {
+      // Pas de fallback legacy symétrique puisqu'on utilise RSA maintenant
+      throw err;
+    }
+  };
 
   const handleFileChange = async (e) => {
     const selectedFiles = e.target.files;
@@ -81,7 +282,7 @@ export default function Drive() {
   };
   const handleDownload = async (id_file) => {
     try {
-      const response = await fetch(`/api/drive/download?id_file=${id_file}`, {
+      const response = await authFetch(`/api/drive/download?id_file=${id_file}`, {
         method: 'GET',
       });
       if (!response.ok) throw new Error('Erreur lors du téléchargement du fichier.');
@@ -90,27 +291,15 @@ export default function Drive() {
       const sodium = _sodium;
       console.log('Sodium ready.');
 
-      const storageKey = localStorage.getItem('storageKey');
-      if (!storageKey) {
-        window.location.href = '/login';
-        throw new Error('Clé de stockage non trouvée. Veuillez vous connecter.');
+      const privateKey = await importPrivateKey(userPrivateKey);
+      if (!privateKey) {
+        // window.location.href = '/login';
+        throw new Error('Clé privée manquante. Veuillez vous reconnecter.');
       }
-
-      const rawStorageKey = sodium.from_hex(storageKey);
-      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
 
       // --- 1. Déchiffrement de la clé du fichier ---
       const encryptedFileKeyB64 = data.encrypted_file_key;
-      const encryptedFileKeyBuf = sodium.from_base64(encryptedFileKeyB64, sodium.base64_variants.ORIGINAL);
-      const nonceKey = encryptedFileKeyBuf.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedFileKeyBuf.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextKey,
-        null,
-        nonceKey,
-        encryptionKey
-      );
+      const fileKey = await decryptFileKey(encryptedFileKeyB64, sodium);
 
       // --- 2. Déchiffrement des métadonnées ---
       const encryptedMetadataB64 = data.encrypted_metadata;
@@ -164,37 +353,18 @@ export default function Drive() {
     try {
       console.log("=== DÉBUT DOWNLOAD STREAMING ===");
 
-      // si l'ulr est en localhost alors ne pas importer streamSaver
-      try {
-        //  const streamSaver = (await import('streamsaver')).default;
-      } catch (e) {
-        console.warn("StreamSaver non chargé en local.");
-        alert("Le téléchargement de gros fichiers n'est pas supporté en local.");
-        return;
-      }
-      
+      const streamSaver = (await import('streamsaver')).default;
+
       await _sodium.ready;
       const sodium = _sodium;
 
       // 1. Métadonnées
-      const metaResponse = await fetch(`/api/drive/download?id_file=${id_file}`);
+      const metaResponse = await authFetch(`/api/drive/download?id_file=${id_file}`);
       if (!metaResponse.ok) throw new Error("Erreur métadonnées");
       const data = await metaResponse.json();
 
-      // 2. Clés
-      const storageKey = localStorage.getItem('storageKey');
-      const rawStorageKey = sodium.from_hex(storageKey);
-      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
-
-      // Clé Fichier
-      const encFileKey = sodium.from_base64(data.encrypted_file_key, sodium.base64_variants.ORIGINAL);
-      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        encFileKey.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
-        null,
-        encFileKey.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES),
-        encryptionKey
-      );
+      // 2. Clé de fichier via RSA (fallback legacy inside helper)
+      const fileKey = await decryptFileKey(data.encrypted_file_key, sodium);
 
       // Métadonnées déchiffrées
       const encMeta = sodium.from_base64(data.encrypted_metadata, sodium.base64_variants.ORIGINAL);
@@ -213,7 +383,7 @@ export default function Drive() {
       const writer = fileStream.getWriter();
 
       // 4. Flux Réseau
-      const response = await fetch(`/api/drive/download_raw?id_file=${id_file}`);
+      const response = await authFetch(`/api/drive/download_raw?id_file=${id_file}`);
       const reader = response.body.getReader();
 
       // 5. Configuration (A VÉRIFIER AVEC TON UPLOAD)
@@ -284,10 +454,11 @@ export default function Drive() {
 
       await writer.close();
       console.log("🎉 Téléchargement terminé avec succès.");
+      setNotifText("Le téléchargement est terminé avec succès.");
 
     } catch (error) {
       console.error("Erreur Globale:", error);
-      alert("Erreur: " + error.message);
+      // alert("Erreur: " + error.message);
     }
   };
 
@@ -300,35 +471,16 @@ export default function Drive() {
     // Définition des helpers (si pas déjà définis ailleurs)
     const b64 = (u8) => sodium.to_base64(u8, sodium.base64_variants.ORIGINAL);
 
-    // 2. Récupération de la clé maîtresse depuis le localStorage
-    const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) {
-      window.location.href = '/login';
-      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-    }
+    // 2. Récupération de la clé maîtresse depuis localStorage
+    // On utilise désormais la clé publique/privée stockée, pas storageKey
 
-    // On suppose ici que tu as stocké la clé en Hexadécimal lors du login.
-    // Si tu l'as stockée en base64, utilise sodium.from_base64()
-    const rawStorageKey = sodium.from_hex(storageKeyHex);
+    // 3. A. Génération de la clé UNIQUE pour ce nouveau dossier
+    const folderKey = sodium.randombytes_buf(32);
 
-    // 3. A. Dérivation de la clé de chiffrement (Même logique que le Root)
-    // C'est la clé qui sert à déverrouiller les clés des dossiers
-    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-
-    // 4. B. Création de la clé UNIQUE pour ce nouveau dossier
-    const folderKey = sodium.randombytes_buf(32); // Renommé pour plus de clarté (ce n'est pas le root)
-
-    // 5. C. Chiffrement de la clé du dossier avec la userMasterKey
-    const nonceFolderKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-    const encryptedFolderKeyBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      folderKey,
-      null,
-      null,
-      nonceFolderKey,
-      userMasterKey // On utilise la clé dérivée du storageKey
-    );
-    // Concaténation Nonce + Cipher
-    const finalEncryptedFolderKey = new Uint8Array([...nonceFolderKey, ...encryptedFolderKeyBlob]);
+    // 5. C. Chiffrement de la clé du dossier avec la userPublicKey (RSA)
+    const publicKey = await importPublicKey(userPublicKey);
+    const encryptedFolderKeyBytes = await rsaEncrypt(publicKey, folderKey);
+    const finalEncryptedFolderKey = new Uint8Array(encryptedFolderKeyBytes);
 
     // 6. D. Chiffrement des métadonnées avec la clé DU DOSSIER
     const folderMetadata = JSON.stringify({
@@ -349,8 +501,7 @@ export default function Drive() {
     // 7. Envoi API
     // Assure-toi que activeFolderId est bien défini (passé en argument ou via un hook/store)
     if (!activeFolderId) throw new Error("Aucun dossier parent sélectionné");
-
-    const res = await fetch('/api/drive/new_folder', {
+    const res = await authFetch('/api/drive/new_folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -360,19 +511,22 @@ export default function Drive() {
       }),
     });
 
+
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Erreur création dossier');
 
     console.log('Dossier créé avec succès:', data);
+    setNotifText("Dossier créé avec succès.");
     // Rafraîchir la vue du dossier courant
     getFolderStructure(activeFolderId);
     console.log(data.folder_id);
     setTimeout(() => {
       rename_folder(data.folder_id, folderName);
-    }, 100);
+    }, 200);
   };
   // --- NOUVELLE VERSION DE encodeAndSend ---
   const encodeAndSend = async (selectedFile) => {
+    const uploadFolderId = activeFolderId; // Capture le dossier cible au moment du lancement
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le fichier:", selectedFile.name);
       return; // Ne pas traiter ce fichier
@@ -385,6 +539,19 @@ export default function Drive() {
 
     console.log(`Préparation upload pour le fichier: ${selectedFile.name} (${selectedFile.size} bytes)`);
     totalFilesToUploadRef.current += 1;
+
+
+    const nameFile = selectedFile.name;
+    const random_tmp_id = Math.random().toString(36).substring(2, 15);
+
+    setFilesUpload((prev) => [...prev, {
+      id: `uploading-${random_tmp_id}`,
+      name: nameFile,
+      size: selectedFile.size,
+      uploading: true,
+      uploadProgress: 0,
+      parent_folder_id: uploadFolderId,
+    }]);
 
     while (uploadingCountRef.current >= 3) {
       if (stopallUploadsRef.current) {
@@ -403,22 +570,17 @@ export default function Drive() {
       await _sodium.ready;
       const sodium = _sodium;
 
-      // 1. Récupération des clés
-      const storageKey = localStorage.getItem('storageKey');
-      if (!storageKey) {
-        window.location.href = '/login';
-        throw new Error('Clé de stockage manquante.');
-      }
-      const rawStorageKey = sodium.from_hex(storageKey);
-      const encryptionKey = sodium.crypto_generichash(32, rawStorageKey);
+      const publicKey = await importPublicKey(userPublicKey);
 
       // 2. Choix de la méthode selon la taille
       // 0.9 Mo = 0.9 * 1024 * 1024 octets
       const LIMIT_SIZE = 0.9 * 1024 * 1024;
 
+
+
       if (selectedFile.size > LIMIT_SIZE) {
         console.log(`Fichier > 0.9Mo (${selectedFile.size}). Passage en mode Streaming.`);
-        const success = await uploadLargeFileStreaming(selectedFile, sodium, encryptionKey);
+        const success = await uploadLargeFileStreaming(selectedFile, sodium, publicKey, random_tmp_id);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -428,7 +590,7 @@ export default function Drive() {
         }
       } else {
         console.log(`Fichier <= 0.9Mo (${selectedFile.size}). Passage en mode Simple.`);
-        const success = await uploadSmallFile(selectedFile, sodium, encryptionKey);
+        const success = await uploadSmallFile(selectedFile, sodium, publicKey);
         if (!success) {
           // Upload annulé, décrémenter les compteurs
           uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -438,6 +600,9 @@ export default function Drive() {
         }
       }
 
+      // remove from filesUpload
+      setFilesUpload((prev) => prev.filter((f) => f.id !== `uploading-${random_tmp_id}`));
+
       // 3. Fin commune
       // setUploading(false);
       uploadingCountRef.current = Math.max(0, uploadingCountRef.current - 1);
@@ -446,13 +611,19 @@ export default function Drive() {
         setUploading(true);
       } else {
         setUploading(false);
+        setNotifText("Tous les fichiers ont été uploadés avec succès.");
         nbFilesUploadedRef.current = 0;
         totalFilesToUploadRef.current = 0;
         abortControllerRef.current = null; // Réinitialiser l'AbortController
       }
+
+      // Rafraîchir la vue uniquement si l'utilisateur est dans le dossier d'upload
+      setNotifText("Fichier uploadé avec succès.");
       setTimeout(() => {
-        getFolderStructure(activeFolderId);
-        getFileStructure(activeFolderId);
+        if (uploadFolderId && activeFolderIdRef.current === uploadFolderId) {
+          getFolderStructure(uploadFolderId);
+          getFileStructure(uploadFolderId);
+        }
       }, 500);
 
     } catch (error) {
@@ -473,7 +644,7 @@ export default function Drive() {
   };
 
   // --- LOGIQUE FICHIERS < 0.9 Mo (En mémoire) ---
-  const uploadSmallFile = async (file, sodium, encryptionKey) => {
+  const uploadSmallFile = async (file, sodium, publicKey) => {
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le petit fichier:", file.name);
       return false; // Annuler l'upload de ce fichier
@@ -512,11 +683,8 @@ export default function Drive() {
       const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
 
       // Chiffrement Clé Fichier
-      const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-        fileKey, null, null, nonceKey, encryptionKey
-      );
-      const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
+      const encryptedFileKey = await rsaEncrypt(publicKey, fileKey);
+      const finalFileKey = new Uint8Array(encryptedFileKey);
 
       nbFilesUploadedRef.current += 1;
       // Envoi
@@ -529,14 +697,15 @@ export default function Drive() {
         parent_folder_id: activeFolderId,
       };
 
-      const response = await fetch('/api/drive/upload', {
+      const response = await authFetch('/api/drive/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
       });
 
       if (!response.ok) throw new Error('Erreur API Upload Simple');
+
       return true;
 
     } catch (e) {
@@ -549,7 +718,7 @@ export default function Drive() {
     }
   };
 
-  const uploadLargeFileStreaming = async (file, sodium, encryptionKey) => {
+  const uploadLargeFileStreaming = async (file, sodium, publicKey, tmp_id) => {
     if (stopallUploadsRef.current) {
       console.log("Upload arrêté par l'utilisateur pour le gros fichier:", file.name);
       return false; // Annuler l'upload de ce fichier
@@ -569,16 +738,13 @@ export default function Drive() {
     );
     const finalMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadata]);
 
-    const nonceKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-    const encryptedFileKey = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-      fileKey, null, null, nonceKey, encryptionKey
-    );
-    const finalFileKey = new Uint8Array([...nonceKey, ...encryptedFileKey]);
+    const encryptedFileKey = await rsaEncrypt(publicKey, fileKey);
+    const finalFileKey = new Uint8Array(encryptedFileKey);
 
     // --- 2. Initialisation Serveur ---
     let temp_upload_id;
     try {
-      const openRes = await fetch('/api/drive/open_streaming_upload', {
+      const openRes = await authFetch('/api/drive/open_streaming_upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -588,7 +754,7 @@ export default function Drive() {
           file_size: file.size,
           parent_folder_id: activeFolderId
         }),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
       });
 
       if (!openRes.ok) {
@@ -618,11 +784,38 @@ export default function Drive() {
 
     // Nombre d'envois simultanés (3 est un bon équilibre, max 5)
     const MAX_CONCURRENT_UPLOADS = 3;
+    const MAX_RETRIES = 3; // Tentatives par chunk avant abandon
+    const RETRY_BASE_DELAY_MS = 400;
+
+    let hasFailed = false;
+    let failureMessage = '';
+
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const markFailure = (message, err) => {
+      console.error(message, err);
+      setNotifText(`Erreur upload: ${message}`);
+      hasFailed = true;
+      failureMessage = message;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      // Marquer le fichier en erreur dans l'UI
+      setFilesUpload((prev) => prev.map((f) => {
+        if (f.id === `uploading-${tmp_id}`) {
+          return { ...f, uploadProgress: f.uploadProgress || 0, uploading: false, error: true };
+        }
+        return f;
+      }));
+    };
 
     nbFilesUploadedRef.current += 1;
     // La fonction que chaque "Worker" va exécuter en boucle
     const processNextChunk = async () => {
       while (nextChunkIndexToProcess < totalChunks) {
+        if (hasFailed || stopallUploadsRef.current) {
+          return;
+        }
 
         // 1. On "réserve" le morceau actuel et on incrémente le compteur global
         const currentIndex = nextChunkIndexToProcess;
@@ -646,41 +839,53 @@ export default function Drive() {
 
           // Upload
           let uploadRes;
-          try {
-            uploadRes = await fetch('/api/drive/upload_chunk', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                temp_upload_id: temp_upload_id,
-                chunk_index: currentIndex, // Important : envoyer le bon index !
-                total_chunks: totalChunks,
-                encrypted_chunk: bufToB64(finalChunk)
-              }),
-              signal: abortControllerRef.current.signal,
-            });
-          } catch (e) {
-            if (e.name === 'AbortError') {
-              console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
-              // Nettoyer côté serveur
-              fetch('/api/drive/cancel_streaming_upload', {
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              uploadRes = await authFetch('/api/drive/upload_chunk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ temp_upload_id: temp_upload_id })
-              }).catch(err => console.error('Erreur lors du nettoyage:', err));
-              return; // Sortir de la fonction processNextChunk
-            }
-            throw e;
-          }
+                body: JSON.stringify({
+                  temp_upload_id: temp_upload_id,
+                  chunk_index: currentIndex, // Important : envoyer le bon index !
+                  total_chunks: totalChunks,
+                  encrypted_chunk: bufToB64(finalChunk)
+                }),
+                signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
+              });
 
-          if (!uploadRes.ok) throw new Error(`Erreur upload chunk ${currentIndex}`);
+              if (!uploadRes.ok) {
+                throw new Error(`Serveur a retourné ${uploadRes.status}`);
+              }
+              break; // Succès, on sort de la boucle de retry
+            } catch (e) {
+              if (e.name === 'AbortError') {
+                console.log(`Upload annulé pour le chunk ${currentIndex} du fichier:`, file.name);
+                await authFetch('/api/drive/cancel_streaming_upload', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ temp_upload_id: temp_upload_id })
+                }).catch(err => console.error('Erreur lors du nettoyage:', err));
+                return; // Sortir de la fonction processNextChunk
+              }
+
+              if (attempt === MAX_RETRIES) {
+                markFailure(`Echec envoi chunk ${currentIndex} après ${MAX_RETRIES} tentatives`, e);
+                return;
+              }
+
+              const backoff = RETRY_BASE_DELAY_MS * attempt;
+              console.warn(`Retry chunk ${currentIndex} (tentative ${attempt}/${MAX_RETRIES}) dans ${backoff}ms`);
+              await wait(backoff);
+            }
+          }
 
           if (stopallUploadsRef.current) {
             console.log("Upload arrêté par l'utilisateur.");
-            fetch('/api/drive/cancel_streaming_upload', {
+            authFetch('/api/drive/cancel_streaming_upload', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ temp_upload_id: temp_upload_id })
-            });      
+            });
             // supprimer toutes les ref a cet upload
             delete UploadProcesses[file.name];
             setUploadProcesses({ ...UploadProcesses });
@@ -701,7 +906,16 @@ export default function Drive() {
 
           // Mise à jour progression UI
           chunksFinished++;
+
+
           let percent = Math.min(100, Math.round((chunksFinished / totalChunks) * 100));
+          // recupérer dans fileUpload le pourcentage et le mettre a jour
+          setFilesUpload((prev) => prev.map((f) => {
+            if (f.id === `uploading-${tmp_id}`) {
+              return { ...f, uploadProgress: percent };
+            }
+            return f;
+          }));
 
           UploadProcesses[file.name] = percent;
           setUploadProcesses({ ...UploadProcesses });
@@ -712,7 +926,8 @@ export default function Drive() {
 
         } catch (error) {
           console.error(`Erreur sur le chunk ${currentIndex}`, error);
-          throw error; // Cela arrêtera Promise.all
+          markFailure(`Erreur sur le chunk ${currentIndex}`, error);
+          return;
         }
       }
     };
@@ -725,6 +940,20 @@ export default function Drive() {
 
     // On attend que TOUS les workers aient fini (quand il n'y a plus de chunks)
     await Promise.all(workers);
+
+    if (hasFailed) {
+      try {
+        await authFetch('/api/drive/cancel_streaming_upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ temp_upload_id: temp_upload_id })
+        });
+      } catch (cleanupErr) {
+        console.error('Erreur lors du nettoyage après échec:', cleanupErr);
+      }
+      setNotifText(failureMessage || 'Upload interrompu suite à une erreur de chunk.');
+      return false;
+    }
 
     console.log("Tous les chunks sont envoyés !");
 
@@ -741,7 +970,7 @@ export default function Drive() {
     //     pub parent_folder_id: Uuid,
     // }
     try {
-      const finalizeRes = await fetch('/api/drive/finish_streaming_upload', {
+      const finalizeRes = await authFetch('/api/drive/finish_streaming_upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -753,7 +982,7 @@ export default function Drive() {
           parent_folder_id: activeFolderId
 
         }),
-        signal: abortControllerRef.current.signal,
+        signal: abortControllerRef.current ? abortControllerRef.current.signal : undefined,
       });
 
       if (!finalizeRes.ok) throw new Error("Erreur lors de la finalisation de l'upload streaming");
@@ -783,31 +1012,14 @@ export default function Drive() {
     await _sodium.ready;
     const sodium = _sodium;
 
-    const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) {
-      window.location.href = '/login';
-      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-    }
-
-    // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
-    const rawStorageKey = sodium.from_hex(storageKeyHex);
-    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-
     try {
       // --- ÉTAPE A : Déchiffrer la Clé du Dossier (FolderKey) ---
       // On a besoin de folder.encrypted_folder_key renvoyé par le SQL
       const encryptedKeyBuffer = sodium.from_base64(folder.encrypted_folder_key, sodium.base64_variants.ORIGINAL);
 
-      const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
-      const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextKey,
-        null,
-        nonceKey,
-        userMasterKey // On utilise la clé de l'utilisateur ici
-      );
+      const privateKey = await importPrivateKey(userPrivateKey);
+      const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
+      const folderKey = new Uint8Array(decryptedKeyBuffer);
 
       // --- ÉTAPE B : Déchiffrer les Métadonnées avec la FolderKey ---
       const encryptedMetaBuffer = sodium.from_base64(folder.encrypted_metadata, sodium.base64_variants.ORIGINAL);
@@ -849,30 +1061,9 @@ export default function Drive() {
     await _sodium.ready;
     const sodium = _sodium;
 
-    const storageKeyHex = localStorage.getItem('storageKey');
-    if (!storageKeyHex) {
-      window.location.href = '/login';
-      throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-    }
-
-    // 1. Préparer la Clé Maître de l'utilisateur (32 bytes)
-    const rawStorageKey = sodium.from_hex(storageKeyHex);
-    const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-
     try {
       // --- ÉTAPE A : Déchiffrer la Clé du Fichier (FileKey) ---
-      const encryptedKeyBuffer = sodium.from_base64(file.encrypted_file_key, sodium.base64_variants.ORIGINAL);
-
-      const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-      const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
-
-      const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextKey,
-        null,
-        nonceKey,
-        userMasterKey // On utilise la clé de l'utilisateur ici
-      );
+      const fileKey = await decryptFileKey(file.encrypted_file_key, sodium);
 
       // --- ÉTAPE B : Déchiffrer les Métadonnées avec la FileKey ---
       const encryptedMetaBuffer = sodium.from_base64(file.encrypted_metadata, sodium.base64_variants.ORIGINAL);
@@ -895,7 +1086,7 @@ export default function Drive() {
       return {
         ...file,
         name: metadata.filename, // Le nom déchiffré
-        size: metadata.filesize,
+        total_size: metadata.filesize,
         type: metadata.filetype,
         // ... autres infos du metadata si besoin
       };
@@ -909,10 +1100,9 @@ export default function Drive() {
   const getFolderStructure = async (id_parent) => {
     let url = `/api/drive/folders?parent_folder_id=${id_parent}`;
     if (id_parent) {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -931,7 +1121,6 @@ export default function Drive() {
           const rootId = data.folders[0]?.folder_id;
           setActiveFolderId(rootId);
           setRootFolderId(rootId);
-          setActiveSection('mon_drive');
         }
 
         const decryptedFolders = [];
@@ -939,6 +1128,7 @@ export default function Drive() {
         for (const folder of data.folders) {
           // On appelle la fonction qui fait le double déchiffrement
           const cleanFolder = await processFolder(folder);
+          console.log("Dossier déchiffré:", cleanFolder);
           decryptedFolders.push(cleanFolder);
         }
 
@@ -953,17 +1143,16 @@ export default function Drive() {
   const getFileStructure = async (id_parent) => {
     let url = `/api/drive/files?parent_folder_id=${id_parent}`;
     if (id_parent) {
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       const data = await res.json();
 
       if (data.status === 'success') { // Adapte selon ton retour API exact
-        console.log("Fichiers reçus:", data);
+        // console.log("Fichiers reçus:", data);
         const decryptedFiles = [];
 
         for (const file of data.files) {
@@ -972,16 +1161,16 @@ export default function Drive() {
           decryptedFiles.push(cleanFile);
         }
 
+        console.log("Fichier déchiffré:", decryptedFiles);
         setFiles(decryptedFiles);
       }
     }
   }
 
   const getRootFolder = async () => {
-    const res = await fetch('/api/drive/folders', {
+    const res = await authFetch('/api/drive/folders', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
@@ -992,18 +1181,17 @@ export default function Drive() {
 
       setActiveFolderId(rootId);
       setRootFolderId(rootId);
-      setActiveSection('mon_drive');
 
       const newUrl = new URL(window.location);
       newUrl.searchParams.set('folderId', rootId);
-      window.history.pushState({}, '', newUrl);
+      window.history.pushState({ folderId: rootId }, '', newUrl);
 
       // CORRECTION ICI : On met un tableau d'objets
       setPath([{ id: rootId, name: 'Mon Drive' }]);
 
       return data.folders[0];
     }
-    throw new Error('Impossible de récupérer le dossier racine.');
+    throw new Error('Erreur récupération dossier racine');
   };
 
   const loadFullPathFromFolderId = async (folderId) => {
@@ -1014,15 +1202,13 @@ export default function Drive() {
     else {
       let url = `/api/drive/full_path?folder_id=${folderIdParam}`;
       console.log("Fetching full path for folder ID:", folderIdParam);
-      const res = await fetch(url, {
+      const data = await fetchJsonWithRetry(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      const data = await res.json();
-      if (data.status === 'success') {
+      if (data && data.status === 'success') {
         const fullPathArray = data.full_path;
         console.log("Full path data received:", fullPathArray);
 
@@ -1051,7 +1237,7 @@ export default function Drive() {
         setActiveFolderId(folderIdParam);
         return;
       }
-      console.error("Erreur récupération full path:", data.message);
+      if (data) console.error("Erreur récupération full path:", data.message);
 
     };
   };
@@ -1066,14 +1252,32 @@ export default function Drive() {
       if (rootFolderId) {
         setActiveFolderId(rootFolderId);
         setPath([{ id: rootFolderId, name: 'Mon Drive' }]);
+        getFolderStructure(rootFolderId);
+        getFileStructure(rootFolderId);
+      } else {
+        getRootFolder();
       }
+    } else if (sectionId === 'partages') {
+      // Sections spéciales : cacher les dossiers et fichiers
+      setFolders([]);
+      setFiles([]);
+      setPath([{ id: 'partages_avec_moi', name: 'Partagés avec moi' }]);  
+      getSharedWithMeFiles();
+      
     } else {
-      // Pour les autres sections (Corbeille, etc.), on peut simuler un path
-      // Note: id null ou spécifique si vous gérez des vues spéciales
-      const formatName = sectionId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      setPath([{ id: sectionId, name: formatName }]);
-      // Ici il faudra probablement une logique pour charger les fichiers "Favoris" ou "Corbeille" au lieu de getFolderStructure
+      // Sections spéciales : cacher les dossiers et fichiers
+      setFolders([]);
+      setFiles([]);
+      setPath([]); // Vider le chemin car on n'est pas dans un dossier classique
     }
+
+    // Mettre à jour l'URL sans recharger la page
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete('folderId'); // Supprimer folderId pour les sections spéciales
+    // Ajoute un hash pour indiquer la section active dans l'URL
+    newUrl.hash = `#${sectionId}`;
+    window.history.pushState({ sectionId }, '', newUrl);
+
   };
 
   const handlePathClick = (item, index) => {
@@ -1083,7 +1287,7 @@ export default function Drive() {
 
     const newUrl = new URL(window.location);
     newUrl.searchParams.set('folderId', item.id);
-    window.history.pushState({}, '', newUrl);
+    window.history.pushState({ folderId: item.id }, '', newUrl);
 
 
     // On charge le dossier correspondant
@@ -1100,7 +1304,7 @@ export default function Drive() {
     // rajoute dans l'url le folderId
     const newUrl = new URL(window.location);
     newUrl.searchParams.set('folderId', folderId);
-    window.history.pushState({}, '', newUrl);
+    window.history.pushState({ folderId }, '', newUrl);
 
     // CORRECTION : On ajoute un objet au tableau existant
     setPath((prevPath) => [
@@ -1152,40 +1356,25 @@ export default function Drive() {
         folderName.onpaste = null;
 
         folderName.contentEditable = false;
-        let newName = folderName.innerText; // .innerText nettoie souvent mieux que .innerHTML
+        let newName = folderName.innerText;
         let created_at = folder.getAttribute("data-created-at");
-        let updated_at = new Date().toISOString();
-
 
         let metadata = {
           name: newName,
           created_at: created_at,
         };
-        console.log(folder.getAttribute("data-encrypted-folder-key"));
 
         await _sodium.ready;
         const sodium = _sodium;
 
-        const storageKeyHex = localStorage.getItem('storageKey');
-        if (!storageKeyHex) {
-          window.location.href = '/login';
-          throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-        }
-
-        const rawStorageKey = sodium.from_hex(storageKeyHex);
-        const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-        // Déchiffrer la clé du dossier
+        // Récupérer la clé du dossier chiffrée
         const encryptedKeyBuffer = sodium.from_base64(folder.getAttribute("data-encrypted-folder-key"), sodium.base64_variants.ORIGINAL);
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
 
-        const folderKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-          null,
-          ciphertextKey,
-          null,
-          nonceKey,
-          userMasterKey
-        );
+        const privateKey = await importPrivateKey(userPrivateKey);
+        const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
+        const folderKey = new Uint8Array(decryptedKeyBuffer);
 
         // Chiffrer les nouvelles métadonnées avec la clé du dossier
         const metadataStr = JSON.stringify(metadata);
@@ -1200,11 +1389,10 @@ export default function Drive() {
         const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
         const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
 
-
-        console.log("Renommer le dossier :", folderId, "en", newName);
+        // console.log("Renommer le dossier :", folderId, "en", newName);
         folderName.classList.remove("editing_folder_name");
 
-        fetch('/api/drive/rename_folder', {
+        authFetch('/api/drive/rename_folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1237,7 +1425,7 @@ export default function Drive() {
 
   const delete_folder = async (folderId) => {
     console.log("Supprimer le dossier :", folderId);
-    fetch('/api/drive/delete_folder', {
+    authFetch('/api/drive/delete_folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1251,7 +1439,7 @@ export default function Drive() {
           // Mettre à jour l'état des dossiers
           setFolders(prevFolders => prevFolders.filter(f => f.folder_id !== folderId));
           // Rafraîchir la vue du dossier courant
-           setTimeout(() => {
+          setTimeout(() => {
             getFolderStructure(activeFolderId);
             getFileStructure(activeFolderId);
           }, 500);
@@ -1305,7 +1493,7 @@ export default function Drive() {
 
   const delete_file = async (fileId) => {
     console.log("Supprimer le fichier :", fileId);
-    fetch('/api/drive/delete_file', {
+    authFetch('/api/drive/delete_file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1320,7 +1508,7 @@ export default function Drive() {
           setFiles(prevFiles => prevFiles.filter(f => f.file_id !== fileId));
           // Rafraîchir la vue du dossier courant
 
-           setTimeout(() => {
+          setTimeout(() => {
             getFolderStructure(activeFolderId);
             getFileStructure(activeFolderId);
           }, 500);
@@ -1335,6 +1523,7 @@ export default function Drive() {
 
   const rename_file = async (fileId, newName) => {
     let file = document.getElementById(fileId);
+    console.log("file element:", file);
     let fileName = file.querySelector(".file_name");
     let menu = document.getElementById("contextual_menu_folder");
 
@@ -1375,9 +1564,7 @@ export default function Drive() {
         fileName.onkeydown = null;
 
         fileName.contentEditable = false;
-        let newName = fileName.innerText; // .innerText nettoie souvent mieux que .innerHTML
-        let created_at = file.getAttribute("data-created-at");
-        let updated_at = new Date().toISOString();
+        let newName = fileName.innerText;
         let metadata = {
           filename: newName,
           filesize: file.getAttribute("data-file-size"),
@@ -1387,28 +1574,16 @@ export default function Drive() {
         await _sodium.ready;
         const sodium = _sodium;
 
-        const storageKeyHex = localStorage.getItem('storageKey');
-        if (!storageKeyHex) {
-          window.location.href = '/login';
-          throw new Error('Clé de stockage manquante. Redirection vers la page de connexion.');
-        }
-
-        const rawStorageKey = sodium.from_hex(storageKeyHex);
-        const userMasterKey = sodium.crypto_generichash(32, rawStorageKey);
-        // Déchiffrer la clé du fichier
+        // Récupérer la clé du fichier chiffrée
         const encryptedKeyBuffer = sodium.from_base64(file.getAttribute("data-encrypted-file-key"), sodium.base64_variants.ORIGINAL);
         const nonceKey = encryptedKeyBuffer.slice(0, sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const ciphertextKey = encryptedKeyBuffer.slice(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
 
-        const fileKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-          null,
-          ciphertextKey,
-          null,
-          nonceKey,
-          userMasterKey
-        );
+        const privateKey = await importPrivateKey(userPrivateKey);
+        const decryptedKeyBuffer = await rsaDecrypt(privateKey, encryptedKeyBuffer);
+        const fileKey = new Uint8Array(decryptedKeyBuffer);
 
-        // Chiffrer les nouvelles métadonnées avec la FileKey
+        // Chiffrer les nouvelles métadonnées avec la clé du fichier
         const metadataStr = JSON.stringify(metadata);
         const nonceMeta = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
         const encryptedMetadataBlob = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
@@ -1420,10 +1595,11 @@ export default function Drive() {
         );
         const encryptedMetadata = new Uint8Array([...nonceMeta, ...encryptedMetadataBlob]);
         const encryptedMetadataB64 = sodium.to_base64(encryptedMetadata, sodium.base64_variants.ORIGINAL);
+
         console.log("Renommer le fichier :", fileId, "en", newName);
         fileName.classList.remove("editing_file_name");
 
-        fetch('/api/drive/rename_file', {
+        authFetch('/api/drive/rename_file', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1440,7 +1616,6 @@ export default function Drive() {
               setFiles(prevFiles => prevFiles.map(f => f.file_id === fileId ? { ...f, name: newName } : f));
               // Rafraîchir la vue du dossier courant
             } else {
-
               console.error("Erreur renommage fichier :", data.message);
             }
           })
@@ -1454,7 +1629,107 @@ export default function Drive() {
     }
   }
 
-  const opent_menu_contextual_file = (fileId, x, y) => {
+  const share_item = (itemId, itemType, email) => {
+    console.log("Partager l'élément :", itemId, "de type :", itemType, "avec :", email);
+
+    fetch('/api/drive/prepare_share_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reciver_email: email
+      }),
+    })
+      .then(response => response.json())
+      .then(async data => {
+        if (data.status === 'success') {
+          console.log("Préparation du partage réussie.", data);
+
+          await _sodium.ready;
+          const sodium = _sodium;
+
+          // Récupérer la clé publique du destinataire
+          const reciverPublicKeyB64 = data.public_key;
+          const reciverPublicKey = await importPublicKey(reciverPublicKeyB64);
+
+          // Récupérer la clé de l'élément à partager
+          let item = null;
+          item = files.find(f => f.file_id === itemId);
+
+          if (!item) {
+            console.error("Élément à partager non trouvé :", itemId);
+            setNotifText("Élément à partager non trouvé : " + itemId);
+            return;
+          }
+
+          const encryptedItemKeyB64 = itemType === 'file' ? item.encrypted_file_key : item.encrypted_folder_key;
+          const encryptedItemKeyBuffer = sodium.from_base64(encryptedItemKeyB64, sodium.base64_variants.ORIGINAL);
+
+          // Déchiffrer la clé de l'élément avec la clé privée de l'utilisateur
+          const privateKey = await importPrivateKey(userPrivateKey);
+          const decryptedItemKeyBuffer = await rsaDecrypt(privateKey, encryptedItemKeyBuffer);
+          // Chiffrer la clé de l'élément avec la clé publique du destinataire
+          const reEncryptedItemKeyBuffer = await rsaEncrypt(reciverPublicKey, new Uint8Array(decryptedItemKeyBuffer));
+          const reEncryptedItemKeyB64 = sodium.to_base64(new Uint8Array(reEncryptedItemKeyBuffer), sodium.base64_variants.ORIGINAL);
+
+          // Envoyer la clé ré-encryptée au serveur pour finaliser le partage
+          fetch('/api/drive/share_file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              file_id: itemId,
+              receiver_id: data.user_id,
+              encrypted_file_key: reEncryptedItemKeyB64,
+            }),
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success') {
+                console.log("Partage de l'élément réussi.");
+                setNotifText("Partage de l'élément réussi.");
+              } else {
+                console.error("Erreur partage élément :", data.message);
+                setNotifText("Erreur partage élément : " + data.message);
+              }
+            })
+            .catch(error => {
+              console.error("Erreur lors de la requête de partage final :", error);
+              setNotifText("Erreur lors de la requête de partage final : " + error.message);
+            });
+        } else {
+          console.error("Erreur préparation partage :", data.message);
+          setNotifText("Erreur préparation partage : " + data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de partage :", error);
+        setNotifText("Erreur lors de la requête de partage : " + error.message);
+      });
+  };
+
+  const acceptSharedFile = async (inviteId) => {
+    console.log("Accepter le fichier partagé :", inviteId);
+    const res = await authFetch('/api/drive/accept_share_invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        invite_id: inviteId
+      })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      console.log("Invitation acceptée avec succès.");
+      setNotifText("Invitation acceptée avec succès. Le fichier est maintenant dans votre Drive.");
+      // Rafraîchir la liste des fichiers partagés avec moi
+      getSharedWithMeFiles();
+    } else {
+      console.error("Erreur acceptation invitation :", data.message);
+      setNotifText("Erreur acceptation invitation : " + data.message);
+    }
+  };
+
+  const open_menu_contextual_file = (fileId, x, y) => {
     // creer une div qui s'affiche a la position x,y
     // avec des options comme renommer, supprimer, partager, etc.
 
@@ -1462,6 +1737,7 @@ export default function Drive() {
     menu.style.display = "flex";
     menu.style.left = x + "px";
     menu.style.top = y + "px";
+
     // stocker l'id du fichier dans un data attribute
     menu.setAttribute("data-file-id", fileId);
 
@@ -1488,23 +1764,279 @@ export default function Drive() {
 
     let shareOption = menu.querySelector("#share_folder_option");
     shareOption.onclick = () => {
-      console.log("Partager le fichier :", fileId);
+      menu.style.display = "none";
+      setShareMenuState({ isOpen: true, itemId: fileId, itemType: 'file' });
     }
 
   }
 
+  const getSharedWithMeFiles = async () => {
+    const res = await authFetch('/api/drive/get_share_invites', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      console.log("Invites reçues :", data.invites);
+      const decryptedFiles = [];
+      for (const invite of data.invites) {
+        // Construire un objet "file-like" attendu par processFile
+        const fileLike = {
+          file_id: invite.file_id,
+          encrypted_file_key: invite.encrypted_file_key,
+          encrypted_metadata: invite.encrypted_metadata,
+          created_at: invite.created_at,
+          sender_name: invite.sender_name,
+          expires_at: invite.expires_at,
+          invite_id: invite.invite_id,
+        };
+
+        const cleanFile = await processFile(fileLike);
+        cleanFile.shared_by = invite.sender_email || invite.sender_id;
+        decryptedFiles.push(cleanFile);
+      }
+
+      setSharedFiles(decryptedFiles);
+    } else {
+      console.error("Erreur récupération invitations de partage :", data.message);
+    }
+  }
+
+  const getUserInfo = async () => {
+    try {
+      const res = await authFetch('/api/auth/info', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (data.status === 'success' && data.user_info) {
+        // Met à jour le nom d'utilisateur affiché (prénom + nom si dispo, sinon email)
+        if (data.user_info.firstName && data.user_info.lastName) {
+          console.log("Nom utilisateur récupéré :", `${data.user_info.firstName} ${data.user_info.lastName}`);
+          setUserName(`${data.user_info.firstName} ${data.user_info.lastName}`);
+        } else if (data.user_info.email) {
+          setUserName(data.user_info.email);
+        }
+      } else {
+        console.error("Erreur récupération info utilisateur :", data.message);
+      }
+    } catch (e) {
+      console.error("Erreur lors de la récupération des infos utilisateur :", e);
+    }
+  };
+
+  const showNotification = () => {
+    const notif = document.getElementById('notification_area');
+    notif.style.display = 'fixed';
+    notif.style.top = '20px';
+    notif.style.transform = 'translateX(50%)';
+  }
+
+  const hideNotification = () => {
+    const notif = document.getElementById('notification_area');
+    if (notif) {
+      notif.style.top = '-0px';
+      notif.style.transform = 'translateX(50%) translateY(-100%)';
+    } else {
+      console.warn('Notification area not found');
+    }
+  }
+
+  const move_file_to_folder = async (fileId, folderId) => {
+    console.log("Déplacer le fichier", fileId, "vers le dossier", folderId);
+    authFetch('/api/drive/move_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_id: fileId,
+        target_folder_id: folderId
+      }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setNotifText("Fichier déplacé avec succès.");
+          // Rafraîchir la vue du dossier courant
+          setTimeout(() => {
+            getFolderStructure(activeFolderId);
+            getFileStructure(activeFolderId);
+          }, 500);
+        } else {
+          console.error("Erreur déplacement fichier :", data.message);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de la requête de déplacement :", error);
+      });
+  };
+
+  const moveElementMouseDown = (e) => {
+    console.log("Déplacement de l'élément :", selectedMoveElement);
+    // mettre un listener sur la souris pour bouger l'élément qui est dans SelectedMoveElement
+    let element_id = selectedMoveElement;
+    let element = document.getElementById(element_id);
+    if (!element) return;
+
+    let width = element.offsetWidth;
+    let height = element.offsetHeight;
+    let diff_souris_corner_element_x = e.pageX - element.getBoundingClientRect().left;
+    let diff_souris_corner_element_y = e.pageY - element.getBoundingClientRect().top;
+
+    let folder_id = null;
+
+    const onMouseMove = (e) => {
+
+      // récupérer la liste de tous les éléments sous la souris
+      let elementsStack = document.elementsFromPoint(e.clientX, e.clientY);
+      // console.log("Éléments sous la souris :", elementsStack);
+
+      // Check for both grid and list view folder elements
+      const folderElement = elementsStack.find(el =>
+        el.classList && (el.classList.contains('folder_list') || el.classList.contains('folder_graph') || el.classList.contains('div_folder_path_graph'))
+      );
+
+      if (folderElement) {
+        console.log("Sur la zone des dossiers");
+        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
+          el.classList.remove('folder_dragover');
+        });
+        folder_id = folderElement.getAttribute("data-folder-id");
+        folderElement.classList.add("folder_dragover");
+      } else {
+        document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
+          el.classList.remove('folder_dragover');
+        });
+        folder_id = null;
+      }
+
+      // si on est en mode list 
+      if (viewType == 'list') {
+        console.log(viewType);
+        element.style.width = '200px';
+        element.style.minWidth = '200px';
+        element.style.overflow = 'hidden';
+        element.style.whiteSpace = 'nowrap';
+        element.style.textOverflow = 'ellipsis';
+      } else {
+        element.style.width = width + 'px';
+      }
+      element.style.zIndex = 1000;
+      element.style.cursor = 'grabbing';
+      element.style.height = height + 'px';
+      element.style.opacity = 0.8;
+      element.style.position = 'absolute';
+      element.style.left = (e.pageX - 100) + 'px';
+      element.style.top = (e.pageY - diff_souris_corner_element_y) + 'px';
+    };
+    document.addEventListener('mousemove', onMouseMove);
+
+    document.addEventListener('mouseup', () => {
+      if (folder_id) {
+        element.style.display = 'none';
+        move_file_to_folder(element_id, folder_id);
+      }
+      document.removeEventListener('mousemove', onMouseMove);
+      element.style.position = '';
+      element.style.left = '';
+      element.style.top = '';
+      element.style.width = '';
+      element.style.minWidth = '';
+      element.style.height = '';
+      element.style.opacity = '';
+      element.style.overflow = '';
+      element.style.zIndex = '';
+      element.style.cursor = '';
+      element.style.whiteSpace = '';
+      element.style.textOverflow = '';
+
+      document.querySelectorAll('.folder_list.folder_dragover, .folder_graph.folder_dragover, .div_folder_path_graph.folder_dragover').forEach((el) => {
+        el.classList.remove('folder_dragover');
+      });
+      setSelectedMoveElement(null);
+    }, { once: true });
+
+  };
   // --- EFFETS DE BORD ---
 
   useEffect(() => {
-    console.log("Active Folder ID changed:", activeFolderId);
-    if (activeFolderId === null) {
-      loadFullPathFromFolderId();
-      getFileStructure(activeFolderId);
-    } else {
-      console.log("Charger le contenu du dossi-----------------------------er actif :", activeFolderId);
-      getFolderStructure(activeFolderId);
-      getFileStructure(activeFolderId);
+    if (selectedMoveElement) {
+      let e = window.event;
+      moveElementMouseDown(e);
     }
+  }, [selectedMoveElement]);
+
+  useEffect(() => {
+    if (notifText) {
+      showNotification();
+      const timer = setTimeout(() => {
+        hideNotification();
+        // Réinitialiser notifText après la notification
+        setTimeout(() => {
+
+          setNotifText('');
+        }, 800);
+      }, 3000); // Durée d'affichage de la notification (3 secondes)
+
+      return () => {
+        clearTimeout(timer);
+      }
+    }
+
+  }, [notifText]);
+
+  useEffect(() => {
+    if (!tokenReady) return;
+    getUserInfo();
+  }, [tokenReady]); // <--- Enlever token
+
+  useEffect(() => {
+    console.log("UseEffect actif : activeFolderId ou tokenReady changé :", activeFolderId, tokenReady);
+    if (!tokenReady) return;
+    console.log("Token prêt, chargement des données du drive.");
+
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      setActiveSection(hash);
+    }
+
+    if (hash === 'mon_drive') {
+      console.log("Active Folder ID changed:", activeFolderId);
+      setSharedFiles([]); 
+      if (activeFolderId === null) {
+        loadFullPathFromFolderId();
+        getFileStructure(activeFolderId);
+      } else {
+        getFolderStructure(activeFolderId);
+        getFileStructure(activeFolderId);
+      }
+    } else if (hash === 'corbeille' || hash === 'favoris') {
+      // Pour l'instant, on ne gère pas les fichiers spéciaux
+      setFolders([]);
+      setFiles([]);
+      setSharedFiles([]);
+    }  
+    else {
+      // Par défaut, on charge le dossier actif
+      if (activeFolderId === null) {
+        getRootFolder();
+        getFolderStructure(activeFolderId);
+        getFileStructure(activeFolderId);
+        let newUrl = new URL(window.location);
+        newUrl.hash = `#mon_drive`;
+        window.history.pushState({}, '', newUrl);
+      } else {
+        getFolderStructure(activeFolderId);
+        getFileStructure(activeFolderId);
+      }
+    }
+
+    // mettre des folder pour le debug  
+
+
 
     const handleClickAnywhere = (event) => {
       if (event.target.closest('.folder_graph')) return;
@@ -1520,28 +2052,102 @@ export default function Drive() {
     };
 
 
+  }, [activeFolderId, tokenReady]);
 
-  }, [activeFolderId]);
+  useEffect(() => {
+    const onPopState = (event) => {
+      const url = new URL(window.location);
+      const folderIdParam = url.searchParams.get('folderId');
+      const hash = url.hash ? url.hash.substring(1) : '';
+
+      // Priorité au hash pour les sections spéciales
+      if (hash && hash !== activeSection) {
+        setActiveSection(hash);
+      }
+
+      if (folderIdParam) {
+        // Si on a un folderId dans l'URL, on recharge le path et le contenu
+        setActiveFolderId(folderIdParam);
+        loadFullPathFromFolderId(folderIdParam);
+        getFolderStructure(folderIdParam);
+        getFileStructure(folderIdParam);
+      } else if (hash === 'mon_drive' || hash === '') {
+        // Retour à la racine
+        getRootFolder();
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [activeSection, tokenReady]);
+
+  // Met à jour `contents` dès que `folders` ou `files` changent
+  useEffect(() => {
+    const unified = [
+      ...folders.map((folder) => ({
+        ...folder,
+        id: folder.folder_id,
+        type: 'folder',
+        name: folder.name,
+      })),
+      ...files.map((file) => ({
+        ...file,
+        id: file.file_id,
+        type: 'file',
+        name: file.name,
+      })),
+      ...filesUpload.map((file) => ({
+        ...file,
+        id: file.tempId,
+        type: 'uploading',
+        name: file.name,
+      })),
+    ];
+    setContents(unified);
+  }, [folders, files, filesUpload]);
+
+  // Ajoutez ceci à l'intérieur de votre composant, avant le return
+  const [selectedId, setSelectedId] = useState(null);
+
+  // Fonction utilitaire pour gérer la sélection (évite la répétition)
+  const handleSelection = (id) => {
+    setSelectedId(id);
+  };
+
   // --- RENDU (JSX) ---
   return (
     <div className="drive-container"> {/* J'ai retiré html/head/body pour integrer dans un composant */}
 
-      <header>
-        <h1><a href="/">GZDRIVE</a></h1>
-        <div className="div_user_profil" onClick={() => {
-          window.location.href = '/profile';
-        }}>
-          {!imageLoadedState && <div className="div_profil_custom"></div>}
-          <img
-            className={`user-image ${imageLoadedState ? 'loaded' : ''}`}
-            src="/images/user_profile.png" // Assurez-vous que l'image est dans le dossier 'public'
-            alt="User Profile"
-            onLoad={() => setImageLoadedState(true)}
-          />
-        </div>
-      </header>
+      <Header TITLE="GZDRIVE" userName={userName} ></Header>
+      <div className="notification_area" id="notification_area" onClick={() => hideNotification()}>
+        <span>{notifText}</span>
+      </div>
 
       <section>
+
+        <div className="div_share_contextual_menu" style={{ display: shareMenuState.isOpen ? 'flex' : 'none' }}>
+          <form id="share_form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              share_item(shareMenuState.itemId, shareMenuState.itemType, document.getElementById('share_email_input').value);
+              setShareMenuState({ isOpen: false, itemId: null, itemType: null });
+            }}>
+            <h3>Partager</h3>
+            <label>Adresse e-mail :</label>
+            <input type="email" id="share_email_input" placeholder="Adresse e-mail du destinataire" />
+            <label>Permissions :</label>
+            <select id="share_permission_select">
+              <option value="view">Lecture seule</option>
+              <option value="edit">Lecture et écriture</option>
+            </select>
+            <div className="share_form_buttons">
+              <button type="button" id="share_cancel_button">Annuler</button>
+              <button type="submit" id="share_submit_button">Partager</button>
+            </div>
+          </form>
+
+        </div>
+
         <div id='contextual_menu_folder' >
           <div className="option_menu_contextual" id="rename_folder_option">
             <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M15.7279 9.57627L14.3137 8.16206L5 17.4758V18.89H6.41421L15.7279 9.57627ZM17.1421 8.16206L18.5563 6.74785L17.1421 5.33363L15.7279 6.74785L17.1421 8.16206ZM7.24264 20.89H3V16.6473L16.435 3.21231C16.8256 2.82179 17.4587 2.82179 17.8492 3.21231L20.6777 6.04074C21.0682 6.43126 21.0682 7.06443 20.6777 7.45495L7.24264 20.89Z"></path></svg>
@@ -1573,6 +2179,7 @@ export default function Drive() {
               onClick={() => {
                 // Annuler tous les uploads en cours
                 stopallUploadsRef.current = true;
+                setFilesUpload([]);
                 if (abortControllerRef.current) {
                   abortControllerRef.current.abort();
                 }
@@ -1658,7 +2265,7 @@ export default function Drive() {
                 title="Uploader un fichier"
                 id="btn_upload_file"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3ZM5 5V19H19V5H5ZM11 11V7H13V11H17V13H13V17H11V13H7V11H11Z"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3H10.4142L12.4142 5ZM5 5V19H19V5H5ZM11 11V7H13V11H17V13H13V17H11V13H7V11H11Z"></path></svg>
 
               </button>
               <input
@@ -1683,6 +2290,27 @@ export default function Drive() {
                 <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5ZM4 5V19H20V7H11.5858L9.58579 5H4ZM11 12V9H13V12H16V14H13V17H11V14H8V12H11Z"></path></svg>
 
               </button>
+
+              {/* bouton pour passer de l'affichage grid a list */}
+              <button
+                onClick={() => {
+                  if (viewType === 'grid') {
+                    setViewType('list');
+                  } else {
+                    setViewType('grid');
+                  }
+                }}
+                style={{ marginLeft: '10px', cursor: 'pointer', background: 'none', border: 'none' }}
+                disabled={uploading}
+                title={viewType === 'grid' ? 'Passer en vue liste' : 'Passer en vue grille'}
+                id="btn_toggle_view"
+              >
+                {viewType === 'grid' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H20V8H4V6ZM4 11H20V13H4V11ZM4 16H20V18H4V16Z"></path></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '22px', height: '22px', cursor: 'pointer' }} viewBox="0 0 24 24" fill="currentColor"><path d="M4 4H10V10H4V4ZM14 4H20V10H14V4ZM4 14H10V20H4V14ZM14 14H20V20H14V14Z"></path></svg>
+                )}
+              </button>
             </div>
 
             {/* <div className="div_filtres">
@@ -1693,22 +2321,23 @@ export default function Drive() {
           <div className="div_contenue">
             <div className="div_path_graphique">
               {path.map((part, index) => (
-                <React.Fragment key={index}> {/* Utiliser index ou part.id comme key */}
+                <React.Fragment key={index}> {/* Line 1749 omitted */}
                   <div
-                    className="div_folder_path_grap"
-                    onClick={() => handlePathClick(part, index)} // Appel de la nouvelle fonction
+                    className="div_folder_path_graph"
+                    onClick={() => handlePathClick(part, index)} /* Lines 1752-1753 omitted */
                     style={{ cursor: 'pointer' }}
                     id={part.id}
+                    data-folder-id={part.id}
                     consolelog={part}
-                  // mettre des param
+                  /* Lines 1756-1757 omitted */
                   >
-                    {/* On affiche bien part.name */}
+                    {/* Line 1758 omitted */}
                     <span style={{ fontWeight: index === path.length - 1 ? 'bold' : 'normal' }}>
                       {part.name}
                     </span>
                   </div>
 
-                  {/* Séparateur (ne pas l'afficher après le dernier élément) */}
+                  {/* Line 1764 omitted */}
                   {index < path.length - 1 && (
                     <div className="div_folder_separator">
                       <span>/</span>
@@ -1718,81 +2347,346 @@ export default function Drive() {
               ))}
             </div>
 
+            {/* =================================================================================
+                VUE GRILLE (GRID)
+                S'affiche uniquement si viewType est 'grid'
+               ================================================================================= */}
+            {viewType === 'grid' && (
+              <>
+                {/* --- DOSSIERS (GRILLE) --- */}
+                <div className="div_contenue_folder" style={{ display: 'flex' }}>
+                  {folders.map((folder) => (
+                    <div
+                      key={folder.id}
+                      className={`folder_graph ${selectedId === folder.folder_id ? 'selected_folder' : ''}`}
+                      id={folder.folder_id}
 
-            <div className="div_contenue_folder">
-              {folders.map((folder) => (
-                <div
-                  key={folder.id}
-                  className="folder_graph"
-                  id={folder.folder_id}
+                      // Data attributes conservés
+                      data-folder-id={folder.folder_id || ''}
+                      data-folder-name={folder.name || ''}
+                      data-folder-created-at={folder.created_at || ''}
+                      data-folder-updated-at={folder.updated_at || ''}
+                      data-encrypted-folder-key={folder.encrypted_folder_key || ''}
 
-                  data-folder-id={folder.id || ''}
-                  data-folder-name={folder.name || ''}
-                  data-folder-created-at={folder.created_at || ''}
-                  data-folder-updated-at={folder.updated_at || ''}
-                  data-encrypted-folder-key={folder.encrypted_folder_key || ''}
-                  onClick={() => {
-                    // console.log("Dossier cliqué :", folder);
-                    // Enlever la classe 'selected_folder' de tous les dossiers
-                    document.querySelectorAll('.folder_graph.selected_folder').forEach((el) => {
-                      el.classList.remove('selected_folder');
-                    });
-                    // Ajouter la classe 'selected_folder' au dossier cliqué
-                    document.getElementById(folder.folder_id).classList.add('selected_folder');
-                  }}
-                  onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
-                  style={{ cursor: 'pointer' }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
-                  </svg>
-                  <span className="folder_name">{folder.name}</span>
+                      onClick={() => handleSelection(folder.folder_id)}
+                      onDoubleClick={() => handleFolderClick(folder.folder_id, folder.name)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(folder.folder_id);
+                        opent_menu_contextual_folder(folder.folder_id, e.pageX, e.pageY);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+                      </svg>
+                      <span className="folder_name">{folder.name}</span>
+                    </div>
+                  ))}
+
+                  {folders.length === 0 && (
+                    <div className="folder_graph_empty">
+                      <span>Aucun dossier.</span>
+                    </div>
+                  )}
                 </div>
-              ))}
 
-              {/* Un exemple statique si la liste est vide pour tester l'affichage */}
-              {folders.length === 0 && (
-                <div className="folder_graph">
-                  <span>Aucun dossier dans ce répertoire.</span>
-                </div>
-              )}
-            </div>
-            <div className="div_contenue_file">
-              {files.map((file) => (
-                <div
-                  key={file.file_id}
-                  className="file_graph"
-                  id={file.file_id}
+                {/* --- FICHIERS (GRILLE) --- */}
+                <div className="div_contenue_file" style={{ display: 'flex' }}>
+                  {/* map files et filesUpload */}
+                  {[...files, ...filesUpload].map((file) => (
+                    <div
+                      key={file.file_id}
+                      className={`file_graph ${selectedId === file.file_id ? 'selected_file' : ''} ${file.uploading ? 'uploading_file' : ''}`}
+                      id={file.file_id}
 
-                  data-file-id={file.file_id || ''}
-                  data-file-name={file.name || ''}
-                  data-file-size={file.size || ''}
-                  data-file-type={file.type || ''}
-                  data-file-created-at={file.created_at || ''}
-                  data-file-updated-at={file.updated_at || ''}
-                  data-encrypted-file-key={file.encrypted_file_key || ''}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    opent_menu_contextual_file(file.file_id, e.pageX, e.pageY);
-                  }}
-                  onDoubleClick={() => {
-                    if (file.is_chunked) {
-                      handleDownloadChunked(file.file_id, file.name);
-                    } else {
-                      handleDownload(file.file_id, file.name);
-                    }
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor"><path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path></svg>
-                  <span className='file_name'>{file.name}</span>
+                      onMouseDown={() => {
+                        setSelectedMoveElement(file.file_id);
+                      }}
+
+                      // Data attributes conservés
+                      data-file-id={file.file_id || ''}
+                      data-file-name={file.name || ''}
+                      data-file-size={file.size || ''}
+                      data-file-type={file.type || ''}
+                      data-file-created-at={file.created_at || ''}
+                      data-file-updated-at={file.updated_at || ''}
+                      data-encrypted-file-key={file.encrypted_file_key || ''}
+
+                      onClick={() => handleSelection(file.file_id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(file.file_id);
+                        open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
+                      }}
+                      onDoubleClick={() => {
+                        if (file.is_chunked) {
+                          handleDownloadChunked(file.file_id, file.name);
+                        } else {
+                          handleDownload(file.file_id, file.name);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+                      </svg>
+                      <span className='file_name'>{file.name}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
+
+            {/* =================================================================================
+                VUE LISTE (LIST)
+                S'affiche uniquement si viewType est 'list'
+               ================================================================================= */}
+            {viewType === 'list' && (
+              <div className='div_contenue_list'>
+                <div className="content_list_header" style={ activeSection === 'mon_drive' ? { display: 'flex' } : { display: 'none' }}>
+                  <div className="header_name">Nom</div>
+                  <div className="header_additional_info">
+                    <span>Propriétaire</span>
+                    <span>Taille</span>
+                    <span>Créé le</span>
+                    <span>Mis à jour</span>
+                  </div>
+                </div>
+
+                <div className="content_list_header" style={ activeSection === 'partages' ? { display: 'flex' } : { display: 'none' }}>
+                  <div className="header_name">Nom</div>
+                  <div className="header_additional_info">
+                    <span>Partagé par</span>
+                    <span>Permissions</span>
+                    <span>Taille</span>
+                    <span>Expire à</span>
+                    <span>Accepter / Refuser</span>
+                  </div>
+                </div>
+
+                {contents.map((content) => {
+                  // Détermination de l'ID unique et de la classe CSS selon le type
+                  const currentId = content.type === 'folder' ? content.folder_id : content.file_id;
+                  const isSelected = selectedId === currentId;
+                  const selectionClass = isSelected ? (content.type === 'folder' ? 'selected_folder' : 'selected_file') : '';
+
+                  // si le content n'est pas dans le bon dissier ne rien afficher
+                  console.log("Content Folder ID:", content.folder_id, "Active Folder ID:", activeFolderId);
+                  if (content.parent_folder_id !== activeFolderId && content.parent_folder_id !== undefined && content.type === 'uploading') {
+                    return null;
+                  }
+
+                  return (
+
+                    <div
+                      key={content.id}
+                      className={`content_graph_list ${selectionClass} ${content.type === 'folder' ? 'folder_list' : 'file_list'} ${content.type === 'uploading' ? 'uploading_file' : ''}`}
+                      id={currentId}
+
+                      // Data attributes conservés
+                      // Data attributes selon le type (clean code)
+                      {...(content.type === 'folder'
+                        ? {
+                          'data-folder-id': content.folder_id || '',
+                          'data-folder-name': content.name || '',
+                          'data-folder-created-at': content.created_at || '',
+                          'data-folder-updated-at': content.updated_at || '',
+                          'data-encrypted-folder-key': content.encrypted_folder_key || '',
+                        }
+                        : {
+                          'data-file-id': content.file_id || '',
+                          'data-file-name': content.name || '',
+                          'data-file-size': content.total_size || '',
+                          'data-file-type': content.type || '',
+                          'data-file-created-at': content.created_at || '',
+                          'data-file-updated-at': content.updated_at || '',
+                          'data-encrypted-file-key': content.encrypted_file_key || '',
+                        }
+                      )}
+
+                      // clique de souris down
+                      onMouseDown={(e) => {
+                        // que le clique gauche pour déplacer
+
+                        if (e.button !== 0) return;
+
+
+                        if (content.type === 'file') {
+                          setSelectedMoveElement(currentId);
+                        }
+                      }}
+
+                      onClick={() => handleSelection(currentId)}
+                      onDoubleClick={() => {
+                        if (content.type === 'file') {
+                          if (content.is_chunked) {
+                            handleDownloadChunked(content.file_id, content.name);
+                          } else {
+                            handleDownload(content.file_id, content.name);
+                          }
+                        } else if (content.type === 'folder') {
+                          handleFolderClick(content.folder_id, content.name);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(currentId);
+                        if (content.type === 'file') {
+                          open_menu_contextual_file(content.file_id, e.pageX, e.pageY);
+                        } else if (content.type === 'folder') {
+                          opent_menu_contextual_folder(content.folder_id, e.pageX, e.pageY);
+                        }
+                      }}
+                    >
+
+
+                      <div className="icon_and_name">
+                        <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                          {content.type === 'folder'
+                            ? <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+                            : <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+                          }
+                        </svg>
+                        <span className={content.type === 'file' ? 'file_name' : 'folder_name'}>{content.name}</span>
+                      </div>
+                      <div className="additional_info">
+                        <span>{content.owner || ''}</span>
+                        <span>
+                          {(() => {
+                            const size = content.total_size || 0;
+                            if (size === 0) return "--";
+                            if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
+                            if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
+                            if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
+                            return size + ' B';
+                          })()}
+                        </span>
+                        <span>
+                          {new Date(content.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
+                        </span>
+                        <span>
+                          {new Date(content.updated_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
+                        </span>
+                      </div>
+                      {/* si le fichier est en cours d'upload alors creer une div qui va etre en fond et qui évolura au cours de l'upload */}
+                      {content.type === 'uploading' && (
+                        <div className="uploading_overlay">
+                          <div
+                            className="uploading_progress_bar"
+                            style={{ width: `${content.uploadProgress || 0}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+
+
+                {activeSection === 'partages' && sharedFiles.map((file) => {
+                  const currentId = file.file_id;
+                  const isSelected = selectedId === currentId;
+                  const selectionClass = isSelected ? 'selected_file' : '';
+
+                  return (
+                    <div
+                      key={file.id}
+                      className={`content_graph_list ${selectionClass} shared_file_list`}
+                      id={currentId}
+
+                      // Data attributes conservés
+                      {...{
+                        'data-file-id': file.file_id || '',
+                        'data-file-name': file.name || '',
+                        'data-file-size': file.total_size || '',
+                        'data-file-type': file.type || '',
+                        'data-file-created-at': file.created_at || '',
+                        'data-file-updated-at': file.updated_at || '',
+                        'data-encrypted-file-key': file.encrypted_file_key || '',
+                      }}
+
+                      // clique de souris down
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        setSelectedMoveElement(currentId);
+                      }}
+
+                      onClick={() => handleSelection(currentId)}
+                      onDoubleClick={() => {
+                        acceptSharedFile(file.invite_id);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleSelection(currentId);
+                        // open_menu_contextual_file(file.file_id, e.pageX, e.pageY);
+                      }}
+                    >
+
+
+                      <div className="icon_and_name">
+                        <svg xmlns="http://www.w3.org/2000/svg" style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+                        </svg>
+                        <span className="file_name">{file.name}</span>
+                      </div>
+                      <div className="additional_info">
+
+                        <span>{file.sender_name || ''}</span>
+                        <span>{file.permission_level || 'viewer'}</span>
+                        <span>
+                          {(() => {
+                            const size = file.total_size || 0;
+                            if (size === 0) return "--";
+                            if (size >= 1024 ** 3) return (size / (1024 ** 3)).toFixed(2) + ' GB';
+                            if (size >= 1024 ** 2) return (size / (1024 ** 2)).toFixed(2) + ' MB';
+                            if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
+                            return size + ' B';
+                          })()}
+                        </span>
+                        <span>
+                          {new Date(file.expires_at).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) || '--'}
+                        </span>
+                        <div className="shared_actions">
+                          <button
+                            type="button"
+                            className="btn_shared_accept"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              acceptSharedFile(file.invite_id);
+                            }}
+                            title="Accepter le fichier"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z"></path></svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn_shared_decline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              declineSharedFile(file.invite_id);
+                            }}
+                            title="Refuser le fichier"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z"></path></svg>
+                          </button>
+                        </div>
+                      </div>
+                      {file.type === 'uploading' && (
+                        <div className="uploading_overlay">
+                          <div
+                            className="uploading_progress_bar"
+                            style={{ width: `${file.uploadProgress || 0}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </section>

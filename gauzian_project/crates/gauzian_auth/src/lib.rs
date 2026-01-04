@@ -1,17 +1,20 @@
-use axum::http::header::USER_AGENT;
-use axum::http::{HeaderMap, header::ACCEPT_LANGUAGE}; // header constant + HeaderMap extractor
+use std::f32::consts::E;
+
+use axum::http::header::{USER_AGENT, COOKIE};
+use axum::http::{HeaderMap, HeaderValue, header::ACCEPT_LANGUAGE}; // header constant + HeaderMap extractor
 use axum::{
     extract::{Json, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use axum_client_ip::InsecureClientIp;
-use gauzian_core::{AppState, LoginRequest, RegisterRequest};
-use sha2::Digest;
+use gauzian_core::{AppState, Claims, LoginRequest, RegisterRequest, EmailRequest, RecoveryResetRequest, RecoveryVerifyRequest};
 
+use uuid::Uuid;
 // Ensure the database connection string is correct in your AppState configuration
 // Example: "postgres://username:password@localhost/database_name"
 use woothee::parser::Parser;
+use ipnetwork::IpNetwork;
 
 // On ajoute les imports pour l'identité
 use argon2::{
@@ -23,35 +26,359 @@ use argon2::{
         SaltString,
     },
 };
+use rand::rngs::OsRng;
 // On importe le module pour charger les variables d'environnement (si ce n'est pas déjà fait)
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use rand::RngCore; // Pour remplir des bytes au hasard
 use serde_json::json; // Import the json! macro
 use sqlx::Row; // Import the Row trait for using the `get` method
 
 // std::time::Duration removed; using chrono::Duration for DateTime arithmetic
 use chrono::Duration as ChronoDuration;
-use chrono::{DateTime, Utc}; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
+use chrono::Utc; // Pour gérer les dates/heures de manière sûre et explicite // Pour l'expiration des tokens
+
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+
+use bigdecimal::BigDecimal;
+use tracing::{debug, error, info};
+use sha2::{Sha256, Digest};
+
+#[derive(Debug, Clone)]
+pub struct AuthSession {
+    pub user_id: Uuid,
+    pub access_token: String,
+    pub set_cookies: Vec<HeaderValue>,
+}
+
+#[derive(Debug)]
+pub enum AuthSessionError {
+    MissingTokens,
+    InvalidAccess,
+    RefreshFailed(String),
+}
+
+impl AuthSessionError {
+    pub fn to_response(&self) -> Response {
+        let (status, message) = match self {
+            AuthSessionError::MissingTokens => (
+                StatusCode::UNAUTHORIZED,
+                "Pas de cookie de session trouvé",
+            ),
+            AuthSessionError::InvalidAccess => (
+                StatusCode::UNAUTHORIZED,
+                "Session invalide ou expirée",
+            ),
+            AuthSessionError::RefreshFailed(_) => (
+                StatusCode::UNAUTHORIZED,
+                "Session invalide ou expirée",
+            ),
+        };
+
+        let body = Json(json!({
+            "status": "error",
+            "message": message,
+        }));
+        (status, body).into_response()
+    }
+}
+
+fn respond_with_cookies<T: IntoResponse>(resp: T, cookies: &[HeaderValue]) -> Response {
+    let mut response = resp.into_response();
+    for cookie in cookies {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, cookie.clone());
+    }
+    response
+}
+pub async fn require_auth(headers: &HeaderMap, state: &AppState) -> Result<AuthSession, Response> {
+    match ensure_session(headers, state).await {
+        Ok(ctx) => Ok(ctx),
+        Err(err) => Err(err.to_response()),
+    }
+}
+
 
 // ------------------ minimal: keep only frontend-provided IP logging ------------------
 
-async fn hash_token(token: &str) -> String {
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(token.as_bytes());
-    let hash = hasher.finalize();
-    BASE64.encode(hash)
+fn get_secret_key() -> Vec<u8> {
+    BASE64
+        .decode(std::env::var("JWT_SECRET_KEY").unwrap_or_default())
+        .expect("Échec du décodage de JWT_SECRET_KEY depuis Base64")
 }
 
-async fn create_token() -> Result<(String, String), String> {
-    let mut token_bytes: [u8; 32] = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut token_bytes);
-    let token_b64 = BASE64.encode(token_bytes);
+// Génère un refresh token aléatoire sécurisé
+pub fn generate_refresh_token() -> String {
+    let mut random_bytes = [0u8; 32];
+    getrandom::getrandom(&mut random_bytes)
+        .expect("Erreur lors de la génération de nombres aléatoires");
+    hex::encode(random_bytes)
+}
 
-    // hashage du token avant de le stocker dans la base de donnees (sha256)
+// Hash le refresh token pour le stocker en BDD
+fn hash_refresh_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
+}
 
-    let token_hash_b64 = hash_token(&token_b64).await;
+// Crée un Access Token JWT de courte durée (5 minutes)
+pub fn create_access_token(user_id: &Uuid) -> Result<String, jsonwebtoken::errors::Error> {
+    let now = Utc::now();
+    let expire = now + ChronoDuration::minutes(5);
 
-    Ok((token_b64, token_hash_b64))
+    let claims = Claims {
+        sub: user_id.to_string(),
+        exp: expire.timestamp() as usize,
+        iat: now.timestamp() as usize,
+    };
+
+    let secret_key = get_secret_key();
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(&secret_key),
+    )
+}
+
+// Sauvegarde le refresh token en BDD
+async fn save_refresh_token(
+    pool: &sqlx::PgPool,
+    user_id: &Uuid,
+    token: &str,
+    headers: &HeaderMap,
+) -> Result<(), sqlx::Error> {
+    let token_hash = hash_refresh_token(token);
+    let expires_at = Utc::now() + ChronoDuration::days(7);
+    let payload_client_ip_str = headers
+        .get("x-real-ip")
+        .and_then(|val| val.to_str().ok())
+        .unwrap_or("127.0.0.1");
+    
+    let payload_client_ip: IpNetwork = payload_client_ip_str
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1".parse().unwrap());
+
+    let raw_user_agent = headers
+        .get(USER_AGENT)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    let parser = Parser::new();
+    let formatted_user_agent = match parser.parse(raw_user_agent) {
+        Some(result) => format!("{} {} sur {}", result.name, result.version, result.os),
+        None => {
+            if raw_user_agent.is_empty() {
+                "Inconnu".to_string()
+            } else {
+                format!(
+                    "Autre ({})",
+                    &raw_user_agent.chars().take(20).collect::<String>()
+                )
+            }
+        }
+    };
+
+    sqlx::query!(
+        r#"
+        INSERT INTO refresh_tokens (user_id, token_hash, expires_at,ip, user_agent)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+        user_id,
+        token_hash,
+        expires_at,
+        payload_client_ip,
+        formatted_user_agent
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+// Vérifie et rafraîchit la session (Rolling Refresh Token)
+pub async fn refresh_session(
+    pool: &sqlx::PgPool,
+    old_refresh_token: &str,
+) -> Result<(String, String), String> {
+    let token_hash = hash_refresh_token(old_refresh_token);
+
+    // 1. Chercher le token en BDD avec vérification d'expiration
+    let db_token = sqlx::query!(
+        r#"
+        SELECT user_id, expires_at
+        FROM refresh_tokens
+        WHERE token_hash = $1
+        "#,
+        token_hash
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Erreur BDD: {}", e))?;
+
+    // 2. Vérifications de sécurité
+    let token_data = db_token.ok_or("Token invalide ou révoqué")?;
+
+    if token_data.expires_at < Utc::now() {
+        // Nettoyer le token expiré
+        let _ = sqlx::query!(
+            "DELETE FROM refresh_tokens WHERE token_hash = $1",
+            token_hash
+        )
+        .execute(pool)
+        .await;
+
+        return Err("Token expiré, veuillez vous reconnecter".to_string());
+    }
+
+    let user_id = token_data.user_id;
+    println!("Refresh token valid for user_id: {}", user_id);
+    // 3. Prolongation : on réutilise le même refresh token mais on prolonge son expiration
+    let new_expires_at = Utc::now() + ChronoDuration::days(7);
+    sqlx::query!(
+        "UPDATE refresh_tokens SET expires_at = $1, last_used_at = $2 WHERE token_hash = $3",
+        new_expires_at,
+        Utc::now(),
+        token_hash
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Erreur lors de la mise à jour du refresh token: {}", e))?;
+
+    // 4. Génération d'un nouvel access token (le refresh reste identique)
+    let new_access_token = create_access_token(&user_id)
+        .map_err(|e| format!("Erreur création access token: {}", e))?;
+
+    Ok((new_access_token, old_refresh_token.to_string()))
+}
+
+// Révoque le refresh token (logout)
+pub async fn logout(pool: &sqlx::PgPool, refresh_token: &str) -> Result<(), sqlx::Error> {
+    let token_hash = hash_refresh_token(refresh_token);
+
+    sqlx::query!(
+        "DELETE FROM refresh_tokens WHERE token_hash = $1",
+        token_hash
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+// fonction  
+
+
+
+// Vérifie l'Access Token JWT (inchangé)
+pub fn verify_session_token(token: &str) -> Result<Uuid, jsonwebtoken::errors::Error> {
+    let validation = Validation::default();
+    let secret_key = get_secret_key();
+
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(&secret_key), &validation)?;
+    let user_id = token_data.claims.sub;
+
+    match Uuid::parse_str(&user_id) {
+        Ok(uuid) => Ok(uuid),
+        Err(_e) => Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidToken,
+        )),
+    }
+}
+
+fn allow_insecure_cookies() -> bool {
+    std::env::var("ALLOW_INSECURE_COOKIES").map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn build_cookie(name: &str, token: &str, max_age: i64) -> Option<HeaderValue> {
+    let insecure = allow_insecure_cookies();
+    let (secure_flag, same_site, partitioned) = if insecure {
+        ("", "SameSite=Lax", "")
+    } else {
+        ("; Secure", "SameSite=None", "; Partitioned")
+    };
+
+    HeaderValue::from_str(&format!(
+        "{}={}; Max-Age={}; Path=/; HttpOnly; {}{}{}",
+        name,
+        token,
+        max_age,
+        same_site,
+        secure_flag,
+        partitioned
+    ))
+    .ok()
+}
+
+fn build_access_cookie(token: &str) -> Option<HeaderValue> {
+    build_cookie("access_token", token, 5 * 60)
+}
+
+fn build_refresh_cookie(token: &str) -> Option<HeaderValue> {
+    build_cookie("refresh_token", token, 7 * 24 * 3600)
+}
+
+fn parse_cookies(headers: &HeaderMap) -> (Option<String>, Option<String>) {
+    let mut access: Option<String> = None;
+    let mut refresh: Option<String> = None;
+
+    if let Some(raw) = headers.get(COOKIE).and_then(|h| h.to_str().ok()) {
+        for cookie in raw.split(';') {
+            let cookie = cookie.trim();
+            if cookie.starts_with("access_token=") {
+                access = Some(cookie.trim_start_matches("access_token=").to_string());
+            }
+            if cookie.starts_with("refresh_token=") {
+                refresh = Some(cookie.trim_start_matches("refresh_token=").to_string());
+            }
+        }
+    }
+
+    (access, refresh)
+}
+
+// Centralise l'authentification : renvoie l'user_id et éventuels nouveaux cookies (si refresh utilisé).
+pub async fn ensure_session(
+    headers: &HeaderMap,
+    state: &AppState,
+) -> Result<AuthSession, AuthSessionError> {
+    let (access_cookie, refresh_cookie) = parse_cookies(headers);
+
+    if let Some(token) = access_cookie {
+        if let Ok(user_id) = verify_session_token(&token) {
+            return Ok(AuthSession {
+                user_id,
+                access_token: token,
+                set_cookies: Vec::new(),
+            });
+        }
+    }
+
+    if let Some(refresh_token) = refresh_cookie {
+        match refresh_session(&state.db_pool, &refresh_token).await {
+            Ok((new_access_token, new_refresh_token)) => {
+                let user_id = verify_session_token(&new_access_token)
+                    .map_err(|_| AuthSessionError::InvalidAccess)?;
+
+                let mut set_cookies = Vec::new();
+                if let Some(cookie) = build_access_cookie(&new_access_token) {
+                    set_cookies.push(cookie);
+                }
+                if let Some(cookie) = build_refresh_cookie(&new_refresh_token) {
+                    set_cookies.push(cookie);
+                }
+
+                Ok(AuthSession {
+                    user_id,
+                    access_token: new_access_token,
+                    set_cookies,
+                })
+            }
+            Err(e) => Err(AuthSessionError::RefreshFailed(e)),
+        }
+    } else {
+        Err(AuthSessionError::MissingTokens)
+    }
 }
 
 // 3. Le Handler (Contrôleur)
@@ -62,7 +389,6 @@ pub async fn register_handler(
     headers: HeaderMap, // FromRequestParts extractors MUST come before body extractors
     Json(payload): Json<RegisterRequest>, // Désérialisation automatique du body JSON
 ) -> impl IntoResponse {
-
     let client_ip = headers
         .get("x-real-ip")
         .and_then(|val| val.to_str().ok())
@@ -70,22 +396,7 @@ pub async fn register_handler(
 
     // 2. LOG POUR VÉRIFICATION
     // Regarde ta console serveur quand tu fais une requête
-    println!("🔍 DEBUG IP CLIENT: {}", client_ip);
-    
-    // 1. Gestion Locale / Timezone (inchangé)
-    let raw_locale = headers
-        .get(ACCEPT_LANGUAGE)
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    let locale = raw_locale
-        .as_deref()
-        .and_then(|s| s.split(',').next())
-        .and_then(|s| s.split('-').next())
-        .unwrap_or("en")
-        .to_string();
-
-    let time_zone = payload.time_zone.unwrap_or("UTC".to_string());
+    info!(client_ip = %client_ip, "register request received");
 
     let salt_auth = payload.salt_auth.clone();
 
@@ -109,7 +420,7 @@ pub async fn register_handler(
     {
         Ok(Ok(hash)) => hash,
         Ok(Err(e)) => {
-            eprintln!("Erreur lors de l'encodage du mot de passe: {}", e);
+            error!(error = %e, "password hashing failed");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Erreur lors de l'encodage du mot de passe",
@@ -117,7 +428,7 @@ pub async fn register_handler(
                 .into_response();
         }
         Err(e) => {
-            eprintln!("Erreur interne lors de l'exécution de la tâche: {}", e);
+            error!(error = %e, "password hashing task join error");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Erreur interne lors de l'exécution de la tâche",
@@ -126,15 +437,48 @@ pub async fn register_handler(
         }
     };
 
-    let storage_key_encrypted = payload.storage_key_encrypted.clone();
-    let storage_key_encrypted_recuperation = payload.storage_key_encrypted_recuperation.clone();
+    let recovery_auth = payload.recovery_auth.clone();
+    let recovery_hash = match tokio::task::spawn_blocking(move || {
+        if recovery_auth.is_empty() {
+            return Err("La preuve de récupération est vide".to_string());
+        }
+        let argon2 = Argon2::default();
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = argon2
+            .hash_password(recovery_auth.as_bytes(), &salt)
+            .map_err(|e| format!("Erreur de hachage de la clé de récupération: {}", e))?
+            .to_string();
+        Ok(hash)
+    })
+    .await
+    {
+        Ok(Ok(hash)) => hash,
+        Ok(Err(e)) => {
+            error!(error = %e, "recovery key hashing failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Erreur lors du hachage de la clé de récupération",
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(error = %e, "recovery key hashing task join error");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Erreur interne lors de l'exécution de la tâche",
+            )
+                .into_response();
+        }
+    };
+
+    let private_key_encrypted_recuperation = payload.private_key_encrypted_recuperation.clone();
     let folder_key_encrypted = payload.folder_key_encrypted.clone();
     let folder_metadata_encrypted = payload.folder_metadata_encrypted.clone();
     // Insertion dans la base de données
     let insert_result = sqlx::query(
         r#"
-        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, storage_key_encrypted, storage_key_encrypted_recuperation, last_name, first_name, date_of_birth, time_zone, locale)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO users (email, password_hash, salt_e2e, salt_auth, private_key_encrypted_recuperation, recovery_salt, recovery_hash, last_name, first_name, date_of_birth, public_key, private_key_encrypted)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id
         "#,
     )
@@ -142,13 +486,14 @@ pub async fn register_handler(
     .bind(password_hash.as_bytes())
     .bind(payload.salt_e2e.as_bytes())
     .bind(payload.salt_auth.as_bytes())
-    .bind(storage_key_encrypted.as_bytes())
-    .bind(storage_key_encrypted_recuperation.as_bytes())
+    .bind(private_key_encrypted_recuperation.as_bytes())
+    .bind(payload.recovery_salt.as_bytes())
+    .bind(recovery_hash.as_bytes())
     .bind(payload.last_name)
     .bind(payload.first_name)
     .bind(payload.date_of_birth)
-    .bind(time_zone)
-    .bind(locale)
+    .bind(payload.public_key.as_bytes())
+    .bind(payload.private_key_encrypted.as_bytes())
     .fetch_one(&state.db_pool)
     .await;
 
@@ -193,7 +538,7 @@ pub async fn register_handler(
                             (StatusCode::OK, body).into_response()
                         }
                         Err(e) => {
-                            eprintln!("Erreur SQL lors de l'insertion de l'accès au dossier: {:?}", e);
+                            error!(error = ?e, "insert folder_access failed");
                             let body = Json(json!({
                                 "status": "error",
                                 "message": "Erreur lors de la création de l'accès au dossier utilisateur."
@@ -203,7 +548,7 @@ pub async fn register_handler(
                     }
                 }
                 Err(e) => {
-                    eprintln!("Erreur SQL lors de l'insertion du dossier: {:?}", e);
+                    error!(error = ?e, "insert root folder failed");
                     let body = Json(json!({
                         "status": "error",
                         "message": "Erreur lors de la création du dossier utilisateur."
@@ -213,7 +558,7 @@ pub async fn register_handler(
             }
         }
         Err(e) => {
-            eprintln!("Erreur SQL: {:?}", e);
+            error!(error = ?e, "insert user failed");
             // Vérifie si c'est une erreur de duplicata (code 23505 en Postgres)
             let body = Json(json!({
                 "status": "error",
@@ -226,41 +571,13 @@ pub async fn register_handler(
 
 pub async fn login_handler(
     State(state): State<AppState>,
-    headers: HeaderMap,
-    InsecureClientIp(ip): InsecureClientIp,
+    headers: HeaderMap, // FromRequestParts extractors MUST come before body extractors
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    // --- LOGIQUE IP / USER-AGENT (INCHANGÉE) ---
-    let payload_client_ip = headers
-        .get("x-real-ip")
-        .and_then(|val| val.to_str().ok())
-        .unwrap_or("IP Inconnue"); // Fallback si le header est absent
-    // ... (Ton code de log IP reste ici) ...
-
-    let raw_user_agent = headers
-        .get(USER_AGENT)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-
-    let parser = Parser::new();
-    let formatted_user_agent = match parser.parse(raw_user_agent) {
-        Some(result) => format!("{} {} sur {}", result.name, result.version, result.os),
-        None => {
-            if raw_user_agent.is_empty() {
-                "Inconnu".to_string()
-            } else {
-                format!(
-                    "Autre ({})",
-                    &raw_user_agent.chars().take(20).collect::<String>()
-                )
-            }
-        }
-    };
 
     let email = payload.email.clone();
     let password = payload.password.clone();
 
-    // recupérer l'utilisateur dans la base de données
     let user_result = sqlx::query!(
         "SELECT id, password_hash, salt_auth FROM users WHERE email = $1",
         email
@@ -274,20 +591,18 @@ pub async fn login_handler(
             return (StatusCode::UNAUTHORIZED, "Email ou mot de passe invalide").into_response();
         }
         Err(e) => {
-            eprintln!("Erreur SQL Login: {:?}", e);
+            error!(error = ?e, "login query failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
 
-    println!("Utilisateur trouvé avec ID: {}", user.id);
+    debug!(user_id = %user.id, "user found for login");
 
-    // Cloner le mot de passe hashé pour le déplacer dans le bloc async
     let password_hash_clone = user.password_hash.clone();
-
-    // Convertir le mot de passe hashé en String pour éviter les problèmes de durée de vie
     let password_hash_str = match String::from_utf8(password_hash_clone) {
         Ok(s) => s,
-        Err(_) => {
+        Err(e) => {
+            error!(error = ?e, "Erreur lors de la conversion du hash de mot de passe en String");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
@@ -303,56 +618,34 @@ pub async fn login_handler(
 
     match verify_result {
         Ok(Ok(())) => {
-            println!("Mot de passe vérifié pour l'utilisateur ID: {}", user.id);
+            debug!(user_id = %user.id, "password verified");
         }
         _ => {
             return (StatusCode::UNAUTHORIZED, "Email ou mot de passe invalide").into_response();
         }
     };
 
-    // Création du token de session
-    let (token_raw, token_hash) = match create_token().await {
+    // Création de l'Access Token (JWT - 5 minutes)
+    let access_token = match create_access_token(&user.id) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("Erreur lors de la création du token: {}", e);
+            error!(error = %e, "access token creation failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
 
-    // Stockage du token dans la base de données avec expiration
-    let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
-        .ok()
-        .and_then(|val| val.parse::<i64>().ok())
-        .unwrap_or(7); // Default to 7 days if parsing fails
-    let expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
+    // Création du Refresh Token (Opaque - 7 jours)
+    let refresh_token = generate_refresh_token();
 
-    let insert_result = sqlx::query!(
-        r#"
-        INSERT INTO sessions (user_id, token, user_agent, ip_address, expires_at)
-        VALUES ($1, $2, $3, $4, $5)
-        "#,
-        user.id,
-        token_hash,
-        formatted_user_agent,
-        payload_client_ip,
-        expires_at
-    )
-    .execute(&state.db_pool)
-    .await;
-
-    match insert_result {
-        Ok(_) => {
-            println!("Session créée pour l'utilisateur ID: {}", user.id);
-        }
-        Err(e) => {
-            eprintln!("Erreur SQL Insert Session: {:?}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
-        }
+    // Sauvegarde du refresh token en BDD
+    if let Err(e) = save_refresh_token(&state.db_pool, &user.id, &refresh_token,&headers).await {
+        error!(error = ?e, "refresh token save failed");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
     }
 
-    // recupérer le storage_key_encrypted et le salt_e2e pour la reponse
-    let user_keys_result = sqlx::query!(
-        "SELECT salt_e2e, storage_key_encrypted FROM users WHERE id = $1",
+    // Récupérer les clés de l'utilisateur
+    let user_keys_result: Result<_, _> = sqlx::query!(
+        "SELECT salt_e2e, public_key, private_key_encrypted FROM users WHERE id = $1",
         user.id
     )
     .fetch_one(&state.db_pool)
@@ -361,18 +654,28 @@ pub async fn login_handler(
     let keys = match user_keys_result {
         Ok(ref keys) => keys,
         Err(e) => {
-            eprintln!("Erreur SQL Récupération Clés Utilisateur: {:?}", e);
+            error!(error = ?e, "fetch user keys failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Erreur interne").into_response();
         }
     };
+
     let salt_e2e = keys.salt_e2e.clone();
     let salt_auth = user.salt_auth.clone();
-    let storage_key_encrypted = keys.storage_key_encrypted.clone();
+    let public_key = keys.public_key.clone();
+    let private_key_encrypted = keys.private_key_encrypted.clone();
 
-    let set_cookie_header = format!(
-        "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
-        token_raw,
-        days * 24 * 3600
+    // Cookie HttpOnly pour l'Access Token (court)
+    let access_cookie = format!(
+        "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        access_token,
+        5 * 60 // 5 minutes
+    );
+
+    // Cookie HttpOnly pour le Refresh Token (long)
+    let refresh_cookie = format!(
+        "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+        refresh_token,
+        7 * 24 * 3600 // 7 jours
     );
 
     let body = Json(json!({
@@ -380,126 +683,694 @@ pub async fn login_handler(
         "message": "Connexion réussie",
         "salt_auth": String::from_utf8(salt_auth).unwrap_or_default(),
         "salt_e2e": String::from_utf8(salt_e2e).unwrap_or_default(),
-        "storage_key_encrypted": String::from_utf8(storage_key_encrypted).unwrap_or_default(),
+        "public_key": String::from_utf8(public_key).unwrap_or_default(),
+        "private_key_encrypted": String::from_utf8(private_key_encrypted).unwrap_or_default(),
     }));
 
-    (
-        StatusCode::OK,
-        [(axum::http::header::SET_COOKIE, set_cookie_header.as_str())],
-        body,
-    )
-        .into_response()
-}
-
-async fn reset_token_life_time(token: &str, State(state): State<AppState>) -> Result<(), String> {
-    // expire dans 1 heure (chrono::Duration)
-    let days: i64 = std::env::var("TOkENT_LIFE_DAYS")
-        .ok()
-        .and_then(|val| val.parse::<i64>().ok())
-        .unwrap_or(7); // Default to 7 days if parsing fails
-    let new_expires_at: DateTime<Utc> = Utc::now() + ChronoDuration::seconds(days * 24 * 3600);
-
-    let update_result = sqlx::query!(
-        r#"
-        UPDATE sessions
-        SET expires_at = $1
-        WHERE token = $2
-        "#,
-        new_expires_at,
-        token
-    )
-    .execute(&state.db_pool)
-    .await;
-
-    match update_result {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            eprintln!("Erreur SQL Update Session: {:?}", e);
-            Err("Erreur interne".to_string())
-        }
+    // Important: append both cookies (access + refresh). Using manual response avoids HeaderMap::extend overwriting.
+    let mut response = (StatusCode::OK, body).into_response();
+    if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, val);
     }
+    if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, val);
+    }
+    response
 }
 
-pub async fn verify_session_token(
-    token: &str,
+// Nouveau handler pour le refresh
+pub async fn refresh_handler(
     State(state): State<AppState>,
-) -> Result<uuid::Uuid, String> {
-    let session_hash_b64 = hash_token(&token).await;
-
-    // verifier le token de session dans la base de données (compare hash)
-    let session_result = sqlx::query!(
-        "SELECT user_id, expires_at FROM sessions WHERE token = $1",
-        session_hash_b64
-    )
-    .fetch_optional(&state.db_pool)
-    .await;
-
-    let session = match session_result {
-        Ok(Some(s)) => s,
-        Ok(None) => {
-            return Err("Session invalide".to_string());
-        }
-        Err(e) => {
-            eprintln!("Erreur SQL Autologin: {:?}", e);
-            return Err("Erreur interne".to_string());
-        }
-    };
-
-    // Vérifier si la session a expiré
-    let now = Utc::now();
-    if session.expires_at < now {
-        return Err("Session expirée".to_string());
-    }
-    reset_token_life_time(&token, State(state.clone())).await?;
-    Ok(session.user_id)
-}
-
-pub async fn autologin_handler(
-    State(state): State<AppState>, // 1. (Parts) État
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    // recuperer le cookie de session
-    let session_cookie = headers
+    // Récupérer le refresh token depuis les cookies
+    let refresh_token = headers
         .get(axum::http::header::COOKIE)
         .and_then(|h| h.to_str().ok())
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None
         });
-    let session_token = match session_cookie {
+
+    let refresh_token = match refresh_token {
         Some(token) => token,
         None => {
             let body = Json(json!({
                 "status": "error",
-                "message": "Pas de cookie de session trouvé"
+                "message": "Refresh token manquant"
             }));
             return (StatusCode::UNAUTHORIZED, body).into_response();
         }
     };
+    
 
-    // The DB stores the hashed token (SHA256 base64). We must hash the
-    // raw token from the cookie the same way before querying.
+    // Rafraîchir la session
+    match refresh_session(&state.db_pool, &refresh_token).await {
+        Ok((new_access_token, new_refresh_token)) => {
+            // Nouveaux cookies
+            let access_cookie = format!(
+                "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_access_token,
+                5 * 60
+            );
 
-    let user_id = match verify_session_token(&session_token, State(state.clone())).await {
-        Ok(user_id) => {
+            let refresh_cookie = format!(
+                "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_refresh_token,
+                7 * 24 * 3600
+            );
+
             let body = Json(json!({
                 "status": "success",
-                "message": "Auto-login réussi",
-                "user_id": user_id,
+                "message": "Session rafraîchie avec succès"
             }));
-            return (StatusCode::OK, body).into_response();
+            let mut response = (StatusCode::OK, body).into_response();
+            if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            response
         }
-        Err(_) => {
+        Err(e) => {
             let body = Json(json!({
                 "status": "error",
-                "message": "Session invalide ou expirée"
+                "message": e
             }));
-            return (StatusCode::UNAUTHORIZED, body).into_response();
+            (StatusCode::UNAUTHORIZED, body).into_response()
+        }
+    }
+}
+
+// Handler de logout
+pub async fn logout_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let refresh_token = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
+                }
+            }
+            None
+        });
+
+    if let Some(token) = refresh_token {
+        if let Err(e) = logout(&state.db_pool, &token).await {
+            error!(error = ?e, "logout failed");
+        }
+    }
+
+    // Supprimer les cookies
+    let clear_access = "access_token=; Max-Age=0; Path=/; HttpOnly; SameSite=None; Secure; Partitioned";
+    let clear_refresh = "refresh_token=; Max-Age=0; Path=/; HttpOnly; SameSite=None; Secure; Partitioned";
+
+    let body = Json(json!({
+        "status": "success",
+        "message": "Déconnexion réussie"
+    }));
+
+    let mut response = (StatusCode::OK, body).into_response();
+    response
+        .headers_mut()
+        .append(axum::http::header::SET_COOKIE, HeaderValue::from_static(clear_access));
+    response
+        .headers_mut()
+        .append(axum::http::header::SET_COOKIE, HeaderValue::from_static(clear_refresh));
+
+    response
+}
+
+pub async fn info_handler(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+   let auth = match require_auth(&headers, &state).await {
+        Ok(ctx) => ctx,
+        Err(resp) => return resp,
+    };
+    let user_id = auth.user_id;
+    let cookies = auth.set_cookies;
+
+    let storage_param = get_storage_usage_handler(user_id, &state).await;
+    let (storage_used, nb_folder, nb_file, storage_limit) = storage_param.unwrap_or((0, 0, 0, 0));
+
+    let media_type_usage = get_storage_usage_by_file_type_handler(user_id, &state).await;
+
+    // Fetch user info from the database
+    let user_info_result = sqlx::query!(
+        "SELECT email, first_name, last_name, date_of_birth, created_at, updated_at
+        FROM users WHERE id = $1",
+        user_id
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+    match user_info_result {
+        Ok(user) => {
+            // Déstructure storage_param une seule fois pour éviter les appels multiples à .map()
+            let body = Json(json!({
+                "status": "success",
+                "user_info": {
+                    "email": user.email,
+                    "firstName": user.first_name,
+                    "lastName": user.last_name,
+                    "date_of_birth": user.date_of_birth,
+                    "createdAt": user.created_at,
+                    "updatedAt": user.updated_at,
+                    "storageLimit": storage_limit,
+                    "storageUsed": storage_used,
+                    "nbFolders": nb_folder,
+                    "nbFiles": nb_file,
+                    "storageByFileType": media_type_usage.unwrap_or_default()
+                }
+            }));
+            respond_with_cookies((StatusCode::OK, body), &cookies)
+        }
+        Err(e) => {
+            error!(error = ?e, "fetch user info failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur lors de la récupération des informations utilisateur"
+            }));
+            respond_with_cookies((StatusCode::INTERNAL_SERVER_ERROR, body), &cookies)
+        }
+    }
+}
+
+pub async fn get_storage_usage_handler(
+    user_id: Uuid,
+    state: &AppState,
+) -> Option<(i64, i64, i64, i32)> {
+    let storage_usage_result = sqlx::query!(
+        r#"
+        SELECT 
+            COALESCE(SUM(vf.file_size), 0)::int8 AS total_storage, 
+            COUNT(DISTINCT fa.folder_id ) as nb_folders, 
+            COUNT(DISTINCT fa2.file_id ) as nb_files, u.storage_limit
+        FROM folder_access fa 
+        LEFT JOIN file_access fa2 ON fa2.folder_id = fa.folder_id 
+        LEFT JOIN vault_files vf ON fa2.file_id = vf.id 
+        inner join users u on u.id = fa.user_id 
+        INNER JOIN folders f ON fa.folder_id = f.id
+        WHERE fa.user_id = $1 and fa.permission_level IN ('owner', 'editor') and f.is_root = false
+        group by u.id
+        "#,
+        user_id,
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+
+    match storage_usage_result {
+        Ok(row) => Some((
+            row.total_storage.unwrap_or(0),
+            row.nb_folders.unwrap_or(0),
+            row.nb_files.unwrap_or(0),
+            row.storage_limit,
+        )),
+        Err(e) => {
+            error!(error = ?e, "fetch user storage usage failed");
+            None
+        }
+    }
+}
+
+pub async fn get_storage_usage_by_file_type_handler(
+    user_id: Uuid,
+    state: &AppState,
+) -> Option<Vec<(String, i64, BigDecimal)>> {
+    let storage_usage_result = sqlx::query!(
+        r#"
+        SELECT 
+            CASE 
+                WHEN "media_type" IN ('application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain') THEN 'Document'
+                WHEN "media_type" LIKE 'image/%' THEN 'Image'
+                WHEN "media_type" LIKE 'video/%' THEN 'Vidéo'
+                ELSE 'Autre'
+            END AS "Groupe",
+            COUNT(*) AS "Nombre_de_fichiers",
+            SUM(vf.file_size ) AS "Taille_totale"
+        FROM vault_files vf
+        Where vf.owner_id = $1
+        GROUP BY "Groupe"
+        ORDER BY "Nombre_de_fichiers" DESC;
+        "#,
+        user_id,
+    )
+    .fetch_all(&state.db_pool)
+    .await;
+
+    match storage_usage_result {
+        Ok(rows) => {
+            let result = rows
+                .into_iter()
+                .map(|row| {
+                    (
+                        row.Groupe.unwrap_or_else(|| "Inconnu".to_string()),
+                        row.Nombre_de_fichiers.unwrap_or(0),
+                        row.Taille_totale.unwrap_or(bigdecimal::BigDecimal::from(0)),
+                    )
+                })
+                .collect();
+            Some(result)
+        }
+        Err(e) => {
+            error!(error = ?e, "fetch storage usage by type failed");
+            None
+        }
+    }
+}
+
+
+pub async fn autologin_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    // Récupérer le refresh token depuis les cookies
+    let refresh_token = headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            for cookie in cookies.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
+                }
+            }
+            None
+        });
+
+    let refresh_token = match refresh_token {
+        Some(token) => token,
+        None => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Non authentifié"
+            }));
+            return respond_with_cookies((StatusCode::UNAUTHORIZED, body), &[]);
         }
     };
+
+    // Vérifier le refresh token et générer une nouvelle paire
+    match refresh_session(&state.db_pool, &refresh_token).await {
+        Ok((new_access_token, new_refresh_token)) => {
+            // Récupérer l'user_id depuis le nouveau access token
+            let user_id = match verify_session_token(&new_access_token) {
+                Ok(id) => id,
+                Err(_) => {
+                    let body = Json(json!({
+                        "status": "error",
+                        "message": "Erreur lors de la vérification du token"
+                    }));
+                    return respond_with_cookies((StatusCode::UNAUTHORIZED, body), &[]);
+                }
+            };
+
+            // Récupérer les informations de l'utilisateur
+            let user_result = sqlx::query!(
+                "SELECT salt_e2e, salt_auth, public_key, private_key_encrypted, id, CONCAT(first_name, ' ', last_name) AS full_name FROM users WHERE id = $1",
+                user_id
+            )
+            .fetch_one(&state.db_pool)
+            .await;
+
+            let user = match user_result {
+                Ok(u) => u,
+                Err(e) => {
+                    error!(error = ?e, "fetch user failed in autologin");
+                    let body = Json(json!({
+                        "status": "error",
+                        "message": "Erreur interne"
+                    }));
+                    return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+                }
+            };
+
+            // Nouveaux cookies
+            let access_cookie = format!(
+                "access_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_access_token,
+                5 * 60
+            );
+
+            let refresh_cookie = format!(
+                "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned",
+                new_refresh_token,
+                7 * 24 * 3600
+            );
+
+            let body = Json(json!({
+                "status": "success",
+                "message": "Connexion automatique réussie",
+                "salt_auth": String::from_utf8(user.salt_auth).unwrap_or_default(),
+                "salt_e2e": String::from_utf8(user.salt_e2e).unwrap_or_default(),
+                "id": user.id,
+                "full_name": user.full_name,
+            }));
+            let mut response = (StatusCode::OK, body).into_response();
+            if let Ok(val) = HeaderValue::from_str(&access_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            if let Ok(val) = HeaderValue::from_str(&refresh_cookie) {
+                response
+                    .headers_mut()
+                    .append(axum::http::header::SET_COOKIE, val);
+            }
+            response
+        }
+        Err(e) => {
+            debug!("autologin failed: {}", e);
+            let body = Json(json!({
+                "status": "error",
+                "message": "Session expirée, veuillez vous reconnecter"
+            }));
+            (StatusCode::UNAUTHORIZED, body).into_response()
+        }
+    }
+}
+
+
+pub async fn recovery_challenge_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<EmailRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query!(
+        "SELECT recovery_salt FROM users WHERE email = $1",
+        payload.email
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+
+    match result {
+        Ok(Some(record)) => {
+            let recovery_salt = String::from_utf8(record.recovery_salt).unwrap_or_default();
+
+            if recovery_salt.is_empty() {
+                let body = Json(json!({
+                    "status": "error",
+                    "message": "Clé de récupération indisponible"
+                }));
+                return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            }
+
+            let body = Json(json!({
+                "status": "challenge",
+                "recovery_salt": recovery_salt,
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        Ok(None) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Email non trouvé"
+            }));
+            (StatusCode::NOT_FOUND, body).into_response()
+        }
+        Err(e) => {
+            error!(error = ?e, "fetch recovery challenge failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur interne"
+            }));
+            (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        }
+    }
+}
+
+pub async fn recovery_verify_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<RecoveryVerifyRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query!(
+        "SELECT recovery_hash, private_key_encrypted_recuperation FROM users WHERE email = $1",
+        payload.email
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+
+    let record = match result {
+        Ok(Some(record)) => record,
+        Ok(None) => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Email non trouvé"
+            }));
+            return (StatusCode::NOT_FOUND, body).into_response();
+        }
+        Err(e) => {
+            error!(error = ?e, "fetch recovery hash failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur interne"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    };
+
+    let recovery_hash = match String::from_utf8(record.recovery_hash) {
+        Ok(hash) if !hash.is_empty() => hash,
+        _ => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Données de récupération manquantes"
+            }));
+            return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+        }
+    };
+
+    let proof = payload.recovery_auth.clone();
+    let verify_result = tokio::task::spawn_blocking(move || {
+        let parsed_hash = PasswordHash::new(&recovery_hash).map_err(|e| e.to_string())?;
+        let argon2 = Argon2::default();
+        argon2
+            .verify_password(proof.as_bytes(), &parsed_hash)
+            .map_err(|_| "Preuve de récupération invalide".to_string())
+    })
+    .await;
+
+    match verify_result {
+        Ok(Ok(())) => {
+            let encrypted_for_recovery = record
+                .private_key_encrypted_recuperation
+                .and_then(|v| String::from_utf8(v).ok())
+                .unwrap_or_default();
+
+            if encrypted_for_recovery.is_empty() {
+                let body = Json(json!({
+                    "status": "error",
+                    "message": "Clé chiffrée indisponible"
+                }));
+                return (StatusCode::INTERNAL_SERVER_ERROR, body).into_response();
+            }
+
+            let body = Json(json!({
+                "status": "success",
+                "private_key_encrypted_recuperation": encrypted_for_recovery,
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        _ => {
+            let body = Json(json!({
+                "status": "error",
+                "message": "Preuve de récupération invalide"
+            }));
+            (StatusCode::UNAUTHORIZED, body).into_response()
+        }
+    }
+}
+
+pub async fn recovery_reset_password_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<RecoveryResetRequest>,
+) -> impl IntoResponse {
+    // 1. Vérifier la preuve de récupération
+    let verify_result = sqlx::query!(
+        "SELECT recovery_hash FROM users WHERE email = $1",
+        payload.email
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+
+    let recovery_hash = match verify_result {
+        Ok(Some(record)) => String::from_utf8(record.recovery_hash).ok(),
+        Ok(None) => None,
+        Err(e) => {
+            error!(error = ?e, "fetch recovery hash failed during reset");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Erreur interne"})),
+            )
+                .into_response();
+        }
+    };
+
+    let recovery_hash = match recovery_hash {
+        Some(hash) if !hash.is_empty() => hash,
+        _ => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({"status": "error", "message": "Preuve de récupération invalide"})),
+            )
+                .into_response();
+        }
+    };
+
+    let proof = payload.recovery_auth.clone();
+    let proof_verification = tokio::task::spawn_blocking(move || {
+        let parsed_hash = PasswordHash::new(&recovery_hash).map_err(|e| e.to_string())?;
+        let argon2 = Argon2::default();
+        argon2
+            .verify_password(proof.as_bytes(), &parsed_hash)
+            .map_err(|_| "Preuve de récupération invalide".to_string())
+    })
+    .await;
+
+    if !matches!(proof_verification, Ok(Ok(()))) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"status": "error", "message": "Preuve de récupération invalide"})),
+        )
+            .into_response();
+    }
+
+    // 2. Recalculer le hash du mot de passe avec les nouveaux sels
+    let salt_auth_clone = payload.salt_auth.clone();
+    let new_password = payload.new_password.clone();
+    let new_password_hash = match tokio::task::spawn_blocking(move || {
+        if salt_auth_clone.is_empty() {
+            return Err("Le sel d'authentification est vide".to_string());
+        }
+        let salt = SaltString::from_b64(salt_auth_clone.as_str())
+            .map_err(|e| format!("Sel invalide: {}", e))?;
+        if new_password.is_empty() {
+            return Err("Le mot de passe est vide".to_string());
+        }
+        let argon2 = Argon2::default();
+        let password_hash = argon2
+            .hash_password(new_password.as_bytes(), &salt)
+            .map_err(|e| format!("Erreur de hachage: {}", e))?
+            .to_string();
+        Ok(password_hash)
+    })
+    .await
+    {
+        Ok(Ok(hash)) => hash,
+        Ok(Err(e)) => {
+            error!(error = %e, "password hashing failed during reset");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Erreur lors de l'encodage du mot de passe"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(error = %e, "password hashing task join error during reset");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": "Erreur interne lors de l'exécution de la tâche"})),
+            )
+                .into_response();
+        }
+    };
+
+    // 3. Hacher la nouvelle preuve de récupération si fournie
+    let new_recovery_hash = if !payload.new_recovery_auth.is_empty() {
+        let auth_clone = payload.new_recovery_auth.clone();
+        let salt_str = payload.new_recovery_salt.clone();
+        match tokio::task::spawn_blocking(move || {
+            if salt_str.is_empty() {
+                return Err("Le sel de récupération est vide".to_string());
+            }
+            let salt = SaltString::from_b64(salt_str.as_str())
+                .map_err(|e| format!("Sel de récupération invalide: {}", e))?;
+            let argon2 = Argon2::default();
+            argon2
+                .hash_password(auth_clone.as_bytes(), &salt)
+                .map(|h| h.to_string())
+                .map_err(|e| format!("Erreur de hachage de la clé de récupération: {}", e))
+        })
+        .await
+        {
+            Ok(Ok(hash)) => Some(hash),
+            Ok(Err(e)) => {
+                error!(error = %e, "recovery hashing failed during reset");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"status": "error", "message": "Erreur lors du hachage de la nouvelle clé de récupération"})),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                error!(error = %e, "recovery hashing task join error during reset");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"status": "error", "message": "Erreur interne"})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        None
+    };
+
+    // 4. Mise à jour des secrets d'authentification et de récupération
+    let update_result = sqlx::query!(
+        r#"
+        UPDATE users
+        SET password_hash = $1,
+            salt_auth = $2,
+            salt_e2e = $3,
+            private_key_encrypted = $4,
+            private_key_encrypted_recuperation = COALESCE($5, private_key_encrypted_recuperation),
+            recovery_salt = COALESCE($6, recovery_salt),
+            recovery_hash = COALESCE($7, recovery_hash),
+            updated_at = NOW()
+        WHERE email = $8
+        "#,
+        new_password_hash.as_bytes(),
+        payload.salt_auth.as_bytes(),
+        payload.salt_e2e.as_bytes(),
+        payload.private_key_encrypted.as_bytes(),
+        if payload.private_key_encrypted_recuperation.is_empty() { None } else { Some(payload.private_key_encrypted_recuperation.as_bytes()) },
+        if payload.new_recovery_salt.is_empty() { None } else { Some(payload.new_recovery_salt.as_bytes()) },
+        new_recovery_hash.as_ref().map(|h| h.as_bytes()),
+        payload.email
+    )
+    .execute(&state.db_pool)
+    .await;
+
+    match update_result {
+        Ok(_) => {
+            let body = Json(json!({
+                "status": "success",
+                "message": "Mot de passe mis à jour"
+            }));
+            (StatusCode::OK, body).into_response()
+        }
+        Err(e) => {
+            error!(error = ?e, "update password via recovery failed");
+            let body = Json(json!({
+                "status": "error",
+                "message": "Erreur lors de la mise à jour du mot de passe"
+            }));
+            (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        }
+    }
 }
