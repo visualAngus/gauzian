@@ -288,7 +288,7 @@ pub async fn login_handler(
         match insert_session_result {
             Ok(_) => {
                 let set_cookie_header = format!(
-                    "session_id={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
+                    "refresh_token={}; Max-Age={}; Path=/; HttpOnly; SameSite=None; Secure;Partitioned",
                     session_token,
                     days * 24 * 3600
                 );
@@ -366,8 +366,8 @@ pub async fn autologin_handler(
         .and_then(|cookies| {
             for cookie in cookies.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("session_id=") {
-                    return Some(cookie.trim_start_matches("session_id=").to_string());
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie.trim_start_matches("refresh_token=").to_string());
                 }
             }
             None

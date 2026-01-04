@@ -1,0 +1,393 @@
+/* CONTAINER FLOTTANT */
+.floater {
+  animation: float 4s ease-in-out infinite;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Une ombre au sol qui grandit/rétrécit pour renforcer l'effet de flottement */
+  filter: drop-shadow(0 20px 15px rgba(0,0,0,0.15));
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+/* LE CORPS (Boule 3D) */
+.body {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  
+  /* CHANGEMENT MAJEUR : Radial Gradient pour l'effet BOULE */
+  /* La lumière vient d'en haut à gauche (30% 30%) */
+  background: radial-gradient(circle at 30% 30%, #ffd180 0%, #ffab40 40%, #e65100 100%);
+  
+  /* On garde une ombre interne douce pour le volume */
+  box-shadow: 
+    inset -10px -10px 30px rgba(160, 60, 0, 0.3),
+    inset 5px 5px 10px rgba(255, 255, 255, 0.5);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-style: preserve-3d;
+}
+
+/* VISAGE */
+.face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px; /* On rapproche la bouche des yeux pour faire "bébé" */
+  transform: translateZ(30px); /* Le visage ressort un peu de la boule */
+  position: relative;
+}
+
+/* JOUES ROUGES QUAND ÉNERVÉ - DÉSACTIVÉ */
+.face.angry::before,
+.face.angry::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  display: none;
+}
+
+.eyesRow {
+  display: flex;
+  gap: 18px; /* Yeux un peu plus rapprochés = plus mignon */
+}
+
+/* ... (Le début du CSS : floater, body, face, eyesRow ne change pas) ... */
+
+/* L'OEIL */
+.eye {
+  width: 32px;
+  height: 32px;
+  background: #ffffff;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  
+  /* TRANSITION IMPORTANTE : Pour que le clignement soit fluide */
+  transition: all 0.1s ease-in-out;
+  border-bottom: 0px solid transparent; /* Préparation pour le clignement */
+}
+
+/* L'OEIL QUAND GAUZIAL EST PAS CONTENT - Sourcils froncés et paupières baissées */
+.face:has(.mouth.sad) .eye {
+  animation: eyebrowFrown 0.3s ease forwards;
+}
+
+@keyframes eyebrowFrown {
+  from { transform: translateY(0); }
+  to { transform: translateY(3px); }
+}
+
+/* Paupières plus fermées quand il est triste */
+.face:has(.mouth.sad) .eye::before {
+  height: 14px; /* Plus grande paupière qui descend */
+  background: #ffab40;
+  opacity: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15); /* Petite ombre pour l'effet de profondeur */
+}
+
+/* YEUX ÉNERVÉS - STYLE 😵 (CROIX) */
+.face.angry .eye {
+  background: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.face.angry .eye::before {
+  opacity: 0;
+}
+
+/* Croix pour les yeux - effet X */
+.face.angry .pupil {
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -9px;
+  margin-left: -9px;
+  transform: translateY(0) !important;
+}
+
+/* Première ligne de la croix */
+.face.angry .pupil::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 2.5px;
+  background: #3e2723;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+/* Deuxième ligne de la croix */
+.face.angry .pupil::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 2.5px;
+  background: #3e2723;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%) rotate(-45deg);
+}
+
+.face.angry .glint {
+  opacity: 0;
+}
+
+/* LA PAUPIÈRE (Le petit bout de peau en haut) */
+.eye::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: #ffab40; /* Doit matcher la couleur de la peau au dessus */
+  z-index: 10;
+  border-radius: 50% 50% 0 0;
+  transition: opacity 0.1s; /* Pour disparaître proprement */
+}
+
+/* --- NOUVEAU : ETAT FERMÉ (CLIGNEMENT) --- */
+.eye.closed {
+  /* 1. On enlève le fond blanc et l'ombre */
+  background: transparent;
+  box-shadow: none;
+  
+  /* 2. On définit la taille de l'arc */
+  height: 15px;       /* Hauteur du pont */
+  width: 26px;        /* Largeur de l'œil */
+  
+  /* 3. LA MAGIE : Arrondir le BAS (Bottom-Left, Bottom-Right) */
+  border-radius: 0 0 50% 50%;
+  
+  /* 4. On dessine la ligne SEULEMENT EN BAS */
+  border: none; /* On reset tout */
+  border-bottom: 4px solid #3e2723; /* Couleur marron foncé */
+  
+  /* 5. Ajustement de la position pour qu'il soit bien aligné */
+  transform: translateY(7px); 
+}
+
+/* On s'assure que tout le reste disparait */
+.eye.closed::before { opacity: 0; } /* Cache la paupière orange */
+.eye.closed .pupil { opacity: 0; }  /* Cache la pupille */
+
+/* Quand l'oeil est fermé, on cache la paupière du haut */
+.eye.closed::before {
+  opacity: 0;
+}
+
+/* Quand l'oeil est fermé, on cache la pupille */
+.eye.closed .pupil {
+  opacity: 0;
+  transform: scale(0); /* Petit effet de pop */
+}
+
+/* LA PUPILLE */
+.pupil {
+  width: 18px;
+  height: 18px;
+  background: #3e2723;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -9px; 
+  margin-left: -9px; 
+  transition: opacity 0.1s, transform 0.1s; /* Transition fluide */
+}
+
+/* ... (Le reste : glint, mouth ne change pas) ... */
+/* LA PUPILLE (Plus grande = plus gentille) */
+.pupil {
+  width: 18px; /* Beaucoup plus grande ! (avant c'était 12px) */
+  height: 18px;
+  background: #3e2723;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -9px; 
+  margin-left: -9px; 
+}
+
+/* LE REFLET (GLINT) */
+.glint {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+/* LA BOUCHE */
+.mouth {
+  width: 12px;
+  height: 6px;
+  border-radius: 0 0 10px 10px;
+  border-bottom: 3px solid #3e2723;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+/* LA BOUCHE TRISTE */
+.mouth.sad {
+  border-bottom: none;
+  border-top: 3px solid #3e2723;
+  border-radius: 10px 10px 0 0;
+  transform: translateY(4px);
+}
+
+/* LA BOUCHE ÉNERVÉE - Grimace */
+.face.angry .mouth {
+  width: 14px;
+  height: 4px;
+  background: transparent;
+  border: none;
+  border-top: 2.5px solid #3e2723;
+  border-radius: 0 0 8px 8px;
+  transform: scaleY(-1);
+  opacity: 1;
+}
+/* ========================================= */
+/*   ANIMATION DE CHARGEMENT : CENTRIFUGE    */
+/* ========================================= */
+
+/* Le conteneur reste fixe mais vibre un peu sous la tension */
+.floater.loading {
+  animation: loadingShake 3s ease-in-out infinite;
+  filter: drop-shadow(0 30px 20px rgba(255, 100, 0, 0.3));
+}
+
+@keyframes loadingShake {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); } 
+}
+
+/* LE CORPS : La rotation */
+.floater.loading .body {
+  /* 1. On coupe la transition JS pour que ça ne lag pas */
+  transition: none;
+  
+  /* 2. IMPORTANT : On enlève toute propriété transform fixe ici */
+  /* On laisse l'animation gérer le mouvement à 100% */
+  
+  /* 3. L'animation avec la bonne courbe de vitesse (pas de "nonLinear" !) */
+  /* cubic-bezier(0.68, -0.55, 0.265, 1.55) = Effet élastique violent */
+  animation: spinZ 2s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+  
+  /* Le dégradé change pour montrer qu'il chauffe (plus rouge) */
+  background: radial-gradient(circle at 50% 50%, #ffd180 0%, #ff6d00 60%, #dd2c00 100%);
+}
+
+/* LA COURBE DE ROTATION (Avec perspective incluse) */
+@keyframes spinZ {
+  0% { 
+    transform: perspective(800px) rotateZ(0deg) scale(1); 
+  }
+  10% { 
+    /* Anticipation plus douce : recule moins (-10deg) */
+    transform: perspective(800px) rotateZ(-10deg) scale(0.98); 
+  }
+  40% { 
+    /* Accélération moins forte */
+    transform: perspective(800px) rotateZ(180deg) scale(1.02); 
+  }
+  100% { 
+    /* Fin du tour (3 tours = 1080deg) */
+    transform: perspective(800px) rotateZ(1080deg) scale(1); 
+  }
+}
+
+
+/* L'ŒIL GAUCHE : Glisse vers la gauche */
+.floater.loading .eye:first-child {
+  animation: eyeSlideLeft 2s infinite;
+}
+
+/* L'ŒIL DROIT : Glisse vers la droite */
+.floater.loading .eye:last-child {
+  animation: eyeSlideRight 2s infinite;
+}
+
+/* On écarte les yeux du centre du visage */
+@keyframes eyeSlideLeft {
+  0%, 15% { transform: translateX(0px) rotate(0deg); }
+  /* Phase rapide : l'œil part à gauche et pivote un peu sous la pression */
+  40%, 80% { transform: translateX(-14px) rotate(-15deg); } 
+  100% { transform: translateX(0px) rotate(0deg); }
+}
+
+@keyframes eyeSlideRight {
+  0%, 15% { transform: translateX(0px) rotate(0deg); }
+  /* Phase rapide : l'œil part à droite */
+  40%, 80% { transform: translateX(14px) rotate(15deg); }
+  100% { transform: translateX(0px) rotate(0deg); }
+}
+
+
+/* --- FORCE CENTRIFUGE : LES PUPILLES SONT ÉCRASÉES SUR LE BORD --- */
+/* (J'ai ajusté les valeurs pour que ça matche avec le mouvement des yeux) */
+
+.floater.loading .eye:first-child .pupil {
+  animation: pupilSquashLeft 2s infinite;
+  transform: translate(0, 0) !important; 
+}
+
+.floater.loading .eye:last-child .pupil {
+  animation: pupilSquashRight 2s infinite;
+  transform: translate(0, 0) !important; 
+}
+
+@keyframes pupilSquashLeft {
+  0%, 15% { transform: translateX(0px); }
+  /* L'œil bouge déjà de 14px, donc la pupille bouge de 10px supp pour toucher le bord */
+  40%, 80% { transform: translateX(-10px) scaleX(0.6) scaleY(1.1); } 
+  100% { transform: translateX(0px); }
+}
+
+@keyframes pupilSquashRight {
+  0%, 15% { transform: translateX(0px); }
+  40%, 80% { transform: translateX(10px) scaleX(0.6) scaleY(1.1); }
+  100% { transform: translateX(0px); }
+}
+/* --- EXPRESSION DU VISAGE PENDANT LE SPIN --- */
+
+/* La bouche devient un petit 'o' de surprise/vitesse */
+.floater.loading .mouth {
+  width: 8px;
+  height: 8px;
+  background: #3e2723;
+  border: none;
+  border-radius: 50%;
+  animation: mouthO 2s infinite;
+  transform: none !important; 
+}
+
+@keyframes mouthO {
+  0%, 15% { transform: scale(1) translateY(0px); } /* Normal */
+  40%, 80% { transform: scale(1.6) translateY(80px); } /* Grande ouverte et descend pendant le spin */
+  100% { transform: scale(1) translateY(0px); }
+}
