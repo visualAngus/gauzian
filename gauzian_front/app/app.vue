@@ -37,7 +37,7 @@
 <script setup>
 import { ref } from 'vue'
 
-const API_URL = 'gauzian.pupin.fr/api'
+const API_URL = 'https://gauzian.pupin.fr/api'
 
 const registerForm = ref({
   username: '',
