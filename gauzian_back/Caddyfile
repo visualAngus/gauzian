@@ -16,6 +16,7 @@ gauzian.pupin.fr {
         }
     }
     
+    # Routes API
     handle_path /api/* {
         reverse_proxy backend:3000 {
             header_up Host {host}
@@ -23,6 +24,11 @@ gauzian.pupin.fr {
             header_up X-Forwarded-For {client_ip}
             header_up X-Forwarded-Proto {scheme}
         }
+    }
+
+    # Par défaut, tout le reste va vers le front
+    handle {
+        reverse_proxy front:3000
     }
 }
 
@@ -37,6 +43,7 @@ http://localhost, http://127.0.0.1 {
         }
     }
     
+    # Routes API
     handle_path /api/* {
         reverse_proxy backend:3000 {
             header_up Host {host}
@@ -44,5 +51,10 @@ http://localhost, http://127.0.0.1 {
             header_up X-Forwarded-For {client_ip}
             header_up X-Forwarded-Proto {scheme}
         }
+    }
+
+    # Par défaut, tout le reste va vers le front
+    handle {
+        reverse_proxy front:3000
     }
 }
