@@ -37,7 +37,7 @@
 <script setup>
 import { ref } from 'vue'
 
-const API_URL = 'api/'
+const API_URL = 'gauzian.pupin.fr/api/'
 
 const registerForm = ref({
   username: '',
@@ -54,6 +54,7 @@ const token = ref('')
 const response = ref('')
 
 const register = async () => {
+  console.log('Registering with', registerForm.value)
   try {
     const res = await fetch(`${API_URL}/register`, {
       method: 'POST',
