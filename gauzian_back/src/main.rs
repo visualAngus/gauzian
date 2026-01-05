@@ -2,6 +2,17 @@ use serde::{Deserialize, Serialize};
 use chrono::{Utc, Duration};
 use uuid::Uuid;
 use jsonwebtoken::{encode, decode, EncodingKey, DecodingKey, Validation, Algorithm};
+use axum::{
+    extract::FromRequestParts,
+    http::{request::Parts, StatusCode, header::AUTHORIZATION},
+    response::{IntoResponse, Response},
+    Json,
+    routing::{get, post},
+    Router,
+};
+use std::net::SocketAddr;
+use std::env;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -36,14 +47,6 @@ fn decode_jwt(token: &str, secret: &[u8]) -> Result<Claims, jsonwebtoken::errors
     
 
 
-use axum::{
-    async_trait,
-    extract::{FromRequest, RequestParts},
-    http::{request::Parts, StatusCode,header::AUTHORIZATION},
-    response::{IntoResponse, Response},
-    Json,
-};
-
 // Structure pour représenter une erreur d'authentification
 struct AuthError(StatusCode, String);
 
@@ -57,39 +60,80 @@ impl IntoResponse for AuthError {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for Claims
 where
     S: Send + Sync,
 {
     type Rejection = AuthError;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        
-        // A. Recupérer le Header Authorization
-        let auth_header = parts
-            .headers
-            .get(AUTHORIZATION)
-            .ok_or(AuthError(StatusCode::UNAUTHORIZED, "Missing Authorization header".into()))?;
+    fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move {
+            // A. Recupérer le Header Authorization
+            let auth_header = parts
+                .headers
+                .get(AUTHORIZATION)
+                .ok_or(AuthError(
+                    StatusCode::UNAUTHORIZED,
+                    "Missing Authorization header".into(),
+                ))?;
 
-        // B.  Parser "Bearer <token>"
-        let auth_str = auth_header.to_str().map_err(|_| AuthError(StatusCode::UNAUTHORIZED, "Invalid header format".into()))?;
+            // B.  Parser "Bearer <token>"
+            let auth_str = auth_header
+                .to_str()
+                .map_err(|_| AuthError(StatusCode::UNAUTHORIZED, "Invalid header format".into()))?;
 
-        // Si il ne commence pas par "Bearer "
-        if !auth_str.starts_with("Bearer ") {
-            return Err(AuthError(StatusCode::UNAUTHORIZED, "Invalid authorization scheme".into()));
+            // Si il ne commence pas par "Bearer "
+            if !auth_str.starts_with("Bearer ") {
+                return Err(AuthError(
+                    StatusCode::UNAUTHORIZED,
+                    "Invalid authorization scheme".into(),
+                ));
+            }
+            // Recupérer le token
+            let token = &auth_str[7..]; // Extraire le token après "Bearer "
+
+            // C. Décoder et valider le JWT
+            let secret = b"your_secret_key"; // Utiliser une clé secrète sécurisée
+            let claim = decode_jwt(token, secret)
+                .map_err(|_| AuthError(StatusCode::UNAUTHORIZED, "Invalid or expired token".into()))?;
+            Ok(claim)
         }
-        // Recupérer le token
-        let token = &auth_str[7..]; // Extraire le token après "Bearer "
-
-        // C. Décoder et valider le JWT
-        let secret = b"your_secret_key"; // Utiliser une clé secrète sécurisée
-        let claim = decode_jwt(token, secret)
-            .map_err(|_| AuthError(StatusCode::UNAUTHORIZED, "Invalid or expired token".into()))?;
-        Ok(claim)
-    }       
+    }
 }
 
 async fn protected_handler(claims: Claims) -> Json<String> {
-    Json(format!("Bienvenue utilisateur : {} !", claims.sub))
+    Json(format!("Bienvenue utilisateur : {} !", claims.id))
+}
+
+
+
+#[tokio::main]
+async fn main() {
+
+    // Route login pour générer un JWT
+    // Route protégée qui nécessite une authentification JWT
+    let app = Router::new()
+        .route("/login", post(login_handler))
+        .route("/protected", get(protected_handler));
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("Listening on {}", addr);
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .unwrap();
+    axum::serve(listener, app)
+        .await
+        .unwrap();
+}
+async fn login_handler() -> Json<String> {
+    let user_id = Uuid::new_v4();
+    let role = "user";
+    let secret = b"your_secret_key";
+    match create_jwt(user_id, role, secret) {
+        Ok(token) => Json(token),
+        Err(_) => Json("Error generating token".into()),
+    }
 }
