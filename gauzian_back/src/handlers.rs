@@ -1,0 +1,122 @@
+use axum::extract::{State, Json};
+use axum::response::{IntoResponse, Response};
+use serde::{Serialize, Deserialize};
+use tracing::{info, instrument};
+use uuid::Uuid;
+use chrono::Utc;
+
+use crate::{
+    auth,
+    jwt,
+    response::{ApiResponse, ErrorResponse},
+    state::AppState,
+};
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub message: String,
+    pub user_id: Uuid,
+}
+#[derive(Serialize)]
+pub struct RegisterResponse {
+    pub message: String,
+    pub user_id: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    pub username: String,
+    pub password_hash: String,
+    pub encrypted_private_key: String,
+    pub public_key: String,
+    pub email: String,
+}
+
+pub async fn login_handler(State(state): State<AppState>) -> ApiResponse<LoginResponse> {
+    
+    let user_id = Uuid::new_v4();
+
+    let token = jwt::create_jwt(user_id, "user", state.jwt_secret.as_bytes()).unwrap();
+
+    info!(%user_id, "Login successful, setting cookie");
+
+    ApiResponse::ok(LoginResponse {
+        message: "Login successful".to_string(),
+        user_id,
+    })
+    .with_token(token)
+}
+
+pub async fn register_handler(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterRequest>,
+) -> Response {
+    let new_user = auth::NewUser {
+        username: req.username,
+        password_hash: req.password_hash,
+        encrypted_private_key: req.encrypted_private_key,
+        public_key: req.public_key,
+        email: req.email,
+        encrypted_settings: None,
+    };
+
+    let user_id = match auth::create_user(&state.db_pool, new_user).await {
+        Ok(id) => id,
+        Err(e) => {
+            if let sqlx::Error::Database(db_err) = &e {
+                if db_err.message().contains("duplicate") || db_err.message().contains("unique") {
+                    tracing::warn!("Duplicate user attempted");
+                    return ApiResponse::conflict("Username or email already exists").into_response();
+                }
+            }
+            tracing::error!("Database error: {:?}", e);
+            return ApiResponse::internal_error("Failed to create user").into_response();
+        }
+    };
+
+    println!("Created user with ID: {}", user_id);
+    let token = jwt::create_jwt(user_id, "user", state.jwt_secret.as_bytes()).unwrap();
+
+    info!(%user_id, "Registration successful, setting cookie");
+    ApiResponse::ok(RegisterResponse {
+        message: "Registration successful".to_string(),
+        user_id,
+    })
+    .with_token(token)
+    .into_response()
+}
+#[instrument]
+pub async fn protected_handler(claims: jwt::Claims) -> ApiResponse<String> {
+    info!(user_id = %claims.id, "Access granted via cookie");
+
+    ApiResponse::ok(format!(
+        "Bienvenue {} ! Tu es authentifié via Cookie.",
+        claims.id
+    ))
+}
+
+pub async fn auto_login_handler(State(state): State<AppState>, claims: jwt::Claims) -> ApiResponse<String> {
+    info!(user_id = %claims.id, "Access granted via Authorization header");
+
+    // générer un nouveau token
+    let token = jwt::create_jwt(claims.id, &claims.role, state.jwt_secret.as_bytes()).unwrap();
+
+    ApiResponse::ok(format!(
+        "Bienvenue {} ! Tu es authentifié via Authorization header.",
+        claims.id
+    ))
+    .with_token(token)
+}
+
+pub async fn logout_handler(State(state): State<AppState>, claims: jwt::Claims) -> ApiResponse<String> {
+    let now = Utc::now().timestamp() as usize;
+    let ttl_seconds = claims.exp.saturating_sub(now);
+
+    if ttl_seconds > 0 {
+        if let Err(e) = auth::blacklist_token(&state.redis_client, &claims.jti, ttl_seconds).await {
+            tracing::warn!("Failed to blacklist token in Redis: {e}");
+        }
+    }
+
+    ApiResponse::ok("Logged out".to_string())
+}
