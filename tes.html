@@ -9,20 +9,24 @@
     
 </body>
 <script>
-    url = "http://gauzian.pupin.fr:3000/register"
-    data = {
-        "username": "testuser",
-        "password": "testpassword",
-        "email": "gael@pupin.fr",
-        "encrypted_settings": "encrypted_data_here"
-    }
+    const url = "https://gauzian.pupin.fr/api/register";
+    const data = {
+        "username": "john_ext_1",
+        "password_hash": "argon2_hash_here",
+        "encrypted_private_key": "encrypted_key_content",
+        "public_key": "public_key_content",
+        "email": "john_ext_1@example.com"
+    };
+    
     fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
         body: JSON.stringify(data)
-    }).then(response => response.json())
-    .then(data => console.log(data));
+    })
+    .then(response => response.json())
+    .then(data => console.log(data))
+    .catch(error => console.error("Error:", error));
 </script>
 </html>
