@@ -64,6 +64,16 @@ services:
     depends_on:
       - backend
 
+  # front
+  front:
+    build:
+      context: ../gauzian_front
+      dockerfile: Dockerfile
+    container_name: gauzian_front
+    restart: always
+    ports:
+      - "8080:80"
+
 # Volumes persistants (pour ne pas perdre les données si on supprime les conteneurs)
 volumes:
   postgres_data:
