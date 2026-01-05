@@ -37,7 +37,7 @@
 <script setup>
 import { ref } from 'vue'
 
-const API_URL = 'http://localhost:3000'
+const API_URL = 'api/'
 
 const registerForm = ref({
   username: '',
