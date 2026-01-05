@@ -1,6 +1,8 @@
 # Pour le dev local : localhost
 # Pour la prod : remplace par ton domaine (ex: api.monapp.com)
-
+{
+    email gael@pupin.fr
+}
 gauzian.pupin.fr {
 
     # CONFIGURATION DU RATE LIMIT
