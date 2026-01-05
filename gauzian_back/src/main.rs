@@ -15,6 +15,11 @@ async fn main() {
         .await
         .expect("Failed to connect to Postgres");
 
+    sqlx::migrate!()
+        .run(&db_pool)
+        .await
+        .expect("Failed to run database migrations");
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
