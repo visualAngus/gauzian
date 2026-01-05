@@ -1,0 +1,46 @@
+# Pour le dev local : localhost
+# Pour la prod : remplace par ton domaine (ex: api.monapp.com)
+
+gauzian.pupin.fr {
+
+    # CONFIGURATION DU RATE LIMIT
+    rate_limit {
+        # On définit une zone nommée "ip_limit"
+        zone ip_limit {
+            # La clé est l'IP réelle du client
+            key {client_ip}
+            events 50
+            window 1s
+        }
+    }
+    
+    handle_path /api/* {
+        reverse_proxy backend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {client_ip}
+            header_up X-Forwarded-For {client_ip}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
+
+http://localhost, http://127.0.0.1 {
+
+    # CONFIGURATION DU RATE LIMIT
+    rate_limit {
+        zone ip_limit {
+            key {client_ip}
+            events 50
+            window 1s
+        }
+    }
+    
+    handle_path /api/* {
+        reverse_proxy backend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {client_ip}
+            header_up X-Forwarded-For {client_ip}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
