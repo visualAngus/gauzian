@@ -128,6 +128,8 @@ import {
 	encryptPrivateKeyPemWithPassword,
 	generateRsaKeyPairPem,
 	saveUserKeysToIndexedDb,
+    getKeyStatus,
+
 } from "~/utils/crypto";
 
 const API_URL = "https://gauzian.pupin.fr/api";
@@ -203,6 +205,30 @@ const handleRegister = async () => {
     loading.value = false;
   }
 };
+
+const autologin = async () => {
+    console.log("Attempting auto-login...");
+    try {
+        const res = await fetch(`${API_URL}/autologin`, {
+            method: "GET",
+            credentials: "include",
+        });
+        if (res.ok) {
+
+            let is_ok = await getKeyStatus();
+            if (!is_ok) {
+                console.warn("Keys not found or invalid in IndexedDB during auto-login.");
+                return;
+            }
+            // redirect to /
+            window.location.href = "/";
+        }
+    } catch (error) {
+        console.error("Auto-login failed:", error);
+    }
+};
+
+autologin();
 
 useHead({
 	title: "GZAuth | Login",
