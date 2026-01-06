@@ -26,10 +26,12 @@ pub struct RegisterResponse {
 #[derive(Deserialize)]
 pub struct RegisterRequest {
     pub username: String,
-    pub password_hash: String,
+    pub password: String,
     pub encrypted_private_key: String,
     pub public_key: String,
     pub email: String,
+    pub private_key_salt: String,
+    pub iv: String,
 }
 
 pub async fn login_handler(State(state): State<AppState>) -> ApiResponse<LoginResponse> {
@@ -53,11 +55,14 @@ pub async fn register_handler(
 ) -> Response {
     let new_user = auth::NewUser {
         username: req.username,
-        password_hash: req.password_hash,
+        password: req.password,
+        password_hash: None,
         encrypted_private_key: req.encrypted_private_key,
         public_key: req.public_key,
         email: req.email,
         encrypted_settings: None,
+        private_key_salt: req.private_key_salt,
+        iv: req.iv,
     };
 
     let user_id = match auth::create_user(&state.db_pool, new_user).await {
