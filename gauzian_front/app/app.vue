@@ -180,6 +180,76 @@ async function checkLocalKey() {
   } catch (e) {
     keyStatus.value = "❌ Erreur DB";
   }
+
+  console.log("=== TEST CRYPTOGRAPHIE ===");
+  let test = await encryptWithPublicKey("Test Message");
+  console.log("Encrypted Test:", test);
+  let decrypted = await decryptWithPrivateKey(test);
+  console.log("Decrypted Test:", decrypted);
+  
+}
+
+async function getPublicKeyFromDB() {
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, "readonly");
+  const request = tx.objectStore(DB_STORE).get("user_public_key");
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      const res = request.result;
+      if (res && res.key) {
+        resolve(res.key);
+      } else {
+        reject("No public key found");
+      }
+    };
+    request.onerror = () => reject("Error retrieving public key");
+  });
+}
+
+
+async function encryptWithPublicKey(data){
+  const publicKey =  await getPublicKeyFromDB();
+  const encoder = new TextEncoder();
+  const encodedData = encoder.encode(data);
+  const encryptedData = await window.crypto.subtle.encrypt(
+    {
+      name: "RSA-OAEP"
+    },
+    publicKey,
+    encodedData
+  );
+  return buff_to_b64(encryptedData);
+}
+
+async function decryptWithPrivateKey(data){
+  const b64Data = data;
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, "readonly");
+  const request = tx.objectStore(DB_STORE).get("user_private_key");
+  return new Promise((resolve, reject) => {
+    request.onsuccess = async () => {
+      const res = request.result;
+      if (res && res.key) {
+        const encryptedData = b64_to_buff(b64Data);
+        try {
+          const decryptedData = await window.crypto.subtle.decrypt(
+            {
+              name: "RSA-OAEP"
+            },
+            res.key,
+            encryptedData
+          );
+          const decoder = new TextDecoder();
+          resolve(decoder.decode(decryptedData));
+        } catch (e) {
+          reject("Decryption failed: " + e.message);
+        }
+      } else {
+        reject("No private key found");
+      }
+    };
+    request.onerror = () => reject("Error retrieving private key");
+  });
 }
 
 // =============================================================================
