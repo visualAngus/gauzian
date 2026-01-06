@@ -123,6 +123,15 @@
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 
+import {
+	decryptPrivateKeyPemWithPassword,
+	encryptPrivateKeyPemWithPassword,
+	generateRsaKeyPairPem,
+	saveUserKeysToIndexedDb,
+} from "~/utils/crypto";
+
+const API_URL = "https://gauzian.pupin.fr/api";
+
 const etat = ref("login");
 const loading = ref(false);
 const loginForm = ref({ email: "", password: "" });
@@ -133,7 +142,26 @@ const showRegisterPassword = ref(false);
 const handleLogin = async () => {
   loading.value = true;
   try {
-    console.log("Login submit", loginForm.value);
+		const res = await fetch(`${API_URL}/login`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			credentials: "include",
+			body: JSON.stringify(loginForm.value),
+		});
+		const data = await res.json();
+		if (!res.ok) throw new Error(data.error || "Login failed");
+
+		if (data.encrypted_private_key && data.private_key_salt && data.iv && data.public_key) {
+			const privateKeyPem = await decryptPrivateKeyPemWithPassword({
+				encrypted_private_key: data.encrypted_private_key,
+				private_key_salt: data.private_key_salt,
+				iv: data.iv,
+				password: loginForm.value.password,
+			});
+			await saveUserKeysToIndexedDb(privateKeyPem, data.public_key);
+		}
+
+		console.log("Login OK");
   } finally {
     loading.value = false;
   }
@@ -142,7 +170,32 @@ const handleLogin = async () => {
 const handleRegister = async () => {
   loading.value = true;
   try {
-    console.log("Register submit", registerForm.value);
+		const { publicKey, privateKey } = await generateRsaKeyPairPem();
+		await saveUserKeysToIndexedDb(privateKey, publicKey);
+
+		const cryptoPayload = await encryptPrivateKeyPemWithPassword(
+			privateKey,
+			registerForm.value.password
+		);
+
+		const res = await fetch(`${API_URL}/register`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			credentials: "include",
+			body: JSON.stringify({
+				username: registerForm.value.username,
+				email: registerForm.value.email,
+				password: registerForm.value.password,
+				public_key: publicKey,
+				encrypted_private_key: cryptoPayload.encrypted_private_key,
+				private_key_salt: cryptoPayload.private_key_salt,
+				iv: cryptoPayload.iv,
+			}),
+		});
+		const data = await res.json();
+		if (!res.ok) throw new Error(data.error || "Register failed");
+
+		console.log("Register OK");
   } finally {
     loading.value = false;
   }
