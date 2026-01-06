@@ -163,18 +163,19 @@ pub async fn get_user_by_email(
     pool: &PgPool,
     email: &str,
 ) -> Result<User, sqlx::Error> {
+    tracing::info!("Fetching user by email: {}", email);
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, salt FROM users WHERE email = $1",
+        "SELECT id, username, password_hash, auth_salt FROM users WHERE email = $1",
     )
     .bind(email)
     .fetch_one(pool)
     .await?;
-
+    tracing::info!("User fetched: {:?}", user.id);
     Ok(user)
 }
 
 pub fn verify_password(password: &str, password_hash: &str, salt: &str) -> bool {
     let hashed_input = hash_password(password, salt);
-    println!("Comparing hashes: input={} stored={}", hashed_input, password_hash);
+    tracing::info!("Comparing hashes: input={} stored={}", hashed_input, password_hash);
     hashed_input == password_hash
 }
