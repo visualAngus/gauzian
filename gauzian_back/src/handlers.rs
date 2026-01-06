@@ -46,7 +46,7 @@ pub async fn login_handler(
     let user = match auth::get_user_by_email(&state.db_pool, &req.email).await {
         Ok(user) => user,
         Err(_) => {
-            tracing::warn!("Login failed for email: {}", req.email);
+            tracing::warn!("Email not found: {}", req.email);
             return ApiResponse::unauthorized("Invalid email or password").into_response();
         }
     };
