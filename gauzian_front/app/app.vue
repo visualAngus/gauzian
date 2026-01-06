@@ -157,6 +157,8 @@ const register = async () => {
       ["encrypt"]
     );
 
+    console.log("private key ", privateKey);
+
     // 4. Chiffrer la Clé Privée (PEM)
     const encryptedBuffer = await cryptoSubtle.encrypt(
       { name: "AES-GCM", iv: iv },
@@ -219,6 +221,53 @@ const login = async () => {
     if (data.token) {
       token.value = data.token;
     }
+
+    const crypted_private_key = data.encrypted_private_key;
+    const private_key_salt = data.private_key_salt;
+    const iv = data.iv;
+
+    console.log("Données de clé privée reçues:", {
+      crypted_private_key,
+      private_key_salt,
+      iv,
+    });
+    
+    // décrypter la clé privée ici pour la stocker en mémoire 
+
+    const password = loginForm.value.password;
+    const cryptoSubtle = window.crypto.subtle;
+    // 1. Dériver la clé AES à partir du mot de passe (PBKDF2)
+    const passwordKey = await cryptoSubtle.importKey(
+      "raw",
+      str_to_buff(password),
+      "PBKDF2",
+      false,
+      ["deriveKey"]
+    );
+
+    const aesKey = await cryptoSubtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: Uint8Array.from(atob(private_key_salt), c => c.charCodeAt(0)),
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      passwordKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"]
+    );
+    // 2. Déchiffrer la clé privée
+    const decryptedBuffer = await cryptoSubtle.decrypt(
+      { name: "AES-GCM", iv: Uint8Array.from(atob(iv), c => c.charCodeAt(0)) },
+      aesKey,
+      Uint8Array.from(atob(crypted_private_key), c => c.charCodeAt(0))
+    );
+    const decryptedPrivateKey = new TextDecoder().decode(decryptedBuffer);
+    console.log("Clé privée déchiffrée:", decryptedPrivateKey);
+
+
+
   } catch (error) {
     response.value = `Error: ${error.message}`;
   } finally {
