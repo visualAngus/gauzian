@@ -43,7 +43,7 @@ export function buffToB64(buff: ArrayBuffer | ArrayBufferView): string {
   let binary = "";
   const len = arr.byteLength;
   for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(arr[i]);
+    binary += String.fromCharCode(arr[i]!);
   }
   return window.btoa(binary);
 }
@@ -65,7 +65,7 @@ export function toPem(buffer: ArrayBuffer, type: KeyType): string {
   assertClient();
   const u8 = new Uint8Array(buffer);
   let binary = "";
-  for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
+  for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]!);
   const b64 = window.btoa(binary);
   const formatted = b64.match(/.{1,64}/g)?.join("\n") ?? b64;
   return `-----BEGIN ${type} KEY-----\n${formatted}\n-----END ${type} KEY-----`;
