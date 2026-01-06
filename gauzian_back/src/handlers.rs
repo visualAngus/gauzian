@@ -42,12 +42,31 @@ pub struct LoginRequest {
 pub async fn login_handler(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>
-) -> ApiResponse<LoginResponse> {
-    // TODO: Implement login logic
-    ApiResponse::ok(LoginResponse {
-        message: "Login successful".to_string(),
-        user_id: Uuid::new_v4(),
-    })
+)-> Response {   
+    let user = match auth::get_user_by_email(&state.db_pool, &req.email).await {
+        Ok(user) => user,
+        Err(_) => {
+            tracing::warn!("Login failed for email: {}", req.email);
+            return ApiResponse::unauthorized("Invalid email or password").into_response();
+        }
+    };
+
+    match auth::verify_password(&req.password, &user.password_hash, &user.auth_salt.unwrap_or_default()) {
+        true => {
+            let token = jwt::create_jwt(user.id, "user", state.jwt_secret.as_bytes()).unwrap();
+            info!(%user.id, "Login successful, setting cookie");
+            return ApiResponse::ok(LoginResponse {
+                message: "Login successful".to_string(),
+                user_id: user.id,
+            })
+            .with_token(token)
+            .into_response();
+        }
+        false => {
+            tracing::warn!("Login failed for email: {}", req.email);
+            return ApiResponse::unauthorized("Invalid email or password").into_response();
+        }
+    }
 }
 
 pub async fn register_handler(
