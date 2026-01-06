@@ -96,9 +96,32 @@
 </template>
 
 <script setup>
+import { ref } from "vue";
 
-// state
 const etat = ref("login");
+const loading = ref(false);
+const loginForm = ref({ email: "", password: "" });
+const registerForm = ref({ username: "", email: "", password: "" });
+
+const handleLogin = async () => {
+  loading.value = true;
+  try {
+    // TODO: branch avec vraie API
+    console.log("Login submit", loginForm.value);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleRegister = async () => {
+  loading.value = true;
+  try {
+    // TODO: branch avec vraie API
+    console.log("Register submit", registerForm.value);
+  } finally {
+    loading.value = false;
+  }
+};
 
 useHead({
 	title: "GZAuth | Login",
