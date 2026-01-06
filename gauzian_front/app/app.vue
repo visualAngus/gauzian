@@ -57,6 +57,8 @@
       <h2>Response</h2>
       <pre>{{ response }}</pre>
     </div>
+
+    <button @click="test">Charger la clé privée depuis le navigateur</button>
   </div>
 </template>
 
@@ -82,6 +84,82 @@ function toPem(buffer, type) {
   const b64 = window.btoa(binary);
   const formatted = b64.match(/.{1,64}/g).join("\n");
   return `-----BEGIN ${type} KEY-----\n${formatted}\n-----END ${type} KEY-----`;
+}
+
+
+async function saveKeyToBrowser(pemKey) {
+  // 1. On ré-importe la clé en format "CryptoKey" mais NON EXTRACTABLE
+  const binaryKey = str_to_buff(pemKey); // Ta fonction existante (attention au format PEM vs DER)
+  // Note: importKey attend souvent du format 'pkcs8' binaire (sans header PEM).
+  // Il faudra peut-être nettoyer le header/footer PEM avant.
+  
+  // Pour simplifier, supposons que tu as le buffer déchiffré (decryptedBuffer) de ton code précédent
+  // C'est mieux d'utiliser directement le buffer avant de le convertir en string
+  
+  const keyObject = await window.crypto.subtle.importKey(
+    "pkcs8",
+    decryptedBuffer, // Utilise le buffer brut sorti du déchiffrement AES
+    {
+      name: "RSA-OAEP",
+      hash: "SHA-256"
+    },
+    false, // <--- FALSE = Impossible à exporter (Sécurité !)
+    ["decrypt"]
+  );
+
+  // 2. Ouvrir IndexedDB
+  const request = indexedDB.open("GauzianSecureDB", 1);
+  
+  request.onupgradeneeded = (e) => {
+    const db = e.target.result;
+    if (!db.objectStoreNames.contains("keys")) {
+      db.createObjectStore("keys", { keyPath: "id" });
+    }
+  };
+
+  request.onsuccess = (e) => {
+    const db = e.target.result;
+    const tx = db.transaction("keys", "readwrite");
+    const store = tx.objectStore("keys");
+    
+    // On stocke la clé avec une date d'expiration (ex: 2 jours)
+    store.put({
+      id: "user_private_key",
+      key: keyObject,
+      expires: Date.now() + (2 * 24 * 60 * 60 * 1000) // 2 jours
+    });
+  };
+}
+
+function loadKeyFromBrowser() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("GauzianSecureDB", 1);
+    
+    request.onsuccess = (e) => {
+      const db = e.target.result;
+      const tx = db.transaction("keys", "readonly");
+      const store = tx.objectStore("keys");
+      const query = store.get("user_private_key");
+
+      query.onsuccess = () => {
+        const result = query.result;
+        if (result && result.key) {
+          // Vérifier l'expiration
+          if (Date.now() > result.expires) {
+            // Trop vieux, on supprime et on demande le login
+            deleteKeyFromBrowser();
+            resolve(null);
+          } else {
+            // C'est bon ! On a la clé CryptoKey prête à l'emploi
+            resolve(result.key);
+          }
+        } else {
+          resolve(null);
+        }
+      };
+    };
+    request.onerror = () => resolve(null);
+  });
 }
 
 // --- GÉNÉRATION RSA ---
@@ -126,6 +204,9 @@ const register = async () => {
     // 1. Générer la paire RSA
     const { publicKey, privateKey } = await generateBestKeyPair();
     console.log("Clés générées.");
+
+    // 1.2 save la clé privée non chiffrée dans le navigateur (IndexedDB)
+    await saveKeyToBrowser(privateKey);
 
     // 2. Préparer les ingrédients aléatoires (Salts et IV)
     const cryptoSubtle = window.crypto.subtle;
@@ -266,7 +347,8 @@ const login = async () => {
     const decryptedPrivateKey = new TextDecoder().decode(decryptedBuffer);
     console.log("Clé privée déchiffrée:", decryptedPrivateKey);
 
-
+    // 3. Stocker la clé privée déchiffrée dans le navigateur (IndexedDB)
+    await saveKeyToBrowser(decryptedPrivateKey);
 
   } catch (error) {
     response.value = `Error: ${error.message}`;
@@ -288,6 +370,12 @@ const testProtected = async () => {
     response.value = `Error: ${error.message}`;
   }
 };
+
+const test = async () => {
+  const key = await loadKeyFromBrowser();
+  console.log("Clé privée chargée depuis le navigateur:", key);
+};
+
 </script>
 
 <style scoped>
