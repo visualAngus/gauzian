@@ -1,13 +1,12 @@
-use axum::extract::{State, Json};
+use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
-use serde::{Serialize, Deserialize};
+use chrono::Utc;
+use serde::{Deserialize, Serialize, de};
 use tracing::{info, instrument};
 use uuid::Uuid;
-use chrono::Utc;
 
 use crate::{
-    auth,
-    jwt,
+    auth, jwt,
     response::{ApiResponse, ErrorResponse},
     state::AppState,
 };
@@ -34,31 +33,26 @@ pub struct RegisterRequest {
     pub iv: String,
 }
 
-pub async fn login_handler(State(state): State<AppState>) -> ApiResponse<LoginResponse> {
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+pub async fn login_handler(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>
+) -> ApiResponse<LoginResponse> {
     
-    let user_id = Uuid::new_v4();
-
-    let token = jwt::create_jwt(user_id, "user", state.jwt_secret.as_bytes()).unwrap();
-
-    info!(%user_id, "Login successful, setting cookie");
-
-    ApiResponse::ok(LoginResponse {
-        message: "Login successful".to_string(),
-        user_id,
-    })
-    .with_token(token)
 }
 
 pub async fn register_handler(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Response {
-
-
     // hash the password
     let salt = auth::generate_salt().await; // Await the future
     let password_hash = auth::hash_password(&req.password, &salt);
-
 
     let new_user = auth::NewUser {
         username: req.username,
@@ -69,6 +63,7 @@ pub async fn register_handler(
         email: req.email,
         encrypted_settings: None,
         private_key_salt: req.private_key_salt,
+        auth_salt: Some(salt),
         iv: req.iv,
     };
 
@@ -78,7 +73,8 @@ pub async fn register_handler(
             if let sqlx::Error::Database(db_err) = &e {
                 if db_err.message().contains("duplicate") || db_err.message().contains("unique") {
                     tracing::warn!("Duplicate user attempted");
-                    return ApiResponse::conflict("Username or email already exists").into_response();
+                    return ApiResponse::conflict("Username or email already exists")
+                        .into_response();
                 }
             }
             tracing::error!("Database error: {:?}", e);
@@ -107,7 +103,10 @@ pub async fn protected_handler(claims: jwt::Claims) -> ApiResponse<String> {
     ))
 }
 
-pub async fn auto_login_handler(State(state): State<AppState>, claims: jwt::Claims) -> ApiResponse<String> {
+pub async fn auto_login_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> ApiResponse<String> {
     info!(user_id = %claims.id, "Access granted via Authorization header");
 
     // générer un nouveau token
@@ -120,7 +119,10 @@ pub async fn auto_login_handler(State(state): State<AppState>, claims: jwt::Clai
     .with_token(token)
 }
 
-pub async fn logout_handler(State(state): State<AppState>, claims: jwt::Claims) -> ApiResponse<String> {
+pub async fn logout_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> ApiResponse<String> {
     let now = Utc::now().timestamp() as usize;
     let ttl_seconds = claims.exp.saturating_sub(now);
 
