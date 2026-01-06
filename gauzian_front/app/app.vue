@@ -63,7 +63,7 @@
 <script setup>
 import { ref } from "vue";
 
-const API_URL = "http://localhost:3000"; // Attention: souvent localhost:3000 en dev, pas pupin.fr direct
+const API_URL = "https://gauzian.pupin.fr/api";
 
 const registerForm = ref({ username: "", email: "", password: "" });
 const loginForm = ref({ email: "", password: "" });
@@ -173,7 +173,7 @@ const register = async () => {
       // Auth data
       password: registerForm.value.password, // Le MDP en clair
 
-      
+
       // Crypto data
       public_key: publicKey,
       encrypted_private_key: buff_to_b64(encryptedBuffer),
