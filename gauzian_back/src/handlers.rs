@@ -53,10 +53,17 @@ pub async fn register_handler(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Response {
+
+
+    // hash the password
+    let salt = auth::generate_salt().await; // Await the future
+    let password_hash = auth::hash_password(&req.password, &salt);
+
+
     let new_user = auth::NewUser {
         username: req.username,
         password: req.password,
-        password_hash: None,
+        password_hash: Some(password_hash),
         encrypted_private_key: req.encrypted_private_key,
         public_key: req.public_key,
         email: req.email,

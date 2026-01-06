@@ -13,6 +13,8 @@ use redis::AsyncCommands;
 use uuid::Uuid;
 use sqlx::PgPool;
 use serde::Deserialize;
+use rand::RngCore;
+use sha2::{Digest, Sha256};
 
 use crate::{jwt, state::AppState};
 
@@ -129,16 +131,29 @@ pub struct NewUser {
     pub iv: String,
 }
 
+pub async fn generate_salt() -> String {
+    let mut salt = [0u8; 16];
+    rand::rng().fill_bytes(&mut salt);
+    base64::encode(salt)
+}
+pub fn hash_password(password: &str, salt: &str) -> String {
+
+    let mut hasher = Sha256::new();
+    hasher.update(salt.as_bytes());
+    hasher.update(password.as_bytes());
+    let result = hasher.finalize();
+    base64::encode(result)
+}
+
 pub async fn create_user(
     pool: &PgPool,
     new_user: NewUser,
 ) -> Result<Uuid, sqlx::Error> {
     let rec = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO users (id, username, password, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"
+        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"
     )
     .bind(Uuid::new_v4())
     .bind(new_user.username)
-    .bind(new_user.password)
     .bind(new_user.password_hash)
     .bind(new_user.encrypted_private_key)
     .bind(new_user.public_key)
