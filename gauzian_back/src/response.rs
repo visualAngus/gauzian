@@ -49,6 +49,14 @@ impl ApiResponse<ErrorResponse> {
             status: StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        Self {
+            data: ErrorResponse { error: message.into() },
+            token: None,
+            status: StatusCode::UNAUTHORIZED,
+        }
+    }
 }
 
 impl<T: Serialize> IntoResponse for ApiResponse<T> {
