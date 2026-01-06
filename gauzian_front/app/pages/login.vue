@@ -32,8 +32,9 @@
                     
                     <h2 v-if="etat === 'login'">LOGIN</h2>
                     <h2 v-else>S'ENREGISTRER</h2>
-                    <!-- Formulaire de login -->
-                    <form @submit.prevent="handleLogin" v-if="etat === 'login'">
+					<!-- Formulaire de login / register avec transition -->
+					<Transition name="auth" mode="out-in">
+						<form v-if="etat === 'login'" key="login" @submit.prevent="handleLogin">
                         <label for="login_email">Email :</label>
                         <input 
                             v-model="loginForm.email"
@@ -50,21 +51,54 @@
 								id="login_password" 
 								required 
 							/>
-							<button type="button" class="toggle-btn" @click="showLoginPassword = !showLoginPassword">
-								{{ showLoginPassword ? "Masquer" : "Afficher" }}
+							<button
+								type="button"
+								class="toggle-btn"
+								@click="showLoginPassword = !showLoginPassword"
+								:aria-label="showLoginPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+							>
+								<svg
+									v-if="!showLoginPassword"
+									class="icon"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+									<circle cx="12" cy="12" r="3" />
+								</svg>
+								<svg
+									v-else
+									class="icon"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+									<circle cx="12" cy="12" r="3" />
+									<path d="M3 3l18 18" />
+								</svg>
 							</button>
 						</div>
 
                         <button type="submit" :disabled="loading">
                             {{ loading ? "Connexion..." : "S'identifier" }}
                         </button>
-                        <button type="button" @click="etat = 'register'">
+						<button type="button" @click="etat = 'register'">
                             S'enregistrer
                         </button>
-                    </form>
+					</form>
 
-                    <!-- Formulaire de register -->
-                    <form @submit.prevent="handleRegister" v-if="etat === 'register'">
+						<!-- Formulaire de register -->
+						<form v-else key="register" @submit.prevent="handleRegister">
                         <label for="register_username">Nom d'utilisateur :</label>
                         <input 
                             v-model="registerForm.username"
@@ -89,18 +123,52 @@
 								id="register_password" 
 								required 
 							/>
-							<button type="button" class="toggle-btn" @click="showRegisterPassword = !showRegisterPassword">
-								{{ showRegisterPassword ? "Masquer" : "Afficher" }}
+							<button
+								type="button"
+								class="toggle-btn"
+								@click="showRegisterPassword = !showRegisterPassword"
+								:aria-label="showRegisterPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+							>
+								<svg
+									v-if="!showRegisterPassword"
+									class="icon"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+									<circle cx="12" cy="12" r="3" />
+								</svg>
+								<svg
+									v-else
+									class="icon"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+									<circle cx="12" cy="12" r="3" />
+									<path d="M3 3l18 18" />
+								</svg>
 							</button>
 						</div>
 
                         <button type="submit" :disabled="loading">
                             {{ loading ? "Création..." : "Créer un compte" }}
                         </button>
-                        <button type="button" @click="etat = 'login'">
+						<button type="button" @click="etat = 'login'">
                             Retour au login
                         </button>
-                    </form>
+					</form>
+					</Transition>
 				</div>
 			</section>
 		</main>
@@ -311,10 +379,30 @@ section form {
 	border-radius: 4px;
 	font-size: 13px;
 	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .toggle-btn:hover {
 	background-color: #e6e6e6;
+}
+
+.toggle-btn .icon {
+	width: 18px;
+	height: 18px;
+}
+
+/* Transition login/register */
+.auth-enter-active,
+.auth-leave-active {
+	transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.auth-enter-from,
+.auth-leave-to {
+	opacity: 0;
+	transform: translateY(6px);
 }
 
 section form label {
