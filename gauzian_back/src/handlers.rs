@@ -43,7 +43,11 @@ pub async fn login_handler(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>
 ) -> ApiResponse<LoginResponse> {
-    
+    // TODO: Implement login logic
+    ApiResponse::ok(LoginResponse {
+        message: "Login successful".to_string(),
+        user_id: Uuid::new_v4(),
+    })
 }
 
 pub async fn register_handler(
