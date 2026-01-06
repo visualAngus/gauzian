@@ -15,6 +15,7 @@ use sqlx::PgPool;
 use serde::Deserialize;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
+use base64::{engine::general_purpose, Engine as _};
 
 use crate::{jwt, state::AppState};
 
@@ -129,7 +130,7 @@ pub struct NewUser {
 pub async fn generate_salt() -> String {
     let mut salt = [0u8; 16];
     rand::rng().fill_bytes(&mut salt);
-    base64::encode(salt)
+    general_purpose::STANDARD.encode(salt)
 }
 pub fn hash_password(password: &str, salt: &str) -> String {
 
@@ -137,7 +138,7 @@ pub fn hash_password(password: &str, salt: &str) -> String {
     hasher.update(salt.as_bytes());
     hasher.update(password.as_bytes());
     let result = hasher.finalize();
-    base64::encode(result)
+    general_purpose::STANDARD.encode(result)
 }
 
 pub async fn create_user(

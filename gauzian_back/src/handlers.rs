@@ -1,15 +1,11 @@
 use axum::extract::{Json, State};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
-use serde::{Deserialize, Serialize, de};
+use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use uuid::Uuid;
 
-use crate::{
-    auth, jwt,
-    response::{ApiResponse, ErrorResponse},
-    state::AppState,
-};
+use crate::{auth, jwt, response::ApiResponse, state::AppState};
 
 #[derive(Serialize)]
 pub struct LoginResponse {

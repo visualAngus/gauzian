@@ -5,7 +5,6 @@ use axum::{
 };
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::Serialize;
-use serde_json::json;
 
 #[derive(Serialize)]
 pub struct ErrorResponse {
