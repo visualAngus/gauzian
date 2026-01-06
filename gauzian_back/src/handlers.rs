@@ -18,6 +18,7 @@ pub struct LoginResponse {
     pub encrypted_private_key: String,
     pub private_key_salt: String,
     pub iv: String,
+    pub public_key: String,
 }
 #[derive(Serialize)]
 pub struct RegisterResponse {
@@ -64,6 +65,7 @@ pub async fn login_handler(
                 encrypted_private_key: user.encrypted_private_key,
                 private_key_salt: user.private_key_salt,
                 iv: user.iv,
+                public_key: user.public_key,
             })
             .with_token(token)
             .into_response();
