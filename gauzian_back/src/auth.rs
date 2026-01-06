@@ -129,6 +129,7 @@ pub struct NewUser {
     pub encrypted_settings: Option<String>,
     pub private_key_salt: String,
     pub iv: String,
+    pub auth_salt: Option<String>,
 }
 
 pub async fn generate_salt() -> String {
@@ -150,7 +151,7 @@ pub async fn create_user(
     new_user: NewUser,
 ) -> Result<Uuid, sqlx::Error> {
     let rec = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id"
+        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv, auth_salt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"
     )
     .bind(Uuid::new_v4())
     .bind(new_user.username)
@@ -161,8 +162,23 @@ pub async fn create_user(
     .bind(new_user.encrypted_settings)
     .bind(new_user.private_key_salt)
     .bind(new_user.iv)
+    .bind(new_user.auth_salt)
     .fetch_one(pool)
     .await?;
 
     Ok(rec)
+}
+
+pub async fn get_user_by_email(
+    pool: &PgPool,
+    email: &str,
+) -> Result<User, sqlx::Error> {
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, username, password_hash, salt FROM users WHERE email = $1",
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(user)
 }
