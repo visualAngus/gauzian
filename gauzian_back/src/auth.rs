@@ -108,17 +108,6 @@ pub struct User {
     pub auth_salt: Option<String>,
 }
 
-async fn get_user(pool: &PgPool, user_id: Uuid) -> Result<User, sqlx::Error> {
-    let user = sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash FROM users WHERE id = $1",
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await?;
-
-    Ok(user)
-}
-
 #[derive(Deserialize, Debug)]
 pub struct NewUser {
     pub username: String,
@@ -186,5 +175,6 @@ pub async fn get_user_by_email(
 
 pub fn verify_password(password: &str, password_hash: &str, salt: &str) -> bool {
     let hashed_input = hash_password(password, salt);
+    println!("Comparing hashes: input={} stored={}", hashed_input, password_hash);
     hashed_input == password_hash
 }
