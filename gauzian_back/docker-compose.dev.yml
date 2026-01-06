@@ -1,0 +1,93 @@
+services:
+  # 1. Base de données PostgreSQL
+  db:
+    image: postgres:alpine
+    container_name: gauzian_dbV2
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Cache Redis
+  redis:
+    image: redis:alpine
+    container_name: gauzian_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  # 3. Backend Rust (MODE DEV avec hot reload)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: gauzian_api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy  
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      RUST_LOG: gauzian_back=debug,tower_http=debug
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/target
+      - cargo_registry:/usr/local/cargo/registry
+
+  # 4. Reverse Proxy Caddy
+  caddy:
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    image: gauzian_back-caddy:latest
+    container_name: gauzian_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  # 5. Front Nuxt (MODE DEV avec hot reload)
+  front:
+    build:
+      context: ../gauzian_front
+      dockerfile: Dockerfile.dev
+    container_name: gauzian_front
+    restart: always
+    ports:
+      - "8080:3000"
+    volumes:
+      - ../gauzian_front:/app
+      - /app/node_modules
+      - /app/.nuxt
+    environment:
+      - NODE_ENV=development
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  cargo_registry:
