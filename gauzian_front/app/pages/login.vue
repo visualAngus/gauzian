@@ -30,17 +30,65 @@
 			<section>
 				<div class="div_input_all">
 					<h2>LOGIN</h2>
+                    <!-- Formulaire de login -->
+                    <form @submit.prevent="handleLogin" v-if="etat === 'login'">
+                        <label for="login_email">Email :</label>
+                        <input 
+                            v-model="loginForm.email"
+                            type="email" 
+                            id="login_email" 
+                            required 
+                        />
 
-					<form id="login_form">
-						<label for="login_username">Nom d'utilisateur :</label>
-						<input type="text" id="login_username" name="login_username" required />
+                        <label for="login_password">Mot de passe :</label>
+                        <input 
+                            v-model="loginForm.password"
+                            type="password" 
+                            id="login_password" 
+                            required 
+                        />
 
-						<label for="login_password">Mot de passe :</label>
-						<input type="password" id="login_password" name="login_password" required />
+                        <button type="submit" :disabled="loading">
+                            {{ loading ? "Connexion..." : "S'identifier" }}
+                        </button>
+                        <button type="button" @click="etat = 'register'">
+                            S'enregistrer
+                        </button>
+                    </form>
 
-						<button type="submit" disabled>S'identifier</button>
-						<button type="button" id="register_button">S'enregistrer</button>
-					</form>
+                    <!-- Formulaire de register -->
+                    <form @submit.prevent="handleRegister" v-if="etat === 'register'">
+                        <label for="register_username">Nom d'utilisateur :</label>
+                        <input 
+                            v-model="registerForm.username"
+                            type="text" 
+                            id="register_username" 
+                            required 
+                        />
+
+                        <label for="register_email">Email :</label>
+                        <input 
+                            v-model="registerForm.email"
+                            type="email" 
+                            id="register_email" 
+                            required 
+                        />
+
+                        <label for="register_password">Mot de passe :</label>
+                        <input 
+                            v-model="registerForm.password"
+                            type="password" 
+                            id="register_password" 
+                            required 
+                        />
+
+                        <button type="submit" :disabled="loading">
+                            {{ loading ? "Création..." : "Créer un compte" }}
+                        </button>
+                        <button type="button" @click="etat = 'login'">
+                            Retour au login
+                        </button>
+                    </form>
 				</div>
 			</section>
 		</main>
@@ -48,6 +96,10 @@
 </template>
 
 <script setup>
+
+// state
+const etat = ref("login");
+
 useHead({
 	title: "GZAuth | Login",
 	link: [
