@@ -43,12 +43,17 @@
                         />
 
                         <label for="login_password">Mot de passe :</label>
-                        <input 
-                            v-model="loginForm.password"
-                            type="password" 
-                            id="login_password" 
-                            required 
-                        />
+						<div class="password-row">
+							<input 
+								v-model="loginForm.password"
+								:type="showLoginPassword ? 'text' : 'password'" 
+								id="login_password" 
+								required 
+							/>
+							<button type="button" class="toggle-btn" @click="showLoginPassword = !showLoginPassword">
+								{{ showLoginPassword ? "Masquer" : "Afficher" }}
+							</button>
+						</div>
 
                         <button type="submit" :disabled="loading">
                             {{ loading ? "Connexion..." : "S'identifier" }}
@@ -77,12 +82,17 @@
                         />
 
                         <label for="register_password">Mot de passe :</label>
-                        <input 
-                            v-model="registerForm.password"
-                            type="password" 
-                            id="register_password" 
-                            required 
-                        />
+						<div class="password-row">
+							<input 
+								v-model="registerForm.password"
+								:type="showRegisterPassword ? 'text' : 'password'" 
+								id="register_password" 
+								required 
+							/>
+							<button type="button" class="toggle-btn" @click="showRegisterPassword = !showRegisterPassword">
+								{{ showRegisterPassword ? "Masquer" : "Afficher" }}
+							</button>
+						</div>
 
                         <button type="submit" :disabled="loading">
                             {{ loading ? "Création..." : "Créer un compte" }}
@@ -104,6 +114,8 @@ const etat = ref("login");
 const loading = ref(false);
 const loginForm = ref({ email: "", password: "" });
 const registerForm = ref({ username: "", email: "", password: "" });
+const showLoginPassword = ref(false);
+const showRegisterPassword = ref(false);
 
 const handleLogin = async () => {
   loading.value = true;
@@ -279,6 +291,30 @@ section form {
 	display: flex;
 	flex-direction: column;
 	gap: 15px;
+}
+
+.password-row {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+.password-row input {
+	flex: 1;
+}
+
+.toggle-btn {
+	padding: 10px 12px;
+	background-color: #f4f4f4;
+	color: #333333;
+	border: 1px solid #cccccc;
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.toggle-btn:hover {
+	background-color: #e6e6e6;
 }
 
 section form label {
