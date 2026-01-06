@@ -119,11 +119,14 @@ async fn get_user(pool: &PgPool, user_id: Uuid) -> Result<User, sqlx::Error> {
 #[derive(Deserialize, Debug)]
 pub struct NewUser {
     pub username: String,
-    pub password_hash: String,
+    pub password: String,
+    pub password_hash: Option<String>,
     pub encrypted_private_key: String,
     pub public_key: String,
     pub email: String,
     pub encrypted_settings: Option<String>,
+    pub private_key_salt: String,
+    pub iv: String,
 }
 
 pub async fn create_user(
@@ -131,15 +134,18 @@ pub async fn create_user(
     new_user: NewUser,
 ) -> Result<Uuid, sqlx::Error> {
     let rec = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id"
+        "INSERT INTO users (id, username, password, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"
     )
     .bind(Uuid::new_v4())
     .bind(new_user.username)
+    .bind(new_user.password)
     .bind(new_user.password_hash)
     .bind(new_user.encrypted_private_key)
     .bind(new_user.public_key)
     .bind(new_user.email)
     .bind(new_user.encrypted_settings)
+    .bind(new_user.private_key_salt)
+    .bind(new_user.iv)
     .fetch_one(pool)
     .await?;
 
