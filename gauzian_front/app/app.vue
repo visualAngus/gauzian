@@ -125,9 +125,11 @@ function openDB() {
   });
 }
 
-async function saveKeyToBrowser(pemKey) {
+async function saveKeyToBrowser(pemKey, publicKey) {
   try {
     const binaryKey = pemToArrayBuffer(pemKey);
+    const binaryPubKey = pemToArrayBuffer(publicKey);
+
     const keyObject = await window.crypto.subtle.importKey(
       "pkcs8",
       binaryKey,
@@ -135,12 +137,25 @@ async function saveKeyToBrowser(pemKey) {
       false,
       ["decrypt"]
     );
+
+    const pubKeyObject = await window.crypto.subtle.importKey(
+      "spki",
+      binaryPubKey,
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      true,
+      ["encrypt"]
+    );
+
     const db = await openDB();
     const tx = db.transaction(DB_STORE, "readwrite");
     tx.objectStore(DB_STORE).put({
       id: "user_private_key",
       key: keyObject,
-      expires: Date.now() + 2 * 24 * 60 * 60 * 1000,
+      expires: Date.now() + 10 * 24 * 60 * 60 * 1000, // 10 jours
+    });
+    tx.objectStore(DB_STORE).put({
+      id: "user_public_key",
+      key: pubKeyObject,
     });
     keyStatus.value = "✅ Stockée en local (IndexedDB)";
   } catch (e) {
@@ -206,7 +221,7 @@ const register = async () => {
 
     // A. Générer & Sauvegarder Localement
     const { publicKey, privateKey } = await generateBestKeyPair();
-    await saveKeyToBrowser(privateKey);
+    await saveKeyToBrowser(privateKey, publicKey);
 
     // B. Chiffrer pour le serveur
     const private_key_salt = window.crypto.getRandomValues(new Uint8Array(16));
@@ -308,7 +323,7 @@ const login = async () => {
         aesKey,
         encryptedBuf
       );
-      await saveKeyToBrowser(new TextDecoder().decode(decryptedBuf));
+      await saveKeyToBrowser(new TextDecoder().decode(decryptedBuf), data.public_key);
       response.value = "Login complet : Cookie OK + Clé OK.";
     } else {
       response.value = "Login OK (Pas de crypto).";

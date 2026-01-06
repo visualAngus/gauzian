@@ -109,6 +109,7 @@ pub struct User {
     pub encrypted_private_key: String,
     pub private_key_salt: String,
     pub iv: String,
+    pub public_key: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -168,7 +169,7 @@ pub async fn get_user_by_email(
 ) -> Result<User, sqlx::Error> {
     tracing::info!("Fetching user by email: {}", email);
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, auth_salt, encrypted_private_key, private_key_salt, iv FROM users WHERE email = $1",
+        "SELECT id, username, password_hash, auth_salt, encrypted_private_key, private_key_salt, iv, public_key FROM users WHERE email = $1",
     )
     .bind(email)
     .fetch_one(pool)
