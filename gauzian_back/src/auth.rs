@@ -101,10 +101,11 @@ pub async fn blacklist_token(
 }
 
 #[derive(sqlx::FromRow)]
-struct User {
-    id: Uuid,
-    username: String,
-    password_hash: String,
+pub struct User {
+    pub id: Uuid,
+    pub username: String,
+    pub password_hash: String,
+    pub auth_salt: Option<String>,
 }
 
 async fn get_user(pool: &PgPool, user_id: Uuid) -> Result<User, sqlx::Error> {
@@ -181,4 +182,9 @@ pub async fn get_user_by_email(
     .await?;
 
     Ok(user)
+}
+
+pub fn verify_password(password: &str, password_hash: &str, salt: &str) -> bool {
+    let hashed_input = hash_password(password, salt);
+    hashed_input == password_hash
 }
