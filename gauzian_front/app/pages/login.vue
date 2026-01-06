@@ -2,7 +2,7 @@
 	<div class="page">
 		<header>
 			<h1>GZAUTH</h1>
-			<div class="div_menu">
+			<div class="div_menu" style="display: none;">
 				<a class="a_menu" href="a_propos.html">
 					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M12 6C12.8284 6 13.5 5.32843 13.5 4.5C13.5 3.67157 12.8284 3 12 3C11.1716 3 10.5 3.67157 10.5 4.5C10.5 5.32843 11.1716 6 12 6ZM9 10H11V18H9V20H15V18H13V8H9V10Z"></path>
@@ -162,6 +162,7 @@ const handleLogin = async () => {
 		}
 
 		console.log("Login OK");
+        window.location.href = "/";
   } finally {
     loading.value = false;
   }
@@ -195,7 +196,9 @@ const handleRegister = async () => {
 		const data = await res.json();
 		if (!res.ok) throw new Error(data.error || "Register failed");
 
-		console.log("Register OK");
+        // redirect to /
+        console.log("Register OK");
+        window.location.href = "/";
   } finally {
     loading.value = false;
   }
