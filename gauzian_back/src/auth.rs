@@ -150,7 +150,7 @@ pub async fn create_user(
     new_user: NewUser,
 ) -> Result<Uuid, sqlx::Error> {
     let rec = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"
+        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id"
     )
     .bind(Uuid::new_v4())
     .bind(new_user.username)
