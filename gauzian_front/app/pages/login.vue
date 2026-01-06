@@ -29,7 +29,9 @@
 		<main>
 			<section>
 				<div class="div_input_all">
-					<h2>LOGIN</h2>
+                    
+                    <h2 v-if="etat === 'login'">LOGIN</h2>
+                    <h2 v-else>S'ENREGISTRER</h2>
                     <!-- Formulaire de login -->
                     <form @submit.prevent="handleLogin" v-if="etat === 'login'">
                         <label for="login_email">Email :</label>
@@ -254,7 +256,7 @@ section {
 .div_input_all {
 	width: 100%;
 	max-width: 400px;
-	transform: translateY(-25%);
+	transform: translateY(-15%);
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
