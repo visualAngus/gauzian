@@ -19,7 +19,7 @@ pub fn create_jwt(
     secret: &[u8],
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = Utc::now()
-        .checked_add_signed(Duration::hours(24))
+        .checked_add_signed(Duration::days(10))
         .expect("valid timestamp")
         .timestamp() as usize;
 
