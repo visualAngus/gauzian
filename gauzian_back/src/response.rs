@@ -68,7 +68,7 @@ impl<T: Serialize> IntoResponse for ApiResponse<T> {
                 .http_only(true)
                 .secure(false) // ⚠️ METTRE true EN PROD (HTTPS)
                 .same_site(SameSite::Lax)
-                .max_age(cookie::time::Duration::hours(24))
+                .max_age(cookie::time::Duration::days(10))
                 .build();
 
             response
