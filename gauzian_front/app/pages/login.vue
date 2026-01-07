@@ -118,8 +118,10 @@
 		</main>
 	</div>
 </template>
-
 <script setup>
+definePageMeta({
+  layout: 'blank' // utiliserait layouts/blank.vue à la place
+})
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 
