@@ -5,7 +5,7 @@
     <main>
       <button @click="autologin">Auto-login</button>
 	  <button @click="navigate('/drive')">Go to Drive</button>
-	  <button @click="navigate('/info')">Go to Info</button>
+	  <button @click="navigate('/drive')">Go to Drive</button>
 
     </main>
 </template> 
