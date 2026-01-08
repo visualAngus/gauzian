@@ -30,7 +30,7 @@ const headerTitle = computed(() => props.headerTitle)
 </script>
 
 <style scoped>
-body {
+/* body {
 	background-color: white;
 }
 
@@ -39,7 +39,7 @@ body {
 	padding: 0;
 	box-sizing: border-box;
 	user-select: none;
-}
+} */
 
 header {
 	padding: 25px 35px;
