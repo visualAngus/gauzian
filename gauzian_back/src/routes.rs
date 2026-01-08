@@ -10,6 +10,7 @@ pub fn app(state: AppState) -> Router {
         .route("/logout", post(handlers::logout_handler))
         .route("/protected", get(handlers::protected_handler))
         .route("/autologin", get(handlers::auto_login_handler))
+        .route("/info", get(handlers::info_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
