@@ -29,6 +29,26 @@
         </div>
     </div>
 </div>
+<div class="info-container">
+    <h1 class="info-title">Sécurisé une information</h1>
+    <input v-model="secretInput" type="text" placeholder="Entrez une information secrète" />
+    <button class="info-btn" @click="encryptSecret">Chiffrer</button>
+    <div v-if="encryptedSecret" class="info-card">
+        <div class="info-row">
+            <span class="info-label">Information chiffrée :</span>
+            <span class="info-value info-mono">{{ encryptedSecret }}</span> 
+        </div>
+    </div>
+
+    <button class="info-btn" @click="decryptSecret">Déchiffrer</button>
+    <div v-if="decryptedSecret" class="info-card">
+        <div class="info-row">
+            <span class="info-label">Information déchiffrée :</span>
+            <span class="info-value info-mono">{{ decryptedSecret }}</span>
+        </div>
+    </div>
+
+</div>
 </template> 
 
 <script setup>
@@ -40,6 +60,8 @@ definePageMeta({
 
 import {
     getKeyStatus,
+    encryptWithStoredPublicKey,
+    decryptWithStoredPrivateKey,
 
 } from "~/utils/crypto";
 
@@ -55,9 +77,9 @@ const public_key = ref(null);
 const encrypted_private_key = ref(null);
 const iv = ref(null);
 const private_key_salt = ref(null);
-
-
-
+const secretInput = ref("");
+const encryptedSecret = ref("");
+const decryptedSecret = ref("");
 
 
 const autologin = async () => {
@@ -82,6 +104,32 @@ const autologin = async () => {
     } catch (error) {
         console.error("Auto-login failed:", error);
         // window.location.href = "/login";
+    }
+};
+
+const encryptSecret = async () => {
+    if (!secretInput.value) {
+        alert("Veuillez entrer une information secrète à chiffrer.");
+        return;
+    }
+    try {
+        encryptedSecret.value = await encryptWithStoredPublicKey(secretInput.value);
+        console.log("Information chiffrée :", encryptedSecret.value);
+    } catch (error) {
+        console.error("Erreur lors du chiffrement de l'information :", error);
+    }
+};
+
+const decryptSecret = async () => {
+    if (!encryptedSecret.value) {
+        alert("Veuillez chiffrer une information avant de la déchiffrer.");
+        return;
+    }
+    try {
+        decryptedSecret.value = await decryptWithStoredPrivateKey(encryptedSecret.value);
+        console.log("Information déchiffrée :", decryptedSecret.value);
+    } catch (error) {
+        console.error("Erreur lors du déchiffrement de l'information :", error);
     }
 };
 
