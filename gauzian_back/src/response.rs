@@ -41,6 +41,14 @@ impl ApiResponse<ErrorResponse> {
         }
     }
 
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self {
+            data: ErrorResponse { error: message.into() },
+            token: None,
+            status: StatusCode::NOT_FOUND,
+        }
+    }
+
     pub fn internal_error(message: impl Into<String>) -> Self {
         Self {
             data: ErrorResponse { error: message.into() },
