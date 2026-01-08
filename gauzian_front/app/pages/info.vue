@@ -189,7 +189,7 @@ body {
 }
 
 input[type="text"] {
-    width: 100%;
+    width: 90%;
     padding: 12px 16px;
     margin-bottom: 16px;
     border: 2px solid #cbd5e1;
