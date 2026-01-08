@@ -188,6 +188,21 @@ body {
     background: linear-gradient(120deg, #f7f8fa 60%, #e0e7ef 100%);
 }
 
+input[type="text"] {
+    width: 100%;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: "Montserrat", sans-serif;
+    transition: border-color 0.2s;
+}
+input[type="text"]:focus {
+    border-color: #3b82f6;
+    outline: none;
+}
+
 .info-container {
     max-width: 700px;
     margin: 40px auto 0 auto;
