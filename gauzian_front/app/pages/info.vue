@@ -1,17 +1,18 @@
 <template>
-	<div class="page">
+  <div class="page">
 		
 	</div>
     <main>
-
+        <button @click="get_info">Récupérer mes infos</button>
+        
     </main>
-</template>
+</template> 
 
 <script setup>
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 definePageMeta({
-    headerTitle: 'GZDRIVE'
+    headerTitle: 'GZINFO'
 })
 
 import {
@@ -50,10 +51,29 @@ const autologin = async () => {
     }
 };
 
+const get_info = async () => {
+    console.log("Fetching info...");
+    try {
+        const res = await fetch(`${API_URL}/info`, {
+            method: "GET",
+            credentials: "include",
+        });
+        if (res.ok) {
+            const data = await res.json();
+            console.log("Info data:", data);
+        } else {
+            console.log("Failed to fetch info.");
+        }
+    } catch (error) {
+        console.error("Fetching info failed:", error);
+    }
+};
+
+
 autologin();
 
 useHead({
-	title: "GZDRIVE | Drive",
+	title: "GZINFO | Info",
 	link: [
 		{ rel: "preconnect", href: "https://fonts.googleapis.com" },
 		{ rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" },
@@ -66,7 +86,8 @@ useHead({
 });
 </script>
 
-<style>
+
+<style scoped>
 body {
 	background-color: white;
 }

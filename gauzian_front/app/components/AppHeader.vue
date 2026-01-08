@@ -1,6 +1,6 @@
 <template>
   <header>
-    <h1>GZDRIVE</h1>
+    <h1>{{ headerTitle }}</h1>
     <div class="div_menu">
       <a class="a_menu" href="#a_propos">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -18,6 +18,16 @@
     </div>
   </header>
 </template>
+
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  headerTitle: { type: String, default: 'GZDRIVE' }
+})
+
+const headerTitle = computed(() => props.headerTitle)
+</script>
 
 <style scoped>
 header {
@@ -49,6 +59,7 @@ h1 {
   width: 50px;
   height: 50px;
   border-radius: 50%;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -71,6 +82,12 @@ h1 {
   overflow: hidden;
   margin-left: 15px;
   color: #333333;
+}
+
+.a_account img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 @media (max-width: 600px) {
