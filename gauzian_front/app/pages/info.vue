@@ -5,6 +5,10 @@
     <main>
         <button @click="get_info">Récupérer mes infos</button>
         
+        <div class="div_info_visu">
+            <p>Vos informations apparaîtront ici.</p>
+            
+        </div>
     </main>
 </template> 
 
@@ -24,6 +28,13 @@ const API_URL = "https://gauzian.pupin.fr/api";
 
 const etat = ref("login");
 const loading = ref(false);
+
+
+const id_user = ref(null);
+const username = ref(null);
+const public_key = ref(null);
+
+
 
 
 const autologin = async () => {
@@ -87,7 +98,7 @@ useHead({
 </script>
 
 
-<style scoped>
+<style>
 body {
 	background-color: white;
 }
