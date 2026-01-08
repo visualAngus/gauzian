@@ -7,7 +7,12 @@
         
         <div class="div_info_visu">
             <p>Vos informations apparaîtront ici.</p>
-            
+            <p>ID Utilisateur: {{ id_user }}</p>
+            <p>Nom d'utilisateur: {{ username }}</p>
+            <p>Clé publique: {{ public_key }}</p>
+            <p>Clé privée chiffrée: {{ encrypted_private_key }}</p>
+            <p>IV: {{ iv }}</p>
+            <p>Sel de la clé privée: {{ private_key_salt }}</p>            
         </div>
     </main>
 </template> 
@@ -33,6 +38,10 @@ const loading = ref(false);
 const id_user = ref(null);
 const username = ref(null);
 const public_key = ref(null);
+const encrypted_private_key = ref(null);
+const iv = ref(null);
+const private_key_salt = ref(null);
+
 
 
 
@@ -71,7 +80,13 @@ const get_info = async () => {
         });
         if (res.ok) {
             const data = await res.json();
-            console.log("Info data:", data);
+            id_user.value = data.id;
+            username.value = data.username;
+            public_key.value = data.public_key;
+            encrypted_private_key.value = data.encrypted_private_key;
+            iv.value = data.iv;
+            private_key_salt.value = data.private_key_salt;
+            console.log("Info fetched successfully:", data);
         } else {
             console.log("Failed to fetch info.");
         }
