@@ -1,20 +1,34 @@
 <template>
-  <div class="page">
-		
-	</div>
-    <main>
-        <button @click="get_info">Récupérer mes infos</button>
-        
-        <div class="div_info_visu">
-            <p>Vos informations apparaîtront ici.</p>
-            <p>ID Utilisateur: {{ id_user }}</p>
-            <p>Nom d'utilisateur: {{ username }}</p>
-            <p>Clé publique: {{ public_key }}</p>
-            <p>Clé privée chiffrée: {{ encrypted_private_key }}</p>
-            <p>IV: {{ iv }}</p>
-            <p>Sel de la clé privée: {{ private_key_salt }}</p>            
+<div class="info-container">
+    <h1 class="info-title">Mes informations</h1>
+    <button class="info-btn" @click="get_info">Récupérer mes infos</button>
+    <div class="info-card">
+        <div class="info-row">
+            <span class="info-label">ID Utilisateur :</span>
+            <span class="info-value">{{ id_user }}</span>
         </div>
-    </main>
+        <div class="info-row">
+            <span class="info-label">Nom d'utilisateur :</span>
+            <span class="info-value">{{ username }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Clé publique :</span>
+            <span class="info-value info-mono">{{ public_key }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Clé privée chiffrée :</span>
+            <span class="info-value info-mono">{{ encrypted_private_key }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">IV :</span>
+            <span class="info-value info-mono">{{ iv }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Sel de la clé privée :</span>
+            <span class="info-value info-mono">{{ private_key_salt }}</span>
+        </div>
+    </div>
+</div>
 </template> 
 
 <script setup>
@@ -114,28 +128,97 @@ useHead({
 
 
 <style>
+
 body {
-	background-color: white;
+    background: #f7f8fa;
 }
 
-* {
-	margin: 0;
-	padding: 0;
-	box-sizing: border-box;
-	user-select: none;
+.info-container {
+    max-width: 700px;
+    margin: 40px auto 0 auto;
+    padding: 32px 24px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 4px 24px 0 rgba(0,0,0,0.08);
+    font-family: "Montserrat", sans-serif;
 }
 
-button {
-    padding: 10px 15px;
-	background-color: #333333;
-	color: white;
-	border: none;
-	border-radius: 4px;
-	font-size: 14px;
-	font-family: "Montserrat", sans-serif;
-	font-weight: 600;
-	cursor: pointer;
-	margin-top: 5px;
+.info-title {
+    text-align: center;
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 24px;
+    color: #222;
+    letter-spacing: 1px;
+}
+
+.info-btn {
+    display: block;
+    margin: 0 auto 28px auto;
+    padding: 12px 28px;
+    background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px 0 rgba(59,130,246,0.08);
+    transition: background 0.2s;
+}
+.info-btn:hover {
+    background: linear-gradient(90deg, #2563eb 0%, #0891b2 100%);
+}
+
+.info-card {
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 24px 18px;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.04);
+}
+
+.info-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+.info-label {
+    min-width: 180px;
+    font-weight: 600;
+    color: #374151;
+    font-size: 1.05rem;
+    margin-right: 10px;
+}
+.info-value {
+    color: #222;
+    font-size: 1.05rem;
+    word-break: break-all;
+    flex: 1;
+}
+.info-mono {
+    font-family: "Fira Mono", "Consolas", "Menlo", monospace;
+    font-size: 0.98rem;
+    background: #e0e7ef;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-top: 2px;
+}
+
+@media (max-width: 600px) {
+    .info-container {
+        padding: 12px 2vw;
+    }
+    .info-label {
+        min-width: 120px;
+        font-size: 0.98rem;
+    }
+    .info-title {
+        font-size: 1.3rem;
+    }
+    .info-card {
+        padding: 10px 4px;
+    }
 }
 
 </style>
