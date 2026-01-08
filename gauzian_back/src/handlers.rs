@@ -170,6 +170,10 @@ pub async fn info_handler(
 ) -> Response {
     match auth::get_user_by_id(&state.db_pool, claims.id).await {
         Ok(user_info) => ApiResponse::ok(user_info).into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            tracing::warn!(user_id = %claims.id, "User info not found");
+            ApiResponse::not_found("User not found").into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to retrieve user info: {:?}", e);
             ApiResponse::internal_error("Failed to retrieve user info").into_response()
