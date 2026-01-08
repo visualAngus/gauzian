@@ -9,7 +9,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { useHead } from "#imports";
+import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 definePageMeta({
     headerTitle: 'GZDRIVE'
 })
