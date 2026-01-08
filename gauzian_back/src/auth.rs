@@ -12,7 +12,7 @@ use axum::{
 use redis::AsyncCommands;
 use uuid::Uuid;
 use sqlx::PgPool;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use base64::{engine::general_purpose, Engine as _};
@@ -127,6 +127,20 @@ pub struct NewUser {
     pub auth_salt: Option<String>,
 }
 
+// UserInfo
+#[derive(Serialize, Debug, sqlx::FromRow)]
+pub struct UserInfo {
+    pub id: Uuid,
+    pub username: String,
+    pub encrypted_private_key: String,
+    pub private_key_salt: String,
+    pub iv: String,
+    pub public_key: String,
+    pub password_hash: String,
+    pub auth_salt: Option<String>,
+}
+
+
 pub async fn generate_salt() -> String {
     let mut salt = [0u8; 16];
     rand::rng().fill_bytes(&mut salt);
@@ -183,4 +197,18 @@ pub fn verify_password(password: &str, password_hash: &str, salt: &str) -> bool 
     let hashed_input = hash_password(password, salt);
     tracing::info!("Comparing hashes: input={} stored={}", hashed_input, password_hash);
     hashed_input == password_hash
+}
+
+
+pub async fn get_user_by_id(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<UserInfo, sqlx::Error> {
+    let user = sqlx::query_as::<_, UserInfo>(
+        "SELECT id, username, password_hash, auth_salt, encrypted_private_key, private_key_salt, iv, public_key FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(user)
 }

@@ -161,3 +161,18 @@ pub async fn logout_handler(
 
     ApiResponse::ok("Logged out".to_string())
 }
+
+
+
+pub async fn info_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> Response {
+    match auth::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(user_info) => ApiResponse::ok(user_info).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to retrieve user info: {:?}", e);
+            ApiResponse::internal_error("Failed to retrieve user info").into_response()
+        }
+    }
+}
