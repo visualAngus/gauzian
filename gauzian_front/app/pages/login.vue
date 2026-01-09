@@ -261,6 +261,16 @@ useHead({
 </script>
 
 <style>
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+body {
+	background-color: white;
+	font-family: "Montserrat", sans-serif;
+}
+
 main {
 	width: 100vw;
 	min-height: 200px;
