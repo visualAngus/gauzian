@@ -29,7 +29,8 @@ async fn main() {
         .init();
 
     let state = AppState::from_env(db_pool).await;
-
+    
+    
     // Initialiser le bucket S3 au démarrage (avec timeout plus long)
     match tokio::time::timeout(
         std::time::Duration::from_secs(30),
