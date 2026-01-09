@@ -447,6 +447,7 @@ export async function decryptPrivateKeyPemWithPassword(params: {
     }
     throw error;
   }
+}
 
 export async function deleteKeyStore(config: KeyStoreConfig = DEFAULT_KEYSTORE): Promise<void> {
   assertClient();
