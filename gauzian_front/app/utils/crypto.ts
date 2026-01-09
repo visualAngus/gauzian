@@ -105,6 +105,86 @@ export async function generateRsaKeyPairPem(): Promise<{
   };
 }
 
+export async function generateRecordKey(privateKey: string): Promise<{
+  encrypted_private_key_reco: string;
+  recovery_key: string;
+}> {
+  assertClient();
+
+  // Générer une clé AES de 256 bits pour chiffrer la clé privée
+  const aesKey = await window.crypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  
+  // Exporter la clé AES brute
+  const rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
+  
+  // Générer un IV aléatoire pour AES-GCM
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  
+  // Chiffrer la clé privée avec AES-GCM
+  const privateKeyBuffer = strToBuff(privateKey);
+  const encryptedPrivateKey = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    privateKeyBuffer
+  );
+  
+  // Créer la clé de récupération (recovery_key) à partir de la clé AES
+  const recoveryKey = buffToB64(rawAesKey);
+  
+  // Combiner IV et clé privée chiffrée
+  const combined = new Uint8Array(iv.length + encryptedPrivateKey.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encryptedPrivateKey), iv.length);
+
+  return {
+    encrypted_private_key_reco: buffToB64(combined),
+    recovery_key: recoveryKey,
+  };
+  
+}
+
+export async function decryptRecordKey(
+  encrypted_private_key_reco: string,
+  recovery_key: string,
+): Promise<string> {
+  assertClient();
+
+  // Décoder la clé de récupération (clé AES)
+  const rawAesKey = b64ToBuff(recovery_key);
+  
+  // Importer la clé AES
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    rawAesKey,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+  
+  // Décoder les données chiffrées (IV + clé privée chiffrée)
+  const combined = b64ToBuff(encrypted_private_key_reco);
+  const iv = combined.slice(0, 12);
+  const encryptedPrivateKey = combined.slice(12);
+  
+  // Déchiffrer la clé privée
+  const decryptedKeyBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    encryptedPrivateKey
+  );
+  
+  // Convertir le buffer en string (clé privée PEM)
+  const decoder = new TextDecoder();
+  return decoder.decode(decryptedKeyBuffer);
+}
+
 async function openDB(config: KeyStoreConfig = DEFAULT_KEYSTORE): Promise<IDBDatabase> {
   assertClient();
   return await new Promise((resolve, reject) => {

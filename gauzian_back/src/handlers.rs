@@ -31,6 +31,7 @@ pub struct RegisterRequest {
     pub email: String,
     pub private_key_salt: String,
     pub iv: String,
+    pub encrypted_record_key: String,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +93,7 @@ pub async fn register_handler(
         private_key_salt: req.private_key_salt,
         auth_salt: Some(salt),
         iv: req.iv,
+        encrypted_record_key: req.encrypted_record_key,
     };
 
     let user_id = match auth::create_user(&state.db_pool, new_user).await {
