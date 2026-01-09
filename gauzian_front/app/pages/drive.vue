@@ -147,7 +147,7 @@ const initializeFileInDB = async (file, folder_id) => {
 
 
 const uploadFile = async (file, file_id, dataKey) => {
-    const chunkSize = 5 * 1024 * 1024; // 5 MB
+    const chunkSize = 1 * 1024 * 1024; // 1 MB (réduit pour éviter stack overflow)
     const totalChunks = Math.ceil(file.size / chunkSize);
     
     // Limite le nombre d'envois simultanés pour ne pas tuer le navigateur
@@ -160,11 +160,9 @@ const uploadFile = async (file, file_id, dataKey) => {
         const end = Math.min(start + chunkSize, file.size);
         
         const chunk = file.slice(start, end);
-        const chunkArrayBuf = await chunk.arrayBuffer();
-        const chunkB64 = btoa(String.fromCharCode(...new Uint8Array(chunkArrayBuf)));
 
         const {cipherText,iv} = await encryptDataWithDataKey(
-            chunkB64,
+            chunk,
             dataKey
         );
         // Simulation d'upload

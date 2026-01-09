@@ -538,7 +538,7 @@ export async function decryptSimpleDataWithDataKey(
 
 // for import data like files
 export async function encryptDataWithDataKey(
-  data: string,
+  data: string | ArrayBuffer | Blob,
   dataKeyB64: string
 ): Promise<{ cipherText: string; iv: string }> {
   assertClient();
@@ -554,11 +554,20 @@ export async function encryptDataWithDataKey(
   const iv = new Uint8Array(12);
   window.crypto.getRandomValues(iv);
 
-  const encodedData = strToBuff(data);
+  // Convertir data en ArrayBuffer selon son type
+  let dataBuffer: ArrayBuffer;
+  if (typeof data === "string") {
+    dataBuffer = toArrayBuffer(strToBuff(data));
+  } else if (data instanceof Blob) {
+    dataBuffer = await data.arrayBuffer();
+  } else {
+    dataBuffer = data; // C'est déjà un ArrayBuffer
+  }
+
   const encryptedBuffer = await window.crypto.subtle.encrypt(
     { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
     aesKey,
-    toArrayBuffer(encodedData) as BufferSource
+    dataBuffer as BufferSource
   );
 
   return {
