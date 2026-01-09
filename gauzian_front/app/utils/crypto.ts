@@ -442,10 +442,7 @@ export async function decryptPrivateKeyPemWithPassword(params: {
   );
   return new TextDecoder().decode(decryptedBuf);
   } catch (error) {
-    if (error.message.includes('base64')) {
-      throw new Error(`Failed to decrypt private key: invalid base64 data in login response. This may indicate corrupted session data. Please try logging in again. Details: ${error.message}`);
-    }
-    throw error;
+    throw new Error("Failed to decrypt private key with provided password");
   }
 }
 
