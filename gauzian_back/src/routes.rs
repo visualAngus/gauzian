@@ -11,6 +11,7 @@ pub fn app(state: AppState) -> Router {
         .route("/protected", get(handlers::protected_handler))
         .route("/autologin", get(handlers::auto_login_handler))
         .route("/info", get(handlers::info_handler))
+        .route("/drive/initialize_file", post(handlers::initialize_file_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

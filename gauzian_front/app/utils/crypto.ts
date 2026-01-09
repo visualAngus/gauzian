@@ -430,3 +430,135 @@ export async function deleteKeyStore(config: KeyStoreConfig = DEFAULT_KEYSTORE):
     req.onblocked = () => resolve(); // Souvent bloqué si des onglets sont ouverts, on résout quand même pour ne pas crash
   });
 }
+
+export async function generateDataKey(): Promise<string> {
+  assertClient();
+  const aesKey = await window.crypto.subtle.generateKey(
+    {
+      name: "AES-GCM",
+      length: 256,
+    },
+    true,
+    ["encrypt", "decrypt"]
+  );
+  const rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
+  return buffToB64(rawAesKey);
+}
+
+// for metatdata for exemple
+export async function encryptSimpleDataWithDataKey(
+  data: string,
+  dataKeyB64: string
+): Promise<string> {
+  assertClient();
+  const dataKeyBuf = b64ToBuff(dataKeyB64);
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(dataKeyBuf) as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+
+  const iv = new Uint8Array(12);
+  window.crypto.getRandomValues(iv);
+
+  const encodedData = strToBuff(data);
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
+    aesKey,
+    toArrayBuffer(encodedData) as BufferSource
+  );
+
+  // Combiner IV et texte chiffré
+  const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encryptedBuffer), iv.length);
+
+  return buffToB64(combined);
+}
+
+export async function decryptSimpleDataWithDataKey(
+  cipherTextB64: string,
+  dataKeyB64: string
+): Promise<string> {
+  assertClient();
+  const dataKeyBuf = b64ToBuff(dataKeyB64);
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(dataKeyBuf) as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const combined = b64ToBuff(cipherTextB64);
+  const iv = combined.slice(0, 12);
+  const cipherBuffer = combined.slice(12);
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
+    aesKey,
+    toArrayBuffer(cipherBuffer) as BufferSource
+  );
+
+  return new TextDecoder().decode(decryptedBuffer);
+}
+
+// for import data like files
+export async function encryptDataWithDataKey(
+  data: string,
+  dataKeyB64: string
+): Promise<{ cipherText: string; iv: string }> {
+  assertClient();
+  const dataKeyBuf = b64ToBuff(dataKeyB64);
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(dataKeyBuf) as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+
+  const iv = new Uint8Array(12);
+  window.crypto.getRandomValues(iv);
+
+  const encodedData = strToBuff(data);
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
+    aesKey,
+    toArrayBuffer(encodedData) as BufferSource
+  );
+
+  return {
+    cipherText: buffToB64(encryptedBuffer),
+    iv: buffToB64(iv),
+  };
+}
+  
+export async function decryptDataWithDataKey(
+  cipherTextB64: string,
+  ivB64: string,
+  dataKeyB64: string
+): Promise<string> {
+  assertClient();
+  const dataKeyBuf = b64ToBuff(dataKeyB64);
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(dataKeyBuf) as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const iv = b64ToBuff(ivB64);
+  const cipherBuffer = b64ToBuff(cipherTextB64);
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
+    aesKey,
+    toArrayBuffer(cipherBuffer) as BufferSource
+  );
+
+  return new TextDecoder().decode(decryptedBuffer);
+}
