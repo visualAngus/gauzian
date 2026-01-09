@@ -35,6 +35,7 @@ pub async  fn initialize_file_in_db(
     encrypted_metadata: &str,
     mime_type: &str,
     folder_id: Option<Uuid>,
+    encrypted_file_key:&str,
 ) -> Result<Uuid, sqlx::Error> {
     let file_id = Uuid::new_v4();
     let rec = sqlx::query_scalar::<_, Uuid>(
@@ -54,14 +55,15 @@ pub async  fn initialize_file_in_db(
     let file_access_id = Uuid::new_v4();
     sqlx::query(
         "
-        INSERT INTO file_access (id, file_id, user_id, folder_id, access_level, created_at)
-        VALUES ($1, $2, $3, $4, 'owner', NOW())
+        INSERT INTO file_access (id, file_id, user_id, folder_id, access_level, created_at, encrypted_file_key)
+        VALUES ($1, $2, $3, $4, 'owner', NOW(), $5)
         "
     )
     .bind(file_access_id)
     .bind(file_id)
     .bind(user_id)
     .bind(folder_id)
+    .bind(encrypted_file_key.as_bytes())
     .execute(db_pool)
     .await?;
     Ok(rec)

@@ -192,6 +192,7 @@ pub struct InitializeFileRequest {
     encrypted_metadata: String,
     mime_type: String,
     folder_id: Option<Uuid>,
+    encrypted_file_key: String,
 }
 
 pub async fn initialize_file_handler(
@@ -201,7 +202,7 @@ pub async fn initialize_file_handler(
     Json(body): Json<InitializeFileRequest>,
 ) -> Response {
     // Vous pouvez accéder aux headers via `headers` et au body via `body`
-    let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, body.folder_id).await {
+    let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, body.folder_id, &body.encrypted_file_key).await {
         Ok(id) => id,
         Err(e) => {
             tracing::error!("Failed to initialize file in DB: {:?}", e);
