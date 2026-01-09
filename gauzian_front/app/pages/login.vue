@@ -264,6 +264,7 @@ useHead({
 
 body {
 	background-color: white;
+	margin: 0 !important;
 }
 
 * {
