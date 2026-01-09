@@ -1,4 +1,5 @@
-use aws_sdk_s3::Client;
+use aws_sdk_s3::{config::Region, Client};
+use aws_types::credentials::Credentials;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
@@ -45,17 +46,26 @@ pub struct StorageClient {
 impl StorageClient {
     /// Créer un nouveau client S3
     pub async fn new(bucket: String) -> Result<Self, StorageError> {
-        let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
-        
-        // Récupérer l'endpoint S3 depuis les env vars
         let s3_endpoint = std::env::var("S3_ENDPOINT")
             .unwrap_or_else(|_| "http://localhost:9000".to_string());
+        let region = std::env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string());
+        let access_key = std::env::var("S3_ACCESS_KEY")
+            .or_else(|_| std::env::var("AWS_ACCESS_KEY_ID"))
+            .unwrap_or_else(|_| "minioadmin".to_string());
+        let secret_key = std::env::var("S3_SECRET_KEY")
+            .or_else(|_| std::env::var("AWS_SECRET_ACCESS_KEY"))
+            .unwrap_or_else(|_| "minioadmin".to_string());
 
-        tracing::info!("Initializing S3 client with endpoint: {}", s3_endpoint);
+        tracing::info!("Initializing S3 client with endpoint: {} and bucket: {}", s3_endpoint, bucket);
 
-        // Créer un client avec l'endpoint customisé
+        let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region(Region::new(region))
+            .credentials_provider(Credentials::new(access_key, secret_key, None, None, "static"))
+            .load()
+            .await;
+
         let client = Client::from_conf(
-            aws_sdk_s3::config::Builder::from(&config)
+            aws_sdk_s3::config::Builder::from(&shared_config)
                 .endpoint_url(&s3_endpoint)
                 .force_path_style(true)  // Important pour MinIO
                 .build(),
