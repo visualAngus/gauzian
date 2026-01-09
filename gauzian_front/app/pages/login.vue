@@ -268,7 +268,6 @@ useHead({
 }
 body {
 	background-color: white;
-	font-family: "Montserrat", sans-serif;
 }
 
 main {
