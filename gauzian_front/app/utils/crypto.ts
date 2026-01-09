@@ -50,10 +50,31 @@ export function buffToB64(buff: ArrayBuffer | ArrayBufferView): string {
 
 export function b64ToBuff(str: string): U8 {
   assertClient();
-  const bin = window.atob(str);
-  const out = new Uint8Array(bin.length) as U8;
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
+
+  // Validate base64 format
+  if (!str || typeof str !== 'string') {
+    throw new Error(`Invalid base64 string: input is not a string or is empty`);
+  }
+
+  // Check for invalid characters
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  if (!base64Regex.test(str)) {
+    throw new Error(`Invalid base64 string: contains invalid characters. String: "${str.substring(0, 50)}${str.length > 50 ? '...' : ''}"`);
+  }
+
+  // Check length (base64 should be multiple of 4, except possibly with padding)
+  if (str.length % 4 !== 0 && str.length % 4 !== 2 && str.length % 4 !== 3) {
+    throw new Error(`Invalid base64 string: length ${str.length} is not valid for base64`);
+  }
+
+  try {
+    const bin = window.atob(str);
+    const out = new Uint8Array(bin.length) as U8;
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch (error) {
+    throw new Error(`Failed to decode base64 string: ${error.message}. String: "${str.substring(0, 50)}${str.length > 50 ? '...' : ''}"`);
+  }
 }
 
 export function strToBuff(str: string): U8 {
@@ -388,9 +409,10 @@ export async function decryptPrivateKeyPemWithPassword(params: {
   assertClient();
   const cryptoSubtle = window.crypto.subtle;
 
-  const saltBuf = b64ToBuff(params.private_key_salt);
-  const ivBuf = b64ToBuff(params.iv);
-  const encryptedBuf = b64ToBuff(params.encrypted_private_key);
+  try {
+    const saltBuf = b64ToBuff(params.private_key_salt);
+    const ivBuf = b64ToBuff(params.iv);
+    const encryptedBuf = b64ToBuff(params.encrypted_private_key);
 
   const passwordKey = await cryptoSubtle.importKey(
     "raw",
@@ -419,7 +441,12 @@ export async function decryptPrivateKeyPemWithPassword(params: {
     toArrayBuffer(encryptedBuf) as BufferSource
   );
   return new TextDecoder().decode(decryptedBuf);
-}
+  } catch (error) {
+    if (error.message.includes('base64')) {
+      throw new Error(`Failed to decrypt private key: invalid base64 data in login response. This may indicate corrupted session data. Please try logging in again. Details: ${error.message}`);
+    }
+    throw error;
+  }
 
 export async function deleteKeyStore(config: KeyStoreConfig = DEFAULT_KEYSTORE): Promise<void> {
   assertClient();

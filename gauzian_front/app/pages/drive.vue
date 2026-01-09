@@ -50,7 +50,12 @@ const autologin = async () => {
         }
     } catch (error) {
         console.error("Auto-login failed:", error);
-        // window.location.href = "/login";
+        // If there's a crypto error (like invalid base64), clear any corrupted data and redirect to login
+        if (error.message.includes('base64') || error.message.includes('crypto')) {
+            console.warn("Crypto error during auto-login, clearing corrupted data and redirecting to login");
+            // Optionally clear IndexedDB here if needed
+        }
+        window.location.href = "/login";
     }
 };
 
