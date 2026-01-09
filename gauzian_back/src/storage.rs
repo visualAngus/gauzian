@@ -51,6 +51,8 @@ impl StorageClient {
         let s3_endpoint = std::env::var("S3_ENDPOINT")
             .unwrap_or_else(|_| "http://localhost:9000".to_string());
 
+        tracing::info!("Initializing S3 client with endpoint: {}", s3_endpoint);
+
         // Créer un client avec l'endpoint customisé
         let client = Client::from_conf(
             aws_sdk_s3::config::Builder::from(&config)
