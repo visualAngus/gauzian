@@ -1,5 +1,5 @@
 use aws_sdk_s3::{config::Region, Client};
-use aws_types::credentials::Credentials;
+use aws_credential_types::Credentials;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
