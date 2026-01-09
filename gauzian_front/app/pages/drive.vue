@@ -165,6 +165,7 @@ const uploadFile = async (file, file_id, dataKey) => {
             chunk,
             dataKey
         );
+        console.log(cipherText,iv);
         // Simulation d'upload
         await new Promise((resolve, reject) => {
             // Ici, code réel d'upload (fetch / xhr)
