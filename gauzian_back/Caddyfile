@@ -16,6 +16,26 @@ gauzian.pupin.fr {
         }
     }
     
+    # MinIO S3 Storage Console
+    handle_path /minio/* {
+        reverse_proxy minio:9001 {
+            header_up Host {host}
+            header_up X-Real-IP {client_ip}
+            header_up X-Forwarded-For {client_ip}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # MinIO S3 API
+    handle_path /s3/* {
+        reverse_proxy minio:9000 {
+            header_up Host {host}
+            header_up X-Real-IP {client_ip}
+            header_up X-Forwarded-For {client_ip}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    
     # Routes API
     handle_path /api/* {
         reverse_proxy backend:3000 {
