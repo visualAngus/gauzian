@@ -115,9 +115,12 @@ const initializeFileInDB = async (file, folder_id) => {
         last_modified: file.lastModified,
     };
 
+    const stringifiedMetadata = JSON.stringify(metadata);
+    console.log("Stringified Metadata:", stringifiedMetadata);
+
     const encryptedMetadata = await encryptSimpleDataWithDataKey(
-        data = JSON.stringify(metadata),
-        dataKeyB64 = dataKey.plainKey
+        stringifiedMetadata,
+        dataKey.plainKey
     );
 
     const res = await fetch(`${API_URL}/drive/initialize_file`, {
