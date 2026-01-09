@@ -43,9 +43,10 @@ services:
     command: server /minio_data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   # 4. Backend Rust (MODE PRODUCTION avec build complet)
   backend:

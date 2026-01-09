@@ -208,24 +208,50 @@ impl StorageClient {
 
     /// Initialiser le bucket (le créer s'il n'existe pas)
     pub async fn init_bucket(&self) -> Result<(), StorageError> {
-        // Essayer de créer le bucket
-        match self.client.create_bucket().bucket(&self.bucket).send().await {
-            Ok(_) => {
-                tracing::info!("S3 bucket created: {}", self.bucket);
-                Ok(())
-            }
-            Err(e) => {
-                // Si le bucket existe déjà, ce n'est pas une erreur
-                if e.to_string().contains("BucketAlreadyOwnedByYou")
-                    || e.to_string().contains("BucketAlreadyExists")
-                {
-                    tracing::info!("S3 bucket already exists: {}", self.bucket);
-                    Ok(())
-                } else {
-                    Err(StorageError::S3Error(format!("Failed to init bucket: {}", e)))
+        const MAX_RETRIES: u32 = 5;
+        const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+        for attempt in 1..=MAX_RETRIES {
+            match self.client.create_bucket().bucket(&self.bucket).send().await {
+                Ok(_) => {
+                    tracing::info!("S3 bucket created: {}", self.bucket);
+                    return Ok(());
+                }
+                Err(e) => {
+                    let err_str = e.to_string();
+                    // Si le bucket existe déjà, ce n'est pas une erreur
+                    if err_str.contains("BucketAlreadyOwnedByYou")
+                        || err_str.contains("BucketAlreadyExists")
+                    {
+                        tracing::info!("S3 bucket already exists: {}", self.bucket);
+                        return Ok(());
+                    }
+
+                    // Si c'est une erreur de connexion, retry
+                    if attempt < MAX_RETRIES
+                        && (err_str.contains("dispatch failure")
+                            || err_str.contains("connection")
+                            || err_str.contains("timeout"))
+                    {
+                        tracing::warn!(
+                            "S3 connection failed (attempt {}/{}), retrying in {:?}...: {}",
+                            attempt,
+                            MAX_RETRIES,
+                            RETRY_DELAY,
+                            e
+                        );
+                        tokio::time::sleep(RETRY_DELAY).await;
+                        continue;
+                    }
+
+                    return Err(StorageError::S3Error(format!("Failed to init bucket: {}", e)));
                 }
             }
         }
+
+        Err(StorageError::S3Error(
+            "Failed to init bucket: max retries exceeded".to_string(),
+        ))
     }
 }
 
