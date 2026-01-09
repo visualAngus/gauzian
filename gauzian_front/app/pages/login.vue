@@ -260,9 +260,7 @@ useHead({
 });
 </script>
 
-<style>
-
-	
+<style scoped>
 main {
 	width: 100vw;
 	min-height: 200px;
