@@ -261,6 +261,18 @@ useHead({
 </script>
 
 <style scoped>
+
+body {
+	background-color: white;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+	user-select: none;
+}
+
 main {
 	width: 100vw;
 	min-height: 200px;
