@@ -1,0 +1,49 @@
+-- Add migration script here
+
+CREATE TABLE files (
+    id UUID PRIMARY KEY,
+    encrypted_metadata BYTEA NOT NULL,
+    size BIGINT NOT NULL,
+    mime_type TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE s3_keys (
+    id UUID PRIMARY KEY,
+    s3_key TEXT NOT NULL,
+    file_id UUID REFERENCES files(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);    
+
+CREATE TABLE folders (
+    id UUID PRIMARY KEY,
+    encrypted_metadata BYTEA NOT NULL,
+    parent_folder_id UUID REFERENCES folders(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE folder_access (
+    id UUID PRIMARY KEY,
+    folder_id UUID REFERENCES folders(id) ON DELETE CASCADE not NULL,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE not NULL,
+    encrypted_folder_key BYTEA NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(folder_id, user_id)
+);
+
+
+CREATE TABLE file_access (
+    id UUID PRIMARY KEY,
+    file_id UUID REFERENCES files(id) ON DELETE CASCADE not NULL,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE not NULL,
+    folder_id UUID REFERENCES folders(id) ON DELETE SET NULL,
+    encrypted_file_key BYTEA NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(file_id, user_id)
+);
+    

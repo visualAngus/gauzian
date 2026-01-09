@@ -1,0 +1,17 @@
+use axum::{routing::{get, post}, Router};
+use tower_http::trace::TraceLayer;
+
+use crate::{handlers, state::AppState};
+
+pub fn app(state: AppState) -> Router {
+    Router::new()
+        .route("/login", post(handlers::login_handler))
+        .route("/register", post(handlers::register_handler))
+        .route("/logout", post(handlers::logout_handler))
+        .route("/protected", get(handlers::protected_handler))
+        .route("/autologin", get(handlers::auto_login_handler))
+        .route("/info", get(handlers::info_handler))
+        .route("/drive/initialize_file", post(handlers::initialize_file_handler))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
