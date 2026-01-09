@@ -131,6 +131,7 @@ import {
 	generateRsaKeyPairPem,
 	saveUserKeysToIndexedDb,
     getKeyStatus,
+	generateRecordKey,
 
 } from "~/utils/crypto";
 
@@ -176,6 +177,9 @@ const handleRegister = async () => {
   loading.value = true;
   try {
 		const { publicKey, privateKey } = await generateRsaKeyPairPem();
+
+		const recovery_key_data = await generateRecordKey(privateKey);
+
 		await saveUserKeysToIndexedDb(privateKey, publicKey);
 
 		const cryptoPayload = await encryptPrivateKeyPemWithPassword(
@@ -195,10 +199,20 @@ const handleRegister = async () => {
 				encrypted_private_key: cryptoPayload.encrypted_private_key,
 				private_key_salt: cryptoPayload.private_key_salt,
 				iv: cryptoPayload.iv,
+				encrypted_record_key: recovery_key_data.encrypted_private_key_reco,
 			}),
 		});
 		const data = await res.json();
 		if (!res.ok) throw new Error(data.error || "Register failed");
+
+		// télécharger la clé de récupération
+		const element = document.createElement("a");
+		const file = new Blob([recovery_key_data.recovery_key], { type: "text/plain" });
+		element.href = URL.createObjectURL(file);
+		element.download = "gauzian_recovery_key.txt";
+		document.body.appendChild(element); // Required for this to work in FireFox
+		element.click();
+		document.body.removeChild(element);
 
         // redirect to /
         console.log("Register OK");
