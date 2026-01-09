@@ -198,7 +198,7 @@ pub struct InitializeFileRequest {
 pub async fn initialize_file_handler(
     State(state): State<AppState>,
     claims: jwt::Claims,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     Json(body): Json<InitializeFileRequest>,
 ) -> Response {
     // Vous pouvez accéder aux headers via `headers` et au body via `body`

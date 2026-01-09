@@ -28,7 +28,14 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let state = AppState::from_env(db_pool);
+    let state = AppState::from_env(db_pool).await;
+
+    // Initialiser le bucket S3 au démarrage
+    state.storage_client
+        .init_bucket()
+        .await
+        .expect("Failed to initialize S3 bucket");
+
     let app = routes::app(state);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());

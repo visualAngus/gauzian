@@ -1,23 +1,10 @@
 use axum::{
-    extract::FromRequestParts,
-    http::{
-        header::AUTHORIZATION,
-        request::Parts,
-        StatusCode,
-    },
+    http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-
-use redis::AsyncCommands;
 use uuid::Uuid;
 use sqlx::PgPool;
-use serde::{Deserialize, Serialize};
-use rand::RngCore;
-use sha2::{Digest, Sha256};
-use base64::{engine::general_purpose, Engine as _};
-
-use crate::{jwt, state::AppState};
 
 pub struct AuthError(pub StatusCode, pub String);
 
