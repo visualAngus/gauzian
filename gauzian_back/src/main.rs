@@ -30,11 +30,24 @@ async fn main() {
 
     let state = AppState::from_env(db_pool).await;
 
-    // Initialiser le bucket S3 au démarrage
-    state.storage_client
-        .init_bucket()
-        .await
-        .expect("Failed to initialize S3 bucket");
+    // Initialiser le bucket S3 au démarrage (avec timeout plus long)
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        state.storage_client.init_bucket(),
+    )
+    .await
+    {
+        Ok(Ok(())) => {
+            info!("S3 bucket initialized successfully");
+        }
+        Ok(Err(e)) => {
+            // Non-fatal: le bucket sera créé à la première requête
+            tracing::warn!("Failed to initialize S3 bucket at startup: {}. It will be created on first use.", e);
+        }
+        Err(_) => {
+            tracing::warn!("S3 bucket initialization timed out. It will be created on first use.");
+        }
+    }
 
     let app = routes::app(state);
 
