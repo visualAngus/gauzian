@@ -20,7 +20,8 @@ import {
     getKeyStatus,
     encryptWithStoredPublicKey,
     generateDataKey,
-
+    encryptSimpleDataWithDataKey,
+    encryptDataWithDataKey,
 } from "~/utils/crypto";
 
 const API_URL = "https://gauzian.pupin.fr/api";

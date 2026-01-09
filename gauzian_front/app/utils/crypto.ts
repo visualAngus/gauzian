@@ -56,19 +56,22 @@ export function b64ToBuff(str: string): U8 {
     throw new Error(`Invalid base64 string: input is not a string or is empty`);
   }
 
+  // Trim whitespace (newlines, spaces, etc.)
+  const trimmedStr = str.replace(/\s/g, '');
+  
   // Check for invalid characters
   const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-  if (!base64Regex.test(str)) {
-    throw new Error(`Invalid base64 string: contains invalid characters. String: "${str.substring(0, 50)}${str.length > 50 ? '...' : ''}"`);
+  if (!base64Regex.test(trimmedStr)) {
+    throw new Error(`Invalid base64 string: contains invalid characters. String: "${trimmedStr.substring(0, 50)}${trimmedStr.length > 50 ? '...' : ''}"`);
   }
 
-  // Check length (base64 should be multiple of 4, except possibly with padding)
-  if (str.length % 4 !== 0 && str.length % 4 !== 2 && str.length % 4 !== 3) {
-    throw new Error(`Invalid base64 string: length ${str.length} is not valid for base64`);
+  // Check length (base64 should be multiple of 4 after trimming)
+  if (trimmedStr.length % 4 !== 0) {
+    throw new Error(`Invalid base64 string: length ${trimmedStr.length} is not valid for base64`);
   }
 
   try {
-    const bin = window.atob(str);
+    const bin = window.atob(trimmedStr);
     const out = new Uint8Array(bin.length) as U8;
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
@@ -76,7 +79,7 @@ export function b64ToBuff(str: string): U8 {
     const message = typeof error === "object" && error !== null && "message" in error
       ? (error as { message: string }).message
       : String(error);
-    throw new Error(`Failed to decode base64 string: ${message}. String: "${str.substring(0, 50)}${str.length > 50 ? '...' : ''}"`);
+    throw new Error(`Failed to decode base64 string: ${message}. String: "${trimmedStr.substring(0, 50)}${trimmedStr.length > 50 ? '...' : ''}"`);
   }
 }
 
