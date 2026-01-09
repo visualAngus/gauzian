@@ -61,7 +61,7 @@ pub async  fn initialize_file_in_db(
     ).await
     .map_err(|e| {
         sqlx::Error::Protocol(format!("Failed to initialize StorageClient: {}", e).into())
-    })?;;
+    })?;
     storage_client.upload_line(&data, file_id.to_string()).await
         .map_err(|e| sqlx::Error::Protocol(format!("Failed to upload to storage: {}", e).into()))?;
 
