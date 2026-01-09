@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use uuid::Uuid;
 
-use crate::{auth, jwt, response::ApiResponse, state::AppState};
+use crate::{auth, jwt, response::ApiResponse, state::AppState,drive};
+
+use axum::http::HeaderMap;
 
 #[derive(Serialize)]
 pub struct LoginResponse {
@@ -181,4 +183,31 @@ pub async fn info_handler(
             ApiResponse::internal_error("Failed to retrieve user info").into_response()
         }
     }
+}
+
+
+#[derive(Deserialize)]
+pub struct InitializeFileRequest {
+    size: i64,
+    encrypted_metadata: String,
+    mime_type: String,
+    folder_id: Option<Uuid>,
+}
+
+pub async fn initialize_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    headers: HeaderMap,
+    Json(body): Json<InitializeFileRequest>,
+) -> Response {
+    // Vous pouvez accéder aux headers via `headers` et au body via `body`
+    let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, body.folder_id).await {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to initialize file in DB: {:?}", e);
+            return ApiResponse::internal_error("Failed to initialize file").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({ "file_id": file_id })).into_response()
 }

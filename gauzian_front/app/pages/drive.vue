@@ -3,19 +3,23 @@
 		
 	</div>
     <main>
-
+        <!-- multiple files -->
+         <input type="file" multiple @change="handleFileChange" />
     </main>
 </template>
 
 <script setup>
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
+import { watch } from "vue";
 definePageMeta({
     headerTitle: 'GZDRIVE'
 })
 
 import {
     getKeyStatus,
+    encryptWithStoredPublicKey,
+    generateDataKey,
 
 } from "~/utils/crypto";
 
@@ -64,6 +68,164 @@ useHead({
 		},
 	],
 });
+
+// drive logic
+
+const totalSpaceLeft = ref(3 * 1024 * 1024 * 1024); // 3 GB in bytes
+const usedSpace = ref(2 * 1024 * 1024 * 1024); // 2 GB in bytes
+const listToUpload = ref([]);
+const listUploadInProgress = ref([]);
+const listUploaded = ref([]);
+const simultaneousUploads = 3;
+
+const formatBytes = (bytes) => {
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes === 0) return '0 Byte';
+    const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+    return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+};
+
+const handleFileChange = async (event) => {
+    const files = event.target.files;
+    var someSize = 0;
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        someSize += file.size;
+        listToUpload.value.push(file);
+    }
+    if (someSize > (totalSpaceLeft.value - usedSpace.value)) {
+        alert("Not enough space left to upload these files.");
+        return;
+    }
+};
+
+const initializeFileInDB = async (file, folder_id) => {
+    const dataKey = await generateDataKey();
+    const encryptedFileKey = await encryptWithStoredPublicKey(dataKey.plainKey);
+
+    const metadata = {
+        filename: file.name,
+        size: file.size,
+        mime_type: file.type,
+        last_modified: file.lastModified,
+    };
+
+    const encryptedMetadata = await encryptSimpleDataWithDataKey(
+        JSON.stringify(metadata),
+        dataKey.plainKey
+    );
+
+    const res = await fetch(`${API_URL}/drive/initialize_file`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            encrypted_metadata : encryptedMetadata,
+            encrypted_file_key: encryptedFileKey,
+            size: file.size,
+            mime_type: file.type,
+            folder_id: folder_id,
+        }),
+    });
+    if (!res.ok) {
+        throw new Error("Failed to initialize file in DB");
+    }
+    const resData = await res.json();
+    return resData.file_id;
+};  
+
+
+const uploadFile = async (file, file_id) => {
+    const chunkSize = 5 * 1024 * 1024; // 5 MB
+    const totalChunks = Math.ceil(file.size / chunkSize);
+    
+    // Limite le nombre d'envois simultanés pour ne pas tuer le navigateur
+    // 3 à 5 est généralement un bon chiffre.
+    const CONCURRENCY_LIMIT = 3; 
+
+    // Cette fonction gère l'upload d'un index précis
+    const uploadChunkByIndex = async (index) => {
+        const start = index * chunkSize;
+        const end = Math.min(start + chunkSize, file.size);
+        
+        const chunk = file.slice(start, end);
+
+        // Simulation d'upload
+        await new Promise((resolve, reject) => {
+            // Ici, code réel d'upload (fetch / xhr)
+            setTimeout(() => {
+                console.log(`Uploaded chunk ${index + 1}/${totalChunks}`);
+                resolve();
+            }, 500 + Math.random() * 1000);
+        });
+        
+    };
+
+    // Gestionnaire de file d'attente (Pool)
+    const queue = [];
+    for (let i = 0; i < totalChunks; i++) {
+        queue.push(i);
+    }
+
+    const worker = async () => {
+        while (queue.length > 0) {
+            // On récupère le prochain index à traiter
+            const index = queue.shift(); 
+            try {
+                await uploadChunkByIndex(index);
+            } catch (err) {
+                console.error(`Echec chunk ${index}`, err);
+                // Optionnel : remettre dans la queue pour réessayer
+                // queue.push(index); 
+            }
+        }
+    };
+
+    // On lance 'CONCURRENCY_LIMIT' workers en parallèle
+    const workers = [];
+    for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, totalChunks); i++) {
+        workers.push(worker());
+    }
+
+    // On attend que tous les workers aient fini
+    await Promise.all(workers);
+
+    console.log(`Finished uploading file: ${file.name}`);
+};
+
+// use effect on listToUpload to start upload
+
+
+const startUploads = async () => {
+    while (
+        listUploadInProgress.value.length < simultaneousUploads &&
+        listToUpload.value.length > 0
+    ) {
+        const file = listToUpload.value.shift();
+        listUploadInProgress.value.push(file);
+
+        file_id = await initializeFileInDB(file, null);
+
+        uploadFile(file).then(() => {
+            listUploadInProgress.value = listUploadInProgress.value.filter(f => f !== file);
+            listUploaded.value.push(file);
+            startUploads();
+        });
+    }
+};
+
+watch(
+    [listToUpload, listUploadInProgress],
+    () => {
+        startUploads();
+    },
+    { deep: true }
+);
+
+
+
 </script>
 
 <style>
