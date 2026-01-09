@@ -125,6 +125,7 @@ pub struct NewUser {
     pub private_key_salt: String,
     pub iv: String,
     pub auth_salt: Option<String>,
+    pub encrypted_record_key: String,
 }
 
 // UserInfo
@@ -160,7 +161,7 @@ pub async fn create_user(
     new_user: NewUser,
 ) -> Result<Uuid, sqlx::Error> {
     let rec = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv, auth_salt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id"
+        "INSERT INTO users (id, username, password_hash, encrypted_private_key, public_key, email, encrypted_settings, private_key_salt, iv, auth_salt, encrypted_record_key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id"
     )
     .bind(Uuid::new_v4())
     .bind(new_user.username)
@@ -172,6 +173,7 @@ pub async fn create_user(
     .bind(new_user.private_key_salt)
     .bind(new_user.iv)
     .bind(new_user.auth_salt)
+    .bind(new_user.encrypted_record_key)
     .fetch_one(pool)
     .await?;
 

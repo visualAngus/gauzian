@@ -36,7 +36,7 @@
     </transition>
 </div>
 <div class="info-container">
-    <h1 class="info-title">Sécurisé une information</h1>
+    <h1 class="info-title">Sécuriser une information</h1>
     <input v-model="secretInput" type="text" placeholder="Entrez une information secrète" />
     <button class="info-btn" @click="encryptSecret">Chiffrer</button>
     <div v-if="encryptedSecret" class="info-card">
@@ -55,6 +55,24 @@
     </div>
 
 </div>
+<div>
+    <h1 class="info-title">Gestion de la clé de récupération</h1>
+    <button class="info-btn" @click="generaterecoverykey">Générer une clé de récupération</button>
+    
+    <div v-if="encrypted_private_key_reco && recovery_key" class="info-card">
+        <div class="info-row">
+            <span class="info-label"><i class="fa-solid fa-lock"></i> Clé privée chiffrée :</span>
+            <span class="info-value info-mono scrollable">{{ encrypted_private_key_reco }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label"><i class="fa-solid fa-key"></i> Clé de récupération (à conserver) :</span>
+            <span class="info-value info-mono scrollable">{{ recovery_key }}</span>
+        </div>
+    </div>
+
+    <button class="info-btn" @click="decryptrecoverykey(encrypted_private_key_reco, recovery_key)">Déchiffrer la clé de récupération</button>
+</div>
+
 </template> 
 
 <script setup>
@@ -68,6 +86,9 @@ import {
     getKeyStatus,
     encryptWithStoredPublicKey,
     decryptWithStoredPrivateKey,
+    generateRecordKey,
+    decryptRecordKey,
+    generateRsaKeyPairPem,
 
 } from "~/utils/crypto";
 
@@ -86,6 +107,9 @@ const private_key_salt = ref(null);
 const secretInput = ref("");
 const encryptedSecret = ref("");
 const decryptedSecret = ref("");
+
+const encrypted_private_key_reco = ref("");
+const recovery_key = ref("");
 
 
 const autologin = async () => {
@@ -162,6 +186,33 @@ const get_info = async () => {
         console.error("Fetching info failed:", error);
     }
 };
+
+const generaterecoverykey = async () => {
+    const { publicKey, privateKey } = await generateRsaKeyPairPem();
+    if (!privateKey) {
+        console.error("Failed to generate private key PEM.");
+        return;
+    }
+    console.log("Random private key generated:", privateKey);
+    const result = await generateRecordKey(privateKey);
+    
+    // Store the values in refs for later use
+    encrypted_private_key_reco.value = result.encrypted_private_key_reco;
+    recovery_key.value = result.recovery_key;
+    
+    console.log("Encrypted private key:", encrypted_private_key_reco.value);
+    console.log("Recovery key (keep this safe!):", recovery_key.value);
+};
+
+const decryptrecoverykey = async (encrypted_private_key_reco, recovery_key) => {
+    try {
+        const decrypted_private_key = await decryptRecordKey(encrypted_private_key_reco, recovery_key);
+        console.log("Decrypted private key:", decrypted_private_key);
+    } catch (error) {
+        console.error("Error decrypting recovery key:", error);
+    }
+};
+    
 
 
 autologin();
