@@ -141,11 +141,11 @@ const initializeFileInDB = async (file, folder_id) => {
         throw new Error("Failed to initialize file in DB");
     }
     const resData = await res.json();
-    return resData.file_id;
+    return (resData.file_id,encryptedFileKey);
 };  
 
 
-const uploadFile = async (file, file_id) => {
+const uploadFile = async (file, file_id, encryptedFileKey) => {
     const chunkSize = 5 * 1024 * 1024; // 5 MB
     const totalChunks = Math.ceil(file.size / chunkSize);
     
@@ -160,6 +160,10 @@ const uploadFile = async (file, file_id) => {
         
         const chunk = file.slice(start, end);
 
+        const {cipherText,iv} = await encryptDataWithDataKey(
+            chunk,
+            encryptedFileKey
+        );
         // Simulation d'upload
         await new Promise((resolve, reject) => {
             // Ici, code réel d'upload (fetch / xhr)
@@ -214,9 +218,9 @@ const startUploads = async () => {
         const file = listToUpload.value.shift();
         listUploadInProgress.value.push(file);
 
-        file_id = await initializeFileInDB(file, null);
+        const [file_id, encryptedFileKey] = await initializeFileInDB(file, null);
 
-        uploadFile(file).then(() => {
+        uploadFile(file,file_id,encryptedFileKey).then(() => {
             listUploadInProgress.value = listUploadInProgress.value.filter(f => f !== file);
             listUploaded.value.push(file);
             startUploads();
