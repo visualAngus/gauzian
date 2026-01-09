@@ -46,7 +46,7 @@ pub async  fn initialize_file_in_db(
     )
     .bind(file_id)
     .bind(size)
-    .bind(encrypted_metadata)
+    .bind(encrypted_metadata.as_bytes())
     .bind(mime_type)
     .fetch_one(db_pool)
     .await?;
