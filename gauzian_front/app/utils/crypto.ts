@@ -73,7 +73,10 @@ export function b64ToBuff(str: string): U8 {
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   } catch (error) {
-    throw new Error(`Failed to decode base64 string: ${error.message}. String: "${str.substring(0, 50)}${str.length > 50 ? '...' : ''}"`);
+    const message = typeof error === "object" && error !== null && "message" in error
+      ? (error as { message: string }).message
+      : String(error);
+    throw new Error(`Failed to decode base64 string: ${message}. String: "${str.substring(0, 50)}${str.length > 50 ? '...' : ''}"`);
   }
 }
 
