@@ -107,7 +107,7 @@ const handleFileChange = async (event) => {
 const initializeFileInDB = async (file, folder_id) => {
     const dataKey = await generateDataKey();
     const encryptedFileKey = await encryptWithStoredPublicKey(dataKey);
-
+    console.log(file);
     const metadata = {
         filename: file.name,
         size: file.size,
