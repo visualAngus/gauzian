@@ -142,11 +142,11 @@ const initializeFileInDB = async (file, folder_id) => {
         throw new Error("Failed to initialize file in DB");
     }
     const resData = await res.json();
-    return (resData.file_id,dataKey);
+    return [resData.file_id, dataKey];
 };  
 
 
-const uploadFile = async (file, file_id, encryptedFileKey) => {
+const uploadFile = async (file, file_id, dataKey) => {
     const chunkSize = 5 * 1024 * 1024; // 5 MB
     const totalChunks = Math.ceil(file.size / chunkSize);
     
@@ -160,10 +160,12 @@ const uploadFile = async (file, file_id, encryptedFileKey) => {
         const end = Math.min(start + chunkSize, file.size);
         
         const chunk = file.slice(start, end);
+        const chunkArrayBuf = await chunk.arrayBuffer();
+        const chunkB64 = btoa(String.fromCharCode(...new Uint8Array(chunkArrayBuf)));
 
         const {cipherText,iv} = await encryptDataWithDataKey(
-            chunk,
-            encryptedFileKey
+            chunkB64,
+            dataKey
         );
         // Simulation d'upload
         await new Promise((resolve, reject) => {
