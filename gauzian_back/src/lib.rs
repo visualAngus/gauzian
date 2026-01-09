@@ -5,3 +5,4 @@ pub mod response;
 pub mod routes;
 pub mod state;
 pub mod drive;
+pub mod storage;
