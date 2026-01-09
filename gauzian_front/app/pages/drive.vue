@@ -141,7 +141,7 @@ const initializeFileInDB = async (file, folder_id) => {
         throw new Error("Failed to initialize file in DB");
     }
     const resData = await res.json();
-    return (resData.file_id,encryptedFileKey);
+    return (resData.file_id,dataKey);
 };  
 
 
@@ -218,9 +218,9 @@ const startUploads = async () => {
         const file = listToUpload.value.shift();
         listUploadInProgress.value.push(file);
 
-        const [file_id, encryptedFileKey] = await initializeFileInDB(file, null);
+        const [file_id, dataKey] = await initializeFileInDB(file, null);
 
-        uploadFile(file,file_id,encryptedFileKey).then(() => {
+        uploadFile(file,file_id,dataKey).then(() => {
             listUploadInProgress.value = listUploadInProgress.value.filter(f => f !== file);
             listUploaded.value.push(file);
             startUploads();
