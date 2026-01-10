@@ -78,7 +78,7 @@ pub async fn get_files_and_folders_list(
             f.updated_at::text as updated_at,
             f.is_root,
             f.parent_folder_id,
-            'folder' as type
+            'folder'::text as file_type
         from folder_access fa
         join folders f on f.id = fa.folder_id
         where fa.user_id = $1
@@ -99,8 +99,8 @@ pub async fn get_files_and_folders_list(
             f.created_at::text as created_at,
             f.updated_at::text as updated_at,
             fa2.access_level,
-            fa2.encrypted_file_key
-            'file' as type
+            fa2.encrypted_file_key,
+            'file'::text as file_type
         from file_access fa2
         join files f on f.id = fa2.file_id
         where fa2.user_id = $1
