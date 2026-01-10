@@ -5,7 +5,8 @@ use axum::{
 };
 use base64::Engine; // Add this import for .encode()
 use uuid::Uuid;
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool};
+use serde_json::json;
 
 fn bytes_to_text_or_b64(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
@@ -273,4 +274,92 @@ pub async fn create_folder_in_db(
     .await?;
 
     Ok(rec)
+}
+
+#[derive(FromRow)]
+struct FolderPathRow {
+    path_index: i32,
+    id: Uuid,
+    encrypted_metadata: Vec<u8>,    // Type BYTEA en base
+    encrypted_folder_key: Option<Vec<u8>>, // Type BYTEA, peut être null
+}
+
+pub async fn get_full_path(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    start_folder_id: Option<Uuid>, // Renommé pour la clarté
+) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+    
+    // Si pas d'ID de départ, on renvoie une liste vide tout de suite
+    let Some(folder_id) = start_folder_id else {
+        return Ok(Vec::new());
+    };
+
+    // 2. On exécute la requête UNE SEULE FOIS avec fetch_all
+    let rows = sqlx::query_as::<_, FolderPathRow>(
+        "
+        WITH RECURSIVE breadcrumb AS (
+            -- 1. ANCRAGE
+            SELECT 
+                f.id, 
+                f.parent_folder_id, 
+                f.encrypted_metadata,
+                0 AS path_index
+            FROM 
+                folders f
+            WHERE 
+                f.id = $1
+
+            UNION ALL
+
+            -- 2. RÉCURSION
+            SELECT 
+                parent.id, 
+                parent.parent_folder_id, 
+                parent.encrypted_metadata,
+                child.path_index + 1
+            FROM 
+                folders parent
+            INNER JOIN 
+                breadcrumb child ON parent.id = child.parent_folder_id
+        )
+        -- 3. SÉLECTION FINALE
+        SELECT 
+            b.path_index,
+            b.id,
+            b.encrypted_metadata,
+            fa.encrypted_folder_key
+        FROM 
+            breadcrumb b
+        LEFT JOIN 
+            folder_access fa ON b.id = fa.folder_id AND fa.user_id = $2
+        ORDER BY 
+            b.path_index DESC; -- DESC pour avoir Racine -> ... -> Enfant direct
+        "
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_all(db_pool) // <--- C'est ici que la magie opère : on récupère tout le tableau
+    .await?;
+
+    // 3. On transforme les résultats en JSON
+    let path: Vec<serde_json::Value> = rows.into_iter().map(|row| {
+        // J'utilise ta fonction existante (supposée) pour convertir les bytes
+        let metadata_str = bytes_to_text_or_b64(&row.encrypted_metadata);
+        
+        // Gestion de la clé optionnelle
+        let key_str = match row.encrypted_folder_key {
+            Some(k) => Some(bytes_to_text_or_b64(&k)),
+            None => None,
+        };
+
+        json!({
+            "folder_id": row.id,
+            "path_index": row.path_index,
+            "encrypted_metadata": metadata_str,
+            "encrypted_folder_key": key_str
+        })
+    }).collect();
+
+    Ok(path)
 }

@@ -267,16 +267,16 @@ pub async fn get_account_and_drive_info_handler(
     };
 
 
-    // let full_path = drive::get_full_path(&state.db_pool, claims.id, parent_id).await;
-    // match full_path {
-    //     Ok(path) => {
-    //         tracing::info!("Full path retrieved: {:?}", path);
-    //     }
-    //     Err(e) => {
-    //         tracing::error!("Failed to retrieve full path: {:?}", e);
-    //         return ApiResponse::internal_error("Failed to retrieve full path").into_response();
-    //     }
-    // };
+    let full_path = match drive::get_full_path(&state.db_pool, claims.id, parent_id).await {
+        Ok(path) => {
+            tracing::info!("Full path retrieved: {:?}", path);
+            path
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve full path: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve full path").into_response();
+        }
+    };
 
 
     ApiResponse::ok(serde_json::json!({
@@ -291,6 +291,7 @@ pub async fn get_account_and_drive_info_handler(
             "folder_count": drive_info.2,
         },
         "files_and_folders": files_and_folders,
+        "full_path": full_path,
     })).into_response()
 }
 
