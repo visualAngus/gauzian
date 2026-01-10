@@ -214,6 +214,55 @@ pub async fn initialize_file_handler(
     ApiResponse::ok(serde_json::json!({ "file_id": file_id })).into_response()
 }
 
+
+
+pub async fn get_account_and_drive_info_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> Response {
+    
+    // user info
+    let user_info = match auth::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(user) => user,
+        Err(e) => {
+            tracing::error!("Failed to retrieve user info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve user info").into_response();
+        }
+    };
+    
+    let drive_info = match drive::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+        }
+    };
+
+    let files_folder_liste = drive::get_files_and_folders_list(&state.db_pool, claims.id).await;
+    let files_and_folders = match files_folder_liste {
+        Ok(list) => list,
+        Err(e) => {
+            tracing::error!("Failed to retrieve files and folders list: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve files and folders list").into_response();
+        }
+    };
+    ApiResponse::ok(serde_json::json!({
+        "user_info": {
+            "id": user_info.id,
+            "username": user_info.username,
+            "email": user_info.email,
+            "public_key": user_info.public_key,
+        },
+        "drive_info": {
+            "used_space": drive_info.0,
+            "file_count": drive_info.1,
+            "folder_count": drive_info.2,
+        },
+        "files_and_folders": files_and_folders,
+    })).into_response()
+}
+
+
 #[derive(Deserialize)]
 pub struct UploadChunkRequest {
     file_id: Uuid,

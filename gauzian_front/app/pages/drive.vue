@@ -44,7 +44,12 @@ const autologin = async () => {
                 console.warn("Keys not found or invalid in IndexedDB during auto-login.");
                 window.location.href = "/login";
             }
-            // redirect to /
+            if (is_ok) {
+                console.log("Auto-login successful, keys are valid.");
+                etat.value = "drive";
+                get_all_info();
+                
+            }
         }else {
             console.log("No valid session found for auto-login.");
             window.location.href = "/login";
@@ -221,6 +226,21 @@ const uploadFile = async (file, file_id, dataKey) => {
 };
 
 // use effect on listToUpload to start upload
+
+
+const get_all_info = async () => {
+    const res = await fetch(`${API_URL}/drive/get_all_drive_info`, {
+        method: "GET",
+        credentials: "include",
+    });
+    if (!res.ok) {
+        throw new Error("Failed to get all drive info");
+    }
+    const resData = await res.json();
+    console.log(resData);
+};
+
+
 
 
 const startUploads = async () => {
