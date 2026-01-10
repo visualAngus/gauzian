@@ -132,6 +132,7 @@ pub struct NewUser {
 #[derive(Serialize, Debug, sqlx::FromRow)]
 pub struct UserInfo {
     pub id: Uuid,
+    pub email: String,
     pub username: String,
     pub encrypted_private_key: String,
     pub private_key_salt: String,
@@ -207,7 +208,7 @@ pub async fn get_user_by_id(
     user_id: Uuid,
 ) -> Result<UserInfo, sqlx::Error> {
     let user = sqlx::query_as::<_, UserInfo>(
-        "SELECT id, username, password_hash, auth_salt, encrypted_private_key, private_key_salt, iv, public_key FROM users WHERE id = $1",
+        "SELECT id, username,email, password_hash, auth_salt, encrypted_private_key, private_key_salt, iv, public_key FROM users WHERE id = $1",
     )
     .bind(user_id)
     .fetch_one(pool)
