@@ -7,6 +7,13 @@ use base64::Engine; // Add this import for .encode()
 use uuid::Uuid;
 use sqlx::PgPool;
 
+fn bytes_to_text_or_b64(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(s) if !s.trim().is_empty() => s.to_string(),
+        _ => base64::engine::general_purpose::STANDARD.encode(bytes),
+    }
+}
+
 pub struct AuthError(pub StatusCode, pub String);
 
 impl IntoResponse for AuthError {
@@ -125,9 +132,9 @@ pub async fn get_files_and_folders_list(
         "folders": folders.iter().map(|row| {
             serde_json::json!({
                 "folder_id": row.folder_id,
-                "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_metadata),
+                "encrypted_metadata": bytes_to_text_or_b64(&row.encrypted_metadata),
                 "parent_folder_id": row.parent_folder_id,
-                "encrypted_folder_key": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_folder_key),
+                "encrypted_folder_key": bytes_to_text_or_b64(&row.encrypted_folder_key),
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
                 "is_root": row.is_root,
@@ -138,13 +145,13 @@ pub async fn get_files_and_folders_list(
             serde_json::json!({
                 "folder_id": row.folder_id,
                 "file_id": row.file_id,
-                "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_metadata),
+                "encrypted_metadata": bytes_to_text_or_b64(&row.encrypted_metadata),
                 "file_size": row.file_size,
                 "mime_type": row.mime_type,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
                 "access_level": row.access_level,
-                "encrypted_file_key": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_file_key),
+                "encrypted_file_key": bytes_to_text_or_b64(&row.encrypted_file_key),
                 "type": row.file_type,
             })
         }).collect::<Vec<_>>(),
