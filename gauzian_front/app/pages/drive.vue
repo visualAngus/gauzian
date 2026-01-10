@@ -2,8 +2,8 @@
   <div class="page"></div>
   <main>
     <!-- multiple files -->
-    <!-- <input type="file" multiple @change="handleFileChange" />
-            <button @click="createFolder">Create Folder</button> -->
+    <input type="file" multiple @change="handleFileChange" />
+    <button @click="createFolder">Create Folder</button>
 
     <div class="section_items">
       <div
