@@ -219,7 +219,7 @@ pub async fn initialize_file_handler(
 pub async fn get_account_and_drive_info_handler(
     State(state): State<AppState>,
     claims: jwt::Claims,
-    Path(parent_id): Path<Option<Uuid>>,
+    Path(parent_id): Path<Uuid>,
 ) -> Response {
     
     // récupérer l'id du dossier parent depuis l'URL 
