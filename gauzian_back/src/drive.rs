@@ -78,7 +78,7 @@ pub async fn get_files_and_folders_list(
             f.parent_folder_id
         from users u 
         left join folder_access fa on fa.user_id = u.id 
-        left join folders f on f.id = fa.folder_id 
+        left join folders f on f.id = fa.folder_id  
         where u.id = $1
         "#,
     )
