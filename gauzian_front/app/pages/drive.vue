@@ -249,11 +249,15 @@ const get_all_info = async () => {
     }
     const resData = await res.json();
     const drive_info = resData.drive_info;
-    const files_folders = resData.files_and_folders;
+    const files_and_folders = resData.files_and_folders;
     const user_info = resData.user_info;
 
-    // parcourir les fichiers et dossiers
-    files_folders.forEach(item => {
+    const items = [
+        ...(files_and_folders?.folders ?? []),
+        ...(files_and_folders?.files ?? []),
+    ];
+
+    items.forEach((item) => {
         console.log("Item:", item);
     });
 };
