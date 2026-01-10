@@ -21,7 +21,10 @@ pub async fn get_drive_info(
 ) -> Result<(i64, i64, i64), sqlx::Error> {
     let (used_space, file_count, folder_count) = sqlx::query_as::<_, (i64, i64, i64)>(
         "
-        select COALESCE(SUM(f.size),0) as used_space, COUNT(f.id) as file_count, COUNT(fa.id) as folder_count
+        select 
+            COALESCE(SUM(f.size),0)::BIGINT as used_space,
+            COUNT(f.id)::BIGINT as file_count,
+            COUNT(fa.id)::BIGINT as folder_count
         from users u 
         left join folder_access fa on fa.user_id = u.id
         left join file_access fa2 on fa2.user_id = u.id 
