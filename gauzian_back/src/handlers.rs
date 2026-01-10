@@ -1,4 +1,4 @@
-use axum::extract::{Json, State};
+use axum::extract::{Json, State, Path};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -219,8 +219,12 @@ pub async fn initialize_file_handler(
 pub async fn get_account_and_drive_info_handler(
     State(state): State<AppState>,
     claims: jwt::Claims,
+    Path(parent_id): Path<Option<Uuid>>,
 ) -> Response {
     
+    // récupérer l'id du dossier parent depuis l'URL 
+    println!("Parent ID from URL: {:?}", parent_id);
+
     // user info
     let user_info = match auth::get_user_by_id(&state.db_pool, claims.id).await {
         Ok(user) => user,

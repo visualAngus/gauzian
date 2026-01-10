@@ -229,7 +229,10 @@ const uploadFile = async (file, file_id, dataKey) => {
 
 
 const get_all_info = async () => {
-    const res = await fetch(`${API_URL}/drive/get_all_drive_info`, {
+
+    id_parent_folder = null; // à modifier plus tard pour la navigation dans les dossiers
+
+    const res = await fetch(`${API_URL}/drive/get_all_drive_info/${id_parent_folder}`, {
         method: "GET",
         credentials: "include",
     });
@@ -237,7 +240,9 @@ const get_all_info = async () => {
         throw new Error("Failed to get all drive info");
     }
     const resData = await res.json();
-    console.log(resData);
+    const drive_info = resData.drive_info;
+    const files_folders = resData.files_and_folders;
+    const user_info = resData.user_info;
 };
 
 

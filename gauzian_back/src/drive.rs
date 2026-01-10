@@ -51,6 +51,7 @@ pub async fn get_files_and_folders_list(
         updated_at: Option<String>,
         is_root: bool,
         parent_folder_id: Option<Uuid>,
+        file_type: String,
     }
 
     #[derive(Debug, sqlx::FromRow)]
@@ -64,6 +65,7 @@ pub async fn get_files_and_folders_list(
         updated_at: Option<String>,
         access_level: String,
         encrypted_file_key: Vec<u8>,
+        file_type: String,
     }
 
     let folders: Vec<FolderRow> = sqlx::query_as::<_, FolderRow>(
@@ -75,7 +77,8 @@ pub async fn get_files_and_folders_list(
             f.created_at::text as created_at,
             f.updated_at::text as updated_at,
             f.is_root,
-            f.parent_folder_id
+            f.parent_folder_id,
+            'folder' as type
         from folder_access fa
         join folders f on f.id = fa.folder_id
         where fa.user_id = $1
@@ -97,6 +100,7 @@ pub async fn get_files_and_folders_list(
             f.updated_at::text as updated_at,
             fa2.access_level,
             fa2.encrypted_file_key
+            'file' as type
         from file_access fa2
         join files f on f.id = fa2.file_id
         where fa2.user_id = $1
@@ -116,6 +120,7 @@ pub async fn get_files_and_folders_list(
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
                 "is_root": row.is_root,
+                "type": row.file_type,
             })
         }).collect::<Vec<_>>(),
         "files": files.iter().map(|row| {
@@ -129,6 +134,7 @@ pub async fn get_files_and_folders_list(
                 "updated_at": row.updated_at,
                 "access_level": row.access_level,
                 "encrypted_file_key": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_file_key),
+                "type": row.file_type,
             })
         }).collect::<Vec<_>>(),
     }))
