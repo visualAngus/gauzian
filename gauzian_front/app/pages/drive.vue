@@ -169,7 +169,7 @@ const uploadFile = async (file, file_id, dataKey) => {
         // envoi du chunk au backend
         const body = {
             file_id: file_id,
-            chunk_index: index,
+            index: index,
             chunk_data: cipherText,
             iv: iv,
         }
