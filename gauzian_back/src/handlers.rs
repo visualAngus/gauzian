@@ -336,7 +336,7 @@ pub async fn upload_chunk_handler(
 #[derive(Deserialize)]
 pub struct CreateFolderRequest {
     encrypted_metadata: String,
-    parent_folder_id: Option<Uuid>,
+    parent_folder_id: String,
     encrypted_folder_key: String,
 }
 pub async fn create_folder_handler(
@@ -344,11 +344,29 @@ pub async fn create_folder_handler(
     claims: jwt::Claims,
     Json(body): Json<CreateFolderRequest>,
 ) -> Response {
+
+    let parent_folder_id = {
+        let s = body.parent_folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid parent_folder_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+
+
     let folder_id = match drive::create_folder_in_db(
         &state.db_pool,
         claims.id,
         &body.encrypted_metadata,
-        body.parent_folder_id,
+        parent_folder_id,
         &body.encrypted_folder_key,
     )
     .await
