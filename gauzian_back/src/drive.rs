@@ -5,6 +5,7 @@ use axum::{
 };
 use uuid::Uuid;
 use sqlx::PgPool;
+use crate::storage;
 
 pub struct AuthError(pub StatusCode, pub String);
 
@@ -53,17 +54,5 @@ pub async  fn initialize_file_in_db(
     .bind(encrypted_file_key.as_bytes())
     .execute(db_pool)
     .await?;
-
-    // ajouter dans le S3 avec upload_line
-    let data = vec![]; // données vides pour l'instant
-    let storage_client = crate::storage::StorageClient::new(
-        std::env::var("S3_BUCKET").unwrap_or_else(|_| "gauzian".to_string())
-    ).await
-    .map_err(|e| {
-        sqlx::Error::Protocol(format!("Failed to initialize StorageClient: {}", e).into())
-    })?;
-    storage_client.upload_line(&data, file_id.to_string()).await
-        .map_err(|e| sqlx::Error::Protocol(format!("Failed to upload to storage: {}", e).into()))?;
-
     Ok(rec)
 }
