@@ -89,6 +89,8 @@ const listUploadInProgress = ref([]);
 const listUploaded = ref([]);
 const simultaneousUploads = 3;
 
+const activeFolderId = ref('root');
+
 const formatBytes = (bytes) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     if (bytes === 0) return '0 Byte';
@@ -231,7 +233,11 @@ const uploadFile = async (file, file_id, dataKey) => {
 const get_all_info = async () => {
     console.log("Fetching all drive info...");
 
-    const id_parent_folder = "014451b1-8392-4c53-8ebc-ce8e68dad086"; // à modifier plus tard pour la navigation dans les dossiers
+    // dans l'url ?folder_id=xxx
+    const urlParams = new URLSearchParams(window.location.search);
+    const id_parent_folder = urlParams.get('folder_id') || 'root';
+
+    activeFolderId.value = id_parent_folder;
 
     const res = await fetch(`${API_URL}/drive/get_all_drive_info/${id_parent_folder}`, {
         method: "GET",
