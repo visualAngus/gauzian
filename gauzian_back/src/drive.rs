@@ -76,10 +76,9 @@ pub async fn get_files_and_folders_list(
             f.updated_at::text as updated_at,
             f.is_root,
             f.parent_folder_id
-        from users u 
-        left join folder_access fa on fa.user_id = u.id 
-        left join folders f on f.id = fa.folder_id  
-        where u.id = $1
+        from folder_access fa
+        join folders f on f.id = fa.folder_id
+        where fa.user_id = $1
         "#,
     )
     .bind(user_id)
@@ -98,10 +97,9 @@ pub async fn get_files_and_folders_list(
             f.updated_at::text as updated_at,
             fa2.access_level,
             fa2.encrypted_file_key
-        from users u 
-        left join file_access fa2 on fa2.user_id = u.id 
-        left join files f on f.id = fa2.file_id
-        where u.id = $1
+        from file_access fa2
+        join files f on f.id = fa2.file_id
+        where fa2.user_id = $1
         "#,
     )
     .bind(user_id)
