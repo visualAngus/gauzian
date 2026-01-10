@@ -6,7 +6,6 @@ use axum::{
 use base64::Engine; // Add this import for .encode()
 use uuid::Uuid;
 use sqlx::PgPool;
-use chrono::{DateTime, Utc};
 
 pub struct AuthError(pub StatusCode, pub String);
 
@@ -48,8 +47,8 @@ pub async fn get_files_and_folders_list(
         folder_id: Uuid,
         encrypted_metadata: Vec<u8>,
         encrypted_folder_key: Vec<u8>,
-        created_at: Option<DateTime<Utc>>,
-        updated_at: Option<DateTime<Utc>>,
+        created_at: Option<String>,
+        updated_at: Option<String>,
         is_root: bool,
         parent_folder_id: Option<Uuid>,
     }
@@ -61,8 +60,8 @@ pub async fn get_files_and_folders_list(
         encrypted_metadata: Vec<u8>,
         file_size: i64,
         mime_type: String,
-        created_at: Option<DateTime<Utc>>,
-        updated_at: Option<DateTime<Utc>>,
+        created_at: Option<String>,
+        updated_at: Option<String>,
         access_level: String,
         encrypted_file_key: Vec<u8>,
     }
@@ -73,8 +72,8 @@ pub async fn get_files_and_folders_list(
             f.id as folder_id,
             f.encrypted_metadata,
             fa.encrypted_folder_key,
-            f.created_at,
-            f.updated_at,
+            f.created_at::text as created_at,
+            f.updated_at::text as updated_at,
             f.is_root,
             f.parent_folder_id
         from users u 
@@ -95,8 +94,8 @@ pub async fn get_files_and_folders_list(
             f.encrypted_metadata,
             f.size as file_size,
             f.mime_type,
-            f.created_at,
-            f.updated_at,
+            f.created_at::text as created_at,
+            f.updated_at::text as updated_at,
             fa2.access_level,
             fa2.encrypted_file_key
         from users u 
