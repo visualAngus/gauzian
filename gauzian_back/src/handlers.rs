@@ -236,7 +236,10 @@ pub async fn upload_chunk_handler(
 
     let storage_client = &state.storage_client;
 
-    let meta_data_s3 = match storage_client.upload_line(&chunk_data, body.file_id.to_string(), body.iv.clone()).await {
+    let meta_data_s3 = match storage_client
+        .upload_line(&chunk_data, body.index.to_string(), body.iv.clone())
+        .await
+    {
         Ok(meta) => meta,
         Err(e) => {
             tracing::error!("Failed to upload chunk to storage: {:?}", e);
@@ -244,24 +247,17 @@ pub async fn upload_chunk_handler(
         }
     };
 
-    // insert into database table s3_keys
-    if let Err(e) = sqlx::query(
-        "
-        INSERT INTO s3_keys (s3_key, file_id, index, created_at)
-        VALUES ($1, $2, $3, NOW())
-        ",
-    )
-    .bind(&meta_data_s3.s3_id)
-    .bind(body.file_id)
-    .bind(body.index)
-    .execute(&state.db_pool)
-    .await
-    {
-        tracing::error!("Failed to insert S3 key into database: {:?}", e);
-        return ApiResponse::internal_error("Failed to record chunk metadata").into_response();
-    }
+    // Enregistrer la clé S3 dans la base
+    let s3_record_id = match drive::save_chunk_metadata(&state.db_pool, body.file_id, body.index, &meta_data_s3.s3_id).await {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to insert S3 key into database: {:?}", e);
+            return ApiResponse::internal_error("Failed to record chunk metadata").into_response();
+        }
+    };
 
     ApiResponse::ok(serde_json::json!({ 
+        "s3_record_id": s3_record_id,
         "s3_id": meta_data_s3.s3_id,
         "index": meta_data_s3.index,
         "date_upload": meta_data_s3.date_upload,
