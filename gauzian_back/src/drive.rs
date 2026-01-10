@@ -67,3 +67,28 @@ pub async  fn initialize_file_in_db(
 
     Ok(rec)
 }
+
+/// Enregistrer les metadatas d'un chunk S3 dans la table s3_keys
+pub async fn save_chunk_metadata(
+    db_pool: &PgPool,
+    file_id: Uuid,
+    index: i32,
+    s3_key: &str,
+) -> Result<Uuid, sqlx::Error> {
+    let id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"
+        INSERT INTO s3_keys (id, s3_key, file_id, index, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, NOW(), NOW())
+        "#,
+    )
+    .bind(id)
+    .bind(s3_key)
+    .bind(file_id)
+    .bind(index)
+    .execute(db_pool)
+    .await?;
+
+    Ok(id)
+}
