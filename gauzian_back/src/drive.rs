@@ -42,12 +42,13 @@ pub async fn get_files_and_folders_list(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<serde_json::Value, sqlx::Error> {
-    let folders = sqlx::query_as::<_, (Uuid, Vec<u8>, Option<Uuid>)>(
+    let folders = sqlx::query_as::<_, (Option<Uuid>, Vec<u8>, Option<String>, chrono::NaiveDateTime, chrono::NaiveDateTime, bool, Vec<u8>)>(
         "
-        SELECT fa.folder_id, f.encrypted_metadata, fa.parent_folder_id
-        FROM folder_access fa
-        JOIN folders f ON f.id = fa.folder_id
-        WHERE fa.user_id = $1
+        select f.id as folder_id, f.encrypted_metadata ,fa.encrypted_folder_key ,f.created_at,f.updated_at  ,f.is_root,f.parent_folder_id 
+        from users u 
+        left join folder_access fa on fa.user_id = u.id 
+        left join folders f on f.id = fa.folder_id 
+        where u.id = $1
         ",
     )
     .bind(user_id)
@@ -68,11 +69,15 @@ pub async fn get_files_and_folders_list(
     .await?;
 
     Ok(serde_json::json!({
-        "folders": folders.iter().map(|(folder_id, encrypted_metadata, parent_folder_id)| {
+        "folders": folders.iter().map(|(folder_id, encrypted_metadata, parent_folder_id, created_at, updated_at, is_root, encrypted_folder_key)| {
             serde_json::json!({
                 "folder_id": folder_id,
                 "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(encrypted_metadata),
                 "parent_folder_id": parent_folder_id,
+                "encrypted_folder_key": base64::engine::general_purpose::STANDARD.encode(encrypted_folder_key),
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "is_root": is_root,
             })
         }).collect::<Vec<_>>(),
         "files": files.iter().map(|(folder_id, file_id, encrypted_metadata, file_size, mime_type, created_at, updated_at, access_level, encrypted_file_key)| {
