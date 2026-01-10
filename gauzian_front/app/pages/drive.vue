@@ -23,6 +23,7 @@ import {
     decryptWithStoredPrivateKey,
     generateDataKey,
     encryptSimpleDataWithDataKey,
+    decryptSimpleDataWithDataKey,
     encryptDataWithDataKey,
 } from "~/utils/crypto";
 
@@ -258,28 +259,24 @@ const get_all_info = async () => {
         ...(files_and_folders?.files ?? []),
     ];
 
-    items.forEach((item) => {
+    for (const item of items) {
         console.log("Item:", item);
-        if (item.type === "file") {
-            
-            // Déchiffrer les métadonnées du fichier ici
-            const encryptedMetadata = item.encrypted_metadata;
-            const decryptkey = decryptWithStoredPrivateKey(item.encrypted_file_key);
-            console.log("Decrypt Key for file:", item.file_id, decryptkey);
-            decryptDataWithDataKey(encryptedMetadata, decryptkey)
-                .then((decryptedMetadata) => {
-                    const metadataStr = new TextDecoder().decode(decryptedMetadata);
-                    const metadata = JSON.parse(metadataStr);
-                    console.log("Decrypted Metadata for file:", item.file_id, metadata);
-                })
-                .catch((err) => {
-                    console.error("Failed to decrypt metadata for file:", item.file_id, err);
-                });
 
+        if (item.type === "file") {
+            try {
+                const encryptedMetadata = item.encrypted_metadata;
+                const decryptkey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
+                console.log("Decrypt Key for file:", item.file_id, decryptkey);
+                const metadataStr = await decryptSimpleDataWithDataKey(encryptedMetadata, decryptkey);
+                const metadata = JSON.parse(metadataStr);
+                console.log("Decrypted Metadata for file:", item.file_id, metadata);
+            } catch (err) {
+                console.error("Failed to decrypt metadata for file:", item.file_id, err);
+            }
         } else if (item.type === "folder") {
             // Déchiffrer les métadonnées du dossier ici si nécessaire
         }
-    });
+    }
 };
 
 const createFolder = async () => {
