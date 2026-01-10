@@ -219,6 +219,7 @@ pub struct UploadChunkRequest {
     file_id: Uuid,
     index: i32,
     chunk_data: String, // base64 encoded
+    iv: String,
 }
 pub async fn upload_chunk_handler(
     State(state): State<AppState>,
@@ -235,7 +236,7 @@ pub async fn upload_chunk_handler(
 
     let storage_client = &state.storage_client;
 
-    let meta_data_s3 = match storage_client.upload_line(&chunk_data, body.file_id.to_string()).await {
+    let meta_data_s3 = match storage_client.upload_line(&chunk_data, body.file_id.to_string(), body.iv.clone()).await {
         Ok(meta) => meta,
         Err(e) => {
             tracing::error!("Failed to upload chunk to storage: {:?}", e);
