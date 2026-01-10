@@ -94,6 +94,7 @@ const simultaneousUploads = 3;
 
 const activeFolderId = ref('root');
 const Liste_decrypted_items = ref([]);
+const displayType = ref('grid'); // 'grid' or 'list'
 
 const formatBytes = (bytes) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -233,6 +234,10 @@ const uploadFile = async (file, file_id, dataKey) => {
 
 // use effect on listToUpload to start upload
 
+const display_items = async () => {
+    console.log("Items to display:", Liste_decrypted_items.value);
+};
+
 
 const get_all_info = async () => {
     console.log("Fetching all drive info...");
@@ -277,10 +282,22 @@ const get_all_info = async () => {
                 console.error("Failed to decrypt metadata for file:", item.file_id, err);
             }
         } else if (item.type === "folder") {
-            // Déchiffrer les métadonnées du dossier ici si nécessaire
+            try {
+                const encryptedMetadata = item.encrypted_metadata;
+                const decryptkey = await decryptWithStoredPrivateKey(item.encrypted_folder_key);
+                const metadataStr = await decryptSimpleDataWithDataKey(encryptedMetadata, decryptkey);
+                const metadata = JSON.parse(metadataStr);
+                Liste_decrypted_items.value.push({
+                    ...item,
+                    metadata: metadata,
+                });
+
+            } catch (err) {
+                console.error("Failed to decrypt metadata for folder:", item.folder_id, err);
+            }
         }
     }
-    console.log("Decrypted items:", Liste_decrypted_items.value);
+    display_items();
 };
 
 const createFolder = async () => {
