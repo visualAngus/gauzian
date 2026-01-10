@@ -332,3 +332,33 @@ pub async fn upload_chunk_handler(
         "data_hash": meta_data_s3.data_hash,
     })).into_response()
 }
+
+#[derive(Deserialize)]
+pub struct CreateFolderRequest {
+    encrypted_metadata: String,
+    parent_folder_id: Option<Uuid>,
+    encrypted_folder_key: String,
+}
+pub async fn create_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<CreateFolderRequest>,
+) -> Response {
+    let folder_id = match drive::create_folder_in_db(
+        &state.db_pool,
+        claims.id,
+        &body.encrypted_metadata,
+        body.parent_folder_id,
+        &body.encrypted_folder_key,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to create folder in DB: {:?}", e);
+            return ApiResponse::internal_error("Failed to create folder").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({ "folder_id": folder_id })).into_response()
+}

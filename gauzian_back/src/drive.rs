@@ -229,4 +229,41 @@ pub async fn save_chunk_metadata(
     Ok(id)
 }
 
+pub async fn create_folder_in_db(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    encrypted_metadata: &str,
+    parent_folder_id: Option<Uuid>,
+    encrypted_folder_key: &str,
+) -> Result<Uuid, sqlx::Error> {
+    let folder_id = Uuid::new_v4();
+    let rec = sqlx::query_scalar::<_, Uuid>(
+        "
+        INSERT INTO folders (id, encrypted_metadata, parent_folder_id, is_root, created_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        RETURNING id
+        "
+    )
+    .bind(folder_id)
+    .bind(encrypted_metadata.as_bytes())
+    .bind(parent_folder_id)
+    .bind(parent_folder_id.is_none())
+    .fetch_one(db_pool)
+    .await?;
 
+    let folder_access_id = Uuid::new_v4();
+    sqlx::query(
+        "
+        INSERT INTO folder_access (id, folder_id, user_id, access_level, created_at, encrypted_folder_key)
+        VALUES ($1, $2, $3, 'owner', NOW(), $4)
+        "
+    )
+    .bind(folder_access_id)
+    .bind(folder_id)
+    .bind(user_id)
+    .bind(encrypted_folder_key.as_bytes())
+    .execute(db_pool)
+    .await?;
+
+    Ok(rec)
+}

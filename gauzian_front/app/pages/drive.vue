@@ -5,6 +5,7 @@
     <main>
         <!-- multiple files -->
          <input type="file" multiple @change="handleFileChange" />
+            <button @click="createFolder">Create Folder</button>
     </main>
 </template>
 
@@ -252,6 +253,39 @@ const get_all_info = async () => {
     const user_info = resData.user_info;
 };
 
+const createFolder = async () => {
+    const folderName = "name_folder"; // Tu peux remplacer par une saisie utilisateur
+
+    const metat_data = {
+        folder_name: folderName,
+    };
+    // génération de la clé de données pour le dossier
+    const dataKey = await generateDataKey();
+    const encryptedFolderKey = await encryptWithStoredPublicKey(dataKey);
+    const stringifiedMetadata = JSON.stringify(metat_data);
+    const encryptedMetadata = await encryptSimpleDataWithDataKey(
+        stringifiedMetadata,
+        dataKey
+    );
+    const res = await fetch(`${API_URL}/drive/create_folder`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            encrypted_metadata : encryptedMetadata,
+            encrypted_folder_key: encryptedFolderKey,
+            parent_folder_id: activeFolderId.value,
+        }),
+    });
+    if (!res.ok) {
+        throw new Error("Failed to create folder");
+    }
+    const resData = await res.json();
+    console.log("Folder created with ID:", resData.folder_id);
+    // Optionnel : rafraîchir la liste des fichiers/dossiers
+};
 
 
 
