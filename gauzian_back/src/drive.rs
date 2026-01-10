@@ -41,6 +41,7 @@ pub async fn get_drive_info(
 pub async fn get_files_and_folders_list(
     pool: &PgPool,
     user_id: Uuid,
+    parent_id: Option<Uuid>,
 ) -> Result<serde_json::Value, sqlx::Error> {
     #[derive(Debug, sqlx::FromRow)]
     struct FolderRow {
@@ -81,10 +82,15 @@ pub async fn get_files_and_folders_list(
             'folder'::text as file_type
         from folder_access fa
         join folders f on f.id = fa.folder_id
-        where fa.user_id = $1
+                where fa.user_id = $1
+                    and (
+                        ($2::uuid is null and f.parent_folder_id is null)
+                        or f.parent_folder_id = $2::uuid
+                    )
         "#,
     )
     .bind(user_id)
+    .bind(parent_id)
     .fetch_all(pool)
     .await?;
 
@@ -103,10 +109,15 @@ pub async fn get_files_and_folders_list(
             'file'::text as file_type
         from file_access fa2
         join files f on f.id = fa2.file_id
-        where fa2.user_id = $1
+                where fa2.user_id = $1
+                    and (
+                        ($2::uuid is null and fa2.folder_id is null)
+                        or fa2.folder_id = $2::uuid
+                    )
         "#,
     )
     .bind(user_id)
+    .bind(parent_id)
     .fetch_all(pool)
     .await?;
 
