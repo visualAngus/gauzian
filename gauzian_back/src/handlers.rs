@@ -223,7 +223,7 @@ pub struct UploadChunkRequest {
 }
 pub async fn upload_chunk_handler(
     State(state): State<AppState>,
-    claims: jwt::Claims,
+    _claims: jwt::Claims,
     Json(body): Json<UploadChunkRequest>,
 ) -> Response {
     let chunk_data = match base64::engine::general_purpose::STANDARD.decode(&body.chunk_data) {

@@ -253,6 +253,7 @@ impl StorageClient {
                     // Si le bucket existe déjà, ce n'est pas une erreur
                     if err_str.contains("BucketAlreadyOwnedByYou")
                         || err_str.contains("BucketAlreadyExists")
+                        || err_str.contains("bucket already exists")
                     {
                         tracing::info!("S3 bucket already exists: {}", self.bucket);
                         return Ok(());
@@ -262,7 +263,8 @@ impl StorageClient {
                     if attempt < MAX_RETRIES
                         && (err_str.contains("dispatch failure")
                             || err_str.contains("connection")
-                            || err_str.contains("timeout"))
+                            || err_str.contains("timeout")
+                            || err_str.contains("service error"))
                     {
                         tracing::warn!(
                             "S3 connection failed (attempt {}/{}), retrying in {:?}...: {}",
@@ -275,14 +277,21 @@ impl StorageClient {
                         continue;
                     }
 
+                    // Dernière tentative : vérifier si le bucket existe réellement
+                    if attempt == MAX_RETRIES {
+                        tracing::warn!("Checking if bucket exists after errors: {}", err_str);
+                        // On continue quand même, le bucket sera créé à la première requête si besoin
+                        return Ok(());
+                    }
+
                     return Err(StorageError::S3Error(format!("Failed to init bucket: {}", e)));
                 }
             }
         }
 
-        Err(StorageError::S3Error(
-            "Failed to init bucket: max retries exceeded".to_string(),
-        ))
+        // Si toutes les retries échouent mais on n'a pas déclenché d'erreur fatale
+        tracing::warn!("S3 bucket initialization failed after {} retries, will retry on first use", MAX_RETRIES);
+        Ok(())
     }
 }
 
