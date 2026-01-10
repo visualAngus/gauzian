@@ -42,7 +42,15 @@ pub async fn get_files_and_folders_list(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<serde_json::Value, sqlx::Error> {
-    let folders = sqlx::query_as::<_, (Option<Uuid>, Vec<u8>, Option<String>, chrono::NaiveDateTime, chrono::NaiveDateTime, bool, Vec<u8>)>(
+    let folders = sqlx::query_as::<_, (
+        Option<Uuid>,              // folder_id
+        Option<Vec<u8>>,           // encrypted_metadata
+        Option<Vec<u8>>,           // encrypted_folder_key
+        Option<chrono::NaiveDateTime>, // created_at
+        Option<chrono::NaiveDateTime>, // updated_at
+        Option<bool>,              // is_root
+        Option<Uuid>,              // parent_folder_id
+    )>(
         "
         select f.id as folder_id, f.encrypted_metadata ,fa.encrypted_folder_key ,f.created_at,f.updated_at  ,f.is_root,f.parent_folder_id 
         from users u 
@@ -55,7 +63,17 @@ pub async fn get_files_and_folders_list(
     .fetch_all(pool)
     .await?;
 
-    let files = sqlx::query_as::<_, (Option<Uuid>, Uuid, Vec<u8>, i64, Option<String>, Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>, Option<String>, Option<Vec<u8>>)>(
+    let files = sqlx::query_as::<_, (
+        Option<Uuid>,              // folder_id
+        Uuid,                      // file_id
+        Option<Vec<u8>>,           // encrypted_metadata
+        i64,                       // file_size
+        Option<String>,            // mime_type
+        Option<chrono::NaiveDateTime>, // created_at
+        Option<chrono::NaiveDateTime>, // updated_at
+        Option<String>,            // access_level
+        Option<Vec<u8>>,           // encrypted_file_key
+    )>(
         "
         select fa2.folder_id , fa2.id as file_id, f.encrypted_metadata ,f.size as file_size, f.mime_type ,f.created_at, f.updated_at, fa2.access_level ,fa2.encrypted_file_key  
         from users u 
@@ -69,12 +87,20 @@ pub async fn get_files_and_folders_list(
     .await?;
 
     Ok(serde_json::json!({
-        "folders": folders.iter().map(|(folder_id, encrypted_metadata, parent_folder_id, created_at, updated_at, is_root, encrypted_folder_key)| {
+        "folders": folders.iter().map(|(
+            folder_id,
+            encrypted_metadata,
+            encrypted_folder_key,
+            created_at,
+            updated_at,
+            is_root,
+            parent_folder_id,
+        )| {
             serde_json::json!({
                 "folder_id": folder_id,
-                "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(encrypted_metadata),
+                "encrypted_metadata": encrypted_metadata.as_ref().map(|m| base64::engine::general_purpose::STANDARD.encode(m)),
                 "parent_folder_id": parent_folder_id,
-                "encrypted_folder_key": base64::engine::general_purpose::STANDARD.encode(encrypted_folder_key),
+                "encrypted_folder_key": encrypted_folder_key.as_ref().map(|k| base64::engine::general_purpose::STANDARD.encode(k)),
                 "created_at": created_at,
                 "updated_at": updated_at,
                 "is_root": is_root,
@@ -84,7 +110,7 @@ pub async fn get_files_and_folders_list(
             serde_json::json!({
                 "folder_id": folder_id,
                 "file_id": file_id,
-                "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(encrypted_metadata),
+                    "encrypted_metadata": encrypted_metadata.as_ref().map(|m| base64::engine::general_purpose::STANDARD.encode(m)),
                 "file_size": file_size,
                 "mime_type": mime_type,
                 "created_at": created_at,
