@@ -6,6 +6,7 @@ use tracing::{info, instrument};
 use uuid::Uuid;
 
 use crate::{auth, jwt, response::ApiResponse, state::AppState,drive};
+use base64::Engine;
 
 use axum::http::HeaderMap;
 
@@ -211,4 +212,58 @@ pub async fn initialize_file_handler(
     };
 
     ApiResponse::ok(serde_json::json!({ "file_id": file_id })).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct UploadChunkRequest {
+    file_id: Uuid,
+    index: i32,
+    chunk_data: String, // base64 encoded
+}
+pub async fn upload_chunk_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<UploadChunkRequest>,
+) -> Response {
+    let chunk_data = match base64::engine::general_purpose::STANDARD.decode(&body.chunk_data) {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("Failed to decode chunk data: {:?}", e);
+            return ApiResponse::bad_request("Invalid chunk data").into_response();
+        }
+    };
+
+    let storage_client = &state.storage_client;
+
+    let meta_data_s3 = match storage_client.upload_line(&chunk_data, body.file_id.to_string()).await {
+        Ok(meta) => meta,
+        Err(e) => {
+            tracing::error!("Failed to upload chunk to storage: {:?}", e);
+            return ApiResponse::internal_error("Failed to upload chunk").into_response();
+        }
+    };
+
+    // insert into database table s3_keys
+    if let Err(e) = sqlx::query(
+        "
+        INSERT INTO s3_keys (s3_key, file_id, index, created_at)
+        VALUES ($1, $2, $3, NOW())
+        ",
+    )
+    .bind(&meta_data_s3.s3_id)
+    .bind(body.file_id)
+    .bind(body.index)
+    .execute(&state.db_pool)
+    .await
+    {
+        tracing::error!("Failed to insert S3 key into database: {:?}", e);
+        return ApiResponse::internal_error("Failed to record chunk metadata").into_response();
+    }
+
+    ApiResponse::ok(serde_json::json!({ 
+        "s3_id": meta_data_s3.s3_id,
+        "index": meta_data_s3.index,
+        "date_upload": meta_data_s3.date_upload,
+        "data_hash": meta_data_s3.data_hash,
+    })).into_response()
 }
