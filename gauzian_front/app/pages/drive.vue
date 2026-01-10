@@ -93,6 +93,7 @@ const listUploaded = ref([]);
 const simultaneousUploads = 3;
 
 const activeFolderId = ref('root');
+const Liste_decrypted_items = ref([]);
 
 const formatBytes = (bytes) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -260,16 +261,18 @@ const get_all_info = async () => {
     ];
 
     for (const item of items) {
-        console.log("Item:", item);
 
         if (item.type === "file") {
             try {
                 const encryptedMetadata = item.encrypted_metadata;
                 const decryptkey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
-                console.log("Decrypt Key for file:", item.file_id, decryptkey);
                 const metadataStr = await decryptSimpleDataWithDataKey(encryptedMetadata, decryptkey);
                 const metadata = JSON.parse(metadataStr);
-                console.log("Decrypted Metadata for file:", item.file_id, metadata);
+                Liste_decrypted_items.value.push({
+                    ...item,
+                    metadata: metadata,
+                });
+
             } catch (err) {
                 console.error("Failed to decrypt metadata for file:", item.file_id, err);
             }
@@ -277,6 +280,7 @@ const get_all_info = async () => {
             // Déchiffrer les métadonnées du dossier ici si nécessaire
         }
     }
+    console.log("Decrypted items:", Liste_decrypted_items.value);
 };
 
 const createFolder = async () => {
