@@ -64,6 +64,13 @@ impl ApiResponse<ErrorResponse> {
             status: StatusCode::UNAUTHORIZED,
         }
     }
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self {
+            data: ErrorResponse { error: message.into() },
+            token: None,
+            status: StatusCode::BAD_REQUEST,
+        }
+    }
 }
 
 impl<T: Serialize> IntoResponse for ApiResponse<T> {
