@@ -7,8 +7,8 @@
 
     <div class="section_items">
       <div
-        v-for="item in Liste_decrypted_items"
-        :key="item.type + (item.folder_id || item.file_id)"
+        v-for="(item, index) in Liste_decrypted_items"
+        :key="item.type + (item.folder_id || item.file_id) + index"
         class="item"
         @click="click_on_item(item)"
       >
@@ -337,7 +337,6 @@ const get_all_info = async () => {
       }
     }
   }
-  display_items();
 };
 
 const createFolder = async () => {
