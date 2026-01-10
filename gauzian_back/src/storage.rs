@@ -10,6 +10,7 @@ use uuid::Uuid;
 pub struct StorageMetadata {
     pub s3_id: String,
     pub index: String,
+    pub iv: Option<String>,
     pub date_upload: String,
     pub data_hash: String, // Pour vérifier l'intégrité
 }
@@ -81,6 +82,7 @@ impl StorageClient {
         &self,
         data_encrypted: &[u8],
         index: String,
+        iv: String,
     ) -> Result<StorageMetadata, StorageError> {
         let s3_id = Uuid::new_v4().to_string();
         let date_upload = Utc::now().to_rfc3339();
@@ -93,6 +95,7 @@ impl StorageClient {
         let metadata = StorageMetadata {
             s3_id: s3_id.clone(),
             index: index.clone(),
+            iv: Some(iv.clone()),
             date_upload: date_upload.clone(),
             data_hash: data_hash.clone(),
         };
@@ -106,6 +109,7 @@ impl StorageClient {
             .metadata("index", &index)
             .metadata("date-upload", &date_upload)
             .metadata("data-hash", &metadata.data_hash)
+            .metadata("iv", &metadata.iv.clone().unwrap_or_default())   
             .send()
             .await
             .map_err(|e| StorageError::S3Error(format!("Failed to upload: {}", e)))?;
@@ -150,6 +154,10 @@ impl StorageClient {
                 .and_then(|m| m.get("index"))
                 .cloned()
                 .unwrap_or_default(),
+            iv: resp
+                .metadata()
+                .and_then(|m| m.get("iv"))
+                .cloned(),
             date_upload: resp
                 .metadata()
                 .and_then(|m| m.get("date-upload"))
@@ -287,6 +295,7 @@ mod tests {
         let metadata = StorageMetadata {
             s3_id: "test-id".to_string(),
             index: "file-1".to_string(),
+            iv: Some("iv-value".to_string()),
             date_upload: Utc::now().to_rfc3339(),
             data_hash: "abc123".to_string(),
         };

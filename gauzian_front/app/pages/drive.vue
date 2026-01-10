@@ -166,14 +166,25 @@ const uploadFile = async (file, file_id, dataKey) => {
             dataKey
         );
         console.log(cipherText,iv);
-        // Simulation d'upload
-        await new Promise((resolve, reject) => {
-            // Ici, code réel d'upload (fetch / xhr)
-            setTimeout(() => {
-                console.log(`Uploaded chunk ${index + 1}/${totalChunks}`);
-                resolve();
-            }, 500 + Math.random() * 1000);
+        // envoi du chunk au backend
+        const body = {
+            file_id: file_id,
+            chunk_index: index,
+            chunk_data: cipherText,
+            iv: iv,
+        }
+        const res = await fetch(`${API_URL}/drive/upload_chunk`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
         });
+        if (!res.ok) {
+            throw new Error(`Failed to upload chunk ${index}`);
+        }
+        console.log(`Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name}`);
         
     };
 
