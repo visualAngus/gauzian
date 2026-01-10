@@ -223,7 +223,7 @@ pub async fn get_account_and_drive_info_handler(
 ) -> Response {
     
     // récupérer l'id du dossier parent depuis l'URL 
-    println!("Parent ID from URL: {:?}", parent_id);
+    tracing::info!("Requested parent folder ID: {:?}", parent_id);
 
     // user info
     let user_info = match auth::get_user_by_id(&state.db_pool, claims.id).await {

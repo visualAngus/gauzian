@@ -231,7 +231,7 @@ const uploadFile = async (file, file_id, dataKey) => {
 const get_all_info = async () => {
     console.log("Fetching all drive info...");
 
-    const id_parent_folder = null; // à modifier plus tard pour la navigation dans les dossiers
+    const id_parent_folder = "014451b1-8392-4c53-8ebc-ce8e68dad086"; // à modifier plus tard pour la navigation dans les dossiers
 
     const res = await fetch(`${API_URL}/drive/get_all_drive_info/${id_parent_folder}`, {
         method: "GET",
