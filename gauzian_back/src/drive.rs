@@ -6,6 +6,7 @@ use axum::{
 use base64::Engine; // Add this import for .encode()
 use uuid::Uuid;
 use sqlx::PgPool;
+use chrono::{DateTime, Utc};
 
 pub struct AuthError(pub StatusCode, pub String);
 
@@ -42,81 +43,95 @@ pub async fn get_files_and_folders_list(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<serde_json::Value, sqlx::Error> {
-    let folders = sqlx::query_as::<_, (
-        Option<Uuid>,              // folder_id
-        Option<Vec<u8>>,           // encrypted_metadata
-        Option<Vec<u8>>,           // encrypted_folder_key
-        Option<chrono::NaiveDateTime>, // created_at
-        Option<chrono::NaiveDateTime>, // updated_at
-        Option<bool>,              // is_root
-        Option<Uuid>,              // parent_folder_id
-    )>(
-        "
-        select f.id as folder_id, f.encrypted_metadata ,fa.encrypted_folder_key ,f.created_at,f.updated_at  ,f.is_root,f.parent_folder_id 
+    #[derive(Debug, sqlx::FromRow)]
+    struct FolderRow {
+        folder_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        encrypted_folder_key: Vec<u8>,
+        created_at: Option<DateTime<Utc>>,
+        updated_at: Option<DateTime<Utc>>,
+        is_root: bool,
+        parent_folder_id: Option<Uuid>,
+    }
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct FileRow {
+        folder_id: Option<Uuid>,
+        file_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        file_size: i64,
+        mime_type: String,
+        created_at: Option<DateTime<Utc>>,
+        updated_at: Option<DateTime<Utc>>,
+        access_level: String,
+        encrypted_file_key: Vec<u8>,
+    }
+
+    let folders: Vec<FolderRow> = sqlx::query_as::<_, FolderRow>(
+        r#"
+        select 
+            f.id as folder_id,
+            f.encrypted_metadata,
+            fa.encrypted_folder_key,
+            f.created_at,
+            f.updated_at,
+            f.is_root,
+            f.parent_folder_id
         from users u 
         left join folder_access fa on fa.user_id = u.id 
         left join folders f on f.id = fa.folder_id 
         where u.id = $1
-        ",
+        "#,
     )
     .bind(user_id)
     .fetch_all(pool)
     .await?;
 
-    let files = sqlx::query_as::<_, (
-        Option<Uuid>,              // folder_id
-        Uuid,                      // file_id
-        Option<Vec<u8>>,           // encrypted_metadata
-        i64,                       // file_size
-        Option<String>,            // mime_type
-        Option<chrono::NaiveDateTime>, // created_at
-        Option<chrono::NaiveDateTime>, // updated_at
-        Option<String>,            // access_level
-        Option<Vec<u8>>,           // encrypted_file_key
-    )>(
-        "
-        select fa2.folder_id , fa2.id as file_id, f.encrypted_metadata ,f.size as file_size, f.mime_type ,f.created_at, f.updated_at, fa2.access_level ,fa2.encrypted_file_key  
+    let files: Vec<FileRow> = sqlx::query_as::<_, FileRow>(
+        r#"
+        select 
+            fa2.folder_id,
+            fa2.id as file_id,
+            f.encrypted_metadata,
+            f.size as file_size,
+            f.mime_type,
+            f.created_at,
+            f.updated_at,
+            fa2.access_level,
+            fa2.encrypted_file_key
         from users u 
         left join file_access fa2 on fa2.user_id = u.id 
         left join files f on f.id = fa2.file_id
         where u.id = $1
-        ",
+        "#,
     )
     .bind(user_id)
     .fetch_all(pool)
     .await?;
 
     Ok(serde_json::json!({
-        "folders": folders.iter().map(|(
-            folder_id,
-            encrypted_metadata,
-            encrypted_folder_key,
-            created_at,
-            updated_at,
-            is_root,
-            parent_folder_id,
-        )| {
+        "folders": folders.iter().map(|row| {
             serde_json::json!({
-                "folder_id": folder_id,
-                "encrypted_metadata": encrypted_metadata.as_ref().map(|m| base64::engine::general_purpose::STANDARD.encode(m)),
-                "parent_folder_id": parent_folder_id,
-                "encrypted_folder_key": encrypted_folder_key.as_ref().map(|k| base64::engine::general_purpose::STANDARD.encode(k)),
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "is_root": is_root,
+                "folder_id": row.folder_id,
+                "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_metadata),
+                "parent_folder_id": row.parent_folder_id,
+                "encrypted_folder_key": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_folder_key),
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "is_root": row.is_root,
             })
         }).collect::<Vec<_>>(),
-        "files": files.iter().map(|(folder_id, file_id, encrypted_metadata, file_size, mime_type, created_at, updated_at, access_level, encrypted_file_key)| {
+        "files": files.iter().map(|row| {
             serde_json::json!({
-                "folder_id": folder_id,
-                "file_id": file_id,
-                    "encrypted_metadata": encrypted_metadata.as_ref().map(|m| base64::engine::general_purpose::STANDARD.encode(m)),
-                "file_size": file_size,
-                "mime_type": mime_type,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "access_level": access_level,
-                "encrypted_file_key": encrypted_file_key.as_ref().map(|key| base64::engine::general_purpose::STANDARD.encode(key)),
+                "folder_id": row.folder_id,
+                "file_id": row.file_id,
+                "encrypted_metadata": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_metadata),
+                "file_size": row.file_size,
+                "mime_type": row.mime_type,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "access_level": row.access_level,
+                "encrypted_file_key": base64::engine::general_purpose::STANDARD.encode(&row.encrypted_file_key),
             })
         }).collect::<Vec<_>>(),
     }))
