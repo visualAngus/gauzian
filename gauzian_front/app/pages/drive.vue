@@ -259,6 +259,23 @@ const get_all_info = async () => {
 
     items.forEach((item) => {
         console.log("Item:", item);
+        if (item.type === "file") {
+            
+            // Déchiffrer les métadonnées du fichier ici
+            const encryptedMetadata = item.encrypted_metadata;
+            decryptDataWithDataKey(encryptedMetadata, item.encrypted_file_key)
+                .then((decryptedMetadata) => {
+                    const metadataStr = new TextDecoder().decode(decryptedMetadata);
+                    const metadata = JSON.parse(metadataStr);
+                    console.log("Decrypted Metadata for file:", item.id, metadata);
+                })
+                .catch((err) => {
+                    console.error("Failed to decrypt metadata for file:", item.id, err);
+                });
+
+        } else if (item.type === "folder") {
+            // Déchiffrer les métadonnées du dossier ici si nécessaire
+        }
     });
 };
 
