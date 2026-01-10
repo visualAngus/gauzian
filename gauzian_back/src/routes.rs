@@ -14,6 +14,7 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/initialize_file", post(handlers::initialize_file_handler))
         .route("/drive/upload_chunk", post(handlers::upload_chunk_handler))
         .route("/drive/get_all_drive_info/{parent_id}", get(handlers::get_account_and_drive_info_handler))
+        .route("/drive/create_folder", post(handlers::create_folder_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
