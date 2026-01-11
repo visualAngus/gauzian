@@ -182,6 +182,7 @@ const click_on_item = (item) => {
   if (item.type === "folder") {
     // naviguer dans le dossier
     router.push(`/drive?folder_id=${item.folder_id}`);
+    activeFolderId.value = item.folder_id;
   } else if (item.type === "file") {
     // télécharger le fichier
     console.log("Download file:", item.metadata?.filename || "Sans nom");
@@ -191,8 +192,9 @@ const click_on_item = (item) => {
 
 const navigateToBreadcrumb = (pathItem, index) => {
   console.log("Navigating to breadcrumb:", pathItem, index);
-  if (index !== full_path.value.length - 1) {
+  if (index !== full_path.value.length - 1 && pathItem.folder_id) {
     router.push(`/drive?folder_id=${pathItem.folder_id}`);
+    activeFolderId.value = pathItem.folder_id;
   }
 };
 
