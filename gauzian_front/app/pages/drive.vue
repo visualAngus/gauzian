@@ -1,9 +1,16 @@
 <template>
   <div class="page"></div>
   <main>
+
+    <div class="div_left_section">
+        <input type="file" multiple @change="handleFileChange"/>
+        <button @click="createFolder">Create Folder</button>
+
+    </div>
+
+    <div class="div_right_section">
+        
     <!-- multiple files -->
-    <input type="file" multiple @change="handleFileChange" />
-    <button @click="createFolder">Create Folder</button>
 
     <div class="breadcrumb">
       <div class="breadcrumb-item" @click="gohome()">
@@ -82,6 +89,7 @@
           </svg>
         </span>
       </div>
+    </div>
     </div>
   </main>
 </template>
@@ -621,6 +629,36 @@ body {
   background-color: #fff;
   padding: 20px;
 }
+main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 100vh;
+}
+.div_left_section{
+    background-color: firebrick;
+    height: 100%;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+
+    flex: 0 0 200px;
+}
+
+.div_right_section{
+    background-color: forestgreen;
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+}
+
 
 .section_items {
   /* Utilisation de Grid pour un alignement responsive comme le Drive */
