@@ -5,6 +5,31 @@
     <input type="file" multiple @change="handleFileChange" />
     <button @click="createFolder">Create Folder</button>
 
+    <div class="breadcrumb">
+        <div class="breadcrumb-item">
+            <svg class="home-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"></path>
+            </svg>
+            <span v-if="activeSection == 'my_drive'">
+                Mon Drive
+            </span>
+        </div>
+
+        <svg class="separator" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"></path>
+        </svg>
+        <div class="breadcrumb-item">
+            <span>Dossier sans nom</span>
+        </div>
+        <svg class="separator" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"></path>
+        </svg>
+        <div class="breadcrumb-item active">
+            <span>Dossier sans nom</span>
+        </div>
+        
+    </div>
+
     <div class="section_items">
       <div
         v-for="(item, index) in liste_decrypted_items"
@@ -133,6 +158,7 @@ const liste_decrypted_items = ref([]);
 const full_path = ref([]);
 
 const displayType = ref("grid"); // 'grid' or 'list'
+const activeSection = ref("my_drive"); // 'my_drive', 'shared_with_me', 'recent', 'trash'
 
 const click_on_item = (item) => {
   if (item.type === "folder") {
@@ -359,7 +385,20 @@ const get_all_info = async () => {
   }
 
   for (const pathItem of fullPathData) {
-    console.log("Full path item:", pathItem);
+    const encryptedMetadata = pathItem.encrypted_metadata;
+    const decryptkey = await decryptWithStoredPrivateKey(
+      pathItem.encrypted_folder_key
+    );
+    const metadataStr = await decryptSimpleDataWithDataKey(
+      encryptedMetadata,
+      decryptkey
+    );
+    const metadata = JSON.parse(metadataStr);
+    full_path.value.push({
+      ...pathItem,
+      metadata: metadata,
+    });
+    console.log("Full path item:", full_path.value);
   }
 };
 
