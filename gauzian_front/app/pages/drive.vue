@@ -6,28 +6,41 @@
     <button @click="createFolder">Create Folder</button>
 
     <div class="breadcrumb">
-        <div class="breadcrumb-item">
-            <svg class="home-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"></path>
-            </svg>
-            <span v-if="activeSection == 'my_drive'">
-                Mon Drive
-            </span>
-        </div>
+      <div class="breadcrumb-item">
+        <svg
+          class="home-icon"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path
+            d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"
+          ></path>
+        </svg>
+        <span v-if="activeSection == 'my_drive'"> Mon Drive </span>
+      </div>
 
-        <template v-for="(pathItem, index) in full_path" :key="pathItem.id">
-            <svg class="separator" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"></path>
-            </svg>
-            <div 
-                class="breadcrumb-item"
-                :class="{ active: index === full_path.length - 1 }"
-                @click="index !== full_path.length - 1 ? window.location.href = `/drive?folder_id=${pathItem.id}` : null"
-            >
-                <span>{{ pathItem.metadata?.folder_name || "Dossier sans nom" }}</span>
-            </div>
-        </template>
-        
+      <template v-for="(pathItem, index) in full_path" :key="pathItem.id">
+        <svg
+          class="separator"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path
+            d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"
+          ></path>
+        </svg>
+        <div
+          class="breadcrumb-item"
+          :class="{ active: index === full_path.length - 1 }"
+          @click="navigateToBreadcrumb(pathItem, index)"
+        >
+          <span>{{
+            pathItem.metadata?.folder_name || "Dossier sans nom"
+          }}</span>
+        </div>
+      </template>
     </div>
 
     <div class="section_items">
@@ -160,14 +173,22 @@ const full_path = ref([]);
 const displayType = ref("grid"); // 'grid' or 'list'
 const activeSection = ref("my_drive"); // 'my_drive', 'shared_with_me', 'recent', 'trash'
 
+const router = useRouter();
+
 const click_on_item = (item) => {
   if (item.type === "folder") {
     // naviguer dans le dossier
-    window.location.href = `/drive?folder_id=${item.folder_id}`;
+    router.push(`/drive?folder_id=${item.folder_id}`);
   } else if (item.type === "file") {
     // télécharger le fichier
     console.log("Download file:", item.metadata?.filename || "Sans nom");
     // implémente la logique de téléchargement ici
+  }
+};
+
+const navigateToBreadcrumb = (pathItem, index) => {
+  if (index !== full_path.value.length - 1) {
+    router.push(`/drive?folder_id=${pathItem.id}`);
   }
 };
 
@@ -465,7 +486,7 @@ watch(
 );
 </script>
 
-<style scoped>
+<style>
 * {
   margin: 0;
   padding: 0;
@@ -557,61 +578,61 @@ body {
   background-color: rgba(0, 0, 0, 0.08);
 }
 
- .breadcrumb {
-        width: 100%;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 4px;
-        margin-bottom: 20px;
-        padding: 12px 0;
-    }
+.breadcrumb {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 12px 0;
+}
 
-    .breadcrumb-item {
-        height: 36px;
-        padding: 0 10px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        transition: background-color 0.15s ease;
-        cursor: pointer;
-    }
+.breadcrumb-item {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
 
-    .breadcrumb-item:not(.active):hover {
-        background-color: #EFF3F8;
-    }
+.breadcrumb-item:not(.active):hover {
+  background-color: #eff3f8;
+}
 
-    .breadcrumb-item.active {
-        cursor: default;
-        color: #1f1f1f;
-        font-weight: 500;
-    }
+.breadcrumb-item.active {
+  cursor: default;
+  color: #1f1f1f;
+  font-weight: 500;
+}
 
-    .breadcrumb-item span {
-        font-size: 14px;
-        color: #444746;
-        white-space: nowrap;
-        user-select: none;
-    }
+.breadcrumb-item span {
+  font-size: 14px;
+  color: #444746;
+  white-space: nowrap;
+  user-select: none;
+}
 
-    .breadcrumb-item.active span {
-        color: #1f1f1f;
-        font-weight: 500;
-    }
+.breadcrumb-item.active span {
+  color: #1f1f1f;
+  font-weight: 500;
+}
 
-    .breadcrumb-item .home-icon {
-        width: 18px;
-        height: 18px;
-        color: #444746;
-    }
+.breadcrumb-item .home-icon {
+  width: 18px;
+  height: 18px;
+  color: #444746;
+}
 
-    .breadcrumb .separator {
-        width: 16px;
-        height: 16px;
-        color: #5f6368;
-        opacity: 0.6;
-        flex-shrink: 0;
-    }
+.breadcrumb .separator {
+  width: 16px;
+  height: 16px;
+  color: #5f6368;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
 </style>
