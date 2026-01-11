@@ -1,5 +1,24 @@
 <template>
-  <div class="page"></div>
+    <div class="div_pannel_up_dow_load">
+        <h3>Upload/Download Panel</h3>
+        <div class="div_liste_fichier">
+            <div class="fichier" v-for="(file, index) in listUploadInProgress" :key="index">
+                <div class="div_info_up">
+                    <span class="nom_fichier">{{ file.name }}</span>
+                    <div class="div_barre">
+                        <div class="barre_progress" :style="{ width: file.progress + '%' }"></div>
+                    </div>
+                </div>
+                <div class="div_cancel">
+                    <button class="btn_cancel">
+                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
   <main>
     <div class="div_left_section">
       <button @click="createFolder" id="create-folder-button">
@@ -617,7 +636,7 @@ const startUploads = async () => {
       ) {
         await loadPath();
       }
-
+      console.log(listUploadInProgress.value);
       startUploads();
     });
   }
@@ -667,7 +686,6 @@ watch(activeFolderId, () => {
 body {
   font-family: "Roboto", "Segoe UI", sans-serif; /* Police style Google */
   background-color: #fff;
-  padding: 20px;
 }
 main {
   position: relative;
@@ -902,4 +920,106 @@ main {
 .hidden {
   display: none;
 }
+
+
+/* div_pannel_up_dow_load */
+.div_pannel_up_dow_load {
+  position: fixed;
+  bottom: -5px;
+  left: 0;
+  width: 350px;
+  min-height: 50px;
+  max-height: 350px;
+    background-color: #333333;
+    border-radius: 0 15px 0 0;
+
+  border-bottom: 1px solid #ddd;
+  z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    color: white;
+}
+
+.div_pannel_up_dow_load h3 {
+  padding: 10px;
+}
+
+.div_liste_fichier {
+    width: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+
+    padding-bottom: 10px;
+    padding-left: 10px;
+}
+
+.fichier {
+    width: 100%;
+    padding: 5px 0;
+    border-bottom: 1px solid #555555;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between; 
+}
+
+.div_info_up {
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.nom_fichier {
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.div_barre {
+    width: 98%;
+    height: 10px;
+    background-color: #555555;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.barre_progress {
+    height: 100%;
+    background-color: #4c8eaf;
+    border-radius: 5px 0 0 5px;
+    transition: width 0.3s ease;
+}
+
+.div_cancel {
+    height: 100%;
+    margin-right: 5px;
+}
+.btn_cancel {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: white;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn_cancel svg {
+    width: 22px;
+    height: 22px;
+    fill: white;
+}
+
+/* lorsque le btn est hover le svg devien rouge */
+.btn_cancel:hover svg {
+    fill: #ff4444;
+}
+
 </style>
