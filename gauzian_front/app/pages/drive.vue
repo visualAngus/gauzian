@@ -15,18 +15,17 @@
             </span>
         </div>
 
-        <svg class="separator" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"></path>
-        </svg>
-        <div class="breadcrumb-item">
-            <span>Dossier sans nom</span>
-        </div>
-        <svg class="separator" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"></path>
-        </svg>
-        <div class="breadcrumb-item active">
-            <span>Dossier sans nom</span>
-        </div>
+        <template v-for="(pathItem, index) in full_path" :key="pathItem.id">
+            <svg class="separator" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"></path>
+            </svg>
+            <div 
+                class="breadcrumb-item"
+                :class="{ active: index === full_path.length - 1 }"
+            >
+                <span>{{ pathItem.metadata?.folder_name || "Dossier sans nom" }}</span>
+            </div>
+        </template>
         
     </div>
 
@@ -556,4 +555,62 @@ body {
 .item .menu-dots:hover {
   background-color: rgba(0, 0, 0, 0.08);
 }
+
+ .breadcrumb {
+        width: 100%;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 4px;
+        margin-bottom: 20px;
+        padding: 12px 0;
+    }
+
+    .breadcrumb-item {
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background-color 0.15s ease;
+        cursor: pointer;
+    }
+
+    .breadcrumb-item:not(.active):hover {
+        background-color: #EFF3F8;
+    }
+
+    .breadcrumb-item.active {
+        cursor: default;
+        color: #1f1f1f;
+        font-weight: 500;
+    }
+
+    .breadcrumb-item span {
+        font-size: 14px;
+        color: #444746;
+        white-space: nowrap;
+        user-select: none;
+    }
+
+    .breadcrumb-item.active span {
+        color: #1f1f1f;
+        font-weight: 500;
+    }
+
+    .breadcrumb-item .home-icon {
+        width: 18px;
+        height: 18px;
+        color: #444746;
+    }
+
+    .breadcrumb .separator {
+        width: 16px;
+        height: 16px;
+        color: #5f6368;
+        opacity: 0.6;
+        flex-shrink: 0;
+    }
 </style>
