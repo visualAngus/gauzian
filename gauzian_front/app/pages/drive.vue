@@ -505,7 +505,8 @@ const loadPath = async () => {
       }
     }
 
-    full_path.value = []; // reset
+    // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
+    const newFullPath = [];
     for (const pathItem of fullPathData) {
       const encryptedMetadata = pathItem.encrypted_metadata;
       const decryptkey = await decryptWithStoredPrivateKey(
@@ -516,12 +517,14 @@ const loadPath = async () => {
         decryptkey
       );
       const metadata = JSON.parse(metadataStr);
-      full_path.value.push({
+      newFullPath.push({
         ...pathItem,
         metadata: metadata,
       });
-      console.log("Full path item:", full_path.value);
     }
+    // Remplacer en une seule opération pour éviter le clignotement
+    full_path.value = newFullPath;
+    console.log("Full path updated:", full_path.value);
 };
 
 const createFolder = async () => {
@@ -555,7 +558,8 @@ const createFolder = async () => {
   }
   const resData = await res.json();
   console.log("Folder created with ID:", resData.folder_id);
-  // Optionnel : rafraîchir la liste des fichiers/dossiers
+  // Rafraîchir la liste des fichiers/dossiers
+  await loadPath();
 };
 
 const startUploads = async () => {
@@ -568,11 +572,17 @@ const startUploads = async () => {
 
     const [file_id, dataKey] = await initializeFileInDB(file, activeFolderId.value);
 
-    uploadFile(file, file_id, dataKey).then(() => {
+    uploadFile(file, file_id, dataKey).then(async () => {
       listUploadInProgress.value = listUploadInProgress.value.filter(
         (f) => f !== file
       );
       listUploaded.value.push(file);
+      
+      // Si c'est le dernier fichier, recharger la liste
+      if (listUploadInProgress.value.length === 0 && listToUpload.value.length === 0) {
+        await loadPath();
+      }
+      
       startUploads();
     });
   }
