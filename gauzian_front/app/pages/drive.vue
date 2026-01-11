@@ -6,7 +6,7 @@
     <button @click="createFolder">Create Folder</button>
 
     <div class="breadcrumb">
-      <div class="breadcrumb-item">
+      <div class="breadcrumb-item" @click="gohome()">
         <svg
           class="home-icon"
           xmlns="http://www.w3.org/2000/svg"
@@ -196,6 +196,11 @@ const navigateToBreadcrumb = (pathItem, index) => {
     router.push(`/drive?folder_id=${pathItem.folder_id}`);
     activeFolderId.value = pathItem.folder_id;
   }
+};
+
+const gohome = () => {
+  router.push(`/drive?folder_id=root`);
+  activeFolderId.value = "root";
 };
 
 const formatBytes = (bytes) => {
@@ -559,7 +564,7 @@ const startUploads = async () => {
     const file = listToUpload.value.shift();
     listUploadInProgress.value.push(file);
 
-    const [file_id, dataKey] = await initializeFileInDB(file, null);
+    const [file_id, dataKey] = await initializeFileInDB(file, activeFolderId.value);
 
     uploadFile(file, file_id, dataKey).then(() => {
       listUploadInProgress.value = listUploadInProgress.value.filter(
