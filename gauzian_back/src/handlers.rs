@@ -429,5 +429,20 @@ pub async fn get_file_folder_handler(
         }
     };
 
-    ApiResponse::ok(files_and_folders).into_response()
+    // full path
+    let full_path = match drive::get_full_path(&state.db_pool, claims.id, parent_id).await {
+        Ok(path) => {
+            tracing::info!("Full path retrieved: {:?}", path);
+            path
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve full path: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve full path").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "files_and_folders": files_and_folders,
+        "full_path": full_path,
+    })).into_response()
 }
