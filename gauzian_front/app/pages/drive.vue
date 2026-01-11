@@ -12,7 +12,7 @@
         </svg>
         Nouveau dossier
       </button>
-      <div class="drop-zone" :class="{ 'is-over': isOver }">
+      <!-- <div class="drop-zone" :class="{ 'is-over': isOver }">
         Dépose fichiers ou dossiers
         <input
           ref="fileInput"
@@ -22,7 +22,7 @@
           class="hidden"
           @change="onNativeChange"
         />
-      </div>
+      </div> -->
     </div>
 
     <div class="div_right_section">
@@ -698,7 +698,7 @@ main {
   flex: 1;
 
   border-radius: 25px;
-
+  padding-left: 25px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -722,6 +722,7 @@ main {
   align-items: center;
   gap: 8px;
   margin-left: 35px;
+  margin-top: 12px;
 }
 #create-folder-button:hover {
   background-color: #555555;
@@ -843,7 +844,7 @@ main {
 }
 
 .breadcrumb-item {
-  height: 36px;
+  height: 40px;
   padding: 0 10px;
   border-radius: 8px;
   display: flex;
@@ -864,7 +865,7 @@ main {
 }
 
 .breadcrumb-item span {
-  font-size: 14px;
+  font-size: 18px;
   color: #444746;
   white-space: nowrap;
   user-select: none;
@@ -876,14 +877,14 @@ main {
 }
 
 .breadcrumb-item .home-icon {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   color: #444746;
 }
 
 .breadcrumb .separator {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   color: #5f6368;
   opacity: 0.6;
   flex-shrink: 0;
