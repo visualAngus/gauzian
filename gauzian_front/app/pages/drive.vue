@@ -22,6 +22,7 @@
             <div 
                 class="breadcrumb-item"
                 :class="{ active: index === full_path.length - 1 }"
+                @click="index !== full_path.length - 1 ? window.location.href = `/drive?folder_id=${pathItem.id}` : null"
             >
                 <span>{{ pathItem.metadata?.folder_name || "Dossier sans nom" }}</span>
             </div>
@@ -464,7 +465,7 @@ watch(
 );
 </script>
 
-<style>
+<style scoped>
 * {
   margin: 0;
   padding: 0;
