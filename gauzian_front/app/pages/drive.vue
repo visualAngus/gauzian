@@ -20,7 +20,10 @@
         <span v-if="activeSection == 'my_drive'"> Mon Drive </span>
       </div>
 
-      <template v-for="(pathItem, index) in full_path" :key="pathItem.folder_id">
+      <template
+        v-for="(pathItem, index) in full_path"
+        :key="pathItem.folder_id"
+      >
         <svg
           class="separator"
           xmlns="http://www.w3.org/2000/svg"
@@ -187,7 +190,7 @@ const click_on_item = (item) => {
 };
 
 const navigateToBreadcrumb = (pathItem, index) => {
-    console.log("Navigating to breadcrumb:", pathItem, index);
+  console.log("Navigating to breadcrumb:", pathItem, index);
   if (index !== full_path.value.length - 1) {
     router.push(`/drive?folder_id=${pathItem.folder_id}`);
   }
@@ -424,6 +427,75 @@ const get_all_info = async () => {
   }
 };
 
+const loadPath = async () => {
+  // dans l'url ?folder_id=xxx
+  const res = await fetch(
+    `${API_URL}/drive/get_file_folder/${activeFolderId.value}`,
+    {
+      method: "GET",
+      credentials: "include",
+    }
+  );
+  if (!res.ok) {
+    throw new Error("Failed to get file/folder info");
+  }
+  const resData = await res.json();
+  const files_and_folders = resData.files_and_folders;
+ 
+  const items = [
+    ...(files_and_folders?.folders ?? []),
+    ...(files_and_folders?.files ?? []),
+  ];
+    liste_decrypted_items.value = []; // reset
+    for (const item of items) {
+      if (item.type === "file") {
+        try {
+          const encryptedMetadata = item.encrypted_metadata;
+          const decryptkey = await decryptWithStoredPrivateKey(
+            item.encrypted_file_key
+          );
+          const metadataStr = await decryptSimpleDataWithDataKey(
+            encryptedMetadata,
+            decryptkey
+          );
+          const metadata = JSON.parse(metadataStr);
+          liste_decrypted_items.value.push({
+            ...item,
+            metadata: metadata,
+          });
+        } catch (err) {
+          console.error(
+            "Failed to decrypt metadata for file:",
+            item.file_id,
+            err
+          );
+        }
+      } else if (item.type === "folder") {
+        try {
+          const encryptedMetadata = item.encrypted_metadata;
+          const decryptkey = await decryptWithStoredPrivateKey(
+            item.encrypted_folder_key
+          );
+          const metadataStr = await decryptSimpleDataWithDataKey(
+            encryptedMetadata,
+            decryptkey
+          );
+          const metadata = JSON.parse(metadataStr);
+          liste_decrypted_items.value.push({
+            ...item,
+            metadata: metadata,
+          });
+        } catch (err) {
+          console.error(
+            "Failed to decrypt metadata for folder:",
+            item.folder_id,
+            err
+          );
+        }
+      }
+    }
+};
+
 const createFolder = async () => {
   const folderName = "name_folder"; // Tu peux remplacer par une saisie utilisateur
 
@@ -485,6 +557,14 @@ watch(
   },
   { deep: true }
 );
+
+// un watch sur activeFolderId pour recharger le path
+watch(
+  activeFolderId, () => {
+    loadPath();
+  }
+);
+
 </script>
 
 <style>

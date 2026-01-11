@@ -394,3 +394,40 @@ pub async fn create_folder_handler(
 
     ApiResponse::ok(serde_json::json!({ "folder_id": folder_id })).into_response()
 }
+
+
+pub async fn get_file_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(parent_id): Path<String>,
+) -> Response {
+
+    let parent_id = {
+        let s = parent_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid parent_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    tracing::info!("Requested parent folder ID: {:?}", parent_id);
+
+    let files_folder_liste = drive::get_files_and_folders_list(&state.db_pool, claims.id, parent_id).await;
+    let files_and_folders = match files_folder_liste {
+        Ok(list) => list,
+        Err(e) => {
+            tracing::error!("Failed to retrieve files and folders list: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve files and folders list").into_response();
+        }
+    };
+
+    ApiResponse::ok(files_and_folders).into_response()
+}
