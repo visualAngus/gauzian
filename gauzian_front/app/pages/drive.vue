@@ -20,7 +20,7 @@
         <span v-if="activeSection == 'my_drive'"> Mon Drive </span>
       </div>
 
-      <template v-for="(pathItem, index) in full_path" :key="pathItem.id">
+      <template v-for="(pathItem, index) in full_path" :key="pathItem.folder_id">
         <svg
           class="separator"
           xmlns="http://www.w3.org/2000/svg"
@@ -187,8 +187,9 @@ const click_on_item = (item) => {
 };
 
 const navigateToBreadcrumb = (pathItem, index) => {
+    console.log("Navigating to breadcrumb:", pathItem, index);
   if (index !== full_path.value.length - 1) {
-    router.push(`/drive?folder_id=${pathItem.id}`);
+    router.push(`/drive?folder_id=${pathItem.folder_id}`);
   }
 };
 
@@ -607,7 +608,7 @@ body {
 .breadcrumb-item.active {
   cursor: default;
   color: #1f1f1f;
-  font-weight: 500;
+  font-weight: 800;
 }
 
 .breadcrumb-item span {
@@ -619,7 +620,7 @@ body {
 
 .breadcrumb-item.active span {
   color: #1f1f1f;
-  font-weight: 500;
+  font-weight: 800;
 }
 
 .breadcrumb-item .home-icon {
