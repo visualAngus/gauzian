@@ -7,20 +7,38 @@
 
     <div class="section_items">
       <div
-        v-for="(item, index) in Liste_decrypted_items"
+        v-for="(item, index) in liste_decrypted_items"
         :key="item.type + (item.folder_id || item.file_id) + index"
         class="item"
         @click="click_on_item(item)"
       >
         <span class="icon-wrapper">
-          <svg v-if="item.type === 'folder'" viewBox="0 0 24 24" fill="currentColor"><path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path></svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path></svg>
+          <svg
+            v-if="item.type === 'folder'"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path
+              d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
+            ></path>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
+            ></path>
+          </svg>
         </span>
         <span class="filename">
-          {{ item.metadata?.folder_name || item.metadata?.filename || 'Sans nom' }}
+          {{
+            item.metadata?.folder_name || item.metadata?.filename || "Sans nom"
+          }}
         </span>
         <span class="menu-dots">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
         </span>
       </div>
     </div>
@@ -111,9 +129,10 @@ const listUploaded = ref([]);
 const simultaneousUploads = 3;
 
 const activeFolderId = ref("root");
-const Liste_decrypted_items = ref([]);
-const displayType = ref("grid"); // 'grid' or 'list'
+const liste_decrypted_items = ref([]);
+const full_path = ref([]);
 
+const displayType = ref("grid"); // 'grid' or 'list'
 
 const click_on_item = (item) => {
   if (item.type === "folder") {
@@ -284,6 +303,7 @@ const get_all_info = async () => {
   const drive_info = resData.drive_info;
   const files_and_folders = resData.files_and_folders;
   const user_info = resData.user_info;
+  const fullPathData = resData.full_path;
 
   const items = [
     ...(files_and_folders?.folders ?? []),
@@ -302,7 +322,7 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        Liste_decrypted_items.value.push({
+        liste_decrypted_items.value.push({
           ...item,
           metadata: metadata,
         });
@@ -324,7 +344,7 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        Liste_decrypted_items.value.push({
+        liste_decrypted_items.value.push({
           ...item,
           metadata: metadata,
         });
@@ -336,6 +356,10 @@ const get_all_info = async () => {
         );
       }
     }
+  }
+
+  for (const pathItem of fullPathData) {
+    console.log("Full path item:", pathItem);
   }
 };
 
@@ -403,7 +427,6 @@ watch(
 </script>
 
 <style>
-
 * {
   margin: 0;
   padding: 0;
