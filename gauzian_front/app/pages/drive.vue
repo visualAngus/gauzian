@@ -1,95 +1,113 @@
 <template>
   <div class="page"></div>
   <main>
-
     <div class="div_left_section">
-        <input type="file" multiple @change="handleFileChange"/>
-        <button @click="createFolder">Create Folder</button>
-
+      <button @click="createFolder" id="create-folder-button">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"></path>
+        </svg>
+        Nouveau dossier
+      </button>
+      <div class="drop-zone" :class="{ 'is-over': isOver }">
+        Dépose fichiers ou dossiers
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          webkitdirectory
+          class="hidden"
+          @change="onNativeChange"
+        />
+      </div>
     </div>
 
     <div class="div_right_section">
-        
-    <!-- multiple files -->
+      <!-- multiple files -->
 
-    <div class="breadcrumb">
-      <div class="breadcrumb-item" @click="gohome()">
-        <svg
-          class="home-icon"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path
-            d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"
-          ></path>
-        </svg>
-        <span v-if="activeSection == 'my_drive'"> Mon Drive </span>
-      </div>
-
-      <template
-        v-for="(pathItem, index) in full_path"
-        :key="pathItem.folder_id"
-      >
-        <svg
-          class="separator"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path
-            d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"
-          ></path>
-        </svg>
-        <div
-          class="breadcrumb-item"
-          :class="{ active: index === full_path.length - 1 }"
-          @click="navigateToBreadcrumb(pathItem, index)"
-        >
-          <span>{{
-            pathItem.metadata?.folder_name || "Dossier sans nom"
-          }}</span>
-        </div>
-      </template>
-    </div>
-
-    <div class="section_items">
-      <div
-        v-for="(item, index) in liste_decrypted_items"
-        :key="item.type + (item.folder_id || item.file_id) + index"
-        class="item"
-        @click="click_on_item(item)"
-      >
-        <span class="icon-wrapper">
+      <div class="breadcrumb">
+        <div class="breadcrumb-item" @click="gohome()">
           <svg
-            v-if="item.type === 'folder'"
+            class="home-icon"
+            xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
             fill="currentColor"
           >
             <path
-              d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
+              d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"
             ></path>
           </svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor">
+          <span v-if="activeSection == 'my_drive'"> Mon Drive </span>
+        </div>
+
+        <template
+          v-for="(pathItem, index) in full_path"
+          :key="pathItem.folder_id"
+        >
+          <svg
+            class="separator"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
             <path
-              d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
+              d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"
             ></path>
           </svg>
-        </span>
-        <span class="filename">
-          {{
-            item.metadata?.folder_name || item.metadata?.filename || "Sans nom"
-          }}
-        </span>
-        <span class="menu-dots">
-          <svg viewBox="0 0 24 24">
-            <circle cx="12" cy="5" r="1.5" />
-            <circle cx="12" cy="12" r="1.5" />
-            <circle cx="12" cy="19" r="1.5" />
-          </svg>
-        </span>
+          <div
+            class="breadcrumb-item"
+            :class="{ active: index === full_path.length - 1 }"
+            @click="navigateToBreadcrumb(pathItem, index)"
+          >
+            <span>{{
+              pathItem.metadata?.folder_name || "Dossier sans nom"
+            }}</span>
+          </div>
+        </template>
       </div>
-    </div>
+
+      <div class="section_items" v-dropzone="{ setIsOver, onFilesFromDrop }">
+        <div
+          v-for="(item, index) in liste_decrypted_items"
+          :key="item.type + (item.folder_id || item.file_id) + index"
+          class="item"
+          @click="click_on_item(item)"
+        >
+          <span class="icon-wrapper">
+            <svg
+              v-if="item.type === 'folder'"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path
+                d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
+              ></path>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
+              ></path>
+            </svg>
+          </span>
+          <span class="filename">
+            {{
+              item.metadata?.folder_name ||
+              item.metadata?.filename ||
+              "Sans nom"
+            }}
+          </span>
+          <span class="menu-dots">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
+          </span>
+        </div>
+      </div>
     </div>
   </main>
 </template>
@@ -98,6 +116,9 @@
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 import { watch } from "vue";
+import dropzone from "~/directives/dropzone";
+
+const vDropzone = dropzone;
 definePageMeta({
   headerTitle: "GZDRIVE",
 });
@@ -459,80 +480,80 @@ const loadPath = async () => {
   const resData = await res.json();
   const files_and_folders = resData.files_and_folders;
   const fullPathData = resData.full_path;
- 
+
   const items = [
     ...(files_and_folders?.folders ?? []),
     ...(files_and_folders?.files ?? []),
   ];
-    liste_decrypted_items.value = []; // reset
-    for (const item of items) {
-      if (item.type === "file") {
-        try {
-          const encryptedMetadata = item.encrypted_metadata;
-          const decryptkey = await decryptWithStoredPrivateKey(
-            item.encrypted_file_key
-          );
-          const metadataStr = await decryptSimpleDataWithDataKey(
-            encryptedMetadata,
-            decryptkey
-          );
-          const metadata = JSON.parse(metadataStr);
-          liste_decrypted_items.value.push({
-            ...item,
-            metadata: metadata,
-          });
-        } catch (err) {
-          console.error(
-            "Failed to decrypt metadata for file:",
-            item.file_id,
-            err
-          );
-        }
-      } else if (item.type === "folder") {
-        try {
-          const encryptedMetadata = item.encrypted_metadata;
-          const decryptkey = await decryptWithStoredPrivateKey(
-            item.encrypted_folder_key
-          );
-          const metadataStr = await decryptSimpleDataWithDataKey(
-            encryptedMetadata,
-            decryptkey
-          );
-          const metadata = JSON.parse(metadataStr);
-          liste_decrypted_items.value.push({
-            ...item,
-            metadata: metadata,
-          });
-        } catch (err) {
-          console.error(
-            "Failed to decrypt metadata for folder:",
-            item.folder_id,
-            err
-          );
-        }
+  liste_decrypted_items.value = []; // reset
+  for (const item of items) {
+    if (item.type === "file") {
+      try {
+        const encryptedMetadata = item.encrypted_metadata;
+        const decryptkey = await decryptWithStoredPrivateKey(
+          item.encrypted_file_key
+        );
+        const metadataStr = await decryptSimpleDataWithDataKey(
+          encryptedMetadata,
+          decryptkey
+        );
+        const metadata = JSON.parse(metadataStr);
+        liste_decrypted_items.value.push({
+          ...item,
+          metadata: metadata,
+        });
+      } catch (err) {
+        console.error(
+          "Failed to decrypt metadata for file:",
+          item.file_id,
+          err
+        );
+      }
+    } else if (item.type === "folder") {
+      try {
+        const encryptedMetadata = item.encrypted_metadata;
+        const decryptkey = await decryptWithStoredPrivateKey(
+          item.encrypted_folder_key
+        );
+        const metadataStr = await decryptSimpleDataWithDataKey(
+          encryptedMetadata,
+          decryptkey
+        );
+        const metadata = JSON.parse(metadataStr);
+        liste_decrypted_items.value.push({
+          ...item,
+          metadata: metadata,
+        });
+      } catch (err) {
+        console.error(
+          "Failed to decrypt metadata for folder:",
+          item.folder_id,
+          err
+        );
       }
     }
+  }
 
-    // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
-    const newFullPath = [];
-    for (const pathItem of fullPathData) {
-      const encryptedMetadata = pathItem.encrypted_metadata;
-      const decryptkey = await decryptWithStoredPrivateKey(
-        pathItem.encrypted_folder_key
-      );
-      const metadataStr = await decryptSimpleDataWithDataKey(
-        encryptedMetadata,
-        decryptkey
-      );
-      const metadata = JSON.parse(metadataStr);
-      newFullPath.push({
-        ...pathItem,
-        metadata: metadata,
-      });
-    }
-    // Remplacer en une seule opération pour éviter le clignotement
-    full_path.value = newFullPath;
-    console.log("Full path updated:", full_path.value);
+  // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
+  const newFullPath = [];
+  for (const pathItem of fullPathData) {
+    const encryptedMetadata = pathItem.encrypted_metadata;
+    const decryptkey = await decryptWithStoredPrivateKey(
+      pathItem.encrypted_folder_key
+    );
+    const metadataStr = await decryptSimpleDataWithDataKey(
+      encryptedMetadata,
+      decryptkey
+    );
+    const metadata = JSON.parse(metadataStr);
+    newFullPath.push({
+      ...pathItem,
+      metadata: metadata,
+    });
+  }
+  // Remplacer en une seule opération pour éviter le clignotement
+  full_path.value = newFullPath;
+  console.log("Full path updated:", full_path.value);
 };
 
 const createFolder = async () => {
@@ -578,22 +599,44 @@ const startUploads = async () => {
     const file = listToUpload.value.shift();
     listUploadInProgress.value.push(file);
 
-    const [file_id, dataKey] = await initializeFileInDB(file, activeFolderId.value);
+    const [file_id, dataKey] = await initializeFileInDB(
+      file,
+      activeFolderId.value
+    );
 
     uploadFile(file, file_id, dataKey).then(async () => {
       listUploadInProgress.value = listUploadInProgress.value.filter(
         (f) => f !== file
       );
       listUploaded.value.push(file);
-      
+
       // Si c'est le dernier fichier, recharger la liste
-      if (listUploadInProgress.value.length === 0 && listToUpload.value.length === 0) {
+      if (
+        listUploadInProgress.value.length === 0 &&
+        listToUpload.value.length === 0
+      ) {
         await loadPath();
       }
-      
+
       startUploads();
     });
   }
+};
+
+const fileInput = ref(null);
+const isOver = ref(false);
+
+const setIsOver = (state) => {
+  isOver.value = state;
+};
+
+const onFilesFromDrop = (files) => {
+  console.log("files dropped", files);
+};
+
+const onNativeChange = (event) => {
+  const files = event.target.files;
+  console.log("input files", files);
 };
 
 watch(
@@ -605,15 +648,12 @@ watch(
 );
 
 // un watch sur activeFolderId pour recharger le path
-watch(
-  activeFolderId, () => {
-    if (!loadingDrive.value){
-        console.log("Active folder changed to:", activeFolderId.value);
-        loadPath();
-    }
+watch(activeFolderId, () => {
+  if (!loadingDrive.value) {
+    console.log("Active folder changed to:", activeFolderId.value);
+    loadPath();
   }
-);
-
+});
 </script>
 
 <style>
@@ -630,43 +670,96 @@ body {
   padding: 20px;
 }
 main {
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   justify-content: flex-start;
+  gap: 5px;
   width: 100%;
-  min-height: 100vh;
-}
-.div_left_section{
-    background-color: firebrick;
-    height: 100%;
-
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-
-    flex: 0 0 200px;
+  height: calc(100vh - 128px);
 }
 
-.div_right_section{
-    background-color: forestgreen;
-    flex: 1;
+/* quand on s'appret a drop des fichiers */
 
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
+.div_left_section {
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+
+  flex: 0 0 200px;
 }
 
+.div_right_section {
+  position: relative;
+  flex: 1;
+
+  border-radius: 25px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  height: 100%;
+}
+
+#create-folder-button {
+  margin-bottom: 20px;
+  padding: 10px 15px;
+  background-color: #333333;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-left: 35px;
+}
+#create-folder-button:hover {
+  background-color: #555555;
+}
+#create-folder-button svg {
+  width: 16px;
+  height: 16px;
+  fill: white;
+}
 
 .section_items {
+  position: relative;
   /* Utilisation de Grid pour un alignement responsive comme le Drive */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 15px;
   width: 100%;
-  max-width: 1200px;
+  height: 100%;
+  border-radius: 25px;
+}
+
+.section_items.is-over {
+  border: 2px dashed #548d61;
+}
+
+.section_items.is-over::after {
+  content: "Déposez vos fichiers ici";
+  font-weight: 800;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: #548d61;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 10px 20px;
+  border-radius: 12px;
+  pointer-events: none;
 }
 
 .item {
@@ -794,5 +887,18 @@ main {
   color: #5f6368;
   opacity: 0.6;
   flex-shrink: 0;
+}
+
+.drop-zone {
+  border: 2px dashed #888;
+  padding: 1.5rem;
+  text-align: center;
+}
+.drop-zone.is-over {
+  border-color: #0a8;
+  background: #f3fffb;
+}
+.hidden {
+  display: none;
 }
 </style>
