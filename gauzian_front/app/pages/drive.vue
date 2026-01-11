@@ -175,6 +175,7 @@ const full_path = ref([]);
 
 const displayType = ref("grid"); // 'grid' or 'list'
 const activeSection = ref("my_drive"); // 'my_drive', 'shared_with_me', 'recent', 'trash'
+const loadingDrive = ref(true);
 
 const router = useRouter();
 
@@ -432,6 +433,7 @@ const get_all_info = async () => {
     });
     console.log("Full path item:", full_path.value);
   }
+  loadingDrive.value = false;
 };
 
 const loadPath = async () => {
@@ -587,8 +589,10 @@ watch(
 // un watch sur activeFolderId pour recharger le path
 watch(
   activeFolderId, () => {
-    console.log("Active folder changed to:", activeFolderId.value);
-    loadPath();
+    if (!loadingDrive.value){
+        console.log("Active folder changed to:", activeFolderId.value);
+        loadPath();
+    }
   }
 );
 
