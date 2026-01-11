@@ -443,6 +443,7 @@ const loadPath = async () => {
   }
   const resData = await res.json();
   const files_and_folders = resData.files_and_folders;
+  const fullPathData = resData.full_path;
  
   const items = [
     ...(files_and_folders?.folders ?? []),
@@ -495,6 +496,24 @@ const loadPath = async () => {
           );
         }
       }
+    }
+
+    full_path.value = []; // reset
+    for (const pathItem of fullPathData) {
+      const encryptedMetadata = pathItem.encrypted_metadata;
+      const decryptkey = await decryptWithStoredPrivateKey(
+        pathItem.encrypted_folder_key
+      );
+      const metadataStr = await decryptSimpleDataWithDataKey(
+        encryptedMetadata,
+        decryptkey
+      );
+      const metadata = JSON.parse(metadataStr);
+      full_path.value.push({
+        ...pathItem,
+        metadata: metadata,
+      });
+      console.log("Full path item:", full_path.value);
     }
 };
 
@@ -563,6 +582,7 @@ watch(
 // un watch sur activeFolderId pour recharger le path
 watch(
   activeFolderId, () => {
+    console.log("Active folder changed to:", activeFolderId.value);
     loadPath();
   }
 );
