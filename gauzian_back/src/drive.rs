@@ -165,6 +165,23 @@ pub async fn initialize_file_in_db(
     folder_id: Option<Uuid>,
     encrypted_file_key: &str,
 ) -> Result<Uuid, sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    if let Some(folder_id) = folder_id {
+        // Ensure the folder exists AND the user has access to it.
+        let has_access = sqlx::query_scalar::<_, i64>(
+            "SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2",
+        )
+        .bind(folder_id)
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if has_access.is_none() {
+            return Err(sqlx::Error::RowNotFound);
+        }
+    }
+
     let file_id = Uuid::new_v4();
     let rec = sqlx::query_scalar::<_, Uuid>(
         "
@@ -177,7 +194,7 @@ pub async fn initialize_file_in_db(
     .bind(size)
     .bind(encrypted_metadata.as_bytes())
     .bind(mime_type)
-    .fetch_one(db_pool)
+    .fetch_one(&mut *tx)
     .await?;
 
     let file_access_id = Uuid::new_v4();
@@ -185,15 +202,17 @@ pub async fn initialize_file_in_db(
         "
         INSERT INTO file_access (id, file_id, user_id, folder_id, access_level, created_at, encrypted_file_key)
         VALUES ($1, $2, $3, $4, 'owner', NOW(), $5)
-        "
+        ",
     )
     .bind(file_access_id)
     .bind(file_id)
     .bind(user_id)
     .bind(folder_id)
     .bind(encrypted_file_key.as_bytes())
-    .execute(db_pool)
+    .execute(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     // // ajouter dans le S3 avec upload_line
     // let data = vec![]; // données vides pour l'instant
