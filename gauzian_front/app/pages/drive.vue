@@ -1030,10 +1030,11 @@ main {
 
 .file-list-enter-active {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: 3s; /* Attend que les éléments sortants soient complètement supprimés */
 }
 
 .file-list-leave-active {
-  transition: none; /* Pas de transition pour la disparition */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .file-list-enter-from {
