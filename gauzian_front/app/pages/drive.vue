@@ -1057,6 +1057,7 @@ const onFilesFromDrop = async (files) => {
 };
 
 const deleteItem = async (item) => {
+    console.log("Deleting item:", item);
     if (item.type === "file") {
       const res = await fetch(`${API_URL}/drive/delete_file/${item.file_id}`, {
         method: "DELETE",
