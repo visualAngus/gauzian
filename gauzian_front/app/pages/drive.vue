@@ -126,6 +126,7 @@
           name="file-list"
           tag="div"
           class="file-grid"
+          @after-leave="onFileListAfterLeave"
         >
           <!-- Fichiers uploadés -->
           <FileItem
@@ -278,11 +279,77 @@ const liste_decrypted_items = ref([]);
 const displayedDriveItems = ref([]);
 const full_path = ref([]);
 
-// Affiche la liste sans vider le DOM: Vue fera le diff via les `:key`.
-const applyDriveItemsForDisplay = (items) => {
+// On garde les updates "diff" pour un refresh dans le même dossier,
+// mais on fait un vrai "out -> in" lors de la navigation (changement de dossier).
+const driveListTransition = ref({
+  leaving: false,
+  pendingLeaves: 0,
+});
+let queuedDriveItems = null;
+
+const flushQueuedDriveItems = async () => {
+  if (!queuedDriveItems) {
+    driveListTransition.value.leaving = false;
+    return;
+  }
+
+  const nextItems = queuedDriveItems;
+  queuedDriveItems = null;
+  driveListTransition.value.leaving = false;
+
+  // Laisse Vue finaliser le retrait avant de ré-insérer.
+  await nextTick();
+  displayedDriveItems.value = [...nextItems];
+};
+
+const applyDriveItemsForDisplay = async (items, { outIn = false } = {}) => {
   liste_decrypted_items.value = items;
-  // Copie pour garantir un nouveau ref (et donc une mise à jour réactive).
-  displayedDriveItems.value = [...items];
+
+  // Update standard: Vue/TransitionGroup fait le diff via les keys.
+  if (!outIn) {
+    displayedDriveItems.value = [...items];
+    return;
+  }
+
+  // Out->in: on attend que tous les anciens items aient fini de sortir.
+  queuedDriveItems = items;
+
+  // Si rien n'est affiché, on affiche directement.
+  if (displayedDriveItems.value.length === 0 && !driveListTransition.value.leaving) {
+    displayedDriveItems.value = [...items];
+    queuedDriveItems = null;
+    return;
+  }
+
+  // Si une transition de suppression est déjà en cours, on garde juste la dernière liste demandée.
+  if (driveListTransition.value.leaving) {
+    return;
+  }
+
+  driveListTransition.value.leaving = true;
+  driveListTransition.value.pendingLeaves = displayedDriveItems.value.length;
+  displayedDriveItems.value = [];
+
+  // Sécurité : si aucune transition n'est jouée, on flush quand même.
+  await nextTick();
+  if (driveListTransition.value.pendingLeaves === 0) {
+    await flushQueuedDriveItems();
+  }
+};
+
+const onFileListAfterLeave = async (el) => {
+  // Le TransitionGroup contient aussi les items "queue" (pending/uploading).
+  if (el?.dataset?.itemGroup !== "drive") return;
+  if (!driveListTransition.value.leaving) return;
+
+  driveListTransition.value.pendingLeaves = Math.max(
+    0,
+    driveListTransition.value.pendingLeaves - 1
+  );
+
+  if (driveListTransition.value.pendingLeaves === 0) {
+    await flushQueuedDriveItems();
+  }
 };
 
 const displayType = ref("grid"); // 'grid' or 'list'
@@ -576,7 +643,7 @@ const get_all_info = async () => {
   loadingDrive.value = false;
 };
 
-const loadPath = async () => {
+const loadPath = async ({ outIn = false } = {}) => {
   // dans l'url ?folder_id=xxx
   const res = await fetch(
     `${API_URL}/drive/get_file_folder/${activeFolderId.value}`,
@@ -658,7 +725,7 @@ const loadPath = async () => {
     }
   }
 
-  applyDriveItemsForDisplay(decryptedItems);
+  await applyDriveItemsForDisplay(decryptedItems, { outIn });
 
   // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
   const newFullPath = [];
@@ -1044,7 +1111,7 @@ watch(
 watch(activeFolderId, () => {
   if (!loadingDrive.value) {
     console.log("Active folder changed to:", activeFolderId.value);
-    loadPath();
+    loadPath({ outIn: true });
   }
 });
 </script>
