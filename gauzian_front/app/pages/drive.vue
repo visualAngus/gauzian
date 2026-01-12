@@ -299,6 +299,7 @@ const initializeFileInDB = async (file, folder_id) => {
   const dataKey = await generateDataKey();
   const encryptedFileKey = await encryptWithStoredPublicKey(dataKey);
   console.log("fileeeeeeee", file);
+  console.log("folder_id", folder_id);
   const metadata = {
     filename: file.name,
     size: file.size,
@@ -795,11 +796,9 @@ const onFilesFromDrop = async (files) => {
 
   // Phase 2: Ajouter les fichiers à la liste d'upload
   for (const { file, targetFolderId } of filesToUpload) {
-    const fileObject = {
-      ...file,
-      _targetFolderId: targetFolderId,
-    };
-    listToUpload.value.push(fileObject);
+    // Conserver l'objet File natif pour garder size/type/lastModified
+    file._targetFolderId = targetFolderId;
+    listToUpload.value.push(file);
   }
 
   console.log("Dossiers créés:", foldersList.value);
