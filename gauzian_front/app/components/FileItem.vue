@@ -5,6 +5,9 @@
       pending: status === 'pending',
       uploading: status === 'uploading',
     }"
+
+    :data-item-type="item.type"
+
     @click="$emit('click', item)"
   >
     <span class="icon-wrapper">
