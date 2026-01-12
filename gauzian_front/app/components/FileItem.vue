@@ -7,6 +7,7 @@
     }"
 
     :data-item-type="item.type"
+    :data-item-id="item.id"
 
     @click="$emit('click', item)"
   >
