@@ -350,35 +350,39 @@ const uploadFile = async (file, file_id, dataKey) => {
 
     const chunk = file.slice(start, end);
 
-    const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
-    const body = {
-      file_id: file_id,
-      index: index,
-      chunk_data: cipherText,
-      iv: iv,
-    };
-    const res = await fetch(`${API_URL}/drive/upload_chunk`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to upload chunk ${index}`);
-    }
-    // Met à jour la progression - Utiliser la réactivité Vue correctement
-    const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
-    fileProgressMap.value = {
-      ...fileProgressMap.value,
-      [file_id]: parseFloat(progress),
-    };
     console.log(
-      `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${
-        fileProgressMap.value[file_id]
-      }%)`
+      file
     );
+
+    // const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
+    // const body = {
+    //   file_id: file_id,
+    //   index: index,
+    //   chunk_data: cipherText,
+    //   iv: iv,
+    // };
+    // const res = await fetch(`${API_URL}/drive/upload_chunk`, {
+    //   method: "POST",
+    //   credentials: "include",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify(body),
+    // });
+    // if (!res.ok) {
+    //   throw new Error(`Failed to upload chunk ${index}`);
+    // }
+    // // Met à jour la progression - Utiliser la réactivité Vue correctement
+    // const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
+    // fileProgressMap.value = {
+    //   ...fileProgressMap.value,
+    //   [file_id]: parseFloat(progress),
+    // };
+    // console.log(
+    //   `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${
+    //     fileProgressMap.value[file_id]
+    //   }%)`
+    // );
   };
 
   // Gestionnaire de file d'attente (Pool)
@@ -641,12 +645,15 @@ const startUploads = async () => {
     listUploadInProgress.value.length < simultaneousUploads &&
     listToUpload.value.length > 0
   ) {
-    const file = listToUpload.value.shift();
+    const fileObject = listToUpload.value.shift();
+    const file = fileObject;
+    const targetFolderId = fileObject._targetFolderId || activeFolderId.value;
+    
     listUploadInProgress.value.push(file);
 
     const [file_id, dataKey] = await initializeFileInDB(
       file,
-      activeFolderId.value
+      targetFolderId
     );
 
     // Initialiser la progression
@@ -687,18 +694,116 @@ const onNativeChange = (event) => {
   console.log("input files", files);
 };
 
-const onFilesFromDrop = (files) => {
+// Récupérer ou créer les dossiers depuis le chemin du fichier
+const getOrCreateFolderHierarchy = async (relativePath, parentFolderId = "root") => {
+  const pathParts = relativePath.split("/").slice(0, -1); // Exclure le nom du fichier
+  
+  if (pathParts.length === 0) {
+    return parentFolderId; // Le fichier est à la racine
+  }
+
+  let currentParentId = parentFolderId;
+  
+  for (const folderName of pathParts) {
+    // Vérifier si le dossier existe déjà
+    const existingFolder = foldersList.value.find(
+      (f) => f.name === folderName && f.parent_folder_id === currentParentId
+    );
+
+    if (existingFolder) {
+      currentParentId = existingFolder.folder_id;
+    } else {
+      // Créer le dossier
+      try {
+        const dataKey = await generateDataKey();
+        const encryptedFolderKey = await encryptWithStoredPublicKey(dataKey);
+        const metadata = { folder_name: folderName };
+        const stringifiedMetadata = JSON.stringify(metadata);
+        const encryptedMetadata = await encryptSimpleDataWithDataKey(
+          stringifiedMetadata,
+          dataKey
+        );
+
+        const res = await fetch(`${API_URL}/drive/create_folder`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            encrypted_metadata: encryptedMetadata,
+            encrypted_folder_key: encryptedFolderKey,
+            parent_folder_id: currentParentId,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to create folder");
+        }
+
+        const resData = await res.json();
+        const newFolderId = resData.folder_id;
+
+        // Ajouter à la liste locale
+        foldersList.value.push({
+          name: folderName,
+          folder_id: newFolderId,
+          parent_folder_id: currentParentId,
+        });
+
+        currentParentId = newFolderId;
+      } catch (err) {
+        console.error(`Erreur création dossier ${folderName}:`, err);
+        throw err;
+      }
+    }
+  }
+
+  return currentParentId;
+};
+
+// Liste plate de tous les dossiers
+const foldersList = ref([]);
+
+const onFilesFromDrop = async (files) => {
   let someSize = 0;
-  console.log("dropped files", files);
+  const filesToUpload = [];
+
+  // Phase 1: Parser les fichiers et calculer la taille + créer les dossiers
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     someSize += file.size;
-    listToUpload.value.push(file);
+
+    // Vérifier la taille
+    if (someSize > totalSpaceLeft.value - usedSpace.value) {
+      alert("Not enough space left to upload these files.");
+      return;
+    }
+
+    // Extraire le chemin et créer les dossiers
+    if (file.webkitRelativePath) {
+      const targetFolderId = await getOrCreateFolderHierarchy(
+        file.webkitRelativePath,
+        activeFolderId.value
+      );
+      filesToUpload.push({ file, targetFolderId });
+    } else {
+      // Fichier sans chemin, upload dans le dossier actif
+      filesToUpload.push({ file, targetFolderId: activeFolderId.value });
+    }
   }
-  if (someSize > totalSpaceLeft.value - usedSpace.value) {
-    alert("Not enough space left to upload these files.");
-    return;
+
+  // Phase 2: Ajouter les fichiers à la liste d'upload
+  for (const { file, targetFolderId } of filesToUpload) {
+    const fileObject = {
+      ...file,
+      _targetFolderId: targetFolderId,
+    };
+    listToUpload.value.push(fileObject);
   }
+
+  console.log("Dossiers créés:", foldersList.value);
+  console.log("Fichiers prêts pour upload:", filesToUpload);
 };
 watch(
   [listToUpload, listUploadInProgress],
