@@ -519,3 +519,47 @@ pub async fn delete_file(
     tx.commit().await?;
     Ok(())
 }
+
+pub async fn delete_folder(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Lock all access rows for this folder to prevent
+    let access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "SELECT user_id FROM folder_access WHERE folder_id = $1 FOR UPDATE",
+    )
+    .bind(folder_id)
+    .fetch_all(&mut *tx)
+    .await?;    
+    // Must have at least the caller's access.
+    if !access_users.iter().any(|u| *u == user_id) {
+        return Err(sqlx::Error::RowNotFound);
+    }   
+    let other_users_still_have_access = access_users.iter().any(|u| *u != user_id);
+    if other_users_still_have_access {
+        // The folder is shared: remove only the caller's access.
+        sqlx::query("DELETE FROM folder_access WHERE folder_id = $1 AND user_id = $2")
+            .bind(folder_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;    
+
+        tx.commit().await?;
+        return Ok(());
+    }   
+    // Only this user has access: delete everything.
+    // Delete DB rows (order matters because of FK constraints)
+    sqlx::query("DELETE FROM folder_access WHERE folder_id = $1")
+        .bind(folder_id)
+        .execute(&mut *tx)
+        .await?;    
+    sqlx::query("DELETE FROM folders WHERE id = $1")
+        .bind(folder_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
