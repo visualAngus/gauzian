@@ -1075,13 +1075,13 @@ main {
 /* animation pour les fichier en attente */
 @keyframes pulse {
   0% {
-    background-color: #444444;
+    background-color: #eff3f8;
   }
   50% {
-    background-color: #666666;
+    background-color: #e2e7ed;
   }
   100% {
-    background-color: #444444;
+    background-color: #eff3f8;
   }
 }
 
