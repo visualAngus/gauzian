@@ -1131,6 +1131,19 @@ main {
   transform: scale(0.8);
 }
 
+/* Les items de la file d'upload doivent disparaître immédiatement au changement de dossier */
+.file-list-enter-active[data-item-group="queue"],
+.file-list-leave-active[data-item-group="queue"],
+.file-list-move[data-item-group="queue"] {
+  transition: none !important;
+}
+
+.file-list-enter-from[data-item-group="queue"],
+.file-list-leave-to[data-item-group="queue"] {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 .breadcrumb {
   width: 100%;
   display: flex;
