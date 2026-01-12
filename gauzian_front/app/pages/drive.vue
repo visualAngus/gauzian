@@ -150,7 +150,7 @@
         <div
           v-for="(item, index) in listToUpload"
           :key="item.type + (item.name) + index"
-          class="item"
+          class="item pending"
           @click="click_on_item(item)"
         >
           <span class="icon-wrapper">
