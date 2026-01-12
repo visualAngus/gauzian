@@ -119,22 +119,13 @@
             @click="click_on_item(item)"
           />
 
-          <!-- Fichiers en attente -->
+          <!-- Fichiers en attente et en cours d'upload (avec clé stable) -->
           <FileItem
-            v-for="(item, index) in listToUpload"
-            :key="'pending-' + item.name + '-' + index"
+            v-for="item in pendingAndUploadingFiles"
+            :key="item._uniqueId"
             :item="item"
-            status="pending"
-            @click="click_on_item(item)"
-          />
-
-          <!-- Fichiers en cours d'upload -->
-          <FileItem
-            v-for="item in listUploadInProgress"
-            :key="'uploading-' + item._uploadId"
-            :item="item"
-            status="uploading"
-            :progress="fileProgressMap[item._uploadId] || 0"
+            :status="item._status"
+            :progress="item._progress"
             @click="click_on_item(item)"
           />
         </TransitionGroup>
@@ -144,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 import { watch } from "vue";
 import dropzone from "~/directives/dropzone";
@@ -231,6 +222,23 @@ const listUploaded = ref([]);
 const simultaneousUploads = 3;
 const fileProgressMap = ref({});
 const abortControllers = ref({}); // Map file_id -> AbortController
+let fileIdCounter = 0; // Compteur pour générer des IDs uniques
+
+// Computed property pour combiner les fichiers en attente et en cours d'upload
+const pendingAndUploadingFiles = computed(() => {
+  return [
+    ...listToUpload.value.map(file => ({
+      ...file,
+      _status: 'pending',
+      _progress: 0
+    })),
+    ...listUploadInProgress.value.map(file => ({
+      ...file,
+      _status: 'uploading',
+      _progress: fileProgressMap.value[file._uploadId] || 0
+    }))
+  ];
+});
 
 const activeFolderId = ref("root");
 const liste_decrypted_items = ref([]);
@@ -280,6 +288,8 @@ const handleFileChange = async (event) => {
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     someSize += file.size;
+    // Assigner un ID unique dès l'ajout
+    file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
     listToUpload.value.push(file);
   }
   if (someSize > totalSpaceLeft.value - usedSpace.value) {
@@ -868,6 +878,7 @@ const onFilesFromDrop = async (files) => {
   for (const { file, targetFolderId } of filesToUpload) {
     // Conserver l'objet File natif pour garder size/type/lastModified
     file._targetFolderId = targetFolderId;
+    file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
     file.status = "pending";
     listToUpload.value.push(file);
   }
