@@ -108,26 +108,26 @@
       </div>
 
       <div
-        <div class="section_items"
+        class="section_items"
         v-dropzone="{
           inputRef: fileInput,
           onFiles: onFilesFromDrop,
           onOverChange: setIsOver,
         }"
       >
-          <TransitionGroup
-            name="file-list"
-            tag="div"
-            class="file-grid"
-            @after-leave="onFileListAfterLeave"
-          >
+        <TransitionGroup
+          name="file-list"
+          tag="div"
+          class="file-grid"
+          @after-leave="onFileListAfterLeave"
+        >
           <!-- Fichiers uploadés -->
           <FileItem
-              v-for="item in displayedDriveItems"
+            v-for="item in displayedDriveItems"
             :key="'uploaded-' + (item.folder_id || item.file_id)"
             :item="item"
             status="uploaded"
-              data-item-group="drive"
+            data-item-group="drive"
             @click="click_on_item(item)"
           />
 
@@ -546,6 +546,11 @@ const get_all_info = async () => {
   const user_info = resData.user_info;
   const fullPathData = resData.full_path;
 
+  // Reset des placeholders "uploaded" pour ce dossier pour éviter les doublons
+  listUploaded.value = listUploaded.value.filter(
+    (file) => (file._targetFolderId || "root") !== activeFolderId.value
+  );
+
   const items = [
     ...(files_and_folders?.folders ?? []),
     ...(files_and_folders?.files ?? []),
@@ -636,6 +641,11 @@ const loadPath = async () => {
   const resData = await res.json();
   const files_and_folders = resData.files_and_folders;
   const fullPathData = resData.full_path;
+
+  // Reset des placeholders "uploaded" pour ce dossier pour éviter les doublons
+  listUploaded.value = listUploaded.value.filter(
+    (file) => (file._targetFolderId || "root") !== activeFolderId.value
+  );
 
   const items = [
     ...(files_and_folders?.folders ?? []),
@@ -759,6 +769,12 @@ const startUploads = async () => {
     const file = fileObject;
     const targetFolderId = fileObject._targetFolderId || activeFolderId.value;
 
+    // Fiabiliser: ne jamais perdre le dossier cible
+    file._targetFolderId = targetFolderId;
+    if (!file._uniqueId) {
+      file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
+    }
+
     listUploadInProgress.value.push(file);
 
     const [file_id, dataKey] = await initializeFileInDB(file, targetFolderId);
@@ -766,6 +782,7 @@ const startUploads = async () => {
     // Initialiser la progression
     fileProgressMap.value[file_id] = 0;
     file._uploadId = file_id;
+    file._serverFileId = file_id;
     file.status = "uploading";
 
     uploadFile(file, file_id, dataKey)
