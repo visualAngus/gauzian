@@ -2,6 +2,35 @@
   <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
     <h3>Upload/Download Panel</h3>
     <div class="div_liste_fichier">
+        <div
+        class="fichier to_upload"
+        v-for="(file, index) in listToUpload"
+        :key="index"
+      >
+        <div class="div_info_up">
+          <span class="nom_fichier">{{ file.name }}</span>
+          <div class="div_barre">
+            <div
+              class="barre_progress"
+              :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"
+            ></div>
+          </div>
+        </div>
+        <div class="div_cancel">
+          <button class="btn_cancel" @click="abort_upload(file._uploadId)">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path
+                d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"
+              ></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <div
         class="fichier"
         v-for="(file, index) in listUploadInProgress"
@@ -749,7 +778,12 @@ const abort_upload = async (file_id) => {
     return;
   }
 
-  console.log(`Upload for file ID ${file_id} has been aborted.`);
+
+  setTimeout(() => {
+    
+      console.log(`Upload for file ID ${file_id} has been aborted.`);
+  }, 100);
+
 };
 
 const fileInput = ref(null);
