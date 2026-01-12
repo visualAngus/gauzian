@@ -1,8 +1,9 @@
 <template>
 
-    <div id="div_pannel_right_click">
-        <a @click="createFolder()">Nouveau dossier</a>
-        <a @click="deleteItem()">Supprimer</a>
+    <div id="div_pannel_right_click" v-if="rightClikedItem">
+        <a @click="createFolder()" v-if="rightClikedItem.dataset.itemType == 'folder'">Nouveau dossier</a>
+        <a @click="deleteItem()" v-if="rightClikedItem.dataset.itemType == 'file' or rightClikedItem.dataset.itemType == 'folder'">Supprimer</a>
+        
     </div>
 
 
@@ -242,6 +243,7 @@ const simultaneousUploads = 3;
 const fileProgressMap = ref({});
 const abortControllers = ref({}); // Map file_id -> AbortController
 let fileIdCounter = 0; // Compteur pour générer des IDs uniques
+const rightClikedItem = ref(null);
 
 // Computed property pour combiner les fichiers en attente et en cours d'upload
 const pendingAndUploadingFiles = computed(() => {
@@ -898,6 +900,7 @@ onMounted(() => {
             // on log l'item en question
             let item = element_under_cursor.closest(".item");
             console.log("Right click on item in group:", item);
+            rightClikedItem.value = item;
         }
 
         pannel_click.style.display = "flex";
@@ -908,6 +911,7 @@ onMounted(() => {
         let pannel_click = document.getElementById("div_pannel_right_click");
         if (pannel_click.style.display == "flex") {
             pannel_click.style.display = "none";
+            rightClikedItem.value = null;
         }
     });
 });
