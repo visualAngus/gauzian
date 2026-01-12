@@ -103,7 +103,7 @@ pub async fn get_files_and_folders_list(
         r#"
         select 
             fa2.folder_id,
-            fa2.id as file_id,
+            fa2.file_id as file_id,
             f.encrypted_metadata,
             f.size as file_size,
             f.mime_type,
