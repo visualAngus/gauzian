@@ -1058,18 +1058,25 @@ const onFilesFromDrop = async (files) => {
 
 const deleteItem = async (item) => {
     // récupérer l'attrribut data-item-type
-    console.log(item);
-    if (item.type === "file") {
-      const res = await fetch(`${API_URL}/drive/delete_file/${item.file_id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error("Failed to delete file");
-      }
-    } else if (item.type === "folder") {
+    // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
+    const itemId = item.dataset?.itemId;
+    const itemType = item.dataset?.itemType;
+    console.log("ID de l'item à supprimer:", itemId);
+    if (itemType === "file") {
+    const res = await fetch(`${API_URL}/drive/delete_file`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ file_id: itemId }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to delete file");
+    }
+    } else if (itemType === "folder") {
       const res = await fetch(
-        `${API_URL}/drive/delete_folder/${item.folder_id}`,
+        `${API_URL}/drive/delete_folder/${itemId}`,
         {
           method: "DELETE",
           credentials: "include",
