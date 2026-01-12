@@ -1086,6 +1086,8 @@ const deleteItem = async (item) => {
         throw new Error("Failed to delete folder");
       }
     }
+    await loadPath();
+
 };
 
 watch(
