@@ -650,6 +650,13 @@ const loadPath = async () => {
   const files_and_folders = resData.files_and_folders;
   const fullPathData = resData.full_path;
 
+//   si full path est vide on renvoie vers root pour etre sur et on reset le ?folder_id
+  if (fullPathData.length === 0 && activeFolderId.value !== "root") {
+    activeFolderId.value = "root";
+    router.push(`/drive?folder_id=root`);
+    return;
+  }
+
   // Reset des placeholders "uploaded" pour ce dossier pour éviter les doublons
   listUploaded.value = listUploaded.value.filter(
     (file) => (file._targetFolderId || "root") !== activeFolderId.value

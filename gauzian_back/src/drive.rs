@@ -169,15 +169,15 @@ pub async fn initialize_file_in_db(
 
     if let Some(folder_id) = folder_id {
         // Ensure the folder exists AND the user has access to it.
-        let has_access = sqlx::query_scalar::<_, i64>(
-            "SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2",
+        let has_access = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
         )
         .bind(folder_id)
         .bind(user_id)
-        .fetch_optional(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
 
-        if has_access.is_none() {
+        if !has_access {
             return Err(sqlx::Error::RowNotFound);
         }
     }
