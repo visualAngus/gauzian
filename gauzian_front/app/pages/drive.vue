@@ -759,6 +759,7 @@ main {
 
   border-radius: 25px;
   padding-left: 25px;
+  padding-right: 25px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -798,7 +799,7 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   /* gestion de la hauteur des ligne */
-  grid-auto-rows: minmax(60px, auto);
+  grid-auto-rows: 60px;
   gap: 15px;
   width: 100%;
   height: 100%;
