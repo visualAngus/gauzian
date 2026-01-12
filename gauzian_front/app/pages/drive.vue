@@ -2,7 +2,7 @@
 
   <div id="div_pannel_right_click" ref="rightClickPanel">
     <a @click="createFolder()" v-if="rightClikedItem?.dataset?.itemType === 'folder'">Nouveau dossier</a>
-    <a @click="deleteItem(rightClikedItem?.dataset?.itemId)" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Supprimer</a>
+    <a @click="deleteItem(rightClikedItem)" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Supprimer</a>
   </div>
 
 
@@ -1048,6 +1048,12 @@ const onFilesFromDrop = async (files) => {
   console.log("Dossiers créés:", foldersList.value);
   console.log("Fichiers prêts pour upload:", filesToUpload);
 };
+
+const deleteItem = async (item) => {
+  console.log("Deleting item:", item);
+  // Implémente la logique de suppression ici
+};
+
 watch(
   [listToUpload, listUploadInProgress],
   () => {
