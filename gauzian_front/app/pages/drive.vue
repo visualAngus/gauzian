@@ -255,6 +255,14 @@ const pendingAndUploadingFiles = computed(() => {
         _name: file.name,
         _progress: fileProgressMap.value[file._uploadId] || 0,
       })),
+    ...listUploaded.value
+      .filter(file => (file._targetFolderId || 'root') === activeFolderId.value)
+      .map((file) => ({
+        ...file,
+        _status: "uploaded",
+        _name: file.name,
+        _progress: 100,
+      }))
   ];
 });
 
