@@ -513,7 +513,7 @@ pub async fn delete_folder_handler(
     claims: jwt::Claims,
     Json(body): Json<DeleteFolderRequest>,
 ) -> Response {
-    match drive::delete_folder(&state.db_pool, claims.id, body.folder_id).await {
+    match drive::delete_folder(&state.db_pool, &state.storage_client, claims.id, body.folder_id).await {
         Ok(_) => ApiResponse::ok("Folder deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder not found").into_response()
