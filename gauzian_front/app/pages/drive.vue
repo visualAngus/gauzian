@@ -355,35 +355,35 @@ const uploadFile = async (file, file_id, dataKey) => {
       file
     );
 
-    // const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
-    // const body = {
-    //   file_id: file_id,
-    //   index: index,
-    //   chunk_data: cipherText,
-    //   iv: iv,
-    // };
-    // const res = await fetch(`${API_URL}/drive/upload_chunk`, {
-    //   method: "POST",
-    //   credentials: "include",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify(body),
-    // });
-    // if (!res.ok) {
-    //   throw new Error(`Failed to upload chunk ${index}`);
-    // }
-    // // Met à jour la progression - Utiliser la réactivité Vue correctement
-    // const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
-    // fileProgressMap.value = {
-    //   ...fileProgressMap.value,
-    //   [file_id]: parseFloat(progress),
-    // };
-    // console.log(
-    //   `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${
-    //     fileProgressMap.value[file_id]
-    //   }%)`
-    // );
+    const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
+    const body = {
+      file_id: file_id,
+      index: index,
+      chunk_data: cipherText,
+      iv: iv,
+    };
+    const res = await fetch(`${API_URL}/drive/upload_chunk`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to upload chunk ${index}`);
+    }
+    // Met à jour la progression - Utiliser la réactivité Vue correctement
+    const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
+    fileProgressMap.value = {
+      ...fileProgressMap.value,
+      [file_id]: parseFloat(progress),
+    };
+    console.log(
+      `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${
+        fileProgressMap.value[file_id]
+      }%)`
+    );
   };
 
   // Gestionnaire de file d'attente (Pool)
