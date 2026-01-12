@@ -1004,24 +1004,26 @@ main {
 }
 
 /* Transitions pour les fichiers */
-.file-list-move,
-.file-list-enter-active,
+.file-list-move {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.file-list-enter-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .file-list-leave-active {
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .file-list-enter-from {
   opacity: 0;
-  transform: translateY(-10px) scale(0.95);
+  transform: scale(0.8);
 }
 
 .file-list-leave-to {
   opacity: 0;
-  transform: translateY(10px) scale(0.95);
-}
-
-.file-list-leave-active {
-  position: absolute;
+  transform: scale(0.8);
 }
 
 .breadcrumb {
