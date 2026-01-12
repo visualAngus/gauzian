@@ -387,11 +387,6 @@ const uploadFile = async (file, file_id, dataKey) => {
       ...fileProgressMap.value,
       [file_id]: parseFloat(progress),
     };
-    console.log(
-      `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${
-        fileProgressMap.value[file_id]
-      }%)`
-    );
   };
 
   // Gestionnaire de file d'attente (Pool)
