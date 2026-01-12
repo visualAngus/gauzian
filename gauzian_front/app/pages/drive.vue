@@ -972,6 +972,9 @@ const onFilesFromDrop = async (files) => {
   // Phase 2: Ajouter les fichiers à la liste d'upload
   for (const { file, targetFolderId } of filesToUpload) {
     // Conserver l'objet File natif pour garder size/type/lastModified
+    if (!file._uniqueId) {
+      file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
+    }
     file._targetFolderId = targetFolderId;
     file.status = "pending";
     listToUpload.value.push(file);
@@ -1129,19 +1132,6 @@ main {
 .file-list-leave-to {
   opacity: 0;
   transform: scale(0.8);
-}
-
-/* Les items de la file d'upload doivent disparaître immédiatement au changement de dossier */
-.file-list-enter-active[data-item-group="queue"],
-.file-list-leave-active[data-item-group="queue"],
-.file-list-move[data-item-group="queue"] {
-  transition: none !important;
-}
-
-.file-list-enter-from[data-item-group="queue"],
-.file-list-leave-to[data-item-group="queue"] {
-  opacity: 1 !important;
-  transform: none !important;
 }
 
 .breadcrumb {
