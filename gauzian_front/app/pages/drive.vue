@@ -1084,16 +1084,17 @@ const deleteItem = async (item) => {
       throw new Error("Failed to delete file");
     }
     } else if (itemType === "folder") {
-      const res = await fetch(
-        `${API_URL}/drive/delete_folder/${itemId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
-      );
-      if (!res.ok) {
-        throw new Error("Failed to delete folder");
-      }
+    const res = await fetch(`${API_URL}/drive/delete_folder`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ folder_id: itemId }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to delete folder");
+    }
     }
     await loadPath();
 
