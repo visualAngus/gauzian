@@ -6,7 +6,7 @@
                 <div class="div_info_up">
                     <span class="nom_fichier">{{ file.name }}</span>
                     <div class="div_barre">
-                        <div class="barre_progress" :style="{ width: file.progress + '%' }"></div>
+                        <div class="barre_progress" :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"></div>
                     </div>
                 </div>
                 <div class="div_cancel">
@@ -216,6 +216,7 @@ const listToUpload = ref([]);
 const listUploadInProgress = ref([]);
 const listUploaded = ref([]);
 const simultaneousUploads = 3;
+const fileProgressMap = ref({});
 
 const activeFolderId = ref("root");
 const liste_decrypted_items = ref([]);
@@ -349,7 +350,7 @@ const uploadFile = async (file, file_id, dataKey) => {
     // Met à jour la progression
     const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
     console.log(`File ${file.name} progress: ${progress}%`);
-    file.progress = progress;
+    fileProgressMap.value[file_id] = parseFloat(progress);
   };
 
   // Gestionnaire de file d'attente (Pool)
@@ -613,19 +614,25 @@ const startUploads = async () => {
     listToUpload.value.length > 0
   ) {
     const file = listToUpload.value.shift();
-    file.progress = 0;
     listUploadInProgress.value.push(file);
 
     const [file_id, dataKey] = await initializeFileInDB(
       file,
       activeFolderId.value
     );
+    
+    // Initialiser la progression
+    fileProgressMap.value[file_id] = 0;
+    file._uploadId = file_id;
 
     uploadFile(file, file_id, dataKey).then(async () => {
       listUploadInProgress.value = listUploadInProgress.value.filter(
         (f) => f !== file
       );
       listUploaded.value.push(file);
+      
+      // Nettoyer la progression du fichier terminé
+      delete fileProgressMap.value[file_id];
 
       // Si c'est le dernier fichier, recharger la liste
       if (
