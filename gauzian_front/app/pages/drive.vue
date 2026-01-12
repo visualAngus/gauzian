@@ -1050,8 +1050,26 @@ const onFilesFromDrop = async (files) => {
 };
 
 const deleteItem = async (item) => {
-  console.log("Deleting item:", item);
-  // Implémente la logique de suppression ici
+    if (item.type === "file") {
+      const res = await fetch(`${API_URL}/drive/delete_file/${item.file_id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to delete file");
+      }
+    } else if (item.type === "folder") {
+      const res = await fetch(
+        `${API_URL}/drive/delete_folder/${item.folder_id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+      if (!res.ok) {
+        throw new Error("Failed to delete folder");
+      }
+    }
 };
 
 watch(

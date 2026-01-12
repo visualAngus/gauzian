@@ -7,7 +7,7 @@
     }"
 
     :data-item-type="item.type"
-    :data-item-id="item.id"
+    :data-item-id="item.file_id || item.folder_id"
 
     @click="$emit('click', item)"
   >
