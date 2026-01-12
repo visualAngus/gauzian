@@ -1125,13 +1125,13 @@ main {
 }
 
 .file-list-enter-from {
-  opacity: 0;
-  transform: scale(0.8);
+  opacity: 0 !important;
+  transform: scale(0.8) !important;
 }
 
 .file-list-leave-to {
-  opacity: 0;
-  transform: scale(0.8);
+  opacity: 0 !important;
+  transform: scale(0.8) !important;
 }
 
 .breadcrumb {
