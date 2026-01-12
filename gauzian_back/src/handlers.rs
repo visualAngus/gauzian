@@ -468,10 +468,10 @@ pub struct AbortUploadRequest {
 }
 pub async fn abort_upload_handler(
     State(state): State<AppState>,
-    _claims: jwt::Claims,
+    claims: jwt::Claims,
     Json(body): Json<AbortUploadRequest>,
 ) -> Response {
-    match drive::abort_file_upload(&state.db_pool, &state.storage_client, body.file_id).await {
+    match drive::abort_file_upload(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("Upload aborted successfully").into_response(),
         Err(e) => {
             tracing::error!("Failed to abort upload: {:?}", e);

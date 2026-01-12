@@ -363,33 +363,45 @@ pub async fn get_full_path(
     Ok(path)
 }
 
-pub async fn abort_file_upload(db_pool: &PgPool,storage_client: &crate::storage::StorageClient, file_id: Uuid) -> Result<(), sqlx::Error> {
-    // récupérer les s3_keys associées au file_id
+pub async fn abort_file_upload(
+    db_pool: &PgPool,
+    storage_client: &crate::storage::StorageClient,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), sqlx::Error> {
     let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
         "
-        SELECT s3_key FROM s3_keys WHERE file_id = $1
+        SELECT s3_key 
+        FROM s3_keys 
+        WHERE file_id = $1
+          AND file_id IN (SELECT file_id FROM file_access WHERE user_id = $2)
         ",
     )
     .bind(file_id)
+    .bind(user_id)
     .fetch_all(db_pool)
     .await?;
 
-    // supprimer les entrées dans minio=
+    // Supprimer les entrées dans minio
     for s3_key in s3_keys.iter() {
         storage_client.delete_line(s3_key).await.map_err(|e| {
             sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
         })?;
     }
 
-    // supprimer les entrées dans s3_keys
     sqlx::query(
         "
-        DELETE FROM s3_keys WHERE file_id = $1
-        DELETE FROM file_access WHERE file_id = $1
-        DELETE FROM files WHERE id = $1
-        ",
+        DELETE FROM s3_keys WHERE file_id = $1 AND file_id IN (
+            SELECT file_id FROM file_access WHERE user_id = $2
+        );
+        DELETE FROM file_access WHERE file_id = $1 AND user_id = $2;
+        DELETE FROM files WHERE id = $1 AND id IN (
+            SELECT file_id FROM file_access WHERE user_id = $2
+        );
+        "
     )
     .bind(file_id)
+    .bind(user_id)
     .execute(db_pool)
     .await?;
     Ok(())
