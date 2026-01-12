@@ -503,3 +503,24 @@ pub async fn delete_file_handler(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct DeleteFolderRequest {
+    folder_id: Uuid,
+}
+pub async fn delete_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<DeleteFolderRequest>,
+) -> Response {
+    match drive::delete_folder(&state.db_pool, claims.id, body.folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder deleted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to delete folder: {:?}", e);
+            ApiResponse::internal_error("Failed to delete folder").into_response()
+        }
+    }
+}
