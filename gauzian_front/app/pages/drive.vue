@@ -233,18 +233,22 @@ let fileIdCounter = 0; // Compteur pour générer des IDs uniques
 // Computed property pour combiner les fichiers en attente et en cours d'upload
 const pendingAndUploadingFiles = computed(() => {
   return [
-    ...listToUpload.value.map((file) => ({
-      ...file,
-      _status: "pending",
-      _name: file.name,
-      _progress: 0,
-    })),
-    ...listUploadInProgress.value.map((file) => ({
-      ...file,
-      _status: "uploading",
-      _name: file.name,
-      _progress: fileProgressMap.value[file._uploadId] || 0,
-    })),
+    ...listToUpload.value
+      .filter(file => (file._targetFolderId || 'root') === activeFolderId.value)
+      .map((file) => ({
+        ...file,
+        _status: "pending",
+        _name: file.name,
+        _progress: 0,
+      })),
+    ...listUploadInProgress.value
+      .filter(file => (file._targetFolderId || 'root') === activeFolderId.value)
+      .map((file) => ({
+        ...file,
+        _status: "uploading",
+        _name: file.name,
+        _progress: fileProgressMap.value[file._uploadId] || 0,
+      })),
   ];
 });
 
@@ -298,6 +302,7 @@ const handleFileChange = async (event) => {
     someSize += file.size;
     // Assigner un ID unique dès l'ajout
     file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
+    file._targetFolderId = activeFolderId.value; // Assigner le dossier cible
     listToUpload.value.push(file);
   }
   if (someSize > totalSpaceLeft.value - usedSpace.value) {
