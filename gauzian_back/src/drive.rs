@@ -522,44 +522,182 @@ pub async fn delete_file(
 
 pub async fn delete_folder(
     db_pool: &PgPool,
+    storage_client: &crate::storage::StorageClient,
     user_id: Uuid,
     folder_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Lock all access rows for this folder to prevent
-    let access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+    // Build the subtree of folders starting from the target.
+    let folder_rows: Vec<(Uuid, i32)> = sqlx::query_as(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id, parent_folder_id, 0 AS depth
+            FROM folders
+            WHERE id = $1
+
+            UNION ALL
+
+            SELECT f.id, f.parent_folder_id, ft.depth + 1
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        SELECT id, depth FROM folder_tree
+        ",
+    )
+    .bind(folder_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    if folder_rows.is_empty() {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    let folder_ids: Vec<Uuid> = folder_rows.iter().map(|(id, _)| *id).collect();
+
+    // Lock all access rows for the root folder to prevent concurrent share/delete.
+    let root_access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
         "SELECT user_id FROM folder_access WHERE folder_id = $1 FOR UPDATE",
     )
     .bind(folder_id)
     .fetch_all(&mut *tx)
-    .await?;    
+    .await?;
+
     // Must have at least the caller's access.
-    if !access_users.iter().any(|u| *u == user_id) {
+    if !root_access_users.iter().any(|u| *u == user_id) {
         return Err(sqlx::Error::RowNotFound);
-    }   
-    let other_users_still_have_access = access_users.iter().any(|u| *u != user_id);
-    if other_users_still_have_access {
-        // The folder is shared: remove only the caller's access.
-        sqlx::query("DELETE FROM folder_access WHERE folder_id = $1 AND user_id = $2")
-            .bind(folder_id)
-            .bind(user_id)
+    }
+
+    // Lock file access rows under this subtree to avoid races with concurrent share/delete.
+    sqlx::query("SELECT 1 FROM file_access WHERE folder_id = ANY($1) FOR UPDATE")
+        .bind(&folder_ids)
+        .execute(&mut *tx)
+        .await?;
+
+    // Determine if any other user still has access to any folder or file in the subtree.
+    let others_exist = sqlx::query_scalar::<_, bool>(
+        "
+        SELECT EXISTS(
+            SELECT 1 FROM folder_access WHERE folder_id = ANY($1) AND user_id <> $2
+            UNION
+            SELECT 1 FROM file_access WHERE folder_id = ANY($1) AND user_id <> $2
+        )
+        ",
+    )
+    .bind(&folder_ids)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // Files in the subtree that the current user can see.
+    let file_ids_for_user: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "SELECT DISTINCT file_id FROM file_access WHERE folder_id = ANY($1) AND user_id = $2",
+    )
+    .bind(&folder_ids)
+    .bind(user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // Files where this user is the only accessor.
+    let files_owned_only_by_user: Vec<Uuid> = if file_ids_for_user.is_empty() {
+        Vec::new()
+    } else {
+        sqlx::query_scalar::<_, Uuid>(
+            "
+            SELECT file_id
+            FROM file_access
+            WHERE file_id = ANY($1)
+            GROUP BY file_id
+            HAVING COUNT(*) FILTER (WHERE user_id <> $2) = 0
+            ",
+        )
+        .bind(&file_ids_for_user)
+        .bind(user_id)
+        .fetch_all(&mut *tx)
+        .await?
+    };
+
+    // Files shared with someone else (the user only loses their access).
+    let files_shared: Vec<Uuid> = file_ids_for_user
+        .iter()
+        .filter(|id| !files_owned_only_by_user.contains(id))
+        .copied()
+        .collect();
+
+    // Delete files that only this user could access.
+    if !files_owned_only_by_user.is_empty() {
+        let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
+            "SELECT s3_key FROM s3_keys WHERE file_id = ANY($1)",
+        )
+        .bind(&files_owned_only_by_user)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        for s3_key in s3_keys.iter() {
+            storage_client.delete_line(s3_key).await.map_err(|e| {
+                sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
+            })?;
+        }
+
+        sqlx::query("DELETE FROM s3_keys WHERE file_id = ANY($1)")
+            .bind(&files_owned_only_by_user)
             .execute(&mut *tx)
-            .await?;    
+            .await?;
+
+        sqlx::query("DELETE FROM file_access WHERE file_id = ANY($1)")
+            .bind(&files_owned_only_by_user)
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM files WHERE id = ANY($1)")
+            .bind(&files_owned_only_by_user)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    if others_exist {
+        if !files_shared.is_empty() {
+            sqlx::query("DELETE FROM file_access WHERE user_id = $1 AND file_id = ANY($2)")
+                .bind(user_id)
+                .bind(&files_shared)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        sqlx::query("DELETE FROM folder_access WHERE user_id = $1 AND folder_id = ANY($2)")
+            .bind(user_id)
+            .bind(&folder_ids)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
         return Ok(());
-    }   
-    // Only this user has access: delete everything.
-    // Delete DB rows (order matters because of FK constraints)
-    sqlx::query("DELETE FROM folder_access WHERE folder_id = $1")
-        .bind(folder_id)
-        .execute(&mut *tx)
-        .await?;    
-    sqlx::query("DELETE FROM folders WHERE id = $1")
-        .bind(folder_id)
+    }
+
+    // No other users anywhere in the subtree: remove everything.
+    if !files_shared.is_empty() {
+        sqlx::query("DELETE FROM file_access WHERE user_id = $1 AND file_id = ANY($2)")
+            .bind(user_id)
+            .bind(&files_shared)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::query("DELETE FROM folder_access WHERE folder_id = ANY($1)")
+        .bind(&folder_ids)
         .execute(&mut *tx)
         .await?;
+
+    // Delete folders bottom-up to satisfy FK constraints.
+    let mut folders_desc = folder_rows.clone();
+    folders_desc.sort_by(|a, b| b.1.cmp(&a.1));
+    for (folder_id, _) in folders_desc {
+        sqlx::query("DELETE FROM folders WHERE id = $1")
+            .bind(folder_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
     tx.commit().await?;
     Ok(())
 }
