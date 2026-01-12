@@ -230,11 +230,13 @@ const pendingAndUploadingFiles = computed(() => {
     ...listToUpload.value.map(file => ({
       ...file,
       _status: 'pending',
+      _name : file.name,
       _progress: 0
     })),
     ...listUploadInProgress.value.map(file => ({
       ...file,
       _status: 'uploading',
+        _name : file.name,
       _progress: fileProgressMap.value[file._uploadId] || 0
     }))
   ];
