@@ -1,23 +1,37 @@
 <template>
-    <div class="div_pannel_up_dow_load">
-        <h3>Upload/Download Panel</h3>
-        <div class="div_liste_fichier">
-            <div class="fichier" v-for="(file, index) in listUploadInProgress" :key="index">
-                <div class="div_info_up">
-                    <span class="nom_fichier">{{ file.name }}</span>
-                    <div class="div_barre">
-                        <div class="barre_progress" :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"></div>
-                    </div>
-                </div>
-                <div class="div_cancel">
-                    <button class="btn_cancel">
-                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"></path></svg>
-                    </button>
-                </div>
-            </div>
+  <div class="div_pannel_up_dow_load">
+    <h3>Upload/Download Panel</h3>
+    <div class="div_liste_fichier">
+      <div
+        class="fichier"
+        v-for="(file, index) in listUploadInProgress"
+        :key="index"
+      >
+        <div class="div_info_up">
+          <span class="nom_fichier">{{ file.name }}</span>
+          <div class="div_barre">
+            <div
+              class="barre_progress"
+              :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"
+            ></div>
+          </div>
         </div>
+        <div class="div_cancel">
+          <button class="btn_cancel">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path
+                d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"
+              ></path>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
-
+  </div>
 
   <main>
     <div class="div_left_section">
@@ -88,7 +102,14 @@
         </template>
       </div>
 
-      <div class="section_items" v-dropzone="{ inputRef: fileInput, onFiles: onFilesFromDrop, onOverChange: setIsOver }">
+      <div
+        class="section_items"
+        v-dropzone="{
+          inputRef: fileInput,
+          onFiles: onFilesFromDrop,
+          onOverChange: setIsOver,
+        }"
+      >
         <div
           v-for="(item, index) in liste_decrypted_items"
           :key="item.type + (item.folder_id || item.file_id) + index"
@@ -354,7 +375,9 @@ const uploadFile = async (file, file_id, dataKey) => {
       [file_id]: parseFloat(progress),
     };
     console.log(
-      `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${fileProgressMap.value[file_id]}%)`
+      `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${
+        fileProgressMap.value[file_id]
+      }%)`
     );
   };
 
@@ -625,7 +648,7 @@ const startUploads = async () => {
       file,
       activeFolderId.value
     );
-    
+
     // Initialiser la progression
     fileProgressMap.value[file_id] = 0;
     file._uploadId = file_id;
@@ -635,7 +658,7 @@ const startUploads = async () => {
         (f) => f !== file
       );
       listUploaded.value.push(file);
-      
+
       // Nettoyer la progression du fichier terminé
       delete fileProgressMap.value[file_id];
 
@@ -665,18 +688,18 @@ const onNativeChange = (event) => {
 };
 
 const onFilesFromDrop = (files) => {
-  let someSize = 0
-  console.log("dropped files", files)
+  let someSize = 0;
+  console.log("dropped files", files);
   for (let i = 0; i < files.length; i++) {
-    const file = files[i]
-    someSize += file.size
-    listToUpload.value.push(file)
+    const file = files[i];
+    someSize += file.size;
+    listToUpload.value.push(file);
   }
   if (someSize > totalSpaceLeft.value - usedSpace.value) {
-    alert("Not enough space left to upload these files.")
-    return
+    alert("Not enough space left to upload these files.");
+    return;
   }
-}
+};
 watch(
   [listToUpload, listUploadInProgress],
   () => {
@@ -772,9 +795,10 @@ main {
 
 .section_items {
   position: relative;
-  /* Utilisation de Grid pour un alignement responsive comme le Drive */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* gestion de la hauteur des ligne */
+  grid-auto-rows: minmax(60px, auto);
   gap: 15px;
   width: 100%;
   height: 100%;
@@ -940,7 +964,6 @@ main {
   display: none;
 }
 
-
 /* div_pannel_up_dow_load */
 .div_pannel_up_dow_load {
   position: fixed;
@@ -949,17 +972,17 @@ main {
   width: 350px;
   min-height: 50px;
   max-height: 350px;
-    background-color: #333333;
-    border-radius: 0 15px 0 0;
+  background-color: #333333;
+  border-radius: 0 15px 0 0;
 
   border-bottom: 1px solid #ddd;
   z-index: 1000;
 
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  color: white;
 }
 
 .div_pannel_up_dow_load h3 {
@@ -967,78 +990,77 @@ main {
 }
 
 .div_liste_fichier {
-    width: 100%;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
+  width: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
 
-    padding-bottom: 10px;
-    padding-left: 10px;
+  padding-bottom: 10px;
+  padding-left: 10px;
 }
 
 .fichier {
-    width: 100%;
-    padding: 5px 0;
-    border-bottom: 1px solid #555555;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between; 
+  width: 100%;
+  padding: 5px 0;
+  border-bottom: 1px solid #555555;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .div_info_up {
-    width: 90%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .nom_fichier {
-    font-size: 14px;
-    margin-bottom: 5px;
+  font-size: 14px;
+  margin-bottom: 5px;
 }
 
 .div_barre {
-    width: 98%;
-    height: 10px;
-    background-color: #555555;
-    border-radius: 5px;
-    overflow: hidden;
+  width: 98%;
+  height: 10px;
+  background-color: #555555;
+  border-radius: 5px;
+  overflow: hidden;
 }
 
 .barre_progress {
-    height: 100%;
-    background-color: #4c8eaf;
-    border-radius: 5px 0 0 5px;
-    transition: width 0.3s ease;
+  height: 100%;
+  background-color: #4c8eaf;
+  border-radius: 5px 0 0 5px;
+  transition: width 0.3s ease;
 }
 
 .div_cancel {
-    height: 100%;
-    margin-right: 5px;
+  height: 100%;
+  margin-right: 5px;
 }
 .btn_cancel {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: white;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: white;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn_cancel svg {
-    width: 22px;
-    height: 22px;
-    fill: white;
+  width: 22px;
+  height: 22px;
+  fill: white;
 }
 
 /* lorsque le btn est hover le svg devien rouge */
 .btn_cancel:hover svg {
-    fill: #ff4444;
+  fill: #ff4444;
 }
-
 </style>
