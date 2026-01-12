@@ -347,9 +347,12 @@ const uploadFile = async (file, file_id, dataKey) => {
     if (!res.ok) {
       throw new Error(`Failed to upload chunk ${index}`);
     }
-    // Met à jour la progression
+    // Met à jour la progression - Utiliser la réactivité Vue correctement
     const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
-    fileProgressMap.value[file_id] = parseFloat(progress);
+    fileProgressMap.value = {
+      ...fileProgressMap.value,
+      [file_id]: parseFloat(progress),
+    };
     console.log(
       `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name} (${fileProgressMap.value[file_id]}%)`
     );
