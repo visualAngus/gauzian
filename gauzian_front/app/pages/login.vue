@@ -38,7 +38,7 @@
 										v-model="loginForm.password" 
 										:type="showLoginPassword ? 'text' : 'password'" 
 										id="login_password" 
-										required 
+										required 	
 									/>
 									<button
 										type="button"
