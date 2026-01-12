@@ -90,6 +90,7 @@ const displayName = computed(() => {
     props.item.metadata?.folder_name ||
     props.item.metadata?.filename ||
     props.item.name ||
+    props.item._name ||
     "Sans nom"
   );
 });

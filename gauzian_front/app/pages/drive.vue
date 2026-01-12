@@ -1,36 +1,42 @@
 <template>
   <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
     <h3>Upload/Download Panel</h3>
-      <div
-        class="fichier"
-        v-for="(file, index) in listUploadInProgress"
-        :key="index"
-      >
-        <div class="div_info_up">
-          <span class="nom_fichier">{{ file.name }}</span>
-          <div class="div_barre">
-            <div
-              class="barre_progress"
-              :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%', transition: 'width 0.5s ease' }"
-            ></div>
-            <span v-if="fileProgressMap[file._uploadId] < 100" class="loading-spinner"></span>
-          </div>
-        </div>
-        <div class="div_cancel">
-          <button class="btn_cancel" @click="abort_upload(file._uploadId)">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path
-                d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"
-              ></path>
-            </svg>
-          </button>
+    <div
+      class="fichier"
+      v-for="(file, index) in listUploadInProgress"
+      :key="index"
+    >
+      <div class="div_info_up">
+        <span class="nom_fichier">{{ file.name }}</span>
+        <div class="div_barre">
+          <div
+            class="barre_progress"
+            :style="{
+              width: (fileProgressMap[file._uploadId] || 0) + '%',
+              transition: 'width 0.5s ease',
+            }"
+          ></div>
+          <span
+            v-if="fileProgressMap[file._uploadId] < 100"
+            class="loading-spinner"
+          ></span>
         </div>
       </div>
+      <div class="div_cancel">
+        <button class="btn_cancel" @click="abort_upload(file._uploadId)">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path
+              d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"
+            ></path>
+          </svg>
+        </button>
+      </div>
     </div>
+  </div>
 
   <main>
     <div class="div_left_section">
@@ -227,18 +233,18 @@ let fileIdCounter = 0; // Compteur pour générer des IDs uniques
 // Computed property pour combiner les fichiers en attente et en cours d'upload
 const pendingAndUploadingFiles = computed(() => {
   return [
-    ...listToUpload.value.map(file => ({
+    ...listToUpload.value.map((file) => ({
       ...file,
-      _status: 'pending',
-      _name : file.name,
-      _progress: 0
+      _status: "pending",
+      _name: file.name,
+      _progress: 0,
     })),
-    ...listUploadInProgress.value.map(file => ({
+    ...listUploadInProgress.value.map((file) => ({
       ...file,
-      _status: 'uploading',
-        _name : file.name,
-      _progress: fileProgressMap.value[file._uploadId] || 0
-    }))
+      _status: "uploading",
+      _name: file.name,
+      _progress: fileProgressMap.value[file._uploadId] || 0,
+    })),
   ];
 });
 
@@ -754,12 +760,9 @@ const abort_upload = async (file_id) => {
     return;
   }
 
-
   setTimeout(() => {
-    
-      console.log(`Upload for file ID ${file_id} has been aborted.`);
+    console.log(`Upload for file ID ${file_id} has been aborted.`);
   }, 100);
-
 };
 
 const fileInput = ref(null);
@@ -1156,9 +1159,6 @@ main {
   align-items: center;
   justify-content: space-between;
 }
-
-
-
 
 .div_info_up {
   width: 90%;
