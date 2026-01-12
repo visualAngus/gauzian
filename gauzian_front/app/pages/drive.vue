@@ -1,9 +1,9 @@
 <template>
 
-    <div id="div_pannel_right_click">
-        <a @click="createFolder()" v-if="rightClikedItem.dataset.itemType == 'folder'">Nouveau dossier</a>
-        <a @click="deleteItem()" v-if="rightClikedItem.dataset.itemType == 'file' || rightClikedItem.dataset.itemType == 'folder'">Supprimer</a>
-    </div>
+  <div id="div_pannel_right_click" ref="rightClickPanel">
+    <a @click="createFolder()" v-if="rightClikedItem?.dataset?.itemType === 'folder'">Nouveau dossier</a>
+    <a @click="deleteItem()" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Supprimer</a>
+  </div>
 
 
   <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
@@ -155,7 +155,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
@@ -882,6 +882,7 @@ const abort_upload = async (file_id) => {
 
 const fileInput = ref(null);
 const isOver = ref(false);
+const rightClickPanel = ref(null);
 
 const setIsOver = (state) => {
   isOver.value = state;
@@ -889,30 +890,44 @@ const setIsOver = (state) => {
 
 // listener sur le click droit pour gérer le pannel
 onMounted(() => {
-    let pannel_click = document.getElementById("div_pannel_right_click");
-    window.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
+  const onContextMenu = (e) => {
+    e.preventDefault();
 
-        // est ce qu'il y a un item sous le curseur ?
-        let element_under_cursor = document.elementFromPoint(e.clientX, e.clientY);
-        if (element_under_cursor && element_under_cursor.closest(".item")) {
-            // on log l'item en question
-            let item = element_under_cursor.closest(".item");
-            console.log("Right click on item in group:", item);
-            rightClikedItem.value = item;
-        }
+    const panel = rightClickPanel.value;
+    if (!panel) return;
 
-        pannel_click.style.display = "flex";
-        pannel_click.style.top = e.pageY + "px";
-        pannel_click.style.left = e.pageX + "px";
-    });
-    window.addEventListener("click", (e) => {
-        let pannel_click = document.getElementById("div_pannel_right_click");
-        if (pannel_click.style.display == "flex") {
-            pannel_click.style.display = "none";
-            rightClikedItem.value = null;
-        }
-    });
+    // est ce qu'il y a un item sous le curseur ?
+    const element_under_cursor = document.elementFromPoint(e.clientX, e.clientY);
+    if (element_under_cursor && element_under_cursor.closest(".item")) {
+      // on log l'item en question
+      const item = element_under_cursor.closest(".item");
+      console.log("Right click on item:", item);
+      rightClikedItem.value = item;
+    } else {
+      rightClikedItem.value = null;
+    }
+
+    panel.style.display = "flex";
+    panel.style.top = e.pageY + "px";
+    panel.style.left = e.pageX + "px";
+  };
+
+  const onClick = () => {
+    const panel = rightClickPanel.value;
+    if (!panel) return;
+    if (panel.style.display === "flex") {
+      panel.style.display = "none";
+      rightClikedItem.value = null;
+    }
+  };
+
+  window.addEventListener("contextmenu", onContextMenu);
+  window.addEventListener("click", onClick);
+
+  onBeforeUnmount(() => {
+    window.removeEventListener("contextmenu", onContextMenu);
+    window.removeEventListener("click", onClick);
+  });
 });
 
 
