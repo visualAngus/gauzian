@@ -108,20 +108,26 @@
       </div>
 
       <div
-        class="section_items"
+        <div class="section_items"
         v-dropzone="{
           inputRef: fileInput,
           onFiles: onFilesFromDrop,
           onOverChange: setIsOver,
         }"
       >
-        <TransitionGroup name="file-list" tag="div" class="file-grid">
+          <TransitionGroup
+            name="file-list"
+            tag="div"
+            class="file-grid"
+            @after-leave="onFileListAfterLeave"
+          >
           <!-- Fichiers uploadés -->
           <FileItem
-            v-for="item in liste_decrypted_items"
+              v-for="item in displayedDriveItems"
             :key="'uploaded-' + (item.folder_id || item.file_id)"
             :item="item"
             status="uploaded"
+              data-item-group="drive"
             @click="click_on_item(item)"
           />
 
@@ -132,6 +138,7 @@
             :item="item"
             :status="item._status"
             :progress="item._progress"
+            data-item-group="queue"
             @click="click_on_item(item)"
           />
         </TransitionGroup>
@@ -141,9 +148,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
-import { watch } from "vue";
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
 
@@ -254,7 +260,72 @@ const pendingAndUploadingFiles = computed(() => {
 
 const activeFolderId = ref("root");
 const liste_decrypted_items = ref([]);
+const displayedDriveItems = ref([]);
 const full_path = ref([]);
+
+const driveListTransition = ref({
+  leaving: false,
+  pendingLeaves: 0,
+});
+let queuedDriveItems = null;
+
+const flushQueuedDriveItems = async () => {
+  if (!queuedDriveItems) {
+    driveListTransition.value.leaving = false;
+    return;
+  }
+
+  const nextItems = queuedDriveItems;
+  queuedDriveItems = null;
+  driveListTransition.value.leaving = false;
+
+  // Laisse Vue finaliser le retrait avant de ré-insérer
+  await nextTick();
+  displayedDriveItems.value = nextItems;
+};
+
+const queueDriveItemsForDisplay = async (items) => {
+  queuedDriveItems = items;
+  liste_decrypted_items.value = items;
+
+  // Si rien n'est affiché, on affiche directement.
+  if (displayedDriveItems.value.length === 0 && !driveListTransition.value.leaving) {
+    displayedDriveItems.value = items;
+    queuedDriveItems = null;
+    return;
+  }
+
+  // Si une transition de suppression est déjà en cours, on garde simplement la dernière liste en attente.
+  if (driveListTransition.value.leaving) {
+    return;
+  }
+
+  // Démarre une phase "out" : on enlève les items actuels du DOM.
+  driveListTransition.value.leaving = true;
+  driveListTransition.value.pendingLeaves = displayedDriveItems.value.length;
+  displayedDriveItems.value = [];
+
+  // Sécurité : si aucune transition n'est jouée, on flush quand même.
+  await nextTick();
+  if (driveListTransition.value.pendingLeaves === 0) {
+    await flushQueuedDriveItems();
+  }
+};
+
+const onFileListAfterLeave = async (el) => {
+  // Le TransitionGroup contient aussi les items "queue" (pending/uploading).
+  if (el?.dataset?.itemGroup !== "drive") return;
+  if (!driveListTransition.value.leaving) return;
+
+  driveListTransition.value.pendingLeaves = Math.max(
+    0,
+    driveListTransition.value.pendingLeaves - 1
+  );
+
+  if (driveListTransition.value.pendingLeaves === 0) {
+    await flushQueuedDriveItems();
+  }
+};
 
 const displayType = ref("grid"); // 'grid' or 'list'
 const activeSection = ref("my_drive"); // 'my_drive', 'shared_with_me', 'recent', 'trash'
@@ -472,6 +543,7 @@ const get_all_info = async () => {
     ...(files_and_folders?.files ?? []),
   ];
 
+  const decryptedItems = [];
   for (const item of items) {
     if (item.type === "file") {
       try {
@@ -484,7 +556,7 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        liste_decrypted_items.value.push({
+        decryptedItems.push({
           ...item,
           metadata: metadata,
         });
@@ -506,7 +578,7 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        liste_decrypted_items.value.push({
+        decryptedItems.push({
           ...item,
           metadata: metadata,
         });
@@ -519,6 +591,8 @@ const get_all_info = async () => {
       }
     }
   }
+
+  await queueDriveItemsForDisplay(decryptedItems);
 
   for (const pathItem of fullPathData) {
     const encryptedMetadata = pathItem.encrypted_metadata;
@@ -559,7 +633,8 @@ const loadPath = async () => {
     ...(files_and_folders?.folders ?? []),
     ...(files_and_folders?.files ?? []),
   ];
-  liste_decrypted_items.value = []; // reset
+
+  const decryptedItems = [];
   for (const item of items) {
     if (item.type === "file") {
       try {
@@ -572,7 +647,7 @@ const loadPath = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        liste_decrypted_items.value.push({
+        decryptedItems.push({
           ...item,
           metadata: metadata,
         });
@@ -594,7 +669,7 @@ const loadPath = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        liste_decrypted_items.value.push({
+        decryptedItems.push({
           ...item,
           metadata: metadata,
         });
@@ -607,6 +682,8 @@ const loadPath = async () => {
       }
     }
   }
+
+  await queueDriveItemsForDisplay(decryptedItems);
 
   // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
   const newFullPath = [];
@@ -1030,7 +1107,6 @@ main {
 
 .file-list-enter-active {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  transition-delay: 3s; /* Attend que les éléments sortants soient complètement supprimés */
 }
 
 .file-list-leave-active {
