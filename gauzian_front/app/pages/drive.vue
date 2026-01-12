@@ -649,15 +649,24 @@ const setIsOver = (state) => {
   isOver.value = state;
 };
 
-const onFilesFromDrop = (files) => {
-  console.log("files dropped", files);
-};
-
 const onNativeChange = (event) => {
   const files = event.target.files;
   console.log("input files", files);
 };
 
+const onFilesFromDrop = (files) => {
+  let someSize = 0
+  console.log("dropped files", files)
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    someSize += file.size
+    listToUpload.value.push(file)
+  }
+  if (someSize > totalSpaceLeft.value - usedSpace.value) {
+    alert("Not enough space left to upload these files.")
+    return
+  }
+}
 watch(
   [listToUpload, listUploadInProgress],
   () => {
