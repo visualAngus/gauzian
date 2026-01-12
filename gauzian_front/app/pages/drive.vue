@@ -88,7 +88,7 @@
         </template>
       </div>
 
-      <div class="section_items" v-dropzone="{ setIsOver, onFilesFromDrop }">
+      <div class="section_items" v-dropzone="{ inputRef: fileInput, onFiles: onFilesFromDrop, onOverChange: setIsOver }">
         <div
           v-for="(item, index) in liste_decrypted_items"
           :key="item.type + (item.folder_id || item.file_id) + index"
