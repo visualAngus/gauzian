@@ -111,7 +111,7 @@
         <div
           v-for="(item, index) in liste_decrypted_items"
           :key="item.type + (item.folder_id || item.file_id) + index"
-          :class="['item', item.status === 'pending' ? 'pending' : '']"
+          class="item"
           @click="click_on_item(item)"
         >
           <span class="icon-wrapper">
@@ -135,6 +135,43 @@
               item.metadata?.folder_name ||
               item.metadata?.filename ||
               "Sans nom"
+            }}
+          </span>
+          <span class="menu-dots">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
+          </span>
+        </div>
+
+
+        <div
+          v-for="(item, index) in listToUpload"
+          :key="item.type + (item.name) + index"
+          class="item"
+          @click="click_on_item(item)"
+        >
+          <span class="icon-wrapper">
+            <svg
+              v-if="item.type === 'folder'"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path
+                d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
+              ></path>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
+              ></path>
+            </svg>
+          </span>
+          <span class="filename">
+            {{
+                item.name || "Sans nom"
             }}
           </span>
           <span class="menu-dots">
@@ -875,7 +912,6 @@ const onFilesFromDrop = async (files) => {
     // Conserver l'objet File natif pour garder size/type/lastModified
     file._targetFolderId = targetFolderId;
     file.status = "pending";
-    liste_decrypted_items.value.push(file);
     listToUpload.value.push(file);
   }
 
@@ -1033,6 +1069,7 @@ main {
 
 .pending {
     opacity: 0.7;
+    animation: pulse 2s infinite;
 }
 
 /* animation pour les fichier en attente */
