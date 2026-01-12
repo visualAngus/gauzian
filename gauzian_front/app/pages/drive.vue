@@ -17,9 +17,7 @@
           </div>
         </div>
         <div class="div_cancel">
-          <button class="btn_cancel"
-          @click="abort_upload(file._uploadId)"
-          >
+          <button class="btn_cancel" @click="abort_upload(file._uploadId)">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -311,7 +309,7 @@ const initializeFileInDB = async (file, folder_id) => {
   };
 
   const stringifiedMetadata = JSON.stringify(metadata);
-//   console.log("Stringified Metadata:", stringifiedMetadata);
+  //   console.log("Stringified Metadata:", stringifiedMetadata);
 
   const encryptedMetadata = await encryptSimpleDataWithDataKey(
     stringifiedMetadata,
@@ -358,9 +356,7 @@ const uploadFile = async (file, file_id, dataKey) => {
 
     const chunk = file.slice(start, end);
 
-    console.log(
-      file
-    );
+    console.log(file);
 
     const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
     const body = {
@@ -403,7 +399,7 @@ const uploadFile = async (file, file_id, dataKey) => {
         await uploadChunkByIndex(index);
       } catch (err) {
         // Si l'erreur est une annulation, on arrête le worker
-        if (err.name === 'AbortError') {
+        if (err.name === "AbortError") {
           console.log(`Upload annulé pour le fichier ${file.name}`);
           return; // Sortir du worker
         }
@@ -662,13 +658,10 @@ const startUploads = async () => {
     const fileObject = listToUpload.value.shift();
     const file = fileObject;
     const targetFolderId = fileObject._targetFolderId || activeFolderId.value;
-    
+
     listUploadInProgress.value.push(file);
 
-    const [file_id, dataKey] = await initializeFileInDB(
-      file,
-      targetFolderId
-    );
+    const [file_id, dataKey] = await initializeFileInDB(file, targetFolderId);
 
     // Initialiser la progression
     fileProgressMap.value[file_id] = 0;
@@ -696,7 +689,7 @@ const startUploads = async () => {
       })
       .catch((err) => {
         // Gérer les erreurs d'upload (y compris l'annulation)
-        if (err.name === 'AbortError') {
+        if (err.name === "AbortError") {
           console.log(`Upload annulé pour ${file.name}`);
         } else {
           console.error(`Erreur upload ${file.name}:`, err);
@@ -711,9 +704,9 @@ const startUploads = async () => {
   }
 };
 
-const abort_upload = (file_id) => {
+const abort_upload = async (file_id) => {
   console.log(`Attempting to abort upload for file ID: ${file_id}`);
-  
+
   // 1. Annuler les requêtes en cours via AbortController
   const abortController = abortControllers.value[file_id];
   if (abortController) {
@@ -736,10 +729,28 @@ const abort_upload = (file_id) => {
 
   // 4. Relancer les uploads pour passer au fichier suivant
   startUploads();
-  
+
+  //   POST
+  const res = await fetch(`${API_URL}/drive/abort_upload`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file_id: file_id,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error(
+      `Failed to notify server about aborting upload for file ID ${file_id}`
+    );
+    return;
+  }
+
   console.log(`Upload for file ID ${file_id} has been aborted.`);
 };
-
 
 const fileInput = ref(null);
 const isOver = ref(false);
@@ -754,15 +765,18 @@ const onNativeChange = (event) => {
 };
 
 // Récupérer ou créer les dossiers depuis le chemin du fichier
-const getOrCreateFolderHierarchy = async (relativePath, parentFolderId = "root") => {
+const getOrCreateFolderHierarchy = async (
+  relativePath,
+  parentFolderId = "root"
+) => {
   const pathParts = relativePath.split("/").slice(0, -1); // Exclure le nom du fichier
-  
+
   if (pathParts.length === 0) {
     return parentFolderId; // Le fichier est à la racine
   }
 
   let currentParentId = parentFolderId;
-  
+
   for (const folderName of pathParts) {
     // Vérifier si le dossier existe déjà
     const existingFolder = foldersList.value.find(

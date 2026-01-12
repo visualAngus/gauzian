@@ -461,3 +461,21 @@ pub async fn get_file_folder_handler(
         "full_path": full_path,
     })).into_response()
 }
+
+#[derive(Deserialize)]
+pub struct AbortUploadRequest {
+    file_id: Uuid,
+}
+pub async fn abort_upload_handler(
+    State(state): State<AppState>,
+    _claims: jwt::Claims,
+    Json(body): Json<AbortUploadRequest>,
+) -> Response {
+    match drive::abort_file_upload(&state.db_pool, &state.storage_client, body.file_id).await {
+        Ok(_) => ApiResponse::ok("Upload aborted successfully").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to abort upload: {:?}", e);
+            ApiResponse::internal_error("Failed to abort upload").into_response()
+        }
+    }
+}

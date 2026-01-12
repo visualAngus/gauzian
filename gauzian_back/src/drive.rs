@@ -1,12 +1,12 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use base64::Engine; // Add this import for .encode()
-use uuid::Uuid;
-use sqlx::{FromRow, PgPool};
 use serde_json::json;
+use sqlx::{FromRow, PgPool};
+use uuid::Uuid;
 
 fn bytes_to_text_or_b64(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
@@ -23,10 +23,7 @@ impl IntoResponse for AuthError {
     }
 }
 
-pub async fn get_drive_info(
-    pool: &PgPool,
-    user_id: Uuid,
-) -> Result<(i64, i64, i64), sqlx::Error> {
+pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<(i64, i64, i64), sqlx::Error> {
     let (used_space, file_count, folder_count) = sqlx::query_as::<_, (i64, i64, i64)>(
         "
         select 
@@ -159,14 +156,14 @@ pub async fn get_files_and_folders_list(
     }))
 }
 
-pub async  fn initialize_file_in_db(
+pub async fn initialize_file_in_db(
     db_pool: &PgPool,
     user_id: Uuid,
     size: i64,
     encrypted_metadata: &str,
     mime_type: &str,
     folder_id: Option<Uuid>,
-    encrypted_file_key:&str,
+    encrypted_file_key: &str,
 ) -> Result<Uuid, sqlx::Error> {
     let file_id = Uuid::new_v4();
     let rec = sqlx::query_scalar::<_, Uuid>(
@@ -174,7 +171,7 @@ pub async  fn initialize_file_in_db(
         INSERT INTO files (id, size, encrypted_metadata, mime_type, created_at)
         VALUES ($1, $2, $3, $4, NOW())
         RETURNING id
-        "
+        ",
     )
     .bind(file_id)
     .bind(size)
@@ -250,7 +247,7 @@ pub async fn create_folder_in_db(
         INSERT INTO folders (id, encrypted_metadata, parent_folder_id, is_root, created_at)
         VALUES ($1, $2, $3, $4, NOW())
         RETURNING id
-        "
+        ",
     )
     .bind(folder_id)
     .bind(encrypted_metadata.as_bytes())
@@ -280,7 +277,7 @@ pub async fn create_folder_in_db(
 struct FolderPathRow {
     path_index: i32,
     id: Uuid,
-    encrypted_metadata: Vec<u8>,    // Type BYTEA en base
+    encrypted_metadata: Vec<u8>,           // Type BYTEA en base
     encrypted_folder_key: Option<Vec<u8>>, // Type BYTEA, peut être null
 }
 
@@ -289,7 +286,6 @@ pub async fn get_full_path(
     user_id: Uuid,
     start_folder_id: Option<Uuid>, // Renommé pour la clarté
 ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
-    
     // Si pas d'ID de départ, on renvoie une liste vide tout de suite
     let Some(folder_id) = start_folder_id else {
         return Ok(Vec::new());
@@ -335,7 +331,7 @@ pub async fn get_full_path(
             folder_access fa ON b.id = fa.folder_id AND fa.user_id = $2
         ORDER BY 
             b.path_index DESC; -- DESC pour avoir Racine -> ... -> Enfant direct
-        "
+        ",
     )
     .bind(folder_id)
     .bind(user_id)
@@ -343,23 +339,58 @@ pub async fn get_full_path(
     .await?;
 
     // 3. On transforme les résultats en JSON
-    let path: Vec<serde_json::Value> = rows.into_iter().map(|row| {
-        // J'utilise ta fonction existante (supposée) pour convertir les bytes
-        let metadata_str = bytes_to_text_or_b64(&row.encrypted_metadata);
-        
-        // Gestion de la clé optionnelle
-        let key_str = match row.encrypted_folder_key {
-            Some(k) => Some(bytes_to_text_or_b64(&k)),
-            None => None,
-        };
+    let path: Vec<serde_json::Value> = rows
+        .into_iter()
+        .map(|row| {
+            // J'utilise ta fonction existante (supposée) pour convertir les bytes
+            let metadata_str = bytes_to_text_or_b64(&row.encrypted_metadata);
 
-        json!({
-            "folder_id": row.id,
-            "path_index": row.path_index,
-            "encrypted_metadata": metadata_str,
-            "encrypted_folder_key": key_str
+            // Gestion de la clé optionnelle
+            let key_str = match row.encrypted_folder_key {
+                Some(k) => Some(bytes_to_text_or_b64(&k)),
+                None => None,
+            };
+
+            json!({
+                "folder_id": row.id,
+                "path_index": row.path_index,
+                "encrypted_metadata": metadata_str,
+                "encrypted_folder_key": key_str
+            })
         })
-    }).collect();
+        .collect();
 
     Ok(path)
+}
+
+pub async fn abort_file_upload(db_pool: &PgPool,storage_client: &crate::storage::StorageClient, file_id: Uuid) -> Result<(), sqlx::Error> {
+    // récupérer les s3_keys associées au file_id
+    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
+        "
+        SELECT s3_key FROM s3_keys WHERE file_id = $1
+        ",
+    )
+    .bind(file_id)
+    .fetch_all(db_pool)
+    .await?;
+
+    // supprimer les entrées dans minio=
+    for s3_key in s3_keys.iter() {
+        storage_client.delete_line(s3_key).await.map_err(|e| {
+            sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
+        })?;
+    }
+
+    // supprimer les entrées dans s3_keys
+    sqlx::query(
+        "
+        DELETE FROM s3_keys WHERE file_id = $1
+        DELETE FROM file_access WHERE file_id = $1
+        DELETE FROM files WHERE id = $1
+        ",
+    )
+    .bind(file_id)
+    .execute(db_pool)
+    .await?;
+    Ok(())
 }
