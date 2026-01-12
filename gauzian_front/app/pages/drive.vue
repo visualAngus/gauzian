@@ -298,7 +298,7 @@ const handleFileChange = async (event) => {
 const initializeFileInDB = async (file, folder_id) => {
   const dataKey = await generateDataKey();
   const encryptedFileKey = await encryptWithStoredPublicKey(dataKey);
-  console.log(file);
+  console.log("fileeeeeeee", file);
   const metadata = {
     filename: file.name,
     size: file.size,
@@ -307,7 +307,7 @@ const initializeFileInDB = async (file, folder_id) => {
   };
 
   const stringifiedMetadata = JSON.stringify(metadata);
-  console.log("Stringified Metadata:", stringifiedMetadata);
+//   console.log("Stringified Metadata:", stringifiedMetadata);
 
   const encryptedMetadata = await encryptSimpleDataWithDataKey(
     stringifiedMetadata,
