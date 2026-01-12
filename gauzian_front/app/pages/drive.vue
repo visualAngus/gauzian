@@ -878,7 +878,6 @@ const onFilesFromDrop = async (files) => {
   for (const { file, targetFolderId } of filesToUpload) {
     // Conserver l'objet File natif pour garder size/type/lastModified
     file._targetFolderId = targetFolderId;
-    file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
     file.status = "pending";
     listToUpload.value.push(file);
   }

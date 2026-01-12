@@ -1,9 +1,9 @@
 <template>
-  <div 
-    class="item" 
-    :class="{ 
-      'pending': status === 'pending', 
-      'uploading': status === 'uploading' 
+  <div
+    class="item"
+    :class="{
+      pending: status === 'pending',
+      uploading: status === 'uploading',
     }"
     @click="$emit('click', item)"
   >
@@ -22,28 +22,36 @@
           d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
         ></path>
       </svg>
-      
+
       <!-- Spinner pour les fichiers en upload -->
       <div v-if="status === 'uploading'" class="upload-spinner"></div>
     </span>
-    
+
     <div class="file-info">
       <span class="filename">
         {{ displayName }}
       </span>
-      
+
       <!-- Barre de progression pour les fichiers en upload -->
-      <div v-if="status === 'uploading' && progress !== undefined" class="inline-progress">
-        <div class="inline-progress-bar" :style="{ width: progress + '%' }"></div>
+      <div
+        v-if="status === 'uploading' && progress !== undefined"
+        class="inline-progress"
+      >
+        <div
+          class="inline-progress-bar"
+          :style="{ width: progress + '%' }"
+        ></div>
       </div>
     </div>
-    
+
     <span class="status-indicator" v-if="status === 'pending'">
       <svg viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+        />
       </svg>
     </span>
-    
+
     <span class="menu-dots" v-else>
       <svg viewBox="0 0 24 24">
         <circle cx="12" cy="5" r="1.5" />
@@ -55,31 +63,35 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed } from "vue";
 
 const props = defineProps({
   item: {
     type: Object,
-    required: true
+    required: true,
   },
   status: {
     type: String,
-    default: 'uploaded', // 'uploaded', 'pending', 'uploading'
-    validator: (value) => ['uploaded', 'pending', 'uploading'].includes(value)
+    default: "uploaded", // 'uploaded', 'pending', 'uploading'
+    validator: (value) => ["uploaded", "pending", "uploading"].includes(value),
   },
   progress: {
     type: Number,
-    default: 0
-  }
+    default: 0,
+  },
 });
 
-defineEmits(['click']);
+defineEmits(["click"]);
 
 const displayName = computed(() => {
-  return props.item.metadata?.folder_name || 
-         props.item.metadata?.filename || 
-         props.item.name || 
-         "Sans nom";
+  console.log("Item metadata:", item);
+
+  return (
+    props.item.metadata?.folder_name ||
+    props.item.metadata?.filename ||
+    props.item.name ||
+    "Sans nom"
+  );
 });
 </script>
 
@@ -152,8 +164,12 @@ const displayName = computed(() => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .file-info {
