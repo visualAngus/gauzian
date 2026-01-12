@@ -894,9 +894,9 @@ onMounted(() => {
 
         // est ce qu'il y a un item sous le curseur ?
         let element_under_cursor = document.elementFromPoint(e.clientX, e.clientY);
-        if (element_under_cursor && element_under_cursor.closest(".file-item")) {
+        if (element_under_cursor && element_under_cursor.closest(".item")) {
             // on log l'item en question
-            let item_group = element_under_cursor.closest(".file-item").dataset.itemGroup;
+            let item_group = element_under_cursor.closest(".item").dataset.itemGroup;
             console.log("Right click on item in group:", item_group);
         }
 
