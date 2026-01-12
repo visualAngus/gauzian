@@ -351,6 +351,9 @@ const uploadFile = async (file, file_id, dataKey) => {
     console.log(
       `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name}`
     );
+    // Met à jour la progression
+    const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
+    file.progress = progress;
   };
 
   // Gestionnaire de file d'attente (Pool)
@@ -367,8 +370,6 @@ const uploadFile = async (file, file_id, dataKey) => {
         await uploadChunkByIndex(index);
       } catch (err) {
         console.error(`Echec chunk ${index}`, err);
-        // Optionnel : remettre dans la queue pour réessayer
-        // queue.push(index);
       }
     }
   };
