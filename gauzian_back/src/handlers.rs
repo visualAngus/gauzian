@@ -220,6 +220,9 @@ pub async fn initialize_file_handler(
     // Vous pouvez accéder aux headers via `headers` et au body via `body`
     let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, folder_id, &body.encrypted_file_key).await {
         Ok(id) => id,
+        Err(sqlx::Error::RowNotFound) => {
+            return ApiResponse::not_found("Folder not found").into_response();
+        }
         Err(e) => {
             tracing::error!("Failed to initialize file in DB: {:?}", e);
             return ApiResponse::internal_error("Failed to initialize file").into_response();
