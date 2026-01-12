@@ -1,4 +1,11 @@
 <template>
+
+    <div id="div_pannel_right_click">
+        <a @click="createFolder()">Nouveau dossier</a>
+        <a @click="deleteItem()">Supprimer</a>
+    </div>
+
+
   <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
     <h3>Upload/Download Panel</h3>
     <div
@@ -879,10 +886,33 @@ const setIsOver = (state) => {
   isOver.value = state;
 };
 
-const onNativeChange = (event) => {
-  const files = event.target.files;
-  console.log("input files", files);
-};
+// listener sur le click droit pour gérer le pannel
+onMounted(() => {
+    let pannel_click = document.getElementById("div_pannel_right_click");
+    window.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+
+        // est ce qu'il y a un item sous le curseur ?
+        let element_under_cursor = document.elementFromPoint(e.clientX, e.clientY);
+        if (element_under_cursor && element_under_cursor.closest(".file-item")) {
+            // on log l'item en question
+            let item_group = element_under_cursor.closest(".file-item").dataset.itemGroup;
+            console.log("Right click on item in group:", item_group);
+        }
+
+        pannel_click.style.display = "flex";
+        pannel_click.style.top = e.pageY + "px";
+        pannel_click.style.left = e.pageX + "px";
+    });
+    window.addEventListener("click", (e) => {
+        let pannel_click = document.getElementById("div_pannel_right_click");
+        if (pannel_click.style.display == "flex") {
+            pannel_click.style.display = "none";
+        }
+    });
+});
+
+
 
 // Récupérer ou créer les dossiers depuis le chemin du fichier
 const getOrCreateFolderHierarchy = async (
@@ -1321,4 +1351,43 @@ main {
 .btn_cancel:hover svg {
   fill: #ff4444;
 }
+
+
+/* div_pannel_right_click */
+
+#div_pannel_right_click{
+    position: absolute;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    width: 200px;
+
+    padding: 5px 8px;
+
+    display: none;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 5px;
+}
+
+#div_pannel_right_click a{
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #333333;
+    font-size: 14px;
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+}
+#div_pannel_right_click a:hover{
+    background-color: #f0f0f0;
+}
+
 </style>
