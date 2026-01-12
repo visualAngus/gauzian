@@ -192,7 +192,7 @@ pub struct InitializeFileRequest {
     size: i64,
     encrypted_metadata: String,
     mime_type: String,
-    folder_id: Option<Uuid>,
+    folder_id: String,
     encrypted_file_key: String,
 }
 
@@ -202,8 +202,23 @@ pub async fn initialize_file_handler(
     _headers: HeaderMap,
     Json(body): Json<InitializeFileRequest>,
 ) -> Response {
+    let folder_id = {
+        let s = body.folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid parent_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
     // Vous pouvez accéder aux headers via `headers` et au body via `body`
-    let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, body.folder_id, &body.encrypted_file_key).await {
+    let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, folder_id, &body.encrypted_file_key).await {
         Ok(id) => id,
         Err(e) => {
             tracing::error!("Failed to initialize file in DB: {:?}", e);
