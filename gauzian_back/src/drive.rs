@@ -389,20 +389,34 @@ pub async fn abort_file_upload(
         })?;
     }
 
+    // Delete s3_keys
     sqlx::query(
-        "
-        DELETE FROM s3_keys WHERE file_id = $1 AND file_id IN (
+        "DELETE FROM s3_keys WHERE file_id = $1 AND file_id IN (
             SELECT file_id FROM file_access WHERE user_id = $2
-        );
-        DELETE FROM file_access WHERE file_id = $1 AND user_id = $2;
-        DELETE FROM files WHERE id = $1 AND id IN (
-            SELECT file_id FROM file_access WHERE user_id = $2
-        );
-        "
+        )"
     )
     .bind(file_id)
     .bind(user_id)
     .execute(db_pool)
     .await?;
+
+    // Delete file_access
+    sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
+        .bind(file_id)
+        .bind(user_id)
+        .execute(db_pool)
+        .await?;
+
+    // Delete files
+    sqlx::query(
+        "DELETE FROM files WHERE id = $1 AND id IN (
+            SELECT file_id FROM file_access WHERE user_id = $2
+        )"
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .execute(db_pool)
+    .await?;
+
     Ok(())
 }
