@@ -896,8 +896,8 @@ onMounted(() => {
         let element_under_cursor = document.elementFromPoint(e.clientX, e.clientY);
         if (element_under_cursor && element_under_cursor.closest(".item")) {
             // on log l'item en question
-            let item_group = element_under_cursor.closest(".item").dataset.itemGroup;
-            console.log("Right click on item in group:", item_group);
+            let item = element_under_cursor.closest(".item");
+            console.log("Right click on item in group:", item);
         }
 
         pannel_click.style.display = "flex";
