@@ -2,7 +2,7 @@
 
     <div id="div_pannel_right_click" v-if="rightClikedItem">
         <a @click="createFolder()" v-if="rightClikedItem.dataset.itemType == 'folder'">Nouveau dossier</a>
-        <a @click="deleteItem()" v-if="rightClikedItem.dataset.itemType == 'file' or rightClikedItem.dataset.itemType == 'folder'">Supprimer</a>
+        <a @click="deleteItem()" v-if="rightClikedItem.dataset.itemType == 'file' || rightClikedItem.dataset.itemType == 'folder'">Supprimer</a>
         
     </div>
 
