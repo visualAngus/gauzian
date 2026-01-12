@@ -11,8 +11,9 @@
           <div class="div_barre">
             <div
               class="barre_progress"
-              :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"
+              :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%', transition: 'width 0.5s ease' }"
             ></div>
+            <span v-if="fileProgressMap[file._uploadId] < 100" class="loading-spinner"></span>
           </div>
         </div>
         <div class="div_cancel">
@@ -108,80 +109,35 @@
           onOverChange: setIsOver,
         }"
       >
-        <div
-          v-for="(item, index) in liste_decrypted_items"
-          :key="item.type + (item.folder_id || item.file_id) + index"
-          class="item"
-          @click="click_on_item(item)"
-        >
-          <span class="icon-wrapper">
-            <svg
-              v-if="item.type === 'folder'"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path
-                d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
-              ></path>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
-              ></path>
-            </svg>
-          </span>
-          <span class="filename">
-            {{
-              item.metadata?.folder_name ||
-              item.metadata?.filename ||
-              "Sans nom"
-            }}
-          </span>
-          <span class="menu-dots">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="5" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
-            </svg>
-          </span>
-        </div>
+        <TransitionGroup name="file-list" tag="div" class="file-grid">
+          <!-- Fichiers uploadés -->
+          <FileItem
+            v-for="item in liste_decrypted_items"
+            :key="'uploaded-' + (item.folder_id || item.file_id)"
+            :item="item"
+            status="uploaded"
+            @click="click_on_item(item)"
+          />
 
+          <!-- Fichiers en attente -->
+          <FileItem
+            v-for="(item, index) in listToUpload"
+            :key="'pending-' + item.name + '-' + index"
+            :item="item"
+            status="pending"
+            @click="click_on_item(item)"
+          />
 
-        <div
-          v-for="(item, index) in listToUpload"
-          :key="item.type + (item.name) + index"
-          class="item pending"
-          @click="click_on_item(item)"
-        >
-          <span class="icon-wrapper">
-            <svg
-              v-if="item.type === 'folder'"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path
-                d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
-              ></path>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
-              ></path>
-            </svg>
-          </span>
-          <span class="filename">
-            {{
-                item.name || "Sans nom"
-            }}
-          </span>
-          <span class="menu-dots">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="5" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
-            </svg>
-          </span>
-        </div>
+          <!-- Fichiers en cours d'upload -->
+          <FileItem
+            v-for="item in listUploadInProgress"
+            :key="'uploading-' + item._uploadId"
+            :item="item"
+            status="uploading"
+            :progress="fileProgressMap[item._uploadId] || 0"
+            @click="click_on_item(item)"
+          />
+        </TransitionGroup>
       </div>
     </div>
   </main>
@@ -192,6 +148,7 @@ import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 import { watch } from "vue";
 import dropzone from "~/directives/dropzone";
+import FileItem from "~/components/FileItem.vue";
 
 const vDropzone = dropzone;
 definePageMeta({
@@ -1014,14 +971,17 @@ main {
 
 .section_items {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  /* gestion de la hauteur des ligne */
-  grid-auto-rows: 60px;
-  gap: 15px;
   width: 100%;
   height: 100%;
   border-radius: 25px;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-auto-rows: 60px;
+  gap: 15px;
+  width: 100%;
 }
 
 .section_items.is-over {
@@ -1043,92 +1003,25 @@ main {
   pointer-events: none;
 }
 
-.item {
-  /* Dimensions et forme */
-  height: 48px;
-  border-radius: 12px; /* Les coins arrondis typiques de Material 3 */
-  background-color: #eff3f8; /* La couleur exacte bleu/gris clair de Drive */
-
-  /* Flexbox pour aligner icone - texte - menu */
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  padding: 0 12px;
-
-  /* Transition douce pour le survol */
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  cursor: pointer;
-  user-select: none; /* Empêche de sélectionner le texte comme du Word */
+/* Transitions pour les fichiers */
+.file-list-move,
+.file-list-enter-active,
+.file-list-leave-active {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Effet au survol de la souris */
-.item:hover {
-  background-color: #e2e7ed; /* Un peu plus sombre au survol */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+.file-list-enter-from {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
 }
 
-.pending {
-    opacity: 0.7;
-    animation: pulse 2s infinite;
+.file-list-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.95);
 }
 
-/* animation pour les fichier en attente */
-@keyframes pulse {
-  0% {
-    background-color: #eff3f8;
-  }
-  50% {
-    background-color: #e2e7ed;
-  }
-  100% {
-    background-color: #eff3f8;
-  }
-}
-
-
-/* Gestion des icônes principales (Dossier/Fichier) */
-.item .icon-wrapper svg {
-  width: 20px;
-  height: 20px;
-  color: #444746; /* Gris foncé Google */
-  margin-right: 12px;
-  flex-shrink: 0; /* Empêche l'icône de s'écraser */
-}
-
-/* Le texte (Nom du fichier) */
-.item .filename {
-  flex-grow: 1; /* Prend toute la place disponible au milieu */
-  font-size: 14px;
-  font-weight: 500;
-  color: #1f1f1f; /* Noir doux */
-  text-decoration: none;
-
-  /* Coupe le texte avec "..." si le nom est trop long */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Les trois petits points à droite */
-.item .menu-dots {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  margin-left: 8px;
-}
-
-.item .menu-dots svg {
-  width: 18px;
-  height: 18px;
-  color: #444746;
-  transform: rotate(90deg);
-}
-
-.item .menu-dots:hover {
-  background-color: rgba(0, 0, 0, 0.08);
+.file-list-leave-active {
+  position: absolute;
 }
 
 .breadcrumb {
