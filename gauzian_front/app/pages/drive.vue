@@ -329,8 +329,6 @@ const uploadFile = async (file, file_id, dataKey) => {
     const chunk = file.slice(start, end);
 
     const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
-    console.log(cipherText, iv);
-    // envoi du chunk au backend
     const body = {
       file_id: file_id,
       index: index,
@@ -348,11 +346,9 @@ const uploadFile = async (file, file_id, dataKey) => {
     if (!res.ok) {
       throw new Error(`Failed to upload chunk ${index}`);
     }
-    console.log(
-      `Uploaded chunk ${index + 1}/${totalChunks} for file ${file.name}`
-    );
     // Met à jour la progression
     const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
+    console.log(`File ${file.name} progress: ${progress}%`);
     file.progress = progress;
   };
 
@@ -617,6 +613,7 @@ const startUploads = async () => {
     listToUpload.value.length > 0
   ) {
     const file = listToUpload.value.shift();
+    file.progress = 0;
     listUploadInProgress.value.push(file);
 
     const [file_id, dataKey] = await initializeFileInDB(
