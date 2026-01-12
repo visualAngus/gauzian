@@ -18,7 +18,7 @@
         </div>
         <div class="div_cancel">
           <button class="btn_cancel"
-          @click="abort_upload(file.id)"
+          @click="abort_upload(file._uploadId)"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -240,6 +240,7 @@ const listUploadInProgress = ref([]);
 const listUploaded = ref([]);
 const simultaneousUploads = 3;
 const fileProgressMap = ref({});
+const abortControllers = ref({}); // Map file_id -> AbortController
 
 const activeFolderId = ref("root");
 const liste_decrypted_items = ref([]);
@@ -342,6 +343,10 @@ const uploadFile = async (file, file_id, dataKey) => {
   const chunkSize = 1 * 1024 * 1024; // 1 MB (réduit pour éviter stack overflow)
   const totalChunks = Math.ceil(file.size / chunkSize);
 
+  // Créer un AbortController pour ce fichier
+  const abortController = new AbortController();
+  abortControllers.value[file_id] = abortController;
+
   // Limite le nombre d'envois simultanés pour ne pas tuer le navigateur
   // 3 à 5 est généralement un bon chiffre.
   const CONCURRENCY_LIMIT = 3;
@@ -371,6 +376,7 @@ const uploadFile = async (file, file_id, dataKey) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: abortController.signal, // Ajouter le signal d'annulation
     });
     if (!res.ok) {
       throw new Error(`Failed to upload chunk ${index}`);
@@ -401,21 +407,31 @@ const uploadFile = async (file, file_id, dataKey) => {
       try {
         await uploadChunkByIndex(index);
       } catch (err) {
+        // Si l'erreur est une annulation, on arrête le worker
+        if (err.name === 'AbortError') {
+          console.log(`Upload annulé pour le fichier ${file.name}`);
+          return; // Sortir du worker
+        }
         console.error(`Echec chunk ${index}`, err);
       }
     }
   };
 
-  // On lance 'CONCURRENCY_LIMIT' workers en parallèle
-  const workers = [];
-  for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, totalChunks); i++) {
-    workers.push(worker());
+  try {
+    // On lance 'CONCURRENCY_LIMIT' workers en parallèle
+    const workers = [];
+    for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, totalChunks); i++) {
+      workers.push(worker());
+    }
+
+    // On attend que tous les workers aient fini
+    await Promise.all(workers);
+
+    console.log(`Finished uploading file: ${file.name}`);
+  } finally {
+    // Nettoyer l'AbortController
+    delete abortControllers.value[file_id];
   }
-
-  // On attend que tous les workers aient fini
-  await Promise.all(workers);
-
-  console.log(`Finished uploading file: ${file.name}`);
 };
 
 // use effect on listToUpload to start upload
@@ -663,39 +679,70 @@ const startUploads = async () => {
     fileProgressMap.value[file_id] = 0;
     file._uploadId = file_id;
 
-    uploadFile(file, file_id, dataKey).then(async () => {
-      listUploadInProgress.value = listUploadInProgress.value.filter(
-        (f) => f !== file
-      );
-      listUploaded.value.push(file);
+    uploadFile(file, file_id, dataKey)
+      .then(async () => {
+        listUploadInProgress.value = listUploadInProgress.value.filter(
+          (f) => f !== file
+        );
+        listUploaded.value.push(file);
 
-      // Nettoyer la progression du fichier terminé
-      delete fileProgressMap.value[file_id];
+        // Nettoyer la progression du fichier terminé
+        delete fileProgressMap.value[file_id];
 
-      // Si c'est le dernier fichier, recharger la liste
-      if (
-        listUploadInProgress.value.length === 0 &&
-        listToUpload.value.length === 0
-      ) {
-        await loadPath();
-      }
-      console.log(listUploadInProgress.value);
-      startUploads();
-    });
+        // Si c'est le dernier fichier, recharger la liste
+        if (
+          listUploadInProgress.value.length === 0 &&
+          listToUpload.value.length === 0
+        ) {
+          await loadPath();
+        }
+        console.log(listUploadInProgress.value);
+        startUploads();
+      })
+      .catch((err) => {
+        // Gérer les erreurs d'upload (y compris l'annulation)
+        if (err.name === 'AbortError') {
+          console.log(`Upload annulé pour ${file.name}`);
+        } else {
+          console.error(`Erreur upload ${file.name}:`, err);
+        }
+        // Nettoyer même en cas d'erreur
+        listUploadInProgress.value = listUploadInProgress.value.filter(
+          (f) => f !== file
+        );
+        delete fileProgressMap.value[file_id];
+        startUploads();
+      });
   }
 };
 
 const abort_upload = (file_id) => {
-  // Trouver le fichier dans la liste des uploads en cours
+  console.log(`Attempting to abort upload for file ID: ${file_id}`);
+  
+  // 1. Annuler les requêtes en cours via AbortController
+  const abortController = abortControllers.value[file_id];
+  if (abortController) {
+    abortController.abort();
+    delete abortControllers.value[file_id];
+    console.log(`AbortController signaled for file ID ${file_id}`);
+  }
+
+  // 2. Retirer le fichier de la liste des uploads en cours
   const fileIndex = listUploadInProgress.value.findIndex(
     (f) => f._uploadId === file_id
   );
   if (fileIndex !== -1) {
-    // Retirer le fichier de la liste des uploads en cours
     listUploadInProgress.value.splice(fileIndex, 1);
-    // Optionnel: Ajouter une logique pour informer le serveur d'annuler l'upload si nécessaire
-    console.log(`Upload for file ID ${file_id} has been aborted.`);
+    console.log(`Removed file from upload queue`);
   }
+
+  // 3. Nettoyer la progression
+  delete fileProgressMap.value[file_id];
+
+  // 4. Relancer les uploads pour passer au fichier suivant
+  startUploads();
+  
+  console.log(`Upload for file ID ${file_id} has been aborted.`);
 };
 
 
