@@ -494,6 +494,9 @@ pub async fn delete_file_handler(
 ) -> Response {
     match drive::delete_file(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("File/Folder deleted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found").into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to delete file/folder: {:?}", e); 
             ApiResponse::internal_error("Failed to delete file/folder").into_response()
