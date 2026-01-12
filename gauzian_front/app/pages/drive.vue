@@ -30,7 +30,6 @@
         </div>
       </div>
     </div>
-  </div>
 
   <main>
     <div class="div_left_section">
