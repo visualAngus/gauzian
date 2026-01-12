@@ -1,5 +1,5 @@
 <template>
-  <div class="div_pannel_up_dow_load">
+  <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
     <h3>Upload/Download Panel</h3>
     <div class="div_liste_fichier">
       <div
@@ -17,7 +17,9 @@
           </div>
         </div>
         <div class="div_cancel">
-          <button class="btn_cancel">
+          <button class="btn_cancel"
+          @click="abort_upload(file.id)"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
@@ -682,6 +684,20 @@ const startUploads = async () => {
     });
   }
 };
+
+const abort_upload = (file_id) => {
+  // Trouver le fichier dans la liste des uploads en cours
+  const fileIndex = listUploadInProgress.value.findIndex(
+    (f) => f._uploadId === file_id
+  );
+  if (fileIndex !== -1) {
+    // Retirer le fichier de la liste des uploads en cours
+    listUploadInProgress.value.splice(fileIndex, 1);
+    // Optionnel: Ajouter une logique pour informer le serveur d'annuler l'upload si nécessaire
+    console.log(`Upload for file ID ${file_id} has been aborted.`);
+  }
+};
+
 
 const fileInput = ref(null);
 const isOver = ref(false);
