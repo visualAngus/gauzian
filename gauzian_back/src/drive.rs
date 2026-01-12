@@ -369,17 +369,39 @@ pub async fn abort_file_upload(
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
-        "
-        SELECT s3_key 
-        FROM s3_keys 
-        WHERE file_id = $1
-          AND file_id IN (SELECT file_id FROM file_access WHERE user_id = $2)
-        ",
+    let mut tx = db_pool.begin().await?;
+
+    // Lock all access rows for this file to prevent races (share/unshare/delete).
+    let access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "SELECT user_id FROM file_access WHERE file_id = $1 FOR UPDATE",
     )
     .bind(file_id)
-    .bind(user_id)
-    .fetch_all(db_pool)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // Must have at least the caller's access.
+    if !access_users.iter().any(|u| *u == user_id) {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    let other_users_still_have_access = access_users.iter().any(|u| *u != user_id);
+    if other_users_still_have_access {
+        // Abort for this user only: remove their access, keep file for others.
+        sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
+            .bind(file_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        return Ok(());
+    }
+
+    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
+        "SELECT s3_key FROM s3_keys WHERE file_id = $1",
+    )
+    .bind(file_id)
+    .fetch_all(&mut *tx)
     .await?;
 
     // Supprimer les entrées dans minio
@@ -389,35 +411,23 @@ pub async fn abort_file_upload(
         })?;
     }
 
-    // Delete s3_keys
-    sqlx::query(
-        "DELETE FROM s3_keys WHERE file_id = $1 AND file_id IN (
-            SELECT file_id FROM file_access WHERE user_id = $2
-        )"
-    )
-    .bind(file_id)
-    .bind(user_id)
-    .execute(db_pool)
-    .await?;
-
-    // Delete file_access
-    sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
+    // Delete DB rows (order matters because of FK constraints)
+    sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
         .bind(file_id)
-        .bind(user_id)
-        .execute(db_pool)
+        .execute(&mut *tx)
         .await?;
 
-    // Delete files
-    sqlx::query(
-        "DELETE FROM files WHERE id = $1 AND id IN (
-            SELECT file_id FROM file_access WHERE user_id = $2
-        )"
-    )
-    .bind(file_id)
-    .bind(user_id)
-    .execute(db_pool)
-    .await?;
+    sqlx::query("DELETE FROM file_access WHERE file_id = $1")
+        .bind(file_id)
+        .execute(&mut *tx)
+        .await?;
 
+    sqlx::query("DELETE FROM files WHERE id = $1")
+        .bind(file_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
     Ok(())
 }
 
@@ -428,17 +438,40 @@ pub async fn delete_file(
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
-        "
-        SELECT s3_key 
-        FROM s3_keys 
-        WHERE file_id = $1
-          AND file_id IN (SELECT file_id FROM file_access WHERE user_id = $2)
-        ",
+    let mut tx = db_pool.begin().await?;
+
+    // Lock all access rows for this file to prevent races (share/unshare/delete).
+    let access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "SELECT user_id FROM file_access WHERE file_id = $1 FOR UPDATE",
     )
     .bind(file_id)
-    .bind(user_id)
-    .fetch_all(db_pool)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // Must have at least the caller's access.
+    if !access_users.iter().any(|u| *u == user_id) {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    let other_users_still_have_access = access_users.iter().any(|u| *u != user_id);
+    if other_users_still_have_access {
+        // The file is shared: remove only the caller's access.
+        sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
+            .bind(file_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        return Ok(());
+    }
+
+    // Only this user has access: delete everything.
+    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
+        "SELECT s3_key FROM s3_keys WHERE file_id = $1",
+    )
+    .bind(file_id)
+    .fetch_all(&mut *tx)
     .await?;
 
     // Supprimer les entrées dans minio
@@ -448,34 +481,22 @@ pub async fn delete_file(
         })?;
     }
 
-    // Delete s3_keys
-    sqlx::query(
-        "DELETE FROM s3_keys WHERE file_id = $1 AND file_id IN (
-            SELECT file_id FROM file_access WHERE user_id = $2
-        )"
-    )
-    .bind(file_id)
-    .bind(user_id)
-    .execute(db_pool)
-    .await?;
-
-    // Delete file_access
-    sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
+    // Delete DB rows (order matters because of FK constraints)
+    sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
         .bind(file_id)
-        .bind(user_id)
-        .execute(db_pool)
+        .execute(&mut *tx)
         .await?;
 
-    // Delete files
-    sqlx::query(
-        "DELETE FROM files WHERE id = $1 AND id IN (
-            SELECT file_id FROM file_access WHERE user_id = $2
-        )"
-    )
-    .bind(file_id)
-    .bind(user_id)
-    .execute(db_pool)
-    .await?;
+    sqlx::query("DELETE FROM file_access WHERE file_id = $1")
+        .bind(file_id)
+        .execute(&mut *tx)
+        .await?;
 
+    sqlx::query("DELETE FROM files WHERE id = $1")
+        .bind(file_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
     Ok(())
 }
