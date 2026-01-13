@@ -8,7 +8,6 @@
 
     :data-item-type="item.type"
     :data-item-id="item.file_id || item.folder_id"
-    :data-item-encrypted-metadata="item.encrypted_metadata"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
     @click="$emit('click', item)"
   >
