@@ -792,7 +792,7 @@ const createFolder = async () => {
   // il faut reussir a seclection le nouveau dossier créé pour le renommer directement
   await nextTick();
   const id = resData.folder_id;
-  const newFolderElement = document.querySelector(`.item[data-folder-id="${id}"]`);
+  const newFolderElement = document.querySelector(`.item[data-item-id="${id}"]`);
 
   console.log("New folder element:", newFolderElement);
   if (newFolderElement) {
