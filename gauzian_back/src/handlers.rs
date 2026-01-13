@@ -524,3 +524,47 @@ pub async fn delete_folder_handler(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct RenameFileRequest {
+    file_id: Uuid,
+    new_encrypted_metadata: String,
+}
+pub async fn rename_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<RenameFileRequest>,
+) -> Response {
+    match drive::rename_file(&state.db_pool, claims.id, body.file_id, &body.new_encrypted_metadata).await {
+        Ok(_) => ApiResponse::ok("File renamed successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to rename file: {:?}", e);
+            ApiResponse::internal_error("Failed to rename file").into_response()
+        }
+    }
+}   
+
+#[derive(Deserialize)]
+pub struct RenameFolderRequest {
+    folder_id: Uuid,
+    new_encrypted_metadata: String,
+}
+pub async fn rename_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<RenameFolderRequest>,
+) -> Response {
+    match drive::rename_folder(&state.db_pool, claims.id, body.folder_id, &body.new_encrypted_metadata).await {
+        Ok(_) => ApiResponse::ok("Folder renamed successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found").into_response()
+        }
+        Err(e) => {     
+            tracing::error!("Failed to rename folder: {:?}", e);
+            ApiResponse::internal_error("Failed to rename folder").into_response()
+        }
+    }
+}

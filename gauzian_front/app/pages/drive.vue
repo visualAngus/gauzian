@@ -1131,6 +1131,9 @@ const renameItem = async (item) => {
         return;
     }
 
+    // enlever l'encrypted_data_key des metadata pour ne pas le modifier
+    delete metadata.encrypted_data_key;
+
     // selectionné le span de classe filename ou foldername
     const nameElement = item.querySelector(".filename, .foldername");
     if (!nameElement) {
@@ -1164,13 +1167,25 @@ const renameItem = async (item) => {
         decryptkey
       );
 
-      // pour le debug 
-      const decryptedMetadataStr = await decryptSimpleDataWithDataKey(
-        encryptedMetadata,
-        decryptkey
-      );
-      console.log("Decrypted metadata after re-encryption:", decryptedMetadataStr);
-
+      const endpoint =
+        itemType === "file"
+          ? `${API_URL}/drive/rename_file`
+          : `${API_URL}/drive/rename_folder`;
+      const body =
+        itemType === "file"
+          ? { file_id: itemId, encrypted_metadata: encryptedMetadata }
+          : { folder_id: itemId, encrypted_metadata: encryptedMetadata };
+      const res = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to rename item"); 
+      }
 
 
     }
