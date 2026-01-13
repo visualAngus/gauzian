@@ -86,7 +86,24 @@ const props = defineProps({
   },
 });
 
-defineEmits(["click", "move"]);
+defineEmits(["click", "move-start","moving","move-end"]);
+
+  const StartTrackingMove = (event) => {
+    emit("move-start", { item: props.item, originalEvent: event });
+    const onMouseMove = (e) => {
+      emit("moving", { item: props.item, originalEvent: e });
+    };
+    const onMouseUp = (e) => {
+      emit("move-end", { item: props.item, originalEvent: e });
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+
+
 const displayName = computed(() => {
   // console.log("Item metadata:", props.item);
 
