@@ -1289,44 +1289,32 @@ body {
 /* Base commune */
 .filename[contenteditable="true"],
 .foldername[contenteditable="true"] {
-  /* Firefox : Barre fine et transparente par défaut */
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-  transition: scrollbar-color 0.3s ease;
-  overflow-x: auto; /* Assure le scroll horizontal */
-  white-space: nowrap;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
 }
 
-/* Apparition au survol (Firefox) */
-.filename[contenteditable="true"]:hover,
-.foldername[contenteditable="true"]:hover {
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-}
-
-/* --- Webkit (Chrome, Edge, Safari) --- */
+/* --- Webkit --- */
 
 .filename[contenteditable="true"]::-webkit-scrollbar,
 .foldername[contenteditable="true"]::-webkit-scrollbar {
-  height: 4px; /* Un peu plus haut pour l'effet "pilule" */
+  height: 3px; /* Très fin */
 }
 
 .filename[contenteditable="true"]::-webkit-scrollbar-track,
 .foldername[contenteditable="true"]::-webkit-scrollbar-track {
-  background: transparent; /* Fond invisible */
+  background: transparent;
 }
 
 .filename[contenteditable="true"]::-webkit-scrollbar-thumb,
 .foldername[contenteditable="true"]::-webkit-scrollbar-thumb {
-  background-color: transparent; /* Invisible par défaut */
-  border-radius: 10px; /* Arrondi total */
-  border: 1px solid transparent; /* Astuce pour créer de l'espace autour si besoin */
-  background-clip: content-box;
+  background: rgba(0, 0, 0, 0.15); /* Couleur subtile */
+  border-radius: 10px; /* Bords ronds */
 }
 
-/* Apparition au survol de l'élément parent */
-.filename[contenteditable="true"]:hover::-webkit-scrollbar-thumb,
-.foldername[contenteditable="true"]:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2); /* Gris discret */
+/* Un peu plus foncé quand on attrape la barre */
+.filename[contenteditable="true"]::-webkit-scrollbar-thumb:hover,
+.foldername[contenteditable="true"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 
