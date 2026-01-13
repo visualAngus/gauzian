@@ -57,6 +57,8 @@
 										</svg>
 									</button>
 								</div>
+								<div id="pass_word_msg">
+								</div>
 
 								<button type="submit" :disabled="loading">
 									{{ loading ? "Connexion..." : "S'identifier" }}
@@ -84,6 +86,7 @@
 										:type="showRegisterPassword ? 'text' : 'password'" 
 										id="register_password" 
 										required 
+										@input="changement"
 									/>
 									<button
 										type="button"
@@ -101,6 +104,10 @@
 											<path d="M3 3l18 18" />
 										</svg>
 									</button>
+								</div>
+
+								<div class="pass_word_msg" :style="{ color: passwordMsgColor }">
+									{{ passwordMsg }}
 								</div>
 
 								<button type="submit" :disabled="loading">
@@ -143,6 +150,39 @@ const loginForm = ref({ email: "", password: "" });
 const registerForm = ref({ username: "", email: "", password: "" });
 const showLoginPassword = ref(false);
 const showRegisterPassword = ref(false);
+const passwordMsg = ref("");
+const passwordMsgColor = ref("");
+
+
+const changement = () => {
+	let password = registerForm.value.password;
+
+	if (password.length === 0) {
+		passwordMsg.value = "";
+		passwordMsgColor.value = "";
+		return;
+	}
+
+	const hasMinLength = password.length >= 10;
+	const hasUpperCase = /[A-Z]/.test(password);
+	const hasNumber = /[0-9]/.test(password);
+	const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+	const errors = [];
+	if (!hasMinLength) errors.push("10 caractères minimum");
+	if (!hasUpperCase) errors.push("1 majuscule");
+	if (!hasNumber) errors.push("1 chiffre");
+	if (!hasSpecialChar) errors.push("1 caractère spécial");
+
+	if (errors.length > 0) {
+		passwordMsgColor.value = "red";
+		passwordMsg.value = `Manquant : ${errors.join(", ")}`;
+	} else {
+		passwordMsgColor.value = "green";
+		passwordMsg.value = "✓ Mot de passe valide";
+	}
+};
+
 
 const handleLogin = async () => {
   loading.value = true;
@@ -362,9 +402,9 @@ h1 {
 
 
 main {
-	width: 100vw;
+	width: calc(100vw - 25px);
 	min-height: 200px;
-	height: calc(100vh - 88px);
+	height: calc(100vh - 113px);
 	display: flex;
 	flex-direction: row;
 }
@@ -515,4 +555,18 @@ button:disabled {
 	background-color: #aaaaaa;
 	cursor: not-allowed;
 }
+
+.pass_word_msg{
+	min-height: 20px;
+	width: 100%;
+	padding: 2px 5px;
+	padding-top: 5px;
+	font-family: "Montserrat", sans-serif;
+	font-size: 13px;
+	text-align: center;
+	line-height: 1.3;
+}
+
+
+
 </style>
