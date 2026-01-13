@@ -1285,6 +1285,35 @@ body {
   font-family: "Roboto", "Segoe UI", sans-serif; /* Police style Google */
   background-color: #fff;
 }
+
+/* Personnalisation de la scrollbar pour les éléments en édition */
+.filename[contenteditable="true"]::-webkit-scrollbar,
+.foldername[contenteditable="true"]::-webkit-scrollbar {
+  height: 3px;
+}
+
+.filename[contenteditable="true"]::-webkit-scrollbar-track,
+.foldername[contenteditable="true"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.filename[contenteditable="true"]::-webkit-scrollbar-thumb,
+.foldername[contenteditable="true"]::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 2px;
+}
+
+.filename[contenteditable="true"]::-webkit-scrollbar-thumb:hover,
+.foldername[contenteditable="true"]::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Pour Firefox */
+.filename[contenteditable="true"],
+.foldername[contenteditable="true"] {
+  scrollbar-width: thin;
+  scrollbar-color: #888 transparent;
+}
 main {
   position: relative;
   display: flex;
