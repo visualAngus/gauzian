@@ -75,7 +75,7 @@
       <!-- multiple files -->
 
       <div class="breadcrumb">
-        <div class="breadcrumb-item" @click="gohome()">
+        <div class="breadcrumb-item" :data-item-id="'root'" @click="gohome()">
           <svg
             class="home-icon"
             xmlns="http://www.w3.org/2000/svg"
@@ -1324,15 +1324,46 @@ const handleDragEnd = async (data) => {
   const elementUnderMouse = document.elementFromPoint(data.x, data.y);
 
   const breadcrumbElement = elementUnderMouse?.closest('.breadcrumb-item');
+  const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
   if (breadcrumbElement) {
     console.log("Drag ended over breadcrumb:", breadcrumbElement);
-    const targetFolderId = breadcrumbElement.dataset?.folderId;
-    console.log(targetFolderId);
+    const targetFolderId = breadcrumbElement.dataset?.dataItemId;
+    
+    try {
+      // Appel API pour déplacer l'item
+      const endpoint = itemType === 'file' 
+        ? `${API_URL}/drive/move_file`
+        : `${API_URL}/drive/move_folder`;
+      
+      const body = itemType === 'file'
+        ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+        : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        console.log("Item moved successfully");
+        // Recharger le dossier courant
+        await loadPath();
+      } else {
+        console.error("Failed to move item");
+        alert("Erreur lors du déplacement de l'élément");
+      }
+    } catch (error) {
+      console.error("Error moving item:", error);
+      alert("Erreur lors du déplacement de l'élément");
+    }
+
+
   }
-
-
-  const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
-  if (targetFolderElement) {
+  else if (targetFolderElement) {
     console.log("Drag ended over element:", targetFolderElement);
     const targetFolderId = targetFolderElement.dataset?.itemId;
     const itemType = activeItem.value.type;
