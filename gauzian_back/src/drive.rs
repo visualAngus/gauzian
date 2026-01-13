@@ -763,3 +763,97 @@ pub async fn rename_folder(
 
     Ok(())
 }
+
+pub async fn move_file(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    new_folder_id: Option<Uuid>,
+) -> Result<(), sqlx::Error> {
+    // Verify user has access to the file
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // If new_folder_id is Some, verify user has access to the target folder
+    if let Some(folder_id) = new_folder_id {
+        let has_folder_access = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+        )
+        .bind(folder_id)
+        .bind(user_id)
+        .fetch_one(db_pool)
+        .await?;
+
+        if !has_folder_access {
+            return Err(sqlx::Error::RowNotFound);
+        }
+    }
+
+    // Update the folder_id in file_access
+    sqlx::query(
+        "UPDATE file_access SET folder_id = $1 WHERE file_id = $2 AND user_id = $3",
+    )
+    .bind(new_folder_id)
+    .bind(file_id)
+    .bind(user_id)
+    .execute(db_pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn move_folder(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    new_parent_folder_id: Option<Uuid>,
+) -> Result<(), sqlx::Error> {
+    // Verify user has access to the folder
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // If new_parent_folder_id is Some, verify user has access to the target parent folder
+    if let Some(parent_folder_id) = new_parent_folder_id {
+        let has_parent_access = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+        )
+        .bind(parent_folder_id)
+        .bind(user_id)
+        .fetch_one(db_pool)
+        .await?;
+
+        if !has_parent_access {
+            return Err(sqlx::Error::RowNotFound);
+        }
+    }
+
+    // Update the parent_folder_id in folders
+    sqlx::query(
+        "UPDATE folders SET parent_folder_id = $1, is_root = $2 WHERE id = $3",
+    )
+    .bind(new_parent_folder_id)
+    .bind(new_parent_folder_id.is_none())
+    .bind(folder_id)
+    .execute(db_pool)
+    .await?;
+
+    Ok(())
+}

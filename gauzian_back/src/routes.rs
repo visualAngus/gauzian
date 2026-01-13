@@ -21,6 +21,8 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/delete_folder", post(handlers::delete_folder_handler))
         .route("/drive/rename_file", post(handlers::rename_file_handler))
         .route("/drive/rename_folder", post(handlers::rename_folder_handler))
+        .route("/drive/move_file", post(handlers::move_file_handler))
+        .route("/drive/move_folder", post(handlers::move_folder_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

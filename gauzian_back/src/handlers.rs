@@ -568,3 +568,79 @@ pub async fn rename_folder_handler(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct MoveFileRequest {
+    file_id: Uuid,
+    new_parent_folder_id: String,
+}
+pub async fn move_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<MoveFileRequest>,
+) -> Response { 
+    let new_parent_folder_id = {
+        let s = body.new_parent_folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid new_parent_folder_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    match drive::move_file(&state.db_pool, claims.id, body.file_id, new_parent_folder_id).await {
+        Ok(_) => ApiResponse::ok("File moved successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or target folder not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to move file: {:?}", e);
+            ApiResponse::internal_error("Failed to move file").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MoveFolderRequest {
+    folder_id: Uuid,
+    new_parent_folder_id: String,
+}
+pub async fn move_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<MoveFolderRequest>,
+) -> Response {
+    let new_parent_folder_id = {
+        let s = body.new_parent_folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid new_parent_folder_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };  
+
+    match drive::move_folder(&state.db_pool, claims.id, body.folder_id, new_parent_folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder moved successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or target folder not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to move folder: {:?}", e);
+            ApiResponse::internal_error("Failed to move folder").into_response()
+        }
+    }
+}
