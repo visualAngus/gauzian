@@ -88,7 +88,7 @@ const props = defineProps({
 defineEmits(["click"]);
 
 const displayName = computed(() => {
-  console.log("Item metadata:", props.item);
+  // console.log("Item metadata:", props.item);
 
   return (
     props.item.metadata?.folder_name ||
