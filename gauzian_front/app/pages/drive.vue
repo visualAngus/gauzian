@@ -141,6 +141,7 @@
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
+            @select="selectItem"
           />
 
           <!-- Fichiers en attente et en cours d'upload (avec clé stable) -->
@@ -155,6 +156,7 @@
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
+            @select="selectItem"
           />
         </TransitionGroup>
       </div>
@@ -278,6 +280,8 @@ const fileProgressMap = ref({});
 const abortControllers = ref({}); // Map file_id -> AbortController
 let fileIdCounter = 0; // Compteur pour générer des IDs uniques
 const rightClikedItem = ref(null);
+
+const selectedItem = ref(null);
 
 // Computed property pour combiner les fichiers en attente et en cours d'upload
 const pendingAndUploadingFiles = computed(() => {
@@ -1417,6 +1421,10 @@ const handleDragEnd = async (data) => {
   activeItem.value = null;
 };
 
+const selectItem = (item) => {
+  selectedItem.value = item;
+};
+
 // Style dynamique pour l'élément "fantôme" qui suit la souris
 const ghostStyle = computed(() => ({
   position: 'fixed',
@@ -1434,6 +1442,22 @@ watch(
   },
   { deep: true }
 );
+
+// watch sur selectedItem
+
+watch(selectedItem, (newItem) => {
+  if (newItem) {
+    console.log("Selected item changed:", newItem);
+
+    const allItems = document.querySelectorAll(".item");
+    allItems.forEach((item) => {
+      item.classList.remove("selected-item");
+    });
+
+    newItem.classList.add("selected-item");
+
+  }
+});
 
 // un watch sur activeFolderId pour recharger le path
 watch(activeFolderId, () => {
@@ -1872,4 +1896,7 @@ main {
   max-width: 200px;
 }
 
+.selected-item{
+  background-color: #d0e6ff !important;
+}
 </style>
