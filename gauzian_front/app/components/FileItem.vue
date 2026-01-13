@@ -10,9 +10,7 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
     @click="$emit('click', item)"
-    @mousedown="$emit('move-start', $event)"
-    @mousemove="$emit('moving', $event)"
-    @mouseup="$emit('move-end', $event)"
+    @mousedown="startDrag"
   >
     <span class="icon-wrapper">
       <svg
@@ -89,6 +87,25 @@ const props = defineProps({
 });
 
 defineEmits(["click", "move-start","moving","move-end"]);
+
+const emit = defineEmits(["click", "move-start","moving","move-end"]);
+
+const startDrag = (mouseDownEvent) => {
+  emit("move-start", { item: props.item, x: mouseDownEvent.clientX, y: mouseDownEvent.clientY, originalEvent: mouseDownEvent });
+  
+  const onMouseMove = (e) => {
+    emit("moving", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+  };
+  
+  const onMouseUp = (e) => {
+    emit("move-end", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
+  
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+};
 
   const StartTrackingMove = (event) => {
     emit("move-start", { item: props.item, originalEvent: event });
