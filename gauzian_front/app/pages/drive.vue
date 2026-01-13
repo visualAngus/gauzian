@@ -282,8 +282,8 @@ const full_path = ref([]);
 
 // displayedDriveItems dev test
 displayedDriveItems.value = [
-  { type: "folder", folder_id: "folder1", metadata: { folder_name: "Dossier 1", encrypted_data_key: "example_encrypted_key_1" } },
-  { type: "file", file_id: "file1", metadata: { filename: "Fichier 1.txt", size: 1024, encrypted_data_key: "example_encrypted_key_2" } },
+  { type: "folder", folder_id: "folder1",metadata: { folder_name: "Dossier 1"} },
+  { type: "file", file_id: "file1",metadata: { filename: "Fichier 1.txt", size: 1024 } },
 ];
 
 
@@ -619,6 +619,7 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
+        metadata.encrypted_data_key = item.encrypted_data_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -700,6 +701,8 @@ const loadPath = async ({ outIn = false } = {}) => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
+          // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
+        metadata.encrypted_data_key = item.encrypted_data_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -722,6 +725,7 @@ const loadPath = async ({ outIn = false } = {}) => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
+        metadata.encrypted_data_key = item.encrypted_data_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -1114,11 +1118,11 @@ const deleteItem = async (item) => {
 const renameItem = async (item) => {
     const itemId = item.dataset?.itemId;
     const itemType = item.dataset?.itemType;
-    const itemMetadata = item.dataset?.itemMetadata ? JSON.parse(item.dataset?.itemMetadata) : {};
-    if (!itemMetadata){
-        console.error("Item metadata not found");
-        return;
-      }
+    const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
+    console.log(metadata);
+
+
+
     // selectionné le span de classe filename ou foldername
     const nameElement = item.querySelector(".filename, .foldername");
     if (!nameElement) {
@@ -1140,10 +1144,6 @@ const renameItem = async (item) => {
     const finishEditing = async () => {
       nameElement.contentEditable = "false";
       const newName = nameElement.textContent.trim();
-
-      const encrypted_data_key = itemMetadata.encrypted_data_key;
-      console.log("Encrypted data key:", encrypted_data_key);
-
 
     }
     nameElement.addEventListener("blur", finishEditing, { once: true });
