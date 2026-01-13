@@ -137,7 +137,9 @@
             status="uploaded"
             data-item-group="drive"
             @click="click_on_item(item)"
-            @move="onItemMove" 
+            @move-start="handleDragStart"
+            @moving="handleDragMove"
+            @move-end="handleDragEnd"
           />
 
           <!-- Fichiers en attente et en cours d'upload (avec clé stable) -->
@@ -149,7 +151,9 @@
             :progress="item._progress"
             data-item-group="queue"
             @click="click_on_item(item)"
-            @move="onItemMove" 
+            @move-start="handleDragStart"
+            @moving="handleDragMove"
+            @move-end="handleDragEnd"
           />
         </TransitionGroup>
       </div>
@@ -1264,10 +1268,38 @@ const renameItem = async (item) => {
         }
     });
 }
-const onItemMove = (item) => {
-  console.log("Le parent a reçu l'ordre de bouger :", item);
-  // Votre logique de drag and drop ici
+
+const isDragging = ref(false);
+const activeItem = ref(null);
+const mousePos = ref({ x: 0, y: 0 });
+
+
+const handleDragStart = (data) => {
+  isDragging.value = true;
+  activeItem.value = data.item;
+  mousePos.value = { x: data.x, y: data.y };
 };
+
+const handleDragMove = (data) => {
+  // Cette fonction est appelée à chaque pixel bougé par la souris
+  mousePos.value = { x: data.x, y: data.y };
+  console.log(`Position X: ${data.x}, Position Y: ${data.y}`);
+};
+
+const handleDragEnd = () => {
+  isDragging.value = false;
+  activeItem.value = null;
+};
+
+// Style dynamique pour l'élément "fantôme" qui suit la souris
+const ghostStyle = computed(() => ({
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  transform: `translate(${mousePos.value.x}px, ${mousePos.value.y}px)`,
+  pointerEvents: 'none', // Important pour ne pas bloquer les événements souris
+  zIndex: 9999
+}));
 
 watch(
   [listToUpload, listUploadInProgress],
