@@ -1170,49 +1170,86 @@ const renameItem = async (item) => {
       nameElement.contentEditable = "false";
       const newName = nameElement.textContent.trim();
 
-      const decryptkey = await decryptWithStoredPrivateKey(encrypted_data_key);
-
-      const encryptedMetadata = await encryptSimpleDataWithDataKey(
-        JSON.stringify(
-          itemType === "file"
-            ? { ...metadata, filename: newName }
-            : { ...metadata, folder_name: newName }
-        ),
-        decryptkey
-      );
-
-      const endpoint =
-        itemType === "file"
-          ? `${API_URL}/drive/rename_file`
-          : `${API_URL}/drive/rename_folder`;
-      const body =
-        itemType === "file"
-          ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
-          : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to rename item"); 
+      // Si le nom n'a pas changé, on annule
+      if (newName === name) {
+        nameElement.style.textOverflow = "ellipsis";
+        nameElement.style.whiteSpace = "nowrap";
+        nameElement.style.overflow = "hidden";
+        nameElement.style.display = "block";
+        nameElement.textContent = name;
+        return;
       }
 
-      nameElement.style.textOverflow = "ellipsis";
-      nameElement.style.whiteSpace = "nowrap";
-      await loadPath();
+      try {
+        const decryptkey = await decryptWithStoredPrivateKey(encrypted_data_key);
 
+        const encryptedMetadata = await encryptSimpleDataWithDataKey(
+          JSON.stringify(
+            itemType === "file"
+              ? { ...metadata, filename: newName }
+              : { ...metadata, folder_name: newName }
+          ),
+          decryptkey
+        );
 
+        const endpoint =
+          itemType === "file"
+            ? `${API_URL}/drive/rename_file`
+            : `${API_URL}/drive/rename_folder`;
+        const body =
+          itemType === "file"
+            ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
+            : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
+        const res = await fetch(endpoint, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          throw new Error("Failed to rename item"); 
+        }
+
+        // Réinitialiser les styles
+        nameElement.style.textOverflow = "ellipsis";
+        nameElement.style.whiteSpace = "nowrap";
+        nameElement.style.overflow = "hidden";
+        nameElement.style.display = "block";
+        
+        // Mettre à jour le texte avec le nouveau nom
+        nameElement.textContent = newName;
+        
+        // Recharger le path pour synchroniser
+        await loadPath();
+      } catch (error) {
+        console.error("Error renaming item:", error);
+        // Restaurer le nom original en cas d'erreur
+        nameElement.style.textOverflow = "ellipsis";
+        nameElement.style.whiteSpace = "nowrap";
+        nameElement.style.overflow = "hidden";
+        nameElement.style.display = "block";
+        nameElement.textContent = name;
+        alert("Erreur lors du renommage de l'élément");
+      }
     }
     nameElement.addEventListener("blur", finishEditing, { once: true });
     nameElement.addEventListener("keydown", (e) => {
       console.log(e.key);
         if (e.key === "Enter") {
             e.preventDefault();
-            finishEditing();
+            nameElement.blur(); // Utiliser blur pour déclencher finishEditing
+        }
+        if (e.key === "Escape") {
+            e.preventDefault();
+            // Annuler l'édition
+            nameElement.contentEditable = "false";
+            nameElement.style.textOverflow = "ellipsis";
+            nameElement.style.whiteSpace = "nowrap";
+            nameElement.style.overflow = "hidden";
+            nameElement.style.display = "block";
+            nameElement.textContent = name;
         }
     });
 }
