@@ -596,7 +596,7 @@ const get_all_info = async () => {
         );
         const metadata = JSON.parse(metadataStr);
         // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
-        metadata.encrypted_data_key = item.encrypted_data_key;
+        metadata.encrypted_data_key = item.encrypted_file_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -619,7 +619,7 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        metadata.encrypted_data_key = item.encrypted_data_key;
+        metadata.encrypted_data_key = item.encrypted_folder_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -702,7 +702,7 @@ const loadPath = async ({ outIn = false } = {}) => {
         );
         const metadata = JSON.parse(metadataStr);
           // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
-        metadata.encrypted_data_key = item.encrypted_data_key;
+        metadata.encrypted_data_key = item.encrypted_file_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -725,7 +725,7 @@ const loadPath = async ({ outIn = false } = {}) => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-        metadata.encrypted_data_key = item.encrypted_data_key;
+        metadata.encrypted_data_key = item.encrypted_folder_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
