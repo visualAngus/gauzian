@@ -1137,7 +1137,7 @@ const renameItem = async (item) => {
     const name = itemType === "file" ? metadata.filename : metadata.folder_name;
     console.log("Current name:", name);
     nameElement.style.textOverflow = "visible";
-    nameElement.style.whiteSpace = "normal";
+    // nameElement.style.whiteSpace = "normal";
     // remplacer le texte par le nom actuel
     nameElement.textContent = name;
     
@@ -1196,6 +1196,10 @@ const renameItem = async (item) => {
       if (!res.ok) {
         throw new Error("Failed to rename item"); 
       }
+
+      nameElement.style.textOverflow = "ellipsis";
+      nameElement.style.whiteSpace = "nowrap";
+      await loadPath();
 
 
     }
