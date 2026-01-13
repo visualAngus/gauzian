@@ -2,6 +2,7 @@
 
   <div id="div_pannel_right_click" ref="rightClickPanel">
     <a @click="createFolder()" v-if="rightClikedItem?.dataset?.itemType === 'folder'">Nouveau dossier</a>
+    <a @click="renameItem(rightClikedItem)" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Renommer</a>
     <a @click="deleteItem(rightClikedItem)" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Supprimer</a>
   </div>
 
@@ -234,7 +235,7 @@ useHead({
 // drive logic
 
 const totalSpaceLeft = ref(3 * 1024 * 1024 * 1024); // 3 GB in bytes
-const usedSpace = ref(2 * 1024 * 1024 * 1024); // 2 GB in bytes
+const usedSpace = ref(0); // 2 GB in bytes
 const listToUpload = ref([]);
 const listUploadInProgress = ref([]);
 const listUploaded = ref([]);
@@ -278,6 +279,14 @@ const activeFolderId = ref("root");
 const liste_decrypted_items = ref([]);
 const displayedDriveItems = ref([]);
 const full_path = ref([]);
+
+// displayedDriveItems dev test
+displayedDriveItems.value = [
+  { type: "folder", folder_id: "folder1", metadata: { folder_name: "Dossier 1", encrypted_data_key: "example_encrypted_key_1" } },
+  { type: "file", file_id: "file1", metadata: { filename: "Fichier 1.txt", size: 1024, encrypted_data_key: "example_encrypted_key_2" } },
+];
+
+
 
 // On garde les updates "diff" pour un refresh dans le même dossier,
 // mais on fait un vrai "out -> in" lors de la navigation (changement de dossier).
@@ -383,29 +392,29 @@ const gohome = () => {
   activeFolderId.value = "root";
 };
 
-const formatBytes = (bytes) => {
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  if (bytes === 0) return "0 Byte";
-  const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-  return Math.round(bytes / Math.pow(1024, i), 2) + " " + sizes[i];
-};
+// const formatBytes = (bytes) => {
+//   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+//   if (bytes === 0) return "0 Byte";
+//   const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+//   return Math.round(bytes / Math.pow(1024, i), 2) + " " + sizes[i];
+// };
 
-const handleFileChange = async (event) => {
-  const files = event.target.files;
-  var someSize = 0;
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    someSize += file.size;
-    // Assigner un ID unique dès l'ajout
-    file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
-    file._targetFolderId = activeFolderId.value; // Assigner le dossier cible
-    listToUpload.value.push(file);
-  }
-  if (someSize > totalSpaceLeft.value - usedSpace.value) {
-    alert("Not enough space left to upload these files.");
-    return;
-  }
-};
+// const handleFileChange = async (event) => {
+//   const files = event.target.files;
+//   var someSize = 0;
+//   for (let i = 0; i < files.length; i++) {
+//     const file = files[i];
+//     someSize += file.size;
+//     // Assigner un ID unique dès l'ajout
+//     file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
+//     file._targetFolderId = activeFolderId.value; // Assigner le dossier cible
+//     listToUpload.value.push(file);
+//   }
+//   if (someSize > totalSpaceLeft.value - usedSpace.value) {
+//     alert("Not enough space left to upload these files.");
+//     return;
+//   }
+// };
 
 const initializeFileInDB = async (file, folder_id) => {
   const dataKey = await generateDataKey();
@@ -586,6 +595,8 @@ const get_all_info = async () => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
+        // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
+        metadata.encrypted_data_key = item.encrypted_data_key;
         decryptedItems.push({
           ...item,
           metadata: metadata,
@@ -1099,6 +1110,52 @@ const deleteItem = async (item) => {
     await loadPath();
 
 };
+
+const renameItem = async (item) => {
+    const itemId = item.dataset?.itemId;
+    const itemType = item.dataset?.itemType;
+    const itemMetadata = item.dataset?.itemMetadata ? JSON.parse(item.dataset?.itemMetadata) : {};
+    if (!itemMetadata){
+        console.error("Item metadata not found");
+        return;
+      }
+    // selectionné le span de classe filename ou foldername
+    const nameElement = item.querySelector(".filename, .foldername");
+    if (!nameElement) {
+        console.error("Name element not found");
+        return;
+    }
+
+    // Rendre le nom éditable
+    nameElement.contentEditable = "true";
+    // sélectionner le texte
+    const range = document.createRange();
+    range.selectNodeContents(nameElement);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    nameElement.focus();
+
+    // Gérer la fin de l'édition
+    const finishEditing = async () => {
+      nameElement.contentEditable = "false";
+      const newName = nameElement.textContent.trim();
+
+      const encrypted_data_key = itemMetadata.encrypted_data_key;
+      console.log("Encrypted data key:", encrypted_data_key);
+
+
+    }
+    nameElement.addEventListener("blur", finishEditing, { once: true });
+    nameElement.addEventListener("keydown", (e) => {
+      console.log(e.key);
+        if (e.key === "Enter") {
+            e.preventDefault();
+            finishEditing();
+        }
+    });
+}
+
 
 watch(
   [listToUpload, listUploadInProgress],

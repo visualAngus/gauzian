@@ -8,7 +8,8 @@
 
     :data-item-type="item.type"
     :data-item-id="item.file_id || item.folder_id"
-
+    :data-item-encrypted-metadata="item.encrypted_metadata"
+    :data-item-metadata="JSON.stringify(item.metadata || {})"
     @click="$emit('click', item)"
   >
     <span class="icon-wrapper">
@@ -192,7 +193,16 @@ const displayName = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: 2px;
 }
+/* lorsque le nom est édité */
+.filename[contenteditable="true"] {
+  border: 1px solid #4c8eaf;
+  border-radius: 4px;
+  background-color: #e8f4f8;
+  outline: none;
+}
+
 
 .inline-progress {
   width: 100%;
