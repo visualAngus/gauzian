@@ -1173,8 +1173,8 @@ const renameItem = async (item) => {
           : `${API_URL}/drive/rename_folder`;
       const body =
         itemType === "file"
-          ? { file_id: itemId, encrypted_metadata: encryptedMetadata }
-          : { folder_id: itemId, encrypted_metadata: encryptedMetadata };
+          ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
+          : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
       const res = await fetch(endpoint, {
         method: "POST",
         credentials: "include",
