@@ -194,7 +194,7 @@ const autologin = async () => {
         console.warn(
           "Keys not found or invalid in IndexedDB during auto-login."
         );
-        // window.location.href = "/login";
+        window.location.href = "/login";
       }
       if (is_ok) {
         console.log("Auto-login successful, keys are valid.");
@@ -203,7 +203,7 @@ const autologin = async () => {
       }
     } else {
       console.log("No valid session found for auto-login.");
-      // window.location.href = "/login";
+      window.location.href = "/login";
     }
   } catch (error) {
     console.error("Auto-login failed:", error);
@@ -214,7 +214,7 @@ const autologin = async () => {
       );
       // Optionally clear IndexedDB here if needed
     }
-    // window.location.href = "/login";
+    window.location.href = "/login";
   }
 };
 
@@ -1112,6 +1112,7 @@ const renameItem = async (item) => {
     const itemId = item.dataset?.itemId;
     const itemType = item.dataset?.itemType;
     const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
+    const name = itemType === "file" ? metadata.filename : metadata.folder_name;
     console.log(metadata);
 
     if (!metadata) {
@@ -1134,11 +1135,21 @@ const renameItem = async (item) => {
         return;
     }
 
+    nameElement.value = name;
+
     // Rendre le nom éditable
     nameElement.contentEditable = "true";
     // sélectionner le texte
+    // Sélectionner uniquement le nom sans l'extension
+    const dotIndex = name.lastIndexOf(".");
+    let start = 0;
+    let end = name.length;
+    if (dotIndex > 0 && itemType === "file") {
+      end = dotIndex;
+    }
     const range = document.createRange();
-    range.selectNodeContents(nameElement);
+    range.setStart(nameElement.firstChild || nameElement, start);
+    range.setEnd(nameElement.firstChild || nameElement, end);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
