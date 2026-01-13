@@ -1289,7 +1289,7 @@ body {
 /* Personnalisation de la scrollbar pour les éléments en édition */
 .filename[contenteditable="true"]::-webkit-scrollbar,
 .foldername[contenteditable="true"]::-webkit-scrollbar {
-  height: 3px;
+  height: 2px;
 }
 
 .filename[contenteditable="true"]::-webkit-scrollbar-track,
@@ -1299,20 +1299,20 @@ body {
 
 .filename[contenteditable="true"]::-webkit-scrollbar-thumb,
 .foldername[contenteditable="true"]::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 1px;
 }
 
 .filename[contenteditable="true"]::-webkit-scrollbar-thumb:hover,
 .foldername[contenteditable="true"]::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* Pour Firefox */
 .filename[contenteditable="true"],
 .foldername[contenteditable="true"] {
   scrollbar-width: thin;
-  scrollbar-color: #888 transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 main {
   position: relative;
