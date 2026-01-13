@@ -790,6 +790,15 @@ const createFolder = async () => {
   console.log("Folder created with ID:", resData.folder_id);
   // Rafraîchir la liste des fichiers/dossiers
   await loadPath();
+
+  // il faut reussir a seclection le nouveau dossier créé pour le renommer directement
+  await nextTick();
+  const newFolderElement = document.querySelector(
+    `.item[data-item-group="drive"][data-item-type="folder"][data-folder-id="${resData.folder_id}"]`
+  );
+  if (newFolderElement) {
+    renameItem(newFolderElement);
+  }
 };
 
 const startUploads = async () => {
