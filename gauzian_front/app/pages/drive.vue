@@ -1322,7 +1322,7 @@ const handleDragEnd = async (data) => {
   // Trouver l'élément dossier sous la position du curseur
   const elementUnderMouse = document.elementFromPoint(data.x, data.y);
   const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
-  console.log("Drag ended over element:", elementUnderMouse);
+  console.log("Drag ended over element:", targetFolderElement);
   if (targetFolderElement) {
     const targetFolderId = targetFolderElement.dataset?.itemId;
     const itemType = activeItem.value.type;
