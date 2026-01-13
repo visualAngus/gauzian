@@ -1305,6 +1305,7 @@ const handleDragStart = (data) => {
   isDragging.value = true;
   activeItem.value = data.item;
   mousePos.value = { x: data.x, y: data.y };
+  console.log("Drag started:", data.item, "at", data.x, data.y);
 };
 
 const handleDragMove = (data) => {
@@ -1319,7 +1320,7 @@ const handleDragEnd = async (data) => {
   }
 
   // Trouver l'élément dossier sous la position du curseur
-  const elementUnderMouse = document.elementFromPoint(data.originalEvent.clientX, data.originalEvent.clientY);
+  const elementUnderMouse = document.elementFromPoint(data.x, data.y);
   const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
   
   if (targetFolderElement) {
