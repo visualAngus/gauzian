@@ -1137,11 +1137,12 @@ const renameItem = async (item) => {
     const name = itemType === "file" ? metadata.filename : metadata.folder_name;
     console.log("Current name:", name);
 
-    // Préparer le style pour édition sur une seule ligne, mais afficher tout le nom pendant l'édition
+    // Préparer le style pour édition sur une seule ligne
     nameElement.style.textOverflow = "clip";
-    nameElement.style.whiteSpace = "normal";
-    nameElement.style.overflow = "visible";
-    nameElement.style.display = "inline-block";
+    nameElement.style.whiteSpace = "nowrap";
+    nameElement.style.overflow = "auto";
+    nameElement.style.display = "block";
+    nameElement.style.maxWidth = "100%";
 
     // Remplacer le texte par le nom actuel
     nameElement.textContent = name;
