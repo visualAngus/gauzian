@@ -532,6 +532,9 @@ const uploadFile = async (file, file_id, dataKey) => {
       ...fileProgressMap.value,
       [file_id]: parseFloat(progress),
     };
+    
+    // Petit délai pour éviter le rate limiting (50ms entre chaque chunk)
+    await new Promise((resolve) => setTimeout(resolve, 50));
   };
 
   // Gestionnaire de file d'attente (Pool)
