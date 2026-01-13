@@ -158,6 +158,22 @@
         </TransitionGroup>
       </div>
     </div>
+    <!-- Élément fantôme qui suit la souris pendant le drag -->
+    <div v-if="isDragging && activeItem" :style="ghostStyle" class="drag-ghost">
+      <div class="item" style="opacity: 0.8; pointer-events: none;">
+        <span class="icon-wrapper">
+          <svg v-if="activeItem.type === 'folder'" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor">
+            <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
+          </svg>
+        </span>
+        <div class="file-info">
+          <span class="filename">{{ activeItem.metadata?.filename || activeItem.metadata?.folder_name || 'Sans nom' }}</span>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -1282,11 +1298,67 @@ const handleDragStart = (data) => {
 
 const handleDragMove = (data) => {
   // Cette fonction est appelée à chaque pixel bougé par la souris
-  mousePos.value = { x: data.x, y: data.y };
-  console.log(`Position X: ${data.x}, Position Y: ${data.y}`);
+  if (data.originalEvent) {
+    mousePos.value = { x: data.originalEvent.clientX, y: data.originalEvent.clientY };
+  }
 };
 
-const handleDragEnd = () => {
+const handleDragEnd = async (data) => {
+  if (!activeItem.value) {
+    isDragging.value = false;
+    return;
+  }
+
+  // Trouver l'élément dossier sous la position du curseur
+  const elementUnderMouse = document.elementFromPoint(data.originalEvent.clientX, data.originalEvent.clientY);
+  const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
+  
+  if (targetFolderElement) {
+    const targetFolderId = targetFolderElement.dataset?.itemId;
+    const itemType = activeItem.value.type;
+    const itemId = activeItem.value.file_id || activeItem.value.folder_id;
+
+    // Éviter de déplacer un dossier dans lui-même
+    if (itemType === 'folder' && itemId === targetFolderId) {
+      console.log("Cannot move a folder into itself");
+      isDragging.value = false;
+      activeItem.value = null;
+      return;
+    }
+
+    try {
+      // Appel API pour déplacer l'item
+      const endpoint = itemType === 'file' 
+        ? `${API_URL}/drive/move_file`
+        : `${API_URL}/drive/move_folder`;
+      
+      const body = itemType === 'file'
+        ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+        : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        console.log("Item moved successfully");
+        // Recharger le dossier courant
+        await loadPath();
+      } else {
+        console.error("Failed to move item");
+        alert("Erreur lors du déplacement de l'élément");
+      }
+    } catch (error) {
+      console.error("Error moving item:", error);
+      alert("Erreur lors du déplacement de l'élément");
+    }
+  }
+
   isDragging.value = false;
   activeItem.value = null;
 };
@@ -1704,6 +1776,20 @@ main {
 }
 #div_pannel_right_click a:hover{
     background-color: #f0f0f0;
+}
+
+/* Élément fantôme pendant le drag */
+.drag-ghost {
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0.9;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+
+.drag-ghost .item {
+  width: 240px;
+  background-color: #e8f0e8;
+  border: 2px solid #548d61;
 }
 
 </style>
