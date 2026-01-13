@@ -106,6 +106,7 @@
           <div
             class="breadcrumb-item"
             :class="{ active: index === full_path.length - 1 }"
+            :data-item-id="pathItem.folder_id"
             @click="navigateToBreadcrumb(pathItem, index)"
           >
             <span>{{
@@ -1321,6 +1322,15 @@ const handleDragEnd = async (data) => {
 
   // Trouver l'élément dossier sous la position du curseur
   const elementUnderMouse = document.elementFromPoint(data.x, data.y);
+
+  const breadcrumbElement = elementUnderMouse?.closest('.breadcrumb-item');
+  if (breadcrumbElement) {
+    console.log("Drag ended over breadcrumb:", breadcrumbElement);
+    const targetFolderId = breadcrumbElement.dataset?.folderId;
+    console.log(targetFolderId);
+  }
+
+
   const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
   if (targetFolderElement) {
     console.log("Drag ended over element:", targetFolderElement);
