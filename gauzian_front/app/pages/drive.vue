@@ -1136,13 +1136,15 @@ const renameItem = async (item) => {
 
     const name = itemType === "file" ? metadata.filename : metadata.folder_name;
     console.log("Current name:", name);
-    // enlever le ellipsis et tout pour l'édition
+
+    // Préparer le style pour édition sur une seule ligne, mais afficher tout le nom pendant l'édition
     nameElement.style.textOverflow = "clip";
     nameElement.style.whiteSpace = "normal";
+    nameElement.style.overflow = "visible";
+    nameElement.style.display = "inline-block";
 
-    // remplacer le texte par le nom actuel
+    // Remplacer le texte par le nom actuel
     nameElement.textContent = name;
-    
 
     // Rendre le nom éditable
     nameElement.contentEditable = "true";
