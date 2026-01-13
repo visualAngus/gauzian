@@ -86,8 +86,6 @@ const props = defineProps({
   },
 });
 
-defineEmits(["click", "move-start","moving","move-end"]);
-
 const emit = defineEmits(["click", "move-start","moving","move-end"]);
 
 const startDrag = (mouseDownEvent) => {
