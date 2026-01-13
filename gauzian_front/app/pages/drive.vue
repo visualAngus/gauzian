@@ -158,23 +158,34 @@
         </TransitionGroup>
       </div>
     </div>
-    <!-- Élément fantôme qui suit la souris pendant le drag -->
-    <div v-if="isDragging && activeItem" :style="ghostStyle" class="drag-ghost">
-      <div class="item" style="opacity: 0.8; pointer-events: none;">
-        <span class="icon-wrapper">
-          <svg v-if="activeItem.type === 'folder'" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"></path>
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor">
-            <path d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"></path>
-          </svg>
-        </span>
-        <div class="file-info">
-          <span class="filename">{{ activeItem.metadata?.filename || activeItem.metadata?.folder_name || 'Sans nom' }}</span>
-        </div>
-      </div>
-    </div>
   </main>
+
+  <!-- Élément de drag qui suit la souris -->
+  <div
+    v-if="isDragging && activeItem"
+    class="drag-ghost"
+    :style="ghostStyle"
+  >
+    <span class="icon-wrapper">
+      <svg
+        v-if="activeItem.type === 'folder'"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path
+          d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
+        ></path>
+      </svg>
+      <svg v-else viewBox="0 0 24 24" fill="currentColor">
+        <path
+          d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
+        ></path>
+      </svg>
+    </span>
+    <span class="drag-label">
+      {{ activeItem.metadata?.folder_name || activeItem.metadata?.filename || "Item" }}
+    </span>
+  </div>
 </template>
 
 <script setup>
@@ -1298,9 +1309,7 @@ const handleDragStart = (data) => {
 
 const handleDragMove = (data) => {
   // Cette fonction est appelée à chaque pixel bougé par la souris
-  if (data.originalEvent) {
-    mousePos.value = { x: data.originalEvent.clientX, y: data.originalEvent.clientY };
-  }
+  mousePos.value = { x: data.x, y: data.y };
 };
 
 const handleDragEnd = async (data) => {
@@ -1326,37 +1335,37 @@ const handleDragEnd = async (data) => {
       return;
     }
 
-    try {
-      // Appel API pour déplacer l'item
-      const endpoint = itemType === 'file' 
-        ? `${API_URL}/drive/move_file`
-        : `${API_URL}/drive/move_folder`;
+    // try {
+    //   // Appel API pour déplacer l'item
+    //   const endpoint = itemType === 'file' 
+    //     ? `${API_URL}/drive/move_file`
+    //     : `${API_URL}/drive/move_folder`;
       
-      const body = itemType === 'file'
-        ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-        : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+    //   const body = itemType === 'file'
+    //     ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+    //     : { folder_id: itemId, new_parent_folder_id: targetFolderId };
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
+    //   const res = await fetch(endpoint, {
+    //     method: "POST",
+    //     credentials: "include",
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //     },
+    //     body: JSON.stringify(body),
+    //   });
 
-      if (res.ok) {
-        console.log("Item moved successfully");
-        // Recharger le dossier courant
-        await loadPath();
-      } else {
-        console.error("Failed to move item");
-        alert("Erreur lors du déplacement de l'élément");
-      }
-    } catch (error) {
-      console.error("Error moving item:", error);
-      alert("Erreur lors du déplacement de l'élément");
-    }
+    //   if (res.ok) {
+    //     console.log("Item moved successfully");
+    //     // Recharger le dossier courant
+    //     await loadPath();
+    //   } else {
+    //     console.error("Failed to move item");
+    //     alert("Erreur lors du déplacement de l'élément");
+    //   }
+    // } catch (error) {
+    //   console.error("Error moving item:", error);
+    //   alert("Erreur lors du déplacement de l'élément");
+    // }
   }
 
   isDragging.value = false;
@@ -1368,7 +1377,7 @@ const ghostStyle = computed(() => ({
   position: 'fixed',
   top: 0,
   left: 0,
-  transform: `translate(${mousePos.value.x}px, ${mousePos.value.y}px)`,
+  transform: `translate(${mousePos.value.x - 50}px, ${mousePos.value.y - 24}px)`,
   pointerEvents: 'none', // Important pour ne pas bloquer les événements souris
   zIndex: 9999
 }));
@@ -1778,18 +1787,44 @@ main {
     background-color: #f0f0f0;
 }
 
-/* Élément fantôme pendant le drag */
+/* Élément de drag qui suit la souris */
 .drag-ghost {
+  position: fixed;
+  background-color: #eff3f8;
+  border-radius: 12px;
+  padding: 0 12px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   pointer-events: none;
-  z-index: 10000;
+  z-index: 9999;
   opacity: 0.9;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
 
-.drag-ghost .item {
-  width: 240px;
-  background-color: #e8f0e8;
-  border: 2px solid #548d61;
+.drag-ghost .icon-wrapper {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #444746;
+  flex-shrink: 0;
+}
+
+.drag-ghost svg {
+  width: 100%;
+  height: 100%;
+}
+
+.drag-label {
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 </style>
