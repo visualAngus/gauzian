@@ -1286,38 +1286,50 @@ body {
   background-color: #fff;
 }
 
-/* Base commune */
+/* --- Cible les éléments en édition --- */
 .filename[contenteditable="true"],
 .foldername[contenteditable="true"] {
+  /* Pour Firefox : barre fine, couleur grise sur fond transparent */
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  white-space: nowrap; /* Force le texte sur une ligne pour scroller horizontalement */
+  overflow-x: auto;
 }
 
-/* --- Webkit --- */
+/* --- WEBKIT (Chrome, Edge, Safari) --- */
 
+/* 1. La taille globale de la scrollbar : on met 3px pour que ça prenne zéro place */
 .filename[contenteditable="true"]::-webkit-scrollbar,
 .foldername[contenteditable="true"]::-webkit-scrollbar {
-  height: 3px; /* Très fin */
+  height: 3px; 
 }
 
+/* 2. IMPORTANT : On supprime les flèches (boutons) gauche/droite */
+.filename[contenteditable="true"]::-webkit-scrollbar-button,
+.foldername[contenteditable="true"]::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 3. Le fond de la barre (track) : totalement transparent */
 .filename[contenteditable="true"]::-webkit-scrollbar-track,
 .foldername[contenteditable="true"]::-webkit-scrollbar-track {
-  background: transparent;
+  background: transparent; 
 }
 
+/* 4. La partie mobile (thumb) : arrondie et discrète */
 .filename[contenteditable="true"]::-webkit-scrollbar-thumb,
 .foldername[contenteditable="true"]::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15); /* Couleur subtile */
-  border-radius: 10px; /* Bords ronds */
+  background: rgba(0, 0, 0, 0.2); /* Gris clair transparent */
+  border-radius: 10px; /* Forme de pilule */
 }
 
-/* Un peu plus foncé quand on attrape la barre */
+/* 5. Au survol de la barre, on la fonce légèrement pour montrer qu'elle est active */
 .filename[contenteditable="true"]::-webkit-scrollbar-thumb:hover,
 .foldername[contenteditable="true"]::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
 }
-
-
 main {
   position: relative;
   display: flex;
