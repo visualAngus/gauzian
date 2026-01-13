@@ -1582,6 +1582,8 @@ main {
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.2s ease;
+  font-weight: 600;
+  font-family: "Roboto", "Segoe UI", sans-serif;
 
   display: flex;
   flex-direction: row;
