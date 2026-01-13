@@ -1135,9 +1135,10 @@ const renameItem = async (item) => {
     }
 
     const name = itemType === "file" ? metadata.filename : metadata.folder_name;
-
+    console.log("Current name:", name);
     // remplacer le texte par le nom actuel
     nameElement.textContent = name;
+    
 
     // Rendre le nom éditable
     nameElement.contentEditable = "true";
