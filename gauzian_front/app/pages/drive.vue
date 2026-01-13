@@ -282,8 +282,8 @@ const full_path = ref([]);
 
 // displayedDriveItems dev test
 displayedDriveItems.value = [
-  { type: "folder", folder_id: "folder1",metadata: { folder_name: "Dossier 1"} },
-  { type: "file", file_id: "file1",metadata: { filename: "Fichier 1.txt", size: 1024 } },
+  { type: "folder", folder_id: "folder1",metadata: { folder_name: "Dossier 1", encrypted_data_key: "example_encrypted_key_1" } },
+  { type: "file", file_id: "file1",metadata: { filename: "Fichier 1.txt", size: 1024, encrypted_data_key: "example_encrypted_key_1" } },
 ];
 
 
@@ -1121,7 +1121,15 @@ const renameItem = async (item) => {
     const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
     console.log(metadata);
 
-
+    if (!metadata) {
+        console.error("No metadata found for item");
+        return;
+    }
+    const encrypted_data_key = metadata.encrypted_data_key;
+    if (!encrypted_data_key) {
+        console.error("No encrypted data key found in metadata");
+        return;
+    }
 
     // selectionné le span de classe filename ou foldername
     const nameElement = item.querySelector(".filename, .foldername");
@@ -1144,6 +1152,26 @@ const renameItem = async (item) => {
     const finishEditing = async () => {
       nameElement.contentEditable = "false";
       const newName = nameElement.textContent.trim();
+
+      const decryptkey = await decryptWithStoredPrivateKey(encrypted_data_key);
+
+      const encryptedMetadata = await encryptSimpleDataWithDataKey(
+        JSON.stringify(
+          itemType === "file"
+            ? { ...metadata, filename: newName }
+            : { ...metadata, folder_name: newName }
+        ),
+        decryptkey
+      );
+
+      // pour le debug 
+      const decryptedMetadataStr = await decryptSimpleDataWithDataKey(
+        encryptedMetadata,
+        decryptkey
+      );
+      console.log("Decrypted metadata after re-encryption:", decryptedMetadataStr);
+
+
 
     }
     nameElement.addEventListener("blur", finishEditing, { once: true });
