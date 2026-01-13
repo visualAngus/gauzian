@@ -281,10 +281,10 @@ const displayedDriveItems = ref([]);
 const full_path = ref([]);
 
 // displayedDriveItems dev test
-displayedDriveItems.value = [
-  { type: "folder", folder_id: "folder1",metadata: { folder_name: "Dossier 1", encrypted_data_key: "example_encrypted_key_1" } },
-  { type: "file", file_id: "file1",metadata: { filename: "Fichier 1.txt", size: 1024, encrypted_data_key: "example_encrypted_key_1" } },
-];
+// displayedDriveItems.value = [
+//   { type: "folder", folder_id: "folder1",metadata: { folder_name: "Dossier 1", encrypted_data_key: "example_encrypted_key_1" } },
+//   { type: "file", file_id: "file1",metadata: { filename: "Fichier 1.txt", size: 1024, encrypted_data_key: "example_encrypted_key_1" } },
+// ];
 
 
 
