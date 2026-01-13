@@ -1454,8 +1454,13 @@ watch(selectedItem, (newItem) => {
       item.classList.remove("selected-item");
     });
 
-    newItem.classList.add("selected-item");
-
+    // Find the DOM element corresponding to the selected item
+    const itemId = newItem.folder_id || newItem.file_id;
+    const itemType = newItem.type;
+    const domItem = document.querySelector(`.item[data-item-id="${itemId}"][data-item-type="${itemType}"]`);
+    if (domItem) {
+      domItem.classList.add("selected-item");
+    }
   }
 });
 
