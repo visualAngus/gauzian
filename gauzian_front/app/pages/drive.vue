@@ -1104,6 +1104,8 @@ const onFilesFromDrop = async (files) => {
     }
   }
 
+  await loadPath();
+
   // Phase 2: Ajouter les fichiers à la liste d'upload
   for (const { file, targetFolderId } of filesToUpload) {
     // Conserver l'objet File natif pour garder size/type/lastModified
