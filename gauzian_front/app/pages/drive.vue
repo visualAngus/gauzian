@@ -137,6 +137,7 @@
             status="uploaded"
             data-item-group="drive"
             @click="click_on_item(item)"
+            @move="onItemMove" 
           />
 
           <!-- Fichiers en attente et en cours d'upload (avec clé stable) -->
@@ -148,6 +149,7 @@
             :progress="item._progress"
             data-item-group="queue"
             @click="click_on_item(item)"
+            @move="onItemMove" 
           />
         </TransitionGroup>
       </div>
@@ -1262,15 +1264,9 @@ const renameItem = async (item) => {
         }
     });
 }
-
-const handleItemMove = (data) => {
-  const { item, originalEvent } = data;
-  
-  console.log("L'utilisateur veut déplacer :", item);
-  console.log("Position de la souris :", originalEvent.clientX, originalEvent.clientY);
-
-  // ICI : Votre logique de move
-  // Exemple : démarrer un drag & drop, changer l'état du store, etc.
+const onItemMove = (item) => {
+  console.log("Le parent a reçu l'ordre de bouger :", item);
+  // Votre logique de drag and drop ici
 };
 
 watch(

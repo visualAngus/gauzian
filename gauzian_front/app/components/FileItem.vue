@@ -10,7 +10,7 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
     @click="$emit('click', item)"
-    @mousedown="move(item)"
+    @mousedown="$emit('move', { item, originalEvent: $event })"
   >
     <span class="icon-wrapper">
       <svg
@@ -86,11 +86,7 @@ const props = defineProps({
   },
 });
 
-defineEmits(["click", "mousedown"]);
-const onMouseDown = (event) => {
-  // On passe l'item ET potentiellement l'événement natif (utile pour les coordonnées de la souris)
-  emit('move', { item: props.item, originalEvent: event });
-};
+defineEmits(["click", "move"]);
 const displayName = computed(() => {
   // console.log("Item metadata:", props.item);
 
