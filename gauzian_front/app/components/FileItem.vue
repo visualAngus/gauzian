@@ -10,7 +10,9 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
     @click="$emit('click', item)"
-    @mousedown="$emit('move', { item, originalEvent: $event })"
+    @mousedown="$emit('move-start', $event)"
+    @mousemove="$emit('moving', $event)"
+    @mouseup="$emit('move-end', $event)"
   >
     <span class="icon-wrapper">
       <svg
