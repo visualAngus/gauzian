@@ -10,6 +10,7 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
     @dblclick="$emit('click', item)"
+    @click ="$emit('select', item)"
     @mousedown="startDrag"
   >
     <span class="icon-wrapper">
@@ -86,7 +87,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["click", "move-start","moving","move-end"]);
+const emit = defineEmits(["click", "select", "move-start","moving","move-end"]);
 
 const DRAG_THRESHOLD = 5; // pixels avant d'activer le drag
 let dragStartPos = null;
