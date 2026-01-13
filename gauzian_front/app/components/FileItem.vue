@@ -87,7 +87,10 @@ const props = defineProps({
 });
 
 defineEmits(["click", "mousedown"]);
-
+const onMouseDown = (event) => {
+  // On passe l'item ET potentiellement l'événement natif (utile pour les coordonnées de la souris)
+  emit('move', { item: props.item, originalEvent: event });
+};
 const displayName = computed(() => {
   // console.log("Item metadata:", props.item);
 
@@ -99,14 +102,6 @@ const displayName = computed(() => {
     "Sans nom"
   );
 });
-
-const move = (item) => {
-  // Émettre un événement personnalisé pour le déplacement
-  console.log("Mousedown on item:", item);
-  // Vous pouvez émettre un événement ou gérer le déplacement ici
-  // Par exemple :
-  // emit('move', item);
-};
 
 
 </script>

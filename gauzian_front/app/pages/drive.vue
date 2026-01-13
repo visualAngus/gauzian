@@ -1263,6 +1263,15 @@ const renameItem = async (item) => {
     });
 }
 
+const handleItemMove = (data) => {
+  const { item, originalEvent } = data;
+  
+  console.log("L'utilisateur veut déplacer :", item);
+  console.log("Position de la souris :", originalEvent.clientX, originalEvent.clientY);
+
+  // ICI : Votre logique de move
+  // Exemple : démarrer un drag & drop, changer l'état du store, etc.
+};
 
 watch(
   [listToUpload, listUploadInProgress],
