@@ -88,36 +88,49 @@ const props = defineProps({
 
 const emit = defineEmits(["click", "move-start","moving","move-end"]);
 
+const DRAG_THRESHOLD = 5; // pixels avant d'activer le drag
+let dragStartPos = null;
+let isDragStarted = false;
+
 const startDrag = (mouseDownEvent) => {
-  emit("move-start", { item: props.item, x: mouseDownEvent.clientX, y: mouseDownEvent.clientY, originalEvent: mouseDownEvent });
+  dragStartPos = { x: mouseDownEvent.clientX, y: mouseDownEvent.clientY };
+  isDragStarted = false;
   
   const onMouseMove = (e) => {
-    emit("moving", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+    // Vérifier si on a bougé au-delà du seuil
+    if (!isDragStarted && dragStartPos) {
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - dragStartPos.x, 2) + 
+        Math.pow(e.clientY - dragStartPos.y, 2)
+      );
+      
+      // Si on a bougé assez, émettre move-start
+      if (distance > DRAG_THRESHOLD) {
+        isDragStarted = true;
+        emit("move-start", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+      }
+    }
+    
+    // Si le drag est actif, émettre moving
+    if (isDragStarted) {
+      emit("moving", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+    }
   };
   
   const onMouseUp = (e) => {
-    emit("move-end", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+    // Émettre move-end seulement si le drag avait vraiment commencé
+    if (isDragStarted) {
+      emit("move-end", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+    }
     window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("mouseup", onMouseUp);
+    dragStartPos = null;
+    isDragStarted = false;
   };
   
   window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mouseup", onMouseUp);
 };
-
-  const StartTrackingMove = (event) => {
-    emit("move-start", { item: props.item, originalEvent: event });
-    const onMouseMove = (e) => {
-      emit("moving", { item: props.item, originalEvent: e });
-    };
-    const onMouseUp = (e) => {
-      emit("move-end", { item: props.item, originalEvent: e });
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
 
 
 
