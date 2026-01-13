@@ -1455,7 +1455,8 @@ watch(selectedItem, (newItem) => {
     });
     console.log(newItem);
     // Find the DOM element corresponding to the selected item
-    const itemId = newItem.folder_id || newItem.file_id;
+    const itemType = newItem.type;
+    const itemId = itemType === "file" ? newItem.file_id : newItem.folder_id;
     console.log("Item ID to select:", itemId);
     const domItem = document.querySelector(`.item[data-item-id="${itemId}"]`);
     console.log("DOM item to select:", domItem);
