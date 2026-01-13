@@ -1112,7 +1112,6 @@ const renameItem = async (item) => {
     const itemId = item.dataset?.itemId;
     const itemType = item.dataset?.itemType;
     const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
-    const name = itemType === "file" ? metadata.filename : metadata.folder_name;
     console.log(metadata);
 
     if (!metadata) {
@@ -1135,10 +1134,14 @@ const renameItem = async (item) => {
         return;
     }
 
-    nameElement.value = name;
+    const name = itemType === "file" ? metadata.filename : metadata.folder_name;
+
+    // remplacer le texte par le nom actuel
+    nameElement.textContent = name;
 
     // Rendre le nom éditable
     nameElement.contentEditable = "true";
+
     // sélectionner le texte
     // Sélectionner uniquement le nom sans l'extension
     const dotIndex = name.lastIndexOf(".");
