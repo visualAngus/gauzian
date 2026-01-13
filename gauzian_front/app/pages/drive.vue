@@ -1588,7 +1588,7 @@ main {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   margin-left: 35px;
   margin-top: 12px;
 }
