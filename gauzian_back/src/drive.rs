@@ -701,3 +701,65 @@ pub async fn delete_folder(
     tx.commit().await?;
     Ok(())
 }
+
+pub async fn rename_file(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    new_encrypted_metadata: &str,
+) -> Result<(), sqlx::Error> {
+    // Verify user has access to the file
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Update the encrypted metadata
+    sqlx::query(
+        "UPDATE files SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(new_encrypted_metadata.as_bytes())
+    .bind(file_id)
+    .execute(db_pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn rename_folder(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+    new_encrypted_metadata: &str,
+) -> Result<(), sqlx::Error> {
+    // Verify user has access to the folder
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Update the encrypted metadata
+    sqlx::query(
+        "UPDATE folders SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(new_encrypted_metadata.as_bytes())
+    .bind(folder_id)
+    .execute(db_pool)
+    .await?;
+
+    Ok(())
+}
