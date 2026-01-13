@@ -412,8 +412,6 @@ const gohome = () => {
 const initializeFileInDB = async (file, folder_id) => {
   const dataKey = await generateDataKey();
   const encryptedFileKey = await encryptWithStoredPublicKey(dataKey);
-  console.log("fileeeeeeee", file);
-  console.log("folder_id", folder_id);
   const metadata = {
     filename: file.name,
     size: file.size,
@@ -469,7 +467,7 @@ const uploadFile = async (file, file_id, dataKey) => {
 
     const chunk = file.slice(start, end);
 
-    console.log(file);
+    // console.log(file);
 
     const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
     const body = {
@@ -793,9 +791,10 @@ const createFolder = async () => {
 
   // il faut reussir a seclection le nouveau dossier créé pour le renommer directement
   await nextTick();
-  const newFolderElement = document.querySelector(
-    `.item[data-item-group="drive"][data-item-type="folder"][data-folder-id="${resData.folder_id}"]`
-  );
+  const id = resData.folder_id;
+  const newFolderElement = document.querySelector(`.item[data-folder-id="${id}"]`);
+
+  console.log("New folder element:", newFolderElement);
   if (newFolderElement) {
     renameItem(newFolderElement);
   }
@@ -843,7 +842,7 @@ const startUploads = async () => {
         ) {
           await loadPath();
         }
-        console.log(listUploadInProgress.value);
+        // console.log(listUploadInProgress.value);
         startUploads();
       })
       .catch((err) => {
@@ -1078,8 +1077,8 @@ const onFilesFromDrop = async (files) => {
     listToUpload.value.push(file);
   }
 
-  console.log("Dossiers créés:", foldersList.value);
-  console.log("Fichiers prêts pour upload:", filesToUpload);
+  // console.log("Dossiers créés:", foldersList.value);
+  // console.log("Fichiers prêts pour upload:", filesToUpload);
 };
 
 const deleteItem = async (item) => {
@@ -1087,7 +1086,7 @@ const deleteItem = async (item) => {
     // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
     const itemId = item.dataset?.itemId;
     const itemType = item.dataset?.itemType;
-    console.log("ID de l'item à supprimer:", itemId);
+    // console.log("ID de l'item à supprimer:", itemId);
     if (itemType === "file") {
     const res = await fetch(`${API_URL}/drive/delete_file`, {
       method: "POST",
@@ -1121,7 +1120,7 @@ const renameItem = async (item) => {
     const itemId = item.dataset?.itemId;
     const itemType = item.dataset?.itemType;
     const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
-    console.log(metadata);
+    // console.log(metadata);
 
     if (!metadata) {
         console.error("No metadata found for item");
@@ -1246,7 +1245,7 @@ const renameItem = async (item) => {
     }
     nameElement.addEventListener("blur", finishEditing, { once: true });
     nameElement.addEventListener("keydown", (e) => {
-      console.log(e.key);
+      // console.log(e.key);
         if (e.key === "Enter") {
             e.preventDefault();
             nameElement.blur(); // Utiliser blur pour déclencher finishEditing
