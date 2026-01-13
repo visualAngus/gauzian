@@ -1330,7 +1330,7 @@ const handleDragEnd = async (data) => {
     const itemId = activeItem.value.file_id || activeItem.value.folder_id;
     const itemType = activeItem.value.type;
     console.log("Drag ended over breadcrumb:", breadcrumbElement);
-    const targetFolderId = breadcrumbElement.dataset?.dataItemId;
+    const targetFolderId = breadcrumbElement.dataset?.itemId;
     
     try {
       // Appel API pour déplacer l'item
