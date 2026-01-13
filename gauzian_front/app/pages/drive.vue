@@ -1457,7 +1457,7 @@ watch(selectedItem, (newItem) => {
     // Find the DOM element corresponding to the selected item
     const itemId = newItem.folder_id || newItem.file_id;
     const itemType = newItem.type;
-    const domItem = document.querySelector(`.item[data-item-id="${itemId}"][data-item-type="${itemType}"]`);
+    const domItem = document.querySelector(`.item[data-item-id="${itemId}"]`);
     console.log("DOM item to select:", domItem);
     if (domItem) {
       domItem.classList.add("selected-item");
