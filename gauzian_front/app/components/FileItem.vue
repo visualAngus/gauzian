@@ -10,6 +10,7 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
     @click="$emit('click', item)"
+    @mousedown="move(item)"
   >
     <span class="icon-wrapper">
       <svg
@@ -85,7 +86,7 @@ const props = defineProps({
   },
 });
 
-defineEmits(["click"]);
+defineEmits(["click", "mousedown"]);
 
 const displayName = computed(() => {
   // console.log("Item metadata:", props.item);
@@ -98,6 +99,16 @@ const displayName = computed(() => {
     "Sans nom"
   );
 });
+
+const move = (item) => {
+  // Émettre un événement personnalisé pour le déplacement
+  console.log("Mousedown on item:", item);
+  // Vous pouvez émettre un événement ou gérer le déplacement ici
+  // Par exemple :
+  // emit('move', item);
+};
+
+
 </script>
 
 <style scoped>
