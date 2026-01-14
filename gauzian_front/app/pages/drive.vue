@@ -159,7 +159,7 @@
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
-            @select="selectItem"
+            @select="selectItem(item, $event)"
             @dotclick="openItemMenu(item)"
           />
 
@@ -1702,6 +1702,7 @@ const handleDragEnd = async (data) => {
 };
 
 const selectItem = (item, event) => {
+  console.log("Item event:", item, event);
   selectedItem.value = item;
 };
 
