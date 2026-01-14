@@ -1701,6 +1701,10 @@ const handleDragEnd = async (data) => {
 };
 
 const selectItem = (item) => {
+
+  // si le ctrl ou cmd est appuyé on ajoute à la selection multiple
+  console.log("Selecting event:", event);
+
   selectedItem.value = item;
 };
 
