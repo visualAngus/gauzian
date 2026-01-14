@@ -85,6 +85,29 @@
           @toggle="toggleFolderNode"
         />
       </div>
+
+      <div class="div_utilisation_storage">
+        <h4>Utilisation du stockage</h4>
+        <div class="storage-bar">
+          <div
+            class="used-space"
+            :style="{
+              width: ((usedSpace / (totalSpaceLeft + usedSpace)) * 100) + '%',
+            }"
+          ></div>
+          <div
+            class="free-space"
+            :style="{
+              width: ((totalSpaceLeft / (totalSpaceLeft + usedSpace)) * 100) + '%',
+            }"
+          ></div>
+        </div>
+        <div class="storage-info">
+          <span>{{ formatBytes(usedSpace) }} utilisés</span>
+          <span>{{ formatBytes(totalSpaceLeft) }} libres</span>
+        </div>
+      </div>
+
     </div>
 
     <div class="div_right_section">
@@ -625,12 +648,12 @@ const gohome = () => {
   activeFolderId.value = "root";
 };
 
-// const formatBytes = (bytes) => {
-//   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-//   if (bytes === 0) return "0 Byte";
-//   const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-//   return Math.round(bytes / Math.pow(1024, i), 2) + " " + sizes[i];
-// };
+const formatBytes = (bytes) => {
+  const sizes = ["octets", "Ko", "Mo", "Go", "To"];
+  if (bytes === 0) return "0 octet";
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, i)).toFixed(2) + " " + sizes[i];
+};
 
 // const handleFileChange = async (event) => {
 //   const files = event.target.files;
@@ -2316,4 +2339,63 @@ main {
 .is-active-folder .three-folder-name {
   font-weight: 700;
 }
+
+.div_utilisation_storage {
+
+display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+
+  /* background-color: #f7f7f7; */
+  height: 20%;
+  width: 100%;
+  border-radius: 10px;
+  padding: 16px 12px;
+  box-shadow: 0 2px 8px rgba(76, 142, 175, 0.08);
+  margin-top: 18px;
+}
+
+.div_utilisation_storage h4 {
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.storage-bar {
+  width: 100%;
+  height: 18px;
+  background-color: #e0e0e0;
+  border-radius: 9px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+}
+
+.used-space {
+  height: 100%;
+  background-color: #4c8eaf;
+  border-radius: 9px 0 0 9px;
+  transition: width 0.3s ease;
+}
+
+.free-space {
+  height: 100%;
+  background-color: #d7eaf6;
+  border-radius: 0 9px 9px 0;
+  transition: width 0.3s ease;
+}
+
+.storage-info {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  font-size: 13px;
+  color: #555;
+}
+
+
+
 </style>
