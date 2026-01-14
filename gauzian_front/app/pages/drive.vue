@@ -92,13 +92,13 @@
           <div
             class="used-space"
             :style="{
-              width: ((usedSpace / (totalSpaceLeft + usedSpace)) * 100) + '%',
+              width: ((usedSpace / (maxspace)) * 100) + '%',
             }"
           ></div>
           <div
             class="free-space"
             :style="{
-              width: ((totalSpaceLeft / (totalSpaceLeft + usedSpace)) * 100) + '%',
+              width: ((totalSpaceLeft / (maxspace)) * 100) + '%',
             }"
           ></div>
         </div>
@@ -323,8 +323,9 @@ useHead({
 
 // drive logic
 
-const totalSpaceLeft = ref(3 * 1024 * 1024 * 1024); // 3 GB in bytes
+const totalSpaceLeft = ref(maxspace.value - usedSpace.value);
 const usedSpace = ref(0); // 2 GB in bytes
+const maxspace = ref(3 * 1024 * 1024 * 1024); // 3 GB in bytes
 const listToUpload = ref([]);
 const listUploadInProgress = ref([]);
 const listUploaded = ref([]);
@@ -828,6 +829,8 @@ const get_all_info = async () => {
   const files_and_folders = resData.files_and_folders;
   const user_info = resData.user_info;
   const fullPathData = resData.full_path;
+
+  usedSpace.value = drive_info.used_space;
 
   full_path.value = [];
 
