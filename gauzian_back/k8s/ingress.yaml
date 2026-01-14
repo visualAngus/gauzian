@@ -6,6 +6,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    traefik.ingress.kubernetes.io/router.middlewares: gauzian-strip-api-prefix@kubernetescrd,gauzian-strip-s3-prefix@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
