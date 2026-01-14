@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gauzian-ingress
+  namespace: gauzian
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - gauzian.pupin.fr
+    secretName: gauzian-tls
+  rules:
+  - host: gauzian.pupin.fr
+    http:
+      paths:
+      # API backend
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+      # MinIO console
+      - path: /minio
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              number: 9001
+      # MinIO S3 API
+      - path: /s3
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              number: 9000
+      # Frontend (catch-all)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: front
+            port:
+              number: 8080
