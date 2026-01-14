@@ -159,7 +159,7 @@
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
-            @select="selectItem(item, $event)"
+            @select="({ item, event }) => selectItem(item, event)"
             @dotclick="openItemMenu(item)"
           />
 
@@ -175,7 +175,7 @@
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
-            @select="selectItem(item, $event)"
+            @select="({ item, event }) => selectItem(item, event)"
           />
         </TransitionGroup>
       </div>
