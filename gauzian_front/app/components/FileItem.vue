@@ -9,8 +9,8 @@
     :data-item-type="item.type"
     :data-item-id="item.file_id || item.folder_id"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
-    @dblclick="$emit('click', item)"
-    @click ="$emit('select', item)"
+    @dblclick="$emit('click', item, $event)"
+    @click ="$emit('select', item, $event)"
     @mousedown="startDrag"
   >
     <span class="icon-wrapper">

@@ -1700,7 +1700,7 @@ const handleDragEnd = async (data) => {
   activeItem.value = null;
 };
 
-const selectItem = (item) => {
+const selectItem = (item, event) => {
 
   // si le ctrl ou cmd est appuyé on ajoute à la selection multiple
   console.log("Selecting event:", event);
