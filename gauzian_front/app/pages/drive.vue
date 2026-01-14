@@ -463,7 +463,7 @@ const loadTreeNode = async (node) => {
 
   try {
     const res = await fetch(
-      `${API_URL}/drive/get_file_folder/${node.folder_id}`,
+      `${API_URL}/drive/get_folder/${node.folder_id}`,
       {
         method: "GET",
         credentials: "include",
@@ -2209,6 +2209,7 @@ main {
   justify-content: center;
   padding: 0;
   margin-right: 6px;
+  margin-top: 0px;
   color: #555555;
   cursor: pointer;
 }

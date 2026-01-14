@@ -465,6 +465,41 @@ pub async fn get_file_folder_handler(
     })).into_response()
 }
 
+
+pub async fn get_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<Uuid>,
+) -> Response {
+
+    let folder_contents = match drive::get_folder_contents(&state.db_pool, claims.id, folder_id).await {
+        Ok(list) => list,
+        Err(e) => {
+            tracing::error!("Failed to retrieve folder contents: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve folder contents").into_response();
+        }
+    };
+
+    // full path
+    let full_path = match drive::get_full_path(&state.db_pool, claims.id, Some(folder_id)).await {
+        Ok(path) => {
+            tracing::info!("Full path retrieved: {:?}", path);
+            path
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve full path: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve full path").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "folder_contents": folder_contents,
+        "full_path": full_path,
+    })).into_response()
+}
+
+
+
 #[derive(Deserialize)]
 pub struct AbortUploadRequest {
     file_id: Uuid,
@@ -493,13 +528,13 @@ pub async fn delete_file_handler(
     Json(body): Json<DeleteFileRequest>,
 ) -> Response {
     match drive::delete_file(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
-        Ok(_) => ApiResponse::ok("File/Folder deleted successfully").into_response(),
+        Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("File not found").into_response()
         }
         Err(e) => {
-            tracing::error!("Failed to delete file/folder: {:?}", e); 
-            ApiResponse::internal_error("Failed to delete file/folder").into_response()
+            tracing::error!("Failed to delete file: {:?}", e); 
+            ApiResponse::internal_error("Failed to delete file").into_response()
         }
     }
 }

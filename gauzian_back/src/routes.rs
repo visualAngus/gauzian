@@ -16,6 +16,7 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/get_all_drive_info/{parent_id}", get(handlers::get_account_and_drive_info_handler))
         .route("/drive/create_folder", post(handlers::create_folder_handler))
         .route("/drive/get_file_folder/{parent_id}", get(handlers::get_file_folder_handler))
+        .route("/drive/get_folder/{folder_id}", get(handlers::get_folder_handler))
         .route("/drive/abort_upload", post(handlers::abort_upload_handler))
         .route("/drive/delete_file", post(handlers::delete_file_handler))
         .route("/drive/delete_folder", post(handlers::delete_folder_handler))
