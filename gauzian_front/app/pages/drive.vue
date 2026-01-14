@@ -142,6 +142,7 @@
             @moving="handleDragMove"
             @move-end="handleDragEnd"
             @select="selectItem"
+            @dotclick="openItemMenu(item)"
           />
 
           <!-- Fichiers en attente et en cours d'upload (avec clé stable) -->
@@ -1003,6 +1004,19 @@ onMounted(() => {
   });
 });
 
+
+const openItemMenu = (item) => {
+  const panel = rightClickPanel.value;
+  if (!panel) return;
+
+  rightClikedItem.value = item;
+
+  // Positionner le menu près de l'élément cliqué
+  const rect = event.currentTarget.getBoundingClientRect();
+  panel.style.display = "flex";
+  panel.style.top = rect.bottom + window.scrollY + "px";
+  panel.style.left = rect.left + window.scrollX + "px";
+};
 
 
 // Récupérer ou créer les dossiers depuis le chemin du fichier
