@@ -156,6 +156,20 @@ pub async fn get_files_and_folders_list(
     }))
 }
 
+pub async fn get_folder_contents(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<serde_json::Value, sqlx::Error> {
+    let contents = get_files_and_folders_list(pool, user_id, Some(folder_id)).await?;
+    // only return the "folders" field
+
+    let folders = contents.get("folders").cloned().unwrap_or_else(|| serde_json::json!([]));
+
+    Ok(folders)
+}
+
+
 pub async fn initialize_file_in_db(
     db_pool: &PgPool,
     user_id: Uuid,
