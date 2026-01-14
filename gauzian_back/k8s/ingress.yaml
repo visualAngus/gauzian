@@ -4,13 +4,14 @@ metadata:
   name: gauzian-ingress
   namespace: gauzian
   annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
 spec:
   ingressClassName: traefik
   tls:
   - hosts:
     - gauzian.pupin.fr
-    secretName: gauzian-tls
+    secretName: gauzian-tls-traefik
   rules:
   - host: gauzian.pupin.fr
     http:

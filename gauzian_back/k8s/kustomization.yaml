@@ -13,6 +13,5 @@ resources:
   - minio-pvc.yaml
   - minio-deployment.yaml
   - backend-deployment.yaml
-  - caddy-configmap.yaml
-  - caddy-deployment.yaml
   - front-deployment.yaml
+  - ingress.yaml
