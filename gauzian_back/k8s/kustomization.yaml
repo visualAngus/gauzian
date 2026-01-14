@@ -14,4 +14,6 @@ resources:
   - minio-deployment.yaml
   - backend-deployment.yaml
   - front-deployment.yaml
-  - ingress.yaml
+  - middleware.yaml
+  - ingressroute.yaml
+  # - ingress.yaml  # Remplacé par IngressRoute

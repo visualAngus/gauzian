@@ -1,0 +1,67 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gauzian-https
+  namespace: gauzian
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # MinIO Console (sous-domaine)
+    - match: Host(`minio.gauzian.pupin.fr`)
+      kind: Rule
+      services:
+        - name: minio
+          port: 9001
+    # API backend (avec strip /api)
+    - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/api`)
+      kind: Rule
+      middlewares:
+        - name: strip-api-prefix
+      services:
+        - name: backend
+          port: 3000
+    # MinIO S3 API (avec strip /s3)
+    - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/s3`)
+      kind: Rule
+      middlewares:
+        - name: strip-s3-prefix
+      services:
+        - name: minio
+          port: 9000
+    # Frontend (catch-all)
+    - match: Host(`gauzian.pupin.fr`)
+      kind: Rule
+      services:
+        - name: front
+          port: 8080
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gauzian-http
+  namespace: gauzian
+spec:
+  entryPoints:
+    - web
+  routes:
+    # Redirect HTTP to HTTPS
+    - match: Host(`gauzian.pupin.fr`) || Host(`minio.gauzian.pupin.fr`)
+      kind: Rule
+      services:
+        - name: front
+          port: 8080
+      middlewares:
+        - name: redirect-https
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: gauzian
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
