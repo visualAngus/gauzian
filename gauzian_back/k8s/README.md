@@ -1,6 +1,107 @@
 # Déploiement Kubernetes pour Gauzian
 
-Ce répertoire contient les manifestes Kubernetes convertis depuis Docker Compose.
+Architecture Kubernetes simplifiée avec Traefik Ingress Controller (intégré K3s).
+
+## Architecture
+
+- **Backend** : API Rust (2 replicas)
+- **Frontend** : Nuxt.js (2 replicas)
+- **PostgreSQL** : Base de données persistante
+- **Redis** : Cache en mémoire
+- **MinIO** : Stockage S3-compatible
+- **Traefik** : Ingress avec certificats Let's Encrypt automatiques
+
+## Avant de déployer
+
+### 1. Modifier les secrets
+
+Éditez [secrets.yaml](secrets.yaml) avec vos vraies valeurs :
+```yaml
+DB_USER: "admin"
+DB_PASSWORD: "votre_mot_de_passe"
+JWT_SECRET: "votre_secret_jwt"
+DATABASE_URL: "postgres://admin:motdepasse@db:5432/gauzian"
+```
+
+### 2. Builder et pusher les images Docker
+
+```bash
+# Backend
+cd gauzian_back
+docker build -t angusvisual/gauzian-backend:latest .
+docker push angusvisual/gauzian-backend:latest
+
+# Frontend
+cd ../gauzian_front
+docker build -t angusvisual/gauzian-front:latest .
+docker push angusvisual/gauzian-front:latest
+```
+
+## Déploiement
+
+### Déployer tous les services
+
+```bash
+kubectl apply -k gauzian_back/k8s/
+```
+
+### Vérifier le déploiement
+
+```bash
+# Pods
+kubectl get pods -n gauzian
+
+# Services
+kubectl get svc -n gauzian
+
+# Ingress
+kubectl get ingress -n gauzian
+
+# Logs backend
+kubectl logs -n gauzian -l app=backend --tail=50
+```
+
+## Accès
+
+- **HTTPS** : https://gauzian.pupin.fr
+- **HTTP** : http://gauzian.pupin.fr (redirige vers HTTPS)
+- **API** : https://gauzian.pupin.fr/api/*
+- **MinIO Console** : https://gauzian.pupin.fr/minio/*
+- **MinIO S3 API** : https://gauzian.pupin.fr/s3/*
+
+Le certificat SSL est automatiquement généré par Traefik via Let's Encrypt.
+
+## Mise à l'échelle
+
+```bash
+# Backend
+kubectl scale deployment backend -n gauzian --replicas=3
+
+# Frontend
+kubectl scale deployment front -n gauzian --replicas=3
+```
+
+## Mise à jour des images
+
+```bash
+# Après avoir pushé une nouvelle image
+kubectl rollout restart deployment/backend -n gauzian
+kubectl rollout restart deployment/front -n gauzian
+```
+
+## Suppression
+
+```bash
+# Supprimer tous les ressources
+kubectl delete namespace gauzian
+```
+
+## Notes
+
+- Les PVC utilisent le StorageClass par défaut (local-path sur K3s)
+- Traefik gère automatiquement les certificats Let's Encrypt
+- Les secrets doivent être modifiés avant le déploiement initial
+- PostgreSQL conserve les données même après redémarrage
 
 ## Structure des fichiers
 
