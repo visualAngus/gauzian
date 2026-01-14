@@ -469,9 +469,23 @@ pub async fn get_file_folder_handler(
 pub async fn get_folder_handler(
     State(state): State<AppState>,
     claims: jwt::Claims,
-    Path(folder_id): Path<Uuid>,
+    Path(folder_id): Path<String>,
 ) -> Response {
-
+    let folder_id = {
+        let s = folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid folder_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
     let folder_contents = match drive::get_folder_contents(&state.db_pool, claims.id, folder_id).await {
         Ok(list) => list,
         Err(e) => {
@@ -480,21 +494,8 @@ pub async fn get_folder_handler(
         }
     };
 
-    // full path
-    let full_path = match drive::get_full_path(&state.db_pool, claims.id, Some(folder_id)).await {
-        Ok(path) => {
-            tracing::info!("Full path retrieved: {:?}", path);
-            path
-        }
-        Err(e) => {
-            tracing::error!("Failed to retrieve full path: {:?}", e);
-            return ApiResponse::internal_error("Failed to retrieve full path").into_response();
-        }
-    };
-
     ApiResponse::ok(serde_json::json!({
-        "folder_contents": folder_contents,
-        "full_path": full_path,
+        "folder_contents": folder_contents
     })).into_response()
 }
 
