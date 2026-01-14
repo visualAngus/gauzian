@@ -155,7 +155,7 @@
             :item="item"
             status="uploaded"
             data-item-group="drive"
-            @click="click_on_item(item)"
+            @click="click_on_item(item, $event)"
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
@@ -595,7 +595,8 @@ onMounted(async () => {
   await expandTreeToCurrentPath();
 });
 
-const click_on_item = (item) => {
+const click_on_item = (item, event) => {
+  console.log("Item event:", item, event);
   if (item.type === "folder") {
     // naviguer dans le dossier
     router.push(`/drive?folder_id=${item.folder_id}`);
@@ -1701,10 +1702,6 @@ const handleDragEnd = async (data) => {
 };
 
 const selectItem = (item, event) => {
-
-  // si le ctrl ou cmd est appuyé on ajoute à la selection multiple
-  console.log("Selecting event:", event);
-
   selectedItem.value = item;
 };
 
