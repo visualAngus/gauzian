@@ -134,6 +134,7 @@
 
       <div
         class="section_items"
+        @click.self="clearSelection"
         v-dropzone="{
           inputRef: fileInput,
           onFiles: onFilesFromDrop,
@@ -144,6 +145,7 @@
           name="file-list"
           tag="div"
           class="file-grid"
+          @click.self="clearSelection"
           @after-leave="onFileListAfterLeave"
         >
           <!-- Fichiers uploadés -->
@@ -1733,8 +1735,13 @@ const selectItem = (item, event) => {
 
   selectedItems.value = newSelectedItems;
   selectedItemsMap.value = newSelectedItemsMap;
-;
 };
+
+const clearSelection = () => {
+  selectedItems.value = new Set();
+  selectedItemsMap.value = new Map();
+};
+
 // Style dynamique pour l'élément "fantôme" qui suit la souris
 const ghostStyle = computed(() => ({
   position: "fixed",
