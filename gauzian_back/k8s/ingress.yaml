@@ -11,8 +11,21 @@ spec:
   tls:
   - hosts:
     - gauzian.pupin.fr
+    - minio.gauzian.pupin.fr
     secretName: gauzian-tls-traefik
   rules:
+  # MinIO Console (sous-domaine)
+  - host: minio.gauzian.pupin.fr
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio
+            port:
+              number: 9001
+  # Application principale
   - host: gauzian.pupin.fr
     http:
       paths:
@@ -24,14 +37,6 @@ spec:
             name: backend
             port:
               number: 3000
-      # MinIO console
-      - path: /minio
-        pathType: Prefix
-        backend:
-          service:
-            name: minio
-            port:
-              number: 9001
       # MinIO S3 API
       - path: /s3
         pathType: Prefix
@@ -40,7 +45,7 @@ spec:
             name: minio
             port:
               number: 9000
-      # Frontend (catch-all)
+      # Frontend (catch-all, must be last)
       - path: /
         pathType: Prefix
         backend:
