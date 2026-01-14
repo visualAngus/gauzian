@@ -1546,7 +1546,7 @@ const handleDragEnd = async (data) => {
     '.item[data-item-type="folder"]'
   );
   const folderTreeNodeElement = elementUnderMouse?.closest(
-    '.tree-node[data-item-type="folder"]'
+    '.folder-three'
   );
   if (breadcrumbElement) {
     const itemId = activeItem.value.file_id || activeItem.value.folder_id;
