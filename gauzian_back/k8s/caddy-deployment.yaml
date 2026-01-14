@@ -54,4 +54,18 @@ spec:
   - port: 443
     targetPort: 443
     name: https
-  type: LoadBalancer
+  type: NodePort
+  externalTrafficPolicy: Cluster
+  sessionAffinity: None
+  # NodePorts fixes the ports so firewall/NAT rules stay stable
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    nodePort: 31176
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 443
+    nodePort: 31929
+    protocol: TCP
