@@ -475,7 +475,9 @@ const loadTreeNode = async (node) => {
     }
 
     const resData = await res.json();
-    const folders = resData.files_and_folders?.folders ?? [];
+    const folders = resData.folder_contents.filter(
+      (item) => item.type === "folder"
+    );
     const childrenNodes = [];
 
     for (const folder of folders) {
