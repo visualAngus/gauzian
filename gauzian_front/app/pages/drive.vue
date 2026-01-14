@@ -208,6 +208,7 @@
         activeItem.metadata?.filename ||
         "Item"
       }}
+      <span v-if="draggedItems.length > 1" class="drag-count">+{{ draggedItems.length - 1 }}</span>
     </span>
   </div>
 </template>
@@ -1529,13 +1530,25 @@ const renameItem = async (item) => {
 
 const isDragging = ref(false);
 const activeItem = ref(null);
+const draggedItems = ref([]); // Tous les items en cours de déplacement
 const mousePos = ref({ x: 0, y: 0 });
 
 const handleDragStart = (data) => {
   isDragging.value = true;
   activeItem.value = data.item;
   mousePos.value = { x: data.x, y: data.y };
-  console.log("Drag started:", data.item, "at", data.x, data.y);
+  
+  const itemId = data.item.type === "file" ? data.item.file_id : data.item.folder_id;
+  
+  // Si l'item draggé fait partie de la sélection multiple, on déplace tous les items sélectionnés
+  if (selectedItems.value.has(itemId) && selectedItems.value.size > 1) {
+    draggedItems.value = Array.from(selectedItemsMap.value.values());
+    console.log("Drag started with", draggedItems.value.length, "items");
+  } else {
+    // Sinon on déplace juste cet item
+    draggedItems.value = [data.item];
+    console.log("Drag started:", data.item);
+  }
 };
 
 const handleDragMove = (data) => {
@@ -1543,8 +1556,36 @@ const handleDragMove = (data) => {
   mousePos.value = { x: data.x, y: data.y };
 };
 
+const moveItem = async (item, targetFolderId) => {
+  const itemId = item.file_id || item.folder_id;
+  const itemType = item.type;
+  
+  const endpoint =
+    itemType === "file"
+      ? `${API_URL}/drive/move_file`
+      : `${API_URL}/drive/move_folder`;
+
+  const body =
+    itemType === "file"
+      ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+      : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to move ${itemType} ${itemId}`);
+  }
+};
+
 const handleDragEnd = async (data) => {
-  if (!activeItem.value) {
+  if (!activeItem.value || draggedItems.value.length === 0) {
     isDragging.value = false;
     return;
   }
@@ -1556,152 +1597,58 @@ const handleDragEnd = async (data) => {
   const targetFolderElement = elementUnderMouse?.closest(
     '.item[data-item-type="folder"]'
   );
-  const folderTreeNodeElement = elementUnderMouse?.closest(
-    '.folder-three'
-  );
+  const folderTreeNodeElement = elementUnderMouse?.closest('.folder-three');
+
+  let targetFolderId = null;
+
   if (breadcrumbElement) {
-    const itemId = activeItem.value.file_id || activeItem.value.folder_id;
-    const itemType = activeItem.value.type;
-    console.log("Drag ended over breadcrumb:", breadcrumbElement);
-    const targetFolderId = breadcrumbElement.dataset?.itemId;
-
-    try {
-      // Appel API pour déplacer l'item
-      const endpoint =
-        itemType === "file"
-          ? `${API_URL}/drive/move_file`
-          : `${API_URL}/drive/move_folder`;
-
-      const body =
-        itemType === "file"
-          ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-          : { folder_id: itemId, new_parent_folder_id: targetFolderId };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        console.log("Item moved successfully");
-        // Recharger le dossier courant
-        await loadPath();
-        await refreshTreeNode(activeFolderId.value);
-        await refreshTreeNode(targetFolderId);
-      } else {
-        console.error("Failed to move item");
-        alert("Erreur lors du déplacement de l'élément");
-      }
-    } catch (error) {
-      console.error("Error moving item:", error);
-      alert("Erreur lors du déplacement de l'élément");
-    }
+    targetFolderId = breadcrumbElement.dataset?.itemId;
   } else if (targetFolderElement) {
-    console.log("Drag ended over element:", targetFolderElement);
-    const targetFolderId = targetFolderElement.dataset?.itemId;
-    const itemType = activeItem.value.type;
-    const itemId = activeItem.value.file_id || activeItem.value.folder_id;
+    targetFolderId = targetFolderElement.dataset?.itemId;
+  } else if (folderTreeNodeElement) {
+    targetFolderId = folderTreeNodeElement.dataset?.folderId;
+  }
 
-    // Éviter de déplacer un dossier dans lui-même
-    if (itemType === "folder" && itemId === targetFolderId) {
-      console.log("Cannot move a folder into itself");
-      isDragging.value = false;
-      activeItem.value = null;
-      return;
-    }
+  if (!targetFolderId) {
+    isDragging.value = false;
+    activeItem.value = null;
+    draggedItems.value = [];
+    return;
+  }
 
-    try {
-      // Appel API pour déplacer l'item
-      const endpoint =
-        itemType === "file"
-          ? `${API_URL}/drive/move_file`
-          : `${API_URL}/drive/move_folder`;
-
-      const body =
-        itemType === "file"
-          ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-          : { folder_id: itemId, new_parent_folder_id: targetFolderId };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        console.log("Item moved successfully");
-        // Recharger le dossier courant
-        await loadPath();
-        await refreshTreeNode(activeFolderId.value);
-        await refreshTreeNode(targetFolderId);
-      } else {
-        console.error("Failed to move item");
-        alert("Erreur lors du déplacement de l'élément");
+  try {
+    // Vérifier qu'on ne déplace pas un dossier dans lui-même
+    for (const item of draggedItems.value) {
+      const itemId = item.file_id || item.folder_id;
+      if (item.type === "folder" && itemId === targetFolderId) {
+        console.log("Cannot move a folder into itself");
+        isDragging.value = false;
+        activeItem.value = null;
+        draggedItems.value = [];
+        return;
       }
-    } catch (error) {
-      console.error("Error moving item:", error);
-      alert("Erreur lors du déplacement de l'élément");
     }
-  } else if (folderTreeNodeElement){
-    const targetFolderId = folderTreeNodeElement.dataset?.folderId;
 
-    console.log("Drag ended over tree node:", folderTreeNodeElement);
-    const itemId = activeItem.value.file_id || activeItem.value.folder_id;
-    const itemType = activeItem.value.type;
+    console.log(`Moving ${draggedItems.value.length} item(s) to folder ${targetFolderId}`);
+
+    // Déplacer tous les items
+    const movePromises = draggedItems.value.map(item => moveItem(item, targetFolderId));
+    await Promise.all(movePromises);
+
+    console.log("All items moved successfully");
     
-    if (itemType === "folder" && itemId === targetFolderId) {
-      console.log("Cannot move a folder into itself");
-      isDragging.value = false;
-      activeItem.value = null;
-      return;
-    }
-
-    try {
-      // Appel API pour déplacer l'item
-      const endpoint =
-        itemType === "file"
-          ? `${API_URL}/drive/move_file`
-          : `${API_URL}/drive/move_folder`;
-
-      const body =
-        itemType === "file"
-          ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-          : { folder_id: itemId, new_parent_folder_id: targetFolderId };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        console.log("Item moved successfully");
-        // Recharger le dossier courant
-        await loadPath();
-        await refreshTreeNode(activeFolderId.value);
-        await refreshTreeNode(targetFolderId);
-      } else {
-        console.error("Failed to move item");
-        alert("Erreur lors du déplacement de l'élément");
-      }
-    } catch (error) {
-      console.error("Error moving item:", error);
-      alert("Erreur lors du déplacement de l'élément");
-    }
+    // Recharger le dossier courant
+    await loadPath();
+    await refreshTreeNode(activeFolderId.value);
+    await refreshTreeNode(targetFolderId);
+  } catch (error) {
+    console.error("Error moving items:", error);
+    alert("Erreur lors du déplacement des éléments");
   }
 
   isDragging.value = false;
   activeItem.value = null;
+  draggedItems.value = [];
 };
 
 const selectItem = (item, event) => {
@@ -2229,6 +2176,20 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drag-count {
+  background-color: #4c8eaf;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
 }
 
 .selected-item {
