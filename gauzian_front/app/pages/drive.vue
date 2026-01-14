@@ -1702,7 +1702,13 @@ const handleDragEnd = async (data) => {
 };
 
 const selectItem = (item, event) => {
-  console.log("Item event:", item, event);
+  
+  // si ctrl ou cmd est appuyé on ajoute à la selection
+  if (event.ctrlKey || event.metaKey) {
+    console.log("Multi-selection not implemented yet");
+    return;
+  }
+
   selectedItem.value = item;
 };
 
