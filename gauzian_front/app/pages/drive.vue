@@ -175,7 +175,7 @@
             @move-start="handleDragStart"
             @moving="handleDragMove"
             @move-end="handleDragEnd"
-            @select="selectItem"
+            @select="selectItem(item, $event)"
           />
         </TransitionGroup>
       </div>
