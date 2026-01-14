@@ -58,7 +58,7 @@
       </svg>
     </span>
 
-    <span class="menu-dots" v-else>
+    <span class="menu-dots" v-else @click="$emit('dotclick',item)">
       <svg viewBox="0 0 24 24">
         <circle cx="12" cy="5" r="1.5" />
         <circle cx="12" cy="12" r="1.5" />
@@ -87,7 +87,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["click", "select", "move-start","moving","move-end"]);
+const emit = defineEmits(["click", "select", "move-start","moving","move-end","dotclick"]);
 
 const DRAG_THRESHOLD = 5; // pixels avant d'activer le drag
 let dragStartPos = null;
