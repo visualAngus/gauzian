@@ -1,11 +1,29 @@
 <template>
-
   <div id="div_pannel_right_click" ref="rightClickPanel">
-    <a @click="createFolder()" v-if="rightClikedItem?.dataset?.itemType === 'folder'">Nouveau dossier</a>
-    <a @click="renameItem(rightClikedItem)" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Renommer</a>
-    <a @click="deleteItem(rightClikedItem)" v-if="rightClikedItem?.dataset && (rightClikedItem.dataset.itemType === 'file' || rightClikedItem.dataset.itemType === 'folder')">Supprimer</a>
+    <a
+      @click="createFolder()"
+      v-if="rightClikedItem?.dataset?.itemType === 'folder'"
+      >Nouveau dossier</a
+    >
+    <a
+      @click="renameItem(rightClikedItem)"
+      v-if="
+        rightClikedItem?.dataset &&
+        (rightClikedItem.dataset.itemType === 'file' ||
+          rightClikedItem.dataset.itemType === 'folder')
+      "
+      >Renommer</a
+    >
+    <a
+      @click="deleteItem(rightClikedItem)"
+      v-if="
+        rightClikedItem?.dataset &&
+        (rightClikedItem.dataset.itemType === 'file' ||
+          rightClikedItem.dataset.itemType === 'folder')
+      "
+      >Supprimer</a
+    >
   </div>
-
 
   <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
     <h3>Upload/Download Panel</h3>
@@ -58,17 +76,15 @@
         </svg>
         Nouveau dossier
       </button>
-      <!-- <div class="drop-zone" :class="{ 'is-over': isOver }">
-        Dépose fichiers ou dossiers
-        <input
-          ref="fileInput"
-          type="file"
-          multiple
-          webkitdirectory
-          class="hidden"
-          @change="onNativeChange"
+
+      <div class="div_treeview">
+        <FolderTreeNode
+          :node="folderTree"
+          :active-id="activeFolderId"
+          @select="selectFolderFromTree"
+          @toggle="toggleFolderNode"
         />
-      </div> -->
+      </div>
     </div>
 
     <div class="div_right_section">
@@ -133,7 +149,9 @@
           <!-- Fichiers uploadés -->
           <FileItem
             v-for="item in displayedDriveItems"
-            :key="'uploaded-' + item.type + '-' + (item.folder_id || item.file_id)"
+            :key="
+              'uploaded-' + item.type + '-' + (item.folder_id || item.file_id)
+            "
             :item="item"
             status="uploaded"
             data-item-group="drive"
@@ -165,11 +183,7 @@
   </main>
 
   <!-- Élément de drag qui suit la souris -->
-  <div
-    v-if="isDragging && activeItem"
-    class="drag-ghost"
-    :style="ghostStyle"
-  >
+  <div v-if="isDragging && activeItem" class="drag-ghost" :style="ghostStyle">
     <span class="icon-wrapper">
       <svg
         v-if="activeItem.type === 'folder'"
@@ -187,13 +201,25 @@
       </svg>
     </span>
     <span class="drag-label">
-      {{ activeItem.metadata?.folder_name || activeItem.metadata?.filename || "Item" }}
+      {{
+        activeItem.metadata?.folder_name ||
+        activeItem.metadata?.filename ||
+        "Item"
+      }}
     </span>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  defineComponent,
+} from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
@@ -215,6 +241,56 @@ import {
 
 const API_URL = "https://gauzian.pupin.fr/api";
 
+const FolderTreeNode = defineComponent({
+  name: "FolderTreeNode",
+  props: {
+    node: {
+      type: Object,
+      required: true,
+    },
+    activeId: {
+      type: String,
+      required: true,
+    },
+  },
+  emits: ["select", "toggle"],
+  setup(props, { emit }) {
+    const onToggle = () => emit("toggle", props.node);
+    const onSelect = () => emit("select", props.node);
+    return { onToggle, onSelect };
+  },
+  template: `
+    <div class="folder-three" :data-folder-id="node.folder_id">
+      <div class="div_name_bnt" :class="{ 'is-active-folder': activeId === node.folder_id }">
+        <button class="tree-toggle" @click.stop="onToggle">
+          <span v-if="node.isLoading">...</span>
+          <span v-else-if="(node.children?.length ?? 0) > 0 || !node.isLoaded">
+            {{ node.isExpanded ? "v" : ">" }}
+          </span>
+          <span v-else>.</span>
+        </button>
+        <a
+          class="three-folder-name"
+          :class="{ select_folder_three: activeId === node.folder_id }"
+          @click.prevent="onSelect"
+        >
+          {{ node.metadata?.folder_name || "Dossier sans nom" }}
+        </a>
+      </div>
+      <div class="div_enfants" v-show="node.isExpanded">
+        <FolderTreeNode
+          v-for="child in node.children"
+          :key="child.folder_id"
+          :node="child"
+          :active-id="activeId"
+          @select="$emit('select', $event)"
+          @toggle="$emit('toggle', $event)"
+        />
+      </div>
+    </div>
+  `,
+});
+
 const etat = ref("login");
 const loading = ref(false);
 
@@ -231,7 +307,7 @@ const autologin = async () => {
         console.warn(
           "Keys not found or invalid in IndexedDB during auto-login."
         );
-        window.location.href = "/login";
+        // window.location.href = "/login";
       }
       if (is_ok) {
         console.log("Auto-login successful, keys are valid.");
@@ -240,7 +316,7 @@ const autologin = async () => {
       }
     } else {
       console.log("No valid session found for auto-login.");
-      window.location.href = "/login";
+      // window.location.href = "/login";
     }
   } catch (error) {
     console.error("Auto-login failed:", error);
@@ -251,7 +327,7 @@ const autologin = async () => {
       );
       // Optionally clear IndexedDB here if needed
     }
-    window.location.href = "/login";
+    // window.location.href = "/login";
   }
 };
 
@@ -284,11 +360,23 @@ const rightClikedItem = ref(null);
 
 const selectedItem = ref(null);
 
+const folderTree = ref({
+  folder_id: "root",
+  metadata: { folder_name: "Mon Drive" },
+  children: [],
+  isExpanded: true,
+  isLoaded: false,
+  isLoading: false,
+  parent_folder_id: null,
+});
+
 // Computed property pour combiner les fichiers en attente et en cours d'upload
 const pendingAndUploadingFiles = computed(() => {
   return [
     ...listToUpload.value
-      .filter(file => (file._targetFolderId || 'root') === activeFolderId.value)
+      .filter(
+        (file) => (file._targetFolderId || "root") === activeFolderId.value
+      )
       .map((file) => ({
         ...file,
         _status: "pending",
@@ -296,7 +384,9 @@ const pendingAndUploadingFiles = computed(() => {
         _progress: 0,
       })),
     ...listUploadInProgress.value
-      .filter(file => (file._targetFolderId || 'root') === activeFolderId.value)
+      .filter(
+        (file) => (file._targetFolderId || "root") === activeFolderId.value
+      )
       .map((file) => ({
         ...file,
         _status: "uploading",
@@ -304,13 +394,15 @@ const pendingAndUploadingFiles = computed(() => {
         _progress: fileProgressMap.value[file._uploadId] || 0,
       })),
     ...listUploaded.value
-      .filter(file => (file._targetFolderId || 'root') === activeFolderId.value)
+      .filter(
+        (file) => (file._targetFolderId || "root") === activeFolderId.value
+      )
       .map((file) => ({
         ...file,
         _status: "uploaded",
         _name: file.name,
         _progress: 100,
-      }))
+      })),
   ];
 });
 
@@ -318,7 +410,6 @@ const activeFolderId = ref("root");
 const liste_decrypted_items = ref([]);
 const displayedDriveItems = ref([]);
 const full_path = ref([]);
-
 
 // On garde les updates "diff" pour un refresh dans le même dossier,
 // mais on fait un vrai "out -> in" lors de la navigation (changement de dossier).
@@ -356,7 +447,10 @@ const applyDriveItemsForDisplay = async (items, { outIn = false } = {}) => {
   queuedDriveItems = items;
 
   // Si rien n'est affiché, on affiche directement.
-  if (displayedDriveItems.value.length === 0 && !driveListTransition.value.leaving) {
+  if (
+    displayedDriveItems.value.length === 0 &&
+    !driveListTransition.value.leaving
+  ) {
     displayedDriveItems.value = [...items];
     queuedDriveItems = null;
     return;
@@ -398,6 +492,149 @@ const activeSection = ref("my_drive"); // 'my_drive', 'shared_with_me', 'recent'
 const loadingDrive = ref(true);
 
 const router = useRouter();
+
+const decryptFolderMetadata = async (folder) => {
+  const encryptedMetadata = folder.encrypted_metadata;
+  const decryptkey = await decryptWithStoredPrivateKey(
+    folder.encrypted_folder_key
+  );
+  const metadataStr = await decryptSimpleDataWithDataKey(
+    encryptedMetadata,
+    decryptkey
+  );
+  const metadata = JSON.parse(metadataStr);
+  metadata.encrypted_data_key = folder.encrypted_folder_key;
+  return metadata;
+};
+
+const loadTreeNode = async (node) => {
+  if (!node) return;
+  node.isLoading = true;
+
+  try {
+    const res = await fetch(
+      `${API_URL}/drive/get_file_folder/${node.folder_id}`,
+      {
+        method: "GET",
+        credentials: "include",
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to get folder content for tree");
+    }
+
+    const resData = await res.json();
+    const folders = resData.files_and_folders?.folders ?? [];
+    const childrenNodes = [];
+
+    for (const folder of folders) {
+      try {
+        const metadata = await decryptFolderMetadata(folder);
+        childrenNodes.push({
+          ...folder,
+          metadata,
+          children: [],
+          isExpanded: false,
+          isLoaded: false,
+          isLoading: false,
+          parent_folder_id: node.folder_id,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to decrypt metadata for tree folder:",
+          folder.folder_id,
+          error
+        );
+      }
+    }
+
+    node.children = childrenNodes;
+    node.isLoaded = true;
+  } catch (error) {
+    console.error("Failed to load folder tree node:", node.folder_id, error);
+  } finally {
+    node.isLoading = false;
+  }
+};
+
+const findNodeById = (node, id) => {
+  if (!node) return null;
+  if (node.folder_id === id) return node;
+  if (!node.children) return null;
+
+  for (const child of node.children) {
+    const found = findNodeById(child, id);
+    if (found) return found;
+  }
+
+  return null;
+};
+
+const refreshTreeNode = async (folderId) => {
+  const targetNode = findNodeById(folderTree.value, folderId);
+  if (!targetNode) return;
+  targetNode.isLoaded = false;
+  await loadTreeNode(targetNode);
+  targetNode.isExpanded = true;
+};
+
+const expandTreeToCurrentPath = async () => {
+  if (!folderTree.value) return;
+
+  let currentNode = folderTree.value;
+  currentNode.isExpanded = true;
+
+  if (!currentNode.isLoaded) {
+    await loadTreeNode(currentNode);
+  }
+
+  for (const pathItem of full_path.value) {
+    const targetId = pathItem.folder_id;
+    if (!targetId) continue;
+
+    let childNode =
+      currentNode.children?.find((child) => child.folder_id === targetId) ||
+      null;
+
+    if (!childNode) {
+      await loadTreeNode(currentNode);
+      childNode =
+        currentNode.children?.find((child) => child.folder_id === targetId) ||
+        null;
+    }
+
+    if (!childNode) {
+      break;
+    }
+
+    childNode.isExpanded = true;
+
+    if (!childNode.isLoaded) {
+      await loadTreeNode(childNode);
+    }
+
+    currentNode = childNode;
+  }
+};
+
+const toggleFolderNode = async (node) => {
+  node.isExpanded = !node.isExpanded;
+  if (node.isExpanded && !node.isLoaded) {
+    await loadTreeNode(node);
+  }
+};
+
+const selectFolderFromTree = async (node) => {
+  if (!node || !node.folder_id) return;
+  activeFolderId.value = node.folder_id;
+  router.push(`/drive?folder_id=${node.folder_id}`);
+};
+
+onMounted(async () => {
+  await loadTreeNode(folderTree.value);
+  await expandTreeToCurrentPath();
+});
 
 const click_on_item = (item) => {
   if (item.type === "folder") {
@@ -533,7 +770,7 @@ const uploadFile = async (file, file_id, dataKey) => {
       ...fileProgressMap.value,
       [file_id]: parseFloat(progress),
     };
-    
+
     // Petit délai pour éviter le rate limiting (50ms entre chaque chunk)
     await new Promise((resolve) => setTimeout(resolve, 50));
   };
@@ -604,6 +841,8 @@ const get_all_info = async () => {
   const files_and_folders = resData.files_and_folders;
   const user_info = resData.user_info;
   const fullPathData = resData.full_path;
+
+  full_path.value = [];
 
   // Reset des placeholders "uploaded" pour ce dossier pour éviter les doublons
   listUploaded.value = listUploaded.value.filter(
@@ -704,7 +943,7 @@ const loadPath = async ({ outIn = false } = {}) => {
   const files_and_folders = resData.files_and_folders;
   const fullPathData = resData.full_path;
 
-//   si full path est vide on renvoie vers root pour etre sur et on reset le ?folder_id
+  //   si full path est vide on renvoie vers root pour etre sur et on reset le ?folder_id
   if (fullPathData.length === 0 && activeFolderId.value !== "root") {
     activeFolderId.value = "root";
     router.push(`/drive?folder_id=root`);
@@ -734,7 +973,7 @@ const loadPath = async ({ outIn = false } = {}) => {
           decryptkey
         );
         const metadata = JSON.parse(metadataStr);
-          // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
+        // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
         metadata.encrypted_data_key = item.encrypted_file_key;
         decryptedItems.push({
           ...item,
@@ -830,11 +1069,14 @@ const createFolder = async () => {
   console.log("Folder created with ID:", resData.folder_id);
   // Rafraîchir la liste des fichiers/dossiers
   await loadPath();
+  await refreshTreeNode(activeFolderId.value);
 
   // il faut reussir a seclection le nouveau dossier créé pour le renommer directement
   await nextTick();
   const id = resData.folder_id;
-  const newFolderElement = document.querySelector(`.item[data-item-id="${id}"]`);
+  const newFolderElement = document.querySelector(
+    `.item[data-item-id="${id}"]`
+  );
 
   console.log("New folder element:", newFolderElement);
   if (newFolderElement) {
@@ -971,7 +1213,10 @@ onMounted(() => {
     if (!panel) return;
 
     // est ce qu'il y a un item sous le curseur ?
-    const element_under_cursor = document.elementFromPoint(e.clientX, e.clientY);
+    const element_under_cursor = document.elementFromPoint(
+      e.clientX,
+      e.clientY
+    );
     if (element_under_cursor && element_under_cursor.closest(".item")) {
       // on log l'item en question
       const item = element_under_cursor.closest(".item");
@@ -1004,7 +1249,6 @@ onMounted(() => {
   });
 });
 
-
 const openItemMenu = (item) => {
   const panel = rightClickPanel.value;
   if (!panel) return;
@@ -1017,7 +1261,6 @@ const openItemMenu = (item) => {
   panel.style.top = rect.bottom + window.scrollY + "px";
   panel.style.left = rect.left + window.scrollX + "px";
 };
-
 
 // Récupérer ou créer les dossiers depuis le chemin du fichier
 const getOrCreateFolderHierarchy = async (
@@ -1139,12 +1382,12 @@ const onFilesFromDrop = async (files) => {
 };
 
 const deleteItem = async (item) => {
-    // récupérer l'attrribut data-item-type
-    // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
-    const itemId = item.dataset?.itemId;
-    const itemType = item.dataset?.itemType;
-    // console.log("ID de l'item à supprimer:", itemId);
-    if (itemType === "file") {
+  // récupérer l'attrribut data-item-type
+  // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
+  const itemId = item.dataset?.itemId;
+  const itemType = item.dataset?.itemType;
+  // console.log("ID de l'item à supprimer:", itemId);
+  if (itemType === "file") {
     const res = await fetch(`${API_URL}/drive/delete_file`, {
       method: "POST",
       credentials: "include",
@@ -1156,7 +1399,7 @@ const deleteItem = async (item) => {
     if (!res.ok) {
       throw new Error("Failed to delete file");
     }
-    } else if (itemType === "folder") {
+  } else if (itemType === "folder") {
     const res = await fetch(`${API_URL}/drive/delete_folder`, {
       method: "POST",
       credentials: "include",
@@ -1168,162 +1411,162 @@ const deleteItem = async (item) => {
     if (!res.ok) {
       throw new Error("Failed to delete folder");
     }
-    }
-    await loadPath();
-
+  }
+  await loadPath();
+  await refreshTreeNode(activeFolderId.value);
 };
 
 const renameItem = async (item) => {
-    const itemId = item.dataset?.itemId;
-    const itemType = item.dataset?.itemType;
-    const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
-    // console.log(metadata);
+  const itemId = item.dataset?.itemId;
+  const itemType = item.dataset?.itemType;
+  const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
+  // console.log(metadata);
 
-    if (!metadata) {
-        console.error("No metadata found for item");
-        return;
+  if (!metadata) {
+    console.error("No metadata found for item");
+    return;
+  }
+  const encrypted_data_key = metadata.encrypted_data_key;
+  if (!encrypted_data_key) {
+    console.error("No encrypted data key found in metadata");
+    return;
+  }
+
+  // enlever l'encrypted_data_key des metadata pour ne pas le modifier
+  delete metadata.encrypted_data_key;
+
+  // selectionné le span de classe filename ou foldername
+  const nameElement = item.querySelector(".filename, .foldername");
+  if (!nameElement) {
+    console.error("Name element not found");
+    return;
+  }
+
+  const name = itemType === "file" ? metadata.filename : metadata.folder_name;
+  console.log("Current name:", name);
+
+  // Préparer le style pour édition sur une seule ligne
+  nameElement.style.textOverflow = "clip";
+  nameElement.style.whiteSpace = "nowrap";
+  nameElement.style.overflow = "auto";
+  nameElement.style.display = "block";
+  nameElement.style.maxWidth = "100%";
+
+  // Remplacer le texte par le nom actuel
+  nameElement.textContent = name;
+
+  // Rendre le nom éditable
+  nameElement.contentEditable = "true";
+
+  // sélectionner le texte
+  // Sélectionner uniquement le nom sans l'extension
+  const dotIndex = name.lastIndexOf(".");
+  let start = 0;
+  let end = name.length;
+  if (dotIndex > 0 && itemType === "file") {
+    end = dotIndex;
+  }
+  const range = document.createRange();
+  range.setStart(nameElement.firstChild || nameElement, start);
+  range.setEnd(nameElement.firstChild || nameElement, end);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  nameElement.focus();
+
+  // Gérer la fin de l'édition
+  const finishEditing = async () => {
+    nameElement.contentEditable = "false";
+    const newName = nameElement.textContent.trim();
+
+    // Si le nom n'a pas changé, on annule
+    if (newName === name) {
+      nameElement.style.textOverflow = "ellipsis";
+      nameElement.style.whiteSpace = "nowrap";
+      nameElement.style.overflow = "hidden";
+      nameElement.style.display = "block";
+      nameElement.textContent = name;
+      return;
     }
-    const encrypted_data_key = metadata.encrypted_data_key;
-    if (!encrypted_data_key) {
-        console.error("No encrypted data key found in metadata");
-        return;
+
+    try {
+      const decryptkey = await decryptWithStoredPrivateKey(encrypted_data_key);
+
+      const encryptedMetadata = await encryptSimpleDataWithDataKey(
+        JSON.stringify(
+          itemType === "file"
+            ? { ...metadata, filename: newName }
+            : { ...metadata, folder_name: newName }
+        ),
+        decryptkey
+      );
+
+      const endpoint =
+        itemType === "file"
+          ? `${API_URL}/drive/rename_file`
+          : `${API_URL}/drive/rename_folder`;
+      const body =
+        itemType === "file"
+          ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
+          : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
+      const res = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to rename item");
+      }
+
+      // Réinitialiser les styles
+      nameElement.style.textOverflow = "ellipsis";
+      nameElement.style.whiteSpace = "nowrap";
+      nameElement.style.overflow = "hidden";
+      nameElement.style.display = "block";
+
+      // Mettre à jour le texte avec le nouveau nom
+      nameElement.textContent = newName;
+
+      // Recharger le path pour synchroniser
+      await loadPath();
+      await refreshTreeNode(activeFolderId.value);
+    } catch (error) {
+      console.error("Error renaming item:", error);
+      // Restaurer le nom original en cas d'erreur
+      nameElement.style.textOverflow = "ellipsis";
+      nameElement.style.whiteSpace = "nowrap";
+      nameElement.style.overflow = "hidden";
+      nameElement.style.display = "block";
+      nameElement.textContent = name;
+      alert("Erreur lors du renommage de l'élément");
     }
-
-    // enlever l'encrypted_data_key des metadata pour ne pas le modifier
-    delete metadata.encrypted_data_key;
-
-    // selectionné le span de classe filename ou foldername
-    const nameElement = item.querySelector(".filename, .foldername");
-    if (!nameElement) {
-        console.error("Name element not found");
-        return;
+  };
+  nameElement.addEventListener("blur", finishEditing, { once: true });
+  nameElement.addEventListener("keydown", (e) => {
+    // console.log(e.key);
+    if (e.key === "Enter") {
+      e.preventDefault();
+      nameElement.blur(); // Utiliser blur pour déclencher finishEditing
     }
-
-    const name = itemType === "file" ? metadata.filename : metadata.folder_name;
-    console.log("Current name:", name);
-
-    // Préparer le style pour édition sur une seule ligne
-    nameElement.style.textOverflow = "clip";
-    nameElement.style.whiteSpace = "nowrap";
-    nameElement.style.overflow = "auto";
-    nameElement.style.display = "block";
-    nameElement.style.maxWidth = "100%";
-
-    // Remplacer le texte par le nom actuel
-    nameElement.textContent = name;
-
-    // Rendre le nom éditable
-    nameElement.contentEditable = "true";
-
-    // sélectionner le texte
-    // Sélectionner uniquement le nom sans l'extension
-    const dotIndex = name.lastIndexOf(".");
-    let start = 0;
-    let end = name.length;
-    if (dotIndex > 0 && itemType === "file") {
-      end = dotIndex;
-    }
-    const range = document.createRange();
-    range.setStart(nameElement.firstChild || nameElement, start);
-    range.setEnd(nameElement.firstChild || nameElement, end);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-    nameElement.focus();
-
-    // Gérer la fin de l'édition
-    const finishEditing = async () => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      // Annuler l'édition
       nameElement.contentEditable = "false";
-      const newName = nameElement.textContent.trim();
-
-      // Si le nom n'a pas changé, on annule
-      if (newName === name) {
-        nameElement.style.textOverflow = "ellipsis";
-        nameElement.style.whiteSpace = "nowrap";
-        nameElement.style.overflow = "hidden";
-        nameElement.style.display = "block";
-        nameElement.textContent = name;
-        return;
-      }
-
-      try {
-        const decryptkey = await decryptWithStoredPrivateKey(encrypted_data_key);
-
-        const encryptedMetadata = await encryptSimpleDataWithDataKey(
-          JSON.stringify(
-            itemType === "file"
-              ? { ...metadata, filename: newName }
-              : { ...metadata, folder_name: newName }
-          ),
-          decryptkey
-        );
-
-        const endpoint =
-          itemType === "file"
-            ? `${API_URL}/drive/rename_file`
-            : `${API_URL}/drive/rename_folder`;
-        const body =
-          itemType === "file"
-            ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
-            : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
-        const res = await fetch(endpoint, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          throw new Error("Failed to rename item"); 
-        }
-
-        // Réinitialiser les styles
-        nameElement.style.textOverflow = "ellipsis";
-        nameElement.style.whiteSpace = "nowrap";
-        nameElement.style.overflow = "hidden";
-        nameElement.style.display = "block";
-        
-        // Mettre à jour le texte avec le nouveau nom
-        nameElement.textContent = newName;
-        
-        // Recharger le path pour synchroniser
-        await loadPath();
-      } catch (error) {
-        console.error("Error renaming item:", error);
-        // Restaurer le nom original en cas d'erreur
-        nameElement.style.textOverflow = "ellipsis";
-        nameElement.style.whiteSpace = "nowrap";
-        nameElement.style.overflow = "hidden";
-        nameElement.style.display = "block";
-        nameElement.textContent = name;
-        alert("Erreur lors du renommage de l'élément");
-      }
+      nameElement.style.textOverflow = "ellipsis";
+      nameElement.style.whiteSpace = "nowrap";
+      nameElement.style.overflow = "hidden";
+      nameElement.style.display = "block";
+      nameElement.textContent = name;
     }
-    nameElement.addEventListener("blur", finishEditing, { once: true });
-    nameElement.addEventListener("keydown", (e) => {
-      // console.log(e.key);
-        if (e.key === "Enter") {
-            e.preventDefault();
-            nameElement.blur(); // Utiliser blur pour déclencher finishEditing
-        }
-        if (e.key === "Escape") {
-            e.preventDefault();
-            // Annuler l'édition
-            nameElement.contentEditable = "false";
-            nameElement.style.textOverflow = "ellipsis";
-            nameElement.style.whiteSpace = "nowrap";
-            nameElement.style.overflow = "hidden";
-            nameElement.style.display = "block";
-            nameElement.textContent = name;
-        }
-    });
-}
+  });
+};
 
 const isDragging = ref(false);
 const activeItem = ref(null);
 const mousePos = ref({ x: 0, y: 0 });
-
 
 const handleDragStart = (data) => {
   isDragging.value = true;
@@ -1345,25 +1588,28 @@ const handleDragEnd = async (data) => {
 
   // Trouver l'élément dossier sous la position du curseur
   const elementUnderMouse = document.elementFromPoint(data.x, data.y);
-  
-  
-  const breadcrumbElement = elementUnderMouse?.closest('.breadcrumb-item');
-  const targetFolderElement = elementUnderMouse?.closest('.item[data-item-type="folder"]');
+
+  const breadcrumbElement = elementUnderMouse?.closest(".breadcrumb-item");
+  const targetFolderElement = elementUnderMouse?.closest(
+    '.item[data-item-type="folder"]'
+  );
   if (breadcrumbElement) {
     const itemId = activeItem.value.file_id || activeItem.value.folder_id;
     const itemType = activeItem.value.type;
     console.log("Drag ended over breadcrumb:", breadcrumbElement);
     const targetFolderId = breadcrumbElement.dataset?.itemId;
-    
+
     try {
       // Appel API pour déplacer l'item
-      const endpoint = itemType === 'file' 
-        ? `${API_URL}/drive/move_file`
-        : `${API_URL}/drive/move_folder`;
-      
-      const body = itemType === 'file'
-        ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-        : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+      const endpoint =
+        itemType === "file"
+          ? `${API_URL}/drive/move_file`
+          : `${API_URL}/drive/move_folder`;
+
+      const body =
+        itemType === "file"
+          ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+          : { folder_id: itemId, new_parent_folder_id: targetFolderId };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -1378,6 +1624,8 @@ const handleDragEnd = async (data) => {
         console.log("Item moved successfully");
         // Recharger le dossier courant
         await loadPath();
+        await refreshTreeNode(activeFolderId.value);
+        await refreshTreeNode(targetFolderId);
       } else {
         console.error("Failed to move item");
         alert("Erreur lors du déplacement de l'élément");
@@ -1386,17 +1634,14 @@ const handleDragEnd = async (data) => {
       console.error("Error moving item:", error);
       alert("Erreur lors du déplacement de l'élément");
     }
-
-
-  }
-  else if (targetFolderElement) {
+  } else if (targetFolderElement) {
     console.log("Drag ended over element:", targetFolderElement);
     const targetFolderId = targetFolderElement.dataset?.itemId;
     const itemType = activeItem.value.type;
     const itemId = activeItem.value.file_id || activeItem.value.folder_id;
 
     // Éviter de déplacer un dossier dans lui-même
-    if (itemType === 'folder' && itemId === targetFolderId) {
+    if (itemType === "folder" && itemId === targetFolderId) {
       console.log("Cannot move a folder into itself");
       isDragging.value = false;
       activeItem.value = null;
@@ -1405,13 +1650,15 @@ const handleDragEnd = async (data) => {
 
     try {
       // Appel API pour déplacer l'item
-      const endpoint = itemType === 'file' 
-        ? `${API_URL}/drive/move_file`
-        : `${API_URL}/drive/move_folder`;
-      
-      const body = itemType === 'file'
-        ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-        : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+      const endpoint =
+        itemType === "file"
+          ? `${API_URL}/drive/move_file`
+          : `${API_URL}/drive/move_folder`;
+
+      const body =
+        itemType === "file"
+          ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+          : { folder_id: itemId, new_parent_folder_id: targetFolderId };
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -1426,6 +1673,8 @@ const handleDragEnd = async (data) => {
         console.log("Item moved successfully");
         // Recharger le dossier courant
         await loadPath();
+        await refreshTreeNode(activeFolderId.value);
+        await refreshTreeNode(targetFolderId);
       } else {
         console.error("Failed to move item");
         alert("Erreur lors du déplacement de l'élément");
@@ -1446,18 +1695,29 @@ const selectItem = (item) => {
 
 // Style dynamique pour l'élément "fantôme" qui suit la souris
 const ghostStyle = computed(() => ({
-  position: 'fixed',
+  position: "fixed",
   top: 0,
   left: 0,
-  transform: `translate(${mousePos.value.x - 50}px, ${mousePos.value.y - 24}px)`,
-  pointerEvents: 'none', // Important pour ne pas bloquer les événements souris
-  zIndex: 9999
+  transform: `translate(${mousePos.value.x - 50}px, ${
+    mousePos.value.y - 24
+  }px)`,
+  pointerEvents: "none", // Important pour ne pas bloquer les événements souris
+  zIndex: 9999,
 }));
 
 watch(
   [listToUpload, listUploadInProgress],
   () => {
     startUploads();
+  },
+  { deep: true }
+);
+
+watch(
+  full_path,
+  () => {
+    if (!full_path.value.length) return;
+    expandTreeToCurrentPath();
   },
   { deep: true }
 );
@@ -1522,7 +1782,7 @@ body {
 /* 1. La taille globale de la scrollbar : on met 3px pour que ça prenne zéro place */
 .filename[contenteditable="true"]::-webkit-scrollbar,
 .foldername[contenteditable="true"]::-webkit-scrollbar {
-  height: 3px; 
+  height: 3px;
 }
 
 /* 2. IMPORTANT : On supprime les flèches (boutons) gauche/droite */
@@ -1536,7 +1796,7 @@ body {
 /* 3. Le fond de la barre (track) : totalement transparent */
 .filename[contenteditable="true"]::-webkit-scrollbar-track,
 .foldername[contenteditable="true"]::-webkit-scrollbar-track {
-  background: transparent; 
+  background: transparent;
 }
 
 /* 4. La partie mobile (thumb) : arrondie et discrète */
@@ -1572,7 +1832,9 @@ main {
   align-items: flex-start;
   justify-content: flex-start;
 
-  flex: 0 0 200px;
+  flex: 0 0 300px;
+  padding-left: 25px;
+  padding-right: 25px;
 }
 
 .div_right_section {
@@ -1580,8 +1842,6 @@ main {
   flex: 1;
 
   border-radius: 25px;
-  padding-left: 25px;
-  padding-right: 25px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1601,12 +1861,13 @@ main {
   transition: background-color 0.2s ease;
   font-weight: 600;
   font-family: "Roboto", "Segoe UI", sans-serif;
-
+  width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 5px;
-  margin-left: 35px;
+  justify-content: center;
+  gap: 10px;
+  /* margin-left: 35px; */
   margin-top: 12px;
 }
 #create-folder-button:hover {
@@ -1846,42 +2107,41 @@ main {
   fill: #ff4444;
 }
 
-
 /* div_pannel_right_click */
 
-#div_pannel_right_click{
-    position: absolute;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    z-index: 1001;
-    width: 200px;
+#div_pannel_right_click {
+  position: absolute;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  width: 200px;
 
-    padding: 5px 8px;
+  padding: 5px 8px;
 
-    display: none;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 5px;
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 5px;
 }
 
-#div_pannel_right_click a{
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: 6px;
-    text-decoration: none;
-    color: #333333;
-    font-size: 14px;
+#div_pannel_right_click a {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #333333;
+  font-size: 14px;
 
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
 }
-#div_pannel_right_click a:hover{
-    background-color: #f0f0f0;
+#div_pannel_right_click a:hover {
+  background-color: #f0f0f0;
 }
 
 /* Élément de drag qui suit la souris */
@@ -1924,7 +2184,90 @@ main {
   max-width: 200px;
 }
 
-.selected-item{
+.selected-item {
   background-color: #d0e6ff !important;
+}
+
+/* div_treeview */
+
+.div_treeview {
+  width: 100%;
+  height: 80%;
+  min-height: 400px;
+  overflow-y: auto;
+  padding: 10px;
+  padding-left: 12px;
+
+  overflow: auto;
+}
+.folder-three {
+  width: 100%;
+  height: fit-content;
+}
+
+.three-folder-name {
+  font-family: "Roboto", "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333333;
+  text-decoration: none;
+  padding: 3px 20px;
+  border-radius: 5px;
+}
+.three-folder-name:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.select_folder_three {
+  background-color: #e6f0ff;
+}
+
+
+.div_enfants {
+  margin-left: 15px;
+  margin-top: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 5px;
+}
+
+.div_name_bnt {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+}
+.div_name_bnt svg {
+  width: 16px;
+  height: 16px;
+  fill: #555555;
+  cursor: pointer;
+  transform: translateY(4px);
+}
+
+.tree-toggle {
+  background: none;
+  border: none;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-right: 6px;
+  color: #555555;
+  cursor: pointer;
+}
+
+.tree-toggle:hover {
+  color: #222222;
+}
+
+.is-active-folder .three-folder-name {
+  font-weight: 700;
 }
 </style>
