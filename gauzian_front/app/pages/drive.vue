@@ -1346,38 +1346,75 @@ const onFilesFromDrop = async (files) => {
 };
 
 const deleteItem = async (item) => {
-  // récupérer l'attrribut data-item-type
   // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
   const itemId = item.dataset?.itemId;
   const itemType = item.dataset?.itemType;
-  // console.log("ID de l'item à supprimer:", itemId);
-  if (itemType === "file") {
-    const res = await fetch(`${API_URL}/drive/delete_file`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ file_id: itemId }),
-    });
-    if (!res.ok) {
-      throw new Error("Failed to delete file");
+
+  // Vérifier si cet item fait partie d'une sélection multiple
+  let itemsToDelete = [];
+  
+  if (selectedItems.value.has(itemId) && selectedItems.value.size > 1) {
+    // Supprimer tous les items sélectionnés
+    itemsToDelete = Array.from(selectedItemsMap.value.values());
+    const confirmMessage = `Voulez-vous vraiment supprimer ${itemsToDelete.length} éléments ?`;
+    if (!confirm(confirmMessage)) {
+      return;
     }
-  } else if (itemType === "folder") {
-    const res = await fetch(`${API_URL}/drive/delete_folder`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ folder_id: itemId }),
-    });
-    if (!res.ok) {
-      throw new Error("Failed to delete folder");
-    }
+  } else {
+    // Supprimer juste cet item
+    itemsToDelete = [{
+      type: itemType,
+      file_id: itemType === "file" ? itemId : null,
+      folder_id: itemType === "folder" ? itemId : null,
+    }];
   }
-  await loadPath();
-  await refreshTreeNode(activeFolderId.value);
+
+  try {
+    // Supprimer tous les items
+    const deletePromises = itemsToDelete.map(async (itemToDelete) => {
+      const id = itemToDelete.file_id || itemToDelete.folder_id;
+      const type = itemToDelete.type;
+      
+      if (type === "file") {
+        const res = await fetch(`${API_URL}/drive/delete_file`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ file_id: id }),
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to delete file ${id}`);
+        }
+      } else if (type === "folder") {
+        const res = await fetch(`${API_URL}/drive/delete_folder`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ folder_id: id }),
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to delete folder ${id}`);
+        }
+      }
+    });
+
+    await Promise.all(deletePromises);
+    
+    console.log(`Successfully deleted ${itemsToDelete.length} item(s)`);
+    
+    // Vider la sélection après suppression
+    clearSelection();
+    
+    await loadPath();
+    await refreshTreeNode(activeFolderId.value);
+  } catch (error) {
+    console.error("Error deleting items:", error);
+    alert("Erreur lors de la suppression des éléments");
+  }
 };
 
 const renameItem = async (item) => {
