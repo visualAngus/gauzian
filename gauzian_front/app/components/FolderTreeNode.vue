@@ -1,7 +1,9 @@
 <template>
   <div class="folder-three" :data-folder-id="node.folder_id">
     <div class="div_name_bnt" :class="{ 'is-active-folder': activeId === node.folder_id }">
-      <button class="tree-toggle" @click.stop="$emit('toggle', node)" v-if="(node.children?.length ?? 0) > 0 || !node.isLoaded">
+      <button class="tree-toggle" @click.stop="$emit('toggle', node)" 
+        :disabled="node.isLoading || ((node.children?.length ?? 0) === 0 && node.isLoaded)"
+      >
         <span v-if="node.isLoading">⋯</span>
         <span v-else-if="(node.children?.length ?? 0) > 0 || !node.isLoaded">
           {{ node.isExpanded ? '▾' : '▸' }}

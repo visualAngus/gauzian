@@ -2212,7 +2212,7 @@ main {
 .three-folder-name {
   font-family: "Roboto", "Segoe UI", sans-serif;
   font-size: 15px;
-  font-weight: 600;
+  /* font-weight: 600; */
   color: #333333;
   text-decoration: none;
   padding: 3px 20px;
