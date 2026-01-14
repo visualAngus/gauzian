@@ -1545,6 +1545,9 @@ const handleDragEnd = async (data) => {
   const targetFolderElement = elementUnderMouse?.closest(
     '.item[data-item-type="folder"]'
   );
+  const folderTreeNodeElement = elementUnderMouse?.closest(
+    '.tree-node[data-item-type="folder"]'
+  );
   if (breadcrumbElement) {
     const itemId = activeItem.value.file_id || activeItem.value.folder_id;
     const itemType = activeItem.value.type;
@@ -1593,6 +1596,55 @@ const handleDragEnd = async (data) => {
     const itemId = activeItem.value.file_id || activeItem.value.folder_id;
 
     // Éviter de déplacer un dossier dans lui-même
+    if (itemType === "folder" && itemId === targetFolderId) {
+      console.log("Cannot move a folder into itself");
+      isDragging.value = false;
+      activeItem.value = null;
+      return;
+    }
+
+    try {
+      // Appel API pour déplacer l'item
+      const endpoint =
+        itemType === "file"
+          ? `${API_URL}/drive/move_file`
+          : `${API_URL}/drive/move_folder`;
+
+      const body =
+        itemType === "file"
+          ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+          : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        console.log("Item moved successfully");
+        // Recharger le dossier courant
+        await loadPath();
+        await refreshTreeNode(activeFolderId.value);
+        await refreshTreeNode(targetFolderId);
+      } else {
+        console.error("Failed to move item");
+        alert("Erreur lors du déplacement de l'élément");
+      }
+    } catch (error) {
+      console.error("Error moving item:", error);
+      alert("Erreur lors du déplacement de l'élément");
+    }
+  } else if (folderTreeNodeElement){
+    const targetFolderId = folderTreeNodeElement.dataset?.folderId;
+
+    console.log("Drag ended over tree node:", folderTreeNodeElement);
+    const itemId = activeItem.value.file_id || activeItem.value.folder_id;
+    const itemType = activeItem.value.type;
+    
     if (itemType === "folder" && itemId === targetFolderId) {
       console.log("Cannot move a folder into itself");
       isDragging.value = false;
