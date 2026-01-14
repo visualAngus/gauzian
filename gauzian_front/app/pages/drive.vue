@@ -323,9 +323,9 @@ useHead({
 
 // drive logic
 
-const totalSpaceLeft = ref(maxspace.value - usedSpace.value);
 const usedSpace = ref(0); // 2 GB in bytes
 const maxspace = ref(3 * 1024 * 1024 * 1024); // 3 GB in bytes
+const totalSpaceLeft = ref(maxspace.value - usedSpace.value);
 const listToUpload = ref([]);
 const listUploadInProgress = ref([]);
 const listUploaded = ref([]);
