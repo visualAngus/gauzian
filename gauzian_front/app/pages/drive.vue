@@ -457,7 +457,7 @@ const decryptFolderMetadata = async (folder) => {
   return metadata;
 };
 
-const loadTreeNode = async (node) => {
+const loadTreeNode = async (node, preserveExpanded = false) => {
   if (!node) return;
   node.isLoading = true;
 
@@ -483,12 +483,18 @@ const loadTreeNode = async (node) => {
     for (const folder of folders) {
       try {
         const metadata = await decryptFolderMetadata(folder);
+        
+        // Chercher si ce nœud existe déjà pour préserver son état
+        const existingChild = node.children?.find(
+          (child) => child.folder_id === folder.folder_id
+        );
+
         childrenNodes.push({
           ...folder,
           metadata,
-          children: [],
-          isExpanded: false,
-          isLoaded: false,
+          children: existingChild?.children || [],
+          isExpanded: preserveExpanded ? existingChild?.isExpanded || false : false,
+          isLoaded: existingChild?.isLoaded || false,
           isLoading: false,
           parent_folder_id: node.folder_id,
         });
@@ -527,7 +533,8 @@ const refreshTreeNode = async (folderId) => {
   const targetNode = findNodeById(folderTree.value, folderId);
   if (!targetNode) return;
   targetNode.isLoaded = false;
-  await loadTreeNode(targetNode);
+  // Passer true pour préserver l'état isExpanded des enfants
+  await loadTreeNode(targetNode, true);
   targetNode.isExpanded = true;
 };
 
