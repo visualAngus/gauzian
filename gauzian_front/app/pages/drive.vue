@@ -1706,6 +1706,13 @@ const selectItem = (item, event) => {
   const itemId = item.type === "file" ? item.file_id : item.folder_id;
   const newSelectedItems = new Set(selectedItems.value);
   const newSelectedItemsMap = new Map(selectedItemsMap.value);
+  console.log("Selecting item:", itemId, item);
+  // afficher les keys de l'event pour debug
+  console.log("Select item event keys:", {
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
+    shiftKey: event.shiftKey,
+  });
 
   // si ctrl ou cmd est appuyé on toggle l'item à la selection
   if (event.ctrlKey || event.metaKey) {
