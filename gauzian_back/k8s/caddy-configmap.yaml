@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: caddy-config
+  namespace: gauzian
+data:
+  Caddyfile: |
+    # TODO: Copier le contenu de votre Caddyfile ici
+    :80 {
+      reverse_proxy backend:3000
+    }
