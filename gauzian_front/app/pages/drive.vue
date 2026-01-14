@@ -308,7 +308,8 @@ const abortControllers = ref({}); // Map file_id -> AbortController
 let fileIdCounter = 0; // Compteur pour générer des IDs uniques
 const rightClikedItem = ref(null);
 
-const selectedItem = ref(null);
+const selectedItems = ref(new Set()); // Set des items sélectionnés (par id)
+const selectedItemsMap = ref(new Map()); // Map id -> item pour récupérer les données
 
 const folderTree = ref({
   folder_id: "root",
@@ -1702,16 +1703,31 @@ const handleDragEnd = async (data) => {
 };
 
 const selectItem = (item, event) => {
-  
-  // si ctrl ou cmd est appuyé on ajoute à la selection
+  const itemId = item.type === "file" ? item.file_id : item.folder_id;
+  const newSelectedItems = new Set(selectedItems.value);
+  const newSelectedItemsMap = new Map(selectedItemsMap.value);
+
+  // si ctrl ou cmd est appuyé on toggle l'item à la selection
   if (event.ctrlKey || event.metaKey) {
-    console.log("Multi-selection not implemented yet");
-    return;
+    if (newSelectedItems.has(itemId)) {
+      newSelectedItems.delete(itemId);
+      newSelectedItemsMap.delete(itemId);
+    } else {
+      newSelectedItems.add(itemId);
+      newSelectedItemsMap.set(itemId, item);
+    }
+  } else {
+    // Sinon, sélection simple (remplace la sélection précédente)
+    newSelectedItems.clear();
+    newSelectedItemsMap.clear();
+    newSelectedItems.add(itemId);
+    newSelectedItemsMap.set(itemId, item);
   }
 
-  selectedItem.value = item;
+  selectedItems.value = newSelectedItems;
+  selectedItemsMap.value = newSelectedItemsMap;
+;
 };
-
 // Style dynamique pour l'élément "fantôme" qui suit la souris
 const ghostStyle = computed(() => ({
   position: "fixed",
@@ -1741,28 +1757,26 @@ watch(
   { deep: true }
 );
 
-// watch sur selectedItem
+// watch sur selectedItems pour mettre à jour le DOM
 
-watch(selectedItem, (newItem) => {
-  if (newItem) {
-    console.log("Selected item changed:", newItem);
-
+watch(
+  selectedItems,
+  (newSelectedItems) => {
     const allItems = document.querySelectorAll(".item");
     allItems.forEach((item) => {
       item.classList.remove("selected-item");
     });
-    console.log(newItem);
-    // Find the DOM element corresponding to the selected item
-    const itemType = newItem.type;
-    const itemId = itemType === "file" ? newItem.file_id : newItem.folder_id;
-    console.log("Item ID to select:", itemId);
-    const domItem = document.querySelector(`.item[data-item-id="${itemId}"]`);
-    console.log("DOM item to select:", domItem);
-    if (domItem) {
-      domItem.classList.add("selected-item");
-    }
-  }
-});
+
+    // Ajouter la classe selected-item à tous les items sélectionnés
+    newSelectedItems.forEach((itemId) => {
+      const domItem = document.querySelector(`.item[data-item-id="${itemId}"]`);
+      if (domItem) {
+        domItem.classList.add("selected-item");
+      }
+    });
+  },
+  { deep: true }
+);
 
 // un watch sur activeFolderId pour recharger le path
 watch(activeFolderId, () => {
