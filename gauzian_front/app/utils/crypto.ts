@@ -580,7 +580,7 @@ export async function decryptDataWithDataKey(
   cipherTextB64: string,
   ivB64: string,
   dataKeyB64: string
-): Promise<string> {
+): Promise<Uint8Array> {
   assertClient();
   const dataKeyBuf = b64ToBuff(dataKeyB64);
   const aesKey = await window.crypto.subtle.importKey(
@@ -600,5 +600,5 @@ export async function decryptDataWithDataKey(
     toArrayBuffer(cipherBuffer) as BufferSource
   );
 
-  return new TextDecoder().decode(decryptedBuffer);
+  return new Uint8Array(decryptedBuffer);
 }

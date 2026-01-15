@@ -11,9 +11,13 @@
         <span v-else>&nbsp;</span>
       </button>
       <a
-        class="three-folder-name"
+        class="three-folder-name tree-item"
         :class="{ select_folder_three: activeId === node.folder_id }"
+        :data-item-type="'folder'"
+        :data-item-id="node.folder_id"
+        :data-folder-name="node.metadata?.folder_name || 'Dossier sans nom'"
         @click.prevent="$emit('select', node)"
+        @contextmenu.prevent="$emit('context-menu', { node, event: $event })"
       >
         {{ node.metadata?.folder_name || "Dossier sans nom" }}
       </a>
@@ -26,6 +30,7 @@
         :active-id="activeId"
         @select="$emit('select', $event)"
         @toggle="$emit('toggle', $event)"
+        @context-menu="$emit('context-menu', $event)"
       />
     </div>
   </div>
@@ -43,5 +48,5 @@ defineProps({
   },
 });
 
-defineEmits(['select', 'toggle']);
+defineEmits(['select', 'toggle', 'context-menu']);
 </script>
