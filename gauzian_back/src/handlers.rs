@@ -459,9 +459,22 @@ pub async fn get_file_folder_handler(
         }
     };
 
+    let drive_info = match drive::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+        }
+    };
+
     ApiResponse::ok(serde_json::json!({
         "files_and_folders": files_and_folders,
         "full_path": full_path,
+        "drive_info": {
+            "used_space": drive_info.0,
+            "file_count": drive_info.1,
+            "folder_count": drive_info.2,
+        },
     })).into_response()
 }
 
@@ -680,3 +693,156 @@ pub async fn move_folder_handler(
         }
     }
 }
+
+pub async fn get_file_info_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    match drive::get_file_info(&state.db_pool, claims.id, file_id).await {
+        Ok(file_info) => ApiResponse::ok(file_info).into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get file info: {:?}", e);
+            ApiResponse::internal_error("Failed to get file info").into_response()
+        }
+    }
+}
+
+use axum::body::Body;
+use axum::http::header;
+use futures::stream::StreamExt;
+
+pub async fn download_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    // Récupérer les informations du fichier
+    let file_info = match drive::get_file_info(&state.db_pool, claims.id, file_id).await {
+        Ok(info) => info,
+        Err(sqlx::Error::RowNotFound) => {
+            return ApiResponse::not_found("File not found or access denied").into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to get file info: {:?}", e);
+            return ApiResponse::internal_error("Failed to get file info").into_response();
+        }
+    };
+
+    let chunks = match file_info.get("chunks").and_then(|c| c.as_array()) {
+        Some(c) => c.clone(),
+        None => {
+            return ApiResponse::internal_error("Invalid file structure").into_response();
+        }
+    };
+
+    let storage_client = state.storage_client.clone();
+    
+    // Créer un stream qui télécharge et envoie chaque chunk
+    let stream = futures::stream::iter(chunks)
+        .then(move |chunk_info| {
+            let storage = storage_client.clone();
+            async move {
+                let s3_key = chunk_info.get("s3_key")?.as_str()?;
+                
+                match storage.download_line(s3_key).await {
+                    Ok((vec, _metadata)) => Some(Ok::<_, std::io::Error>(vec)),
+                    Err(e) => {
+                        tracing::error!("Failed to download chunk {}: {:?}", s3_key, e);
+                        None
+                    }
+                }
+            }
+        })
+        .filter_map(|x| async move { x })
+        .map(|result| result.map(|vec| {
+            use bytes::Bytes;
+            Bytes::from(vec)
+        }));
+
+    let body = Body::from_stream(stream);
+    
+    let filename = file_info
+        .get("encrypted_metadata")
+        .and_then(|m| m.as_str())
+        .unwrap_or("download");
+
+    axum::response::Response::builder()
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename),
+        )
+        .body(body)
+        .unwrap()
+}
+
+pub async fn download_chunk_handler(
+    State(state): State<AppState>,
+    _claims: jwt::Claims,
+    Path(s3_key): Path<String>,
+) -> Response {
+    match state.storage_client.download_line(&s3_key).await {
+        Ok((data, metadata)) => {
+            ApiResponse::ok(serde_json::json!({
+                "data": base64::engine::general_purpose::STANDARD.encode(&data),
+                "iv": metadata.iv,
+                "index": metadata.index,
+            })).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to download chunk: {:?}", e);
+            ApiResponse::internal_error("Failed to download chunk").into_response()
+        }
+    }
+}
+
+pub async fn get_folder_contents_handler(   
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = {
+        let s = folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid folder_id").into_response();
+                }
+            }
+        }
+    };
+
+    match drive::get_folder_contents_recursive(&state.db_pool, claims.id, folder_id).await {
+        Ok(contents) => ApiResponse::ok(serde_json::json!({
+            "folder_id": folder_id,
+            "contents": contents,
+        })).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to get folder contents: {:?}", e);
+            ApiResponse::internal_error("Failed to get folder contents").into_response()
+        }
+    }
+}
+

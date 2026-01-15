@@ -12,7 +12,8 @@
   "dependencies": {
     "nuxt": "^4.2.2",
     "vue": "^3.5.26",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

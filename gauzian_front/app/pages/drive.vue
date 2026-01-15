@@ -6,6 +6,15 @@
       >Nouveau dossier</a
     >
     <a
+      @click="downloadItem(rightClikedItem)"
+      v-if="
+        rightClikedItem?.dataset &&
+        (rightClikedItem.dataset.itemType === 'file' ||
+          rightClikedItem.dataset.itemType === 'folder')
+      "
+      >Télécharger</a
+    >
+    <a
       @click="renameItem(rightClikedItem)"
       v-if="
         rightClikedItem?.dataset &&
@@ -25,15 +34,16 @@
     >
   </div>
 
-  <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0">
+  <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0 || listDownloadInProgress.length > 0">
     <h3>Upload/Download Panel</h3>
+    <!-- Uploads -->
     <div
       class="fichier"
       v-for="(file, index) in listUploadInProgress"
-      :key="index"
+      :key="'upload-' + index"
     >
       <div class="div_info_up">
-        <span class="nom_fichier">{{ file.name }}</span>
+        <span class="nom_fichier">⬆️ {{ file.name }}</span>
         <div class="div_barre">
           <div
             class="barre_progress"
@@ -62,6 +72,29 @@
         </button>
       </div>
     </div>
+    <!-- Downloads -->
+    <div
+      class="fichier"
+      v-for="(file, index) in listDownloadInProgress"
+      :key="'download-' + index"
+    >
+      <div class="div_info_up">
+        <span class="nom_fichier">⬇️ {{ file.name }}</span>
+        <div class="div_barre">
+          <div
+            class="barre_progress barre_download"
+            :style="{
+              width: (downloadProgressMap[file._downloadId] || 0) + '%',
+              transition: 'width 0.5s ease',
+            }"
+          ></div>
+          <span
+            v-if="downloadProgressMap[file._downloadId] < 100"
+            class="loading-spinner"
+          ></span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <main>
@@ -83,6 +116,7 @@
           :active-id="activeFolderId"
           @select="selectFolderFromTree"
           @toggle="toggleFolderNode"
+          @context-menu="handleTreeContextMenu"
         />
       </div>
 
@@ -249,6 +283,7 @@ import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à 
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
 import FolderTreeNode from "~/components/FolderTreeNode.vue";
+import JSZip from "jszip";
 
 const vDropzone = dropzone;
 definePageMeta({
@@ -631,10 +666,281 @@ const click_on_item = (item, event) => {
     activeFolderId.value = item.folder_id;
   } else if (item.type === "file") {
     // télécharger le fichier
-    console.log("Download file:", item.metadata?.filename || "Sans nom");
-    // implémente la logique de téléchargement ici
+    downloadFile(item);
   }
 };
+
+const listDownloadInProgress = ref([]);
+const downloadProgressMap = ref({});
+
+const downloadFile = async (item) => {
+  const downloadId = `download-${Date.now()}-${Math.random()}`;
+  
+  try {
+    const filename = item.metadata?.filename || "download";
+    console.log("Starting download for:", filename);
+
+    // Ajouter à la liste des téléchargements
+    listDownloadInProgress.value.push({
+      name: filename,
+      _downloadId: downloadId,
+      _targetFolderId: activeFolderId.value,
+    });
+    downloadProgressMap.value[downloadId] = 0;
+
+    // Récupérer les infos du fichier depuis l'API
+    const fileInfoRes = await fetch(`${API_URL}/drive/file/${item.file_id}`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!fileInfoRes.ok) {
+      throw new Error("Failed to fetch file info");
+    }
+
+    const fileInfo = await fileInfoRes.json();
+    
+    // Déchiffrer la clé du fichier
+    const dataKey = await decryptWithStoredPrivateKey(fileInfo.encrypted_file_key);
+    
+    // Déchiffrer les métadonnées
+    const decryptedMetadataStr = await decryptSimpleDataWithDataKey(
+      fileInfo.encrypted_metadata,
+      dataKey
+    );
+    const metadata = JSON.parse(decryptedMetadataStr);
+
+    const chunks = fileInfo.chunks || [];
+    const totalChunks = chunks.length;
+    
+    console.log(`Downloading ${totalChunks} chunks for file: ${metadata.filename}`);
+
+    // Utiliser File System Access API si disponible, sinon accumuler en mémoire
+    let fileHandle;
+    let writable;
+    let decryptedChunks = [];
+
+    // Essayer d'utiliser l'API File System Access
+    if ('showSaveFilePicker' in window) {
+      try {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: metadata.filename || filename,
+          types: [{
+            description: 'File',
+            accept: { [metadata.mime_type || 'application/octet-stream']: [] },
+          }],
+        });
+        writable = await fileHandle.createWritable();
+      } catch (err) {
+        console.log("User cancelled save dialog or API not available, falling back to memory");
+      }
+    }
+
+    // Télécharger et déchiffrer chunk par chunk
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      console.log(`Downloading chunk ${i + 1}/${totalChunks}`);
+
+      // Télécharger le chunk
+      const chunkRes = await fetch(`${API_URL}/drive/download_chunk/${chunk.s3_key}`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!chunkRes.ok) {
+        throw new Error(`Failed to download chunk ${i}`);
+      }
+
+      const chunkData = await chunkRes.json();
+      
+      // Déchiffrer le chunk
+      const decryptedChunk = await decryptDataWithDataKey(
+        chunkData.data,
+        chunkData.iv,
+        dataKey
+      );
+
+      // Écrire dans le fichier ou accumuler en mémoire
+      if (writable) {
+        await writable.write(decryptedChunk);
+      } else {
+        decryptedChunks.push(decryptedChunk);
+      }
+
+      // Mettre à jour la progression
+      downloadProgressMap.value[downloadId] = ((i + 1) / totalChunks) * 100;
+    }
+
+    // Finaliser l'écriture
+    if (writable) {
+      await writable.close();
+      console.log("File written successfully using File System Access API");
+    } else {
+      // Créer un blob à partir des chunks et déclencher le téléchargement
+      const blob = new Blob(decryptedChunks, { type: metadata.mime_type || 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = metadata.filename || filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      // Libérer la mémoire
+      URL.revokeObjectURL(url);
+    }
+
+    console.log("Download completed successfully");
+    
+    // Retirer de la liste des téléchargements
+    listDownloadInProgress.value = listDownloadInProgress.value.filter(
+      d => d._downloadId !== downloadId
+    );
+    delete downloadProgressMap.value[downloadId];
+    
+  } catch (error) {
+    console.error("Error downloading file:", error);
+    alert(`Erreur lors du téléchargement: ${error.message}`);
+    
+    // Retirer de la liste des téléchargements en cas d'erreur
+    listDownloadInProgress.value = listDownloadInProgress.value.filter(
+      d => d._downloadId !== downloadId
+    );
+    delete downloadProgressMap.value[downloadId];
+  }
+};
+
+const downloadItem = async (element) => {
+  if (!element?.dataset) return;
+  
+  const itemType = element.dataset.itemType;
+  const itemId = element.dataset.itemId;
+  
+  if (itemType === 'file') {
+    // Télécharger un fichier unique
+    const item = liste_decrypted_items.value.find(i => i.file_id === itemId);
+    if (item) {
+      downloadFile(item);
+    }
+  } else if (itemType === 'folder') {
+    // Télécharger un dossier avec tout son contenu en ZIP
+    downloadFolderAsZip(itemId, element.dataset.folderName);
+  }
+};
+
+const downloadFolderAsZip = async (folderId, folderName) => {
+  const downloadId = `download-${Date.now()}-${Math.random()}`;
+  
+  try {
+    console.log("Starting folder download as ZIP:", folderId);
+
+    // Ajouter à la liste des téléchargements
+    listDownloadInProgress.value.push({
+      name: `${folderName}.zip`,
+      _downloadId: downloadId,
+      _targetFolderId: activeFolderId.value,
+    });
+    downloadProgressMap.value[downloadId] = 0;
+
+    // Récupérer la structure complète du dossier
+    const contentsRes = await fetch(`${API_URL}/drive/folder_contents/${folderId}`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!contentsRes.ok) {
+      throw new Error("Failed to fetch folder contents");
+    }
+
+    const { contents } = await contentsRes.json();
+    console.log(`Retrieved ${contents.length} items from folder`);
+
+    // Créer un ZIP
+    const zip = new JSZip();
+    let downloadedCount = 0;
+
+    // Traiter chaque fichier
+    for (const item of contents) {
+      if (item.type === 'file') {
+        try {
+          // Déchiffrer la clé du fichier
+          const dataKey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
+          
+          // Déchiffrer les métadonnées
+          const decryptedMetadataStr = await decryptSimpleDataWithDataKey(
+            item.encrypted_metadata,
+            dataKey
+          );
+          const metadata = JSON.parse(decryptedMetadataStr);
+          
+          // Télécharger et déchiffrer tous les chunks du fichier
+          const decryptedChunks = [];
+          for (const chunk of item.chunks) {
+            const chunkRes = await fetch(`${API_URL}/drive/download_chunk/${chunk.s3_key}`, {
+              method: "GET",
+              credentials: "include",
+            });
+
+            if (!chunkRes.ok) {
+              throw new Error(`Failed to download chunk for file ${metadata.filename}`);
+            }
+
+            const chunkData = await chunkRes.json();
+            const decryptedChunk = await decryptDataWithDataKey(
+              chunkData.data,
+              chunkData.iv,
+              dataKey
+            );
+            decryptedChunks.push(decryptedChunk);
+          }
+
+          // Ajouter le fichier au ZIP
+          const fileBlob = new Blob(decryptedChunks, { type: item.mime_type });
+          zip.file(`${item.path}${metadata.filename}`, fileBlob);
+          
+          downloadedCount++;
+          downloadProgressMap.value[downloadId] = (downloadedCount / contents.length) * 100;
+          console.log(`Added file: ${metadata.filename} (${downloadedCount}/${contents.length})`);
+        } catch (fileError) {
+          console.error("Error processing file:", fileError);
+        }
+      }
+    }
+
+    // Générer le ZIP et le télécharger
+    console.log("Generating ZIP file...");
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${folderName}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    URL.revokeObjectURL(url);
+    
+    console.log("ZIP download completed");
+    
+    // Retirer de la liste des téléchargements
+    listDownloadInProgress.value = listDownloadInProgress.value.filter(
+      d => d._downloadId !== downloadId
+    );
+    delete downloadProgressMap.value[downloadId];
+    
+  } catch (error) {
+    console.error("Error downloading folder as ZIP:", error);
+    alert(`Erreur lors du téléchargement: ${error.message}`);
+    
+    // Retirer de la liste des téléchargements en cas d'erreur
+    listDownloadInProgress.value = listDownloadInProgress.value.filter(
+      d => d._downloadId !== downloadId
+    );
+    delete downloadProgressMap.value[downloadId];
+  }
+}
 
 const navigateToBreadcrumb = (pathItem, index) => {
   console.log("Navigating to breadcrumb:", pathItem, index);
@@ -932,7 +1238,10 @@ const loadPath = async ({ outIn = false } = {}) => {
   const resData = await res.json();
   const files_and_folders = resData.files_and_folders;
   const fullPathData = resData.full_path;
+  const drive_info = resData.drive_info;
 
+  usedSpace.value = drive_info.used_space;
+  
   //   si full path est vide on renvoie vers root pour etre sur et on reset le ?folder_id
   if (fullPathData.length === 0 && activeFolderId.value !== "root") {
     activeFolderId.value = "root";
@@ -1219,6 +1528,24 @@ onMounted(() => {
     panel.style.display = "flex";
     panel.style.top = e.pageY + "px";
     panel.style.left = e.pageX + "px";
+  };
+
+  const handleTreeContextMenu = ({ node, event }) => {
+    event.preventDefault();
+    const panel = rightClickPanel.value;
+    if (!panel) return;
+
+    // Créer un élément virtuel pour le dossier du tree
+    const virtualItem = document.createElement('div');
+    virtualItem.setAttribute('data-item-type', 'folder');
+    virtualItem.setAttribute('data-item-id', node.folder_id);
+    virtualItem.setAttribute('data-folder-name', node.metadata?.folder_name || 'Dossier');
+    
+    rightClikedItem.value = virtualItem;
+
+    panel.style.display = "flex";
+    panel.style.top = event.pageY + "px";
+    panel.style.left = event.pageX + "px";
   };
 
   const onClick = () => {
@@ -2137,6 +2464,10 @@ main {
   background-color: #4c8eaf;
   border-radius: 5px 0 0 5px;
   transition: width 0.3s ease;
+}
+
+.barre_download {
+  background-color: #4caf50;
 }
 
 .div_cancel {

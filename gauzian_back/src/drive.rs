@@ -164,11 +164,13 @@ pub async fn get_folder_contents(
     let contents = get_files_and_folders_list(pool, user_id, folder_id).await?;
     // only return the "folders" field
 
-    let folders = contents.get("folders").cloned().unwrap_or_else(|| serde_json::json!([]));
+    let folders = contents
+        .get("folders")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
 
     Ok(folders)
 }
-
 
 pub async fn initialize_file_in_db(
     db_pool: &PgPool,
@@ -430,12 +432,11 @@ pub async fn abort_file_upload(
         return Ok(());
     }
 
-    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
-        "SELECT s3_key FROM s3_keys WHERE file_id = $1",
-    )
-    .bind(file_id)
-    .fetch_all(&mut *tx)
-    .await?;
+    let s3_keys: Vec<String> =
+        sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = $1")
+            .bind(file_id)
+            .fetch_all(&mut *tx)
+            .await?;
 
     // Supprimer les entrées dans minio
     for s3_key in s3_keys.iter() {
@@ -463,7 +464,6 @@ pub async fn abort_file_upload(
     tx.commit().await?;
     Ok(())
 }
-
 
 pub async fn delete_file(
     db_pool: &PgPool,
@@ -500,12 +500,11 @@ pub async fn delete_file(
     }
 
     // Only this user has access: delete everything.
-    let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
-        "SELECT s3_key FROM s3_keys WHERE file_id = $1",
-    )
-    .bind(file_id)
-    .fetch_all(&mut *tx)
-    .await?;
+    let s3_keys: Vec<String> =
+        sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = $1")
+            .bind(file_id)
+            .fetch_all(&mut *tx)
+            .await?;
 
     // Supprimer les entrées dans minio
     for s3_key in s3_keys.iter() {
@@ -640,12 +639,11 @@ pub async fn delete_folder(
 
     // Delete files that only this user could access.
     if !files_owned_only_by_user.is_empty() {
-        let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
-            "SELECT s3_key FROM s3_keys WHERE file_id = ANY($1)",
-        )
-        .bind(&files_owned_only_by_user)
-        .fetch_all(&mut *tx)
-        .await?;
+        let s3_keys: Vec<String> =
+            sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = ANY($1)")
+                .bind(&files_owned_only_by_user)
+                .fetch_all(&mut *tx)
+                .await?;
 
         for s3_key in s3_keys.iter() {
             storage_client.delete_line(s3_key).await.map_err(|e| {
@@ -736,13 +734,11 @@ pub async fn rename_file(
     }
 
     // Update the encrypted metadata
-    sqlx::query(
-        "UPDATE files SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2",
-    )
-    .bind(new_encrypted_metadata.as_bytes())
-    .bind(file_id)
-    .execute(db_pool)
-    .await?;
+    sqlx::query("UPDATE files SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2")
+        .bind(new_encrypted_metadata.as_bytes())
+        .bind(file_id)
+        .execute(db_pool)
+        .await?;
 
     Ok(())
 }
@@ -767,13 +763,11 @@ pub async fn rename_folder(
     }
 
     // Update the encrypted metadata
-    sqlx::query(
-        "UPDATE folders SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2",
-    )
-    .bind(new_encrypted_metadata.as_bytes())
-    .bind(folder_id)
-    .execute(db_pool)
-    .await?;
+    sqlx::query("UPDATE folders SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2")
+        .bind(new_encrypted_metadata.as_bytes())
+        .bind(folder_id)
+        .execute(db_pool)
+        .await?;
 
     Ok(())
 }
@@ -813,14 +807,12 @@ pub async fn move_file(
     }
 
     // Update the folder_id in file_access
-    sqlx::query(
-        "UPDATE file_access SET folder_id = $1 WHERE file_id = $2 AND user_id = $3",
-    )
-    .bind(new_folder_id)
-    .bind(file_id)
-    .bind(user_id)
-    .execute(db_pool)
-    .await?;
+    sqlx::query("UPDATE file_access SET folder_id = $1 WHERE file_id = $2 AND user_id = $3")
+        .bind(new_folder_id)
+        .bind(file_id)
+        .bind(user_id)
+        .execute(db_pool)
+        .await?;
 
     Ok(())
 }
@@ -860,14 +852,232 @@ pub async fn move_folder(
     }
 
     // Update the parent_folder_id in folders
-    sqlx::query(
-        "UPDATE folders SET parent_folder_id = $1, is_root = $2 WHERE id = $3",
-    )
-    .bind(new_parent_folder_id)
-    .bind(new_parent_folder_id.is_none())
-    .bind(folder_id)
-    .execute(db_pool)
-    .await?;
+    sqlx::query("UPDATE folders SET parent_folder_id = $1, is_root = $2 WHERE id = $3")
+        .bind(new_parent_folder_id)
+        .bind(new_parent_folder_id.is_none())
+        .bind(folder_id)
+        .execute(db_pool)
+        .await?;
 
     Ok(())
+}
+
+// Récupérer les infos d'un fichier avec ses chunks
+pub async fn get_file_info(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<serde_json::Value, sqlx::Error> {
+    #[derive(FromRow)]
+    struct FileInfo {
+        file_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        size: i64,
+        mime_type: String,
+        encrypted_file_key: Vec<u8>,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+    }
+
+    #[derive(FromRow)]
+    struct ChunkInfo {
+        s3_key: String,
+        index: i32,
+        chunk_id: Uuid,
+    }
+
+    // Vérifier que l'utilisateur a accès au fichier
+    let file_info = sqlx::query_as::<_, FileInfo>(
+        r#"
+        SELECT 
+            f.id as file_id,
+            f.encrypted_metadata,
+            f.size,
+            f.mime_type,
+            fa.encrypted_file_key,
+            f.created_at::text,
+            f.updated_at::text
+        FROM files f
+        JOIN file_access fa ON fa.file_id = f.id
+        WHERE f.id = $1 AND fa.user_id = $2
+        "#,
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    // Récupérer tous les chunks ordonnés par index
+    let chunks = sqlx::query_as::<_, ChunkInfo>(
+        r#"
+        SELECT id as chunk_id, s3_key, index
+        FROM s3_keys
+        WHERE file_id = $1
+        ORDER BY index ASC
+        "#,
+    )
+    .bind(file_id)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(json!({
+        "file_id": file_info.file_id,
+        "encrypted_metadata": bytes_to_text_or_b64(&file_info.encrypted_metadata),
+        "encrypted_file_key": bytes_to_text_or_b64(&file_info.encrypted_file_key),
+        "size": file_info.size,
+        "mime_type": file_info.mime_type,
+        "created_at": file_info.created_at,
+        "updated_at": file_info.updated_at,
+        "chunk_count": chunks.len(),
+        "chunks": chunks.iter().map(|c| json!({
+            "s3_key": c.s3_key,
+            "index": c.index,
+            "chunk_id": c.chunk_id,
+        })).collect::<Vec<_>>(),
+    }))
+}
+
+// Récupérer tous les fichiers et dossiers d'un dossier de façon récursive avec CTE
+pub async fn get_folder_contents_recursive(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Option<Uuid>,
+) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+    #[derive(FromRow)]
+    struct FileItem {
+        file_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        size: i64,
+        mime_type: String,
+        encrypted_file_key: Vec<u8>,
+        s3_key: Option<String>,
+        chunk_index: Option<i32>,
+        chunk_id: Option<Uuid>,
+        folder_path: String,
+    }
+
+    // Utiliser une CTE récursive pour récupérer toute la hiérarchie
+    let items: Vec<FileItem> = sqlx::query_as::<_, FileItem>(
+        r#"
+WITH RECURSIVE folder_hierarchy AS (
+    -- Cas de base: le dossier de départ
+    SELECT 
+        f.id as folder_id,
+        f.encrypted_metadata,
+        f.parent_folder_id,
+        '' as path,
+        0 as depth
+    FROM folders f
+    JOIN folder_access fa ON fa.folder_id = f.id
+    WHERE fa.user_id = $1
+        AND (
+            ($2::uuid IS NULL AND f.parent_folder_id IS NULL)
+            OR f.id = $2::uuid
+        )
+    
+    UNION ALL
+    
+    -- Cas récursif: descendre dans les sous-dossiers
+    SELECT 
+        f.id as folder_id,
+        f.encrypted_metadata,
+        f.parent_folder_id,
+        CASE 
+            WHEN fh.path = '' THEN encode(fh.encrypted_metadata, 'base64')
+            ELSE fh.path || '/' || encode(fh.encrypted_metadata, 'base64')
+        END as path,
+        fh.depth + 1 as depth
+    FROM folder_hierarchy fh
+    JOIN folders f ON f.parent_folder_id = fh.folder_id
+    JOIN folder_access fa ON fa.folder_id = f.id AND fa.user_id = $1
+)
+-- Récupérer les fichiers de chaque dossier avec leurs chunks
+SELECT 
+    files.id as file_id,
+    files.encrypted_metadata,
+    files.size,
+    files.mime_type,
+    fa.encrypted_file_key,
+    sk.s3_key,
+    sk.index as chunk_index,
+    sk.id as chunk_id,
+    CASE 
+        WHEN fh.path = '' THEN ''
+        ELSE fh.path || '/'
+    END as folder_path
+FROM folder_hierarchy fh
+JOIN file_access fa ON fa.folder_id = fh.folder_id AND fa.user_id = $1
+JOIN files ON files.id = fa.file_id
+LEFT JOIN s3_keys sk ON sk.file_id = files.id
+ORDER BY files.id, sk.index ASC
+        "#,
+    )
+    .bind(user_id)
+    .bind(folder_id)
+    .fetch_all(pool)
+    .await?;
+
+    // Grouper par fichier et construire les réponses
+    let mut results = Vec::new();
+    let mut current_file_id: Option<Uuid> = None;
+    let mut current_chunks = Vec::new();
+    let mut current_file_data: Option<(Uuid, Vec<u8>, i64, String, Vec<u8>, String)> = None;
+
+    for item in items {
+        let file_id = item.file_id;
+        
+        // Si c'est un nouveau fichier, sauvegarder le précédent
+        if current_file_id.is_some() && current_file_id != Some(file_id) {
+            if let Some((fid, metadata, size, mime_type, key, path)) = current_file_data.take() {
+                results.push(json!({
+                    "type": "file",
+                    "file_id": fid,
+                    "encrypted_metadata": bytes_to_text_or_b64(&metadata),
+                    "encrypted_file_key": bytes_to_text_or_b64(&key),
+                    "size": size,
+                    "mime_type": mime_type,
+                    "path": path,
+                    "chunks": current_chunks.drain(..).collect::<Vec<_>>(),
+                }));
+            }
+        }
+
+        current_file_id = Some(file_id);
+
+        if current_file_data.is_none() {
+            current_file_data = Some((
+                file_id,
+                item.encrypted_metadata.clone(),
+                item.size,
+                item.mime_type.clone(),
+                item.encrypted_file_key.clone(),
+                item.folder_path.clone(),
+            ));
+        }
+
+        // Ajouter le chunk s'il existe
+        if let Some(s3_key) = item.s3_key {
+            current_chunks.push(json!({
+                "s3_key": s3_key,
+                "index": item.chunk_index,
+                "chunk_id": item.chunk_id,
+            }));
+        }
+    }
+
+    // Ajouter le dernier fichier
+    if let Some((fid, metadata, size, mime_type, key, path)) = current_file_data {
+        results.push(json!({
+            "type": "file",
+            "file_id": fid,
+            "encrypted_metadata": bytes_to_text_or_b64(&metadata),
+            "encrypted_file_key": bytes_to_text_or_b64(&key),
+            "size": size,
+            "mime_type": mime_type,
+            "path": path,
+            "chunks": current_chunks,
+        }));
+    }
+
+    Ok(results)
 }
