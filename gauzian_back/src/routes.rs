@@ -13,6 +13,7 @@ pub fn app(state: AppState) -> Router {
         .route("/info", get(handlers::info_handler))
         .route("/drive/initialize_file", post(handlers::initialize_file_handler))
         .route("/drive/upload_chunk", post(handlers::upload_chunk_handler))
+        .route("/drive/finalize_upload", post(handlers::finalize_upload_handler))
         .route("/drive/get_all_drive_info/{parent_id}", get(handlers::get_account_and_drive_info_handler))
         .route("/drive/create_folder", post(handlers::create_folder_handler))
         .route("/drive/get_file_folder/{parent_id}", get(handlers::get_file_folder_handler))
