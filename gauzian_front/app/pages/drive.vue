@@ -946,6 +946,18 @@ const downloadFile = async (item) => {
 
     console.log("Download completed successfully");
     
+    // Notifier le backend que le download est terminé
+    try {
+      await fetch(`${API_URL}/drive/finalize_download`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: item.file_id })
+      });
+    } catch (err) {
+      console.error("Failed to finalize download:", err);
+    }
+    
     // Retirer de la liste des téléchargements
     listDownloadInProgress.value = listDownloadInProgress.value.filter(
       d => d._downloadId !== downloadId
@@ -957,6 +969,18 @@ const downloadFile = async (item) => {
   } catch (error) {
     console.error("Error downloading file:", error);
     alert(`Erreur lors du téléchargement: ${error.message}`);
+    
+    // Notifier le backend en cas d'erreur aussi (pour décrémenter le compteur)
+    try {
+      await fetch(`${API_URL}/drive/finalize_download`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: item.file_id })
+      });
+    } catch (err) {
+      console.error("Failed to finalize download after error:", err);
+    }
     
     // Retirer de la liste des téléchargements en cas d'erreur
     listDownloadInProgress.value = listDownloadInProgress.value.filter(
@@ -1281,6 +1305,33 @@ const uploadFile = async (file, file_id, dataKey) => {
     await Promise.all(workers);
 
     console.log(`Finished uploading file: ${file.name}`);
+    
+    // Notifier le backend que l'upload est terminé
+    try {
+      await fetch(`${API_URL}/drive/finalize_upload`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: file_id })
+      });
+    } catch (err) {
+      console.error("Failed to finalize upload:", err);
+    }
+  } catch (error) {
+    // En cas d'erreur, finaliser aussi pour décrémenter le compteur
+    if (error.name !== "AbortError") {
+      try {
+        await fetch(`${API_URL}/drive/finalize_upload`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_id: file_id })
+        });
+      } catch (err) {
+        console.error("Failed to finalize upload after error:", err);
+      }
+    }
+    throw error;
   } finally {
     // Nettoyer l'AbortController
     delete abortControllers.value[file_id];
