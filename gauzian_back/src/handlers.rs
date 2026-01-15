@@ -218,7 +218,7 @@ pub async fn initialize_file_handler(
             }
         }
     };
-    // Vous pouvez accéder aux headers via `headers` et au body via `body`
+
     let file_id = match drive::initialize_file_in_db(&state.db_pool, claims.id, body.size, &body.encrypted_metadata, &body.mime_type, folder_id, &body.encrypted_file_key).await {
         Ok(id) => id,
         Err(sqlx::Error::RowNotFound) => {
@@ -230,15 +230,11 @@ pub async fn initialize_file_handler(
         }
     };
 
-    // Register upload in Redis: track total chunks and chunks received
-    let upload_key = format!("upload:{}:{}", file_id, claims.id);
-    let total_chunks = (body.size as f64 / 5_242_880.0).ceil() as u32; // 5MB chunks
-    
+    // Increment user's active transfers counter in Redis
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
     if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        let upload_data = format!("{}:{}", total_chunks, 0); // total_chunks:chunks_received
-        if let Err(e) = redis_conn.set_ex::<_, _, String>(&upload_key, upload_data, 86400).await {
-            tracing::warn!("Failed to register upload in Redis: {}", e);
-        }
+        let _ = redis_conn.incr::<_, _, i32>(&transfers_key, 1).await;
+        let _ : Result<bool, _> = redis_conn.expire(&transfers_key, 86400).await; // 24h TTL
     }
 
     ApiResponse::ok(serde_json::json!({ "file_id": file_id })).into_response()
@@ -359,7 +355,6 @@ pub async fn upload_chunk_handler(
         }
     };
 
-    // Enregistrer la clé S3 dans la base
     let s3_record_id = match drive::save_chunk_metadata(&state.db_pool, body.file_id, body.index, &meta_data_s3.s3_id).await {
         Ok(id) => id,
         Err(e) => {
@@ -368,32 +363,6 @@ pub async fn upload_chunk_handler(
         }
     };
 
-    // Update upload progress in Redis
-    let upload_key = format!("upload:{}:{}", body.file_id, claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        use redis::AsyncCommands;
-        
-        // Get current upload data
-        if let Ok(data) = redis_conn.get::<_, String>(&upload_key).await {
-            let parts: Vec<&str> = data.split(':').collect();
-            if parts.len() == 2 {
-                if let (Ok(total), Ok(received)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
-                    let new_received = received + 1;
-                    
-                    if new_received >= total {
-                        // Upload complete: remove the key
-                        let _ = redis_conn.del::<_, ()>(&upload_key).await;
-                        tracing::info!("Upload completed for file {}, removed Redis key", body.file_id);
-                    } else {
-                        // Update progress
-                        let updated_data = format!("{}:{}", total, new_received);
-                        let _ = redis_conn.set_ex::<_, _, String>(&upload_key, updated_data, 86400).await;
-                    }
-                }
-            }
-        }
-    }
-
     ApiResponse::ok(serde_json::json!({ 
         "s3_record_id": s3_record_id,
         "s3_id": meta_data_s3.s3_id,
@@ -401,6 +370,27 @@ pub async fn upload_chunk_handler(
         "date_upload": meta_data_s3.date_upload,
         "data_hash": meta_data_s3.data_hash,
     })).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct FinalizeUploadRequest {
+    file_id: Uuid,
+}
+pub async fn finalize_upload_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(_body): Json<FinalizeUploadRequest>,
+) -> Response {
+    // Decrement user's active transfers counter in Redis (upload completed)
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
+    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
+        let count: i32 = redis_conn.decr(&transfers_key, 1).await.unwrap_or(0);
+        if count <= 0 {
+            let _ = redis_conn.del::<_, ()>(&transfers_key).await;
+        }
+    }
+
+    ApiResponse::ok("Upload finalized successfully").into_response()
 }
 
 #[derive(Deserialize)]
@@ -561,11 +551,13 @@ pub async fn abort_upload_handler(
     claims: jwt::Claims,
     Json(body): Json<AbortUploadRequest>,
 ) -> Response {
-    // Clean up Redis upload tracking
-    let upload_key = format!("upload:{}:{}", body.file_id, claims.id);
+    // Decrement user's active transfers counter in Redis
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
     if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        use redis::AsyncCommands;
-        let _ = redis_conn.del::<_, ()>(&upload_key).await;
+        let count: i32 = redis_conn.decr(&transfers_key, 1).await.unwrap_or(0);
+        if count <= 0 {
+            let _ = redis_conn.del::<_, ()>(&transfers_key).await;
+        }
     }
 
     match drive::abort_file_upload(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
@@ -586,23 +578,13 @@ pub async fn delete_file_handler(
     claims: jwt::Claims,
     Json(body): Json<DeleteFileRequest>,
 ) -> Response {
-    // Check in Redis for active uploads on this file
-    let upload_key = format!("upload:{}:{}", body.file_id, claims.id);
+    // Check if user has active transfers
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
     if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        use redis::AsyncCommands;
-        let exists: bool = redis_conn.exists(&upload_key).await.unwrap_or(false);
-        if exists {
-            return ApiResponse::conflict("Cannot delete file: upload in progress").into_response();
-        }
-    }
-
-    // Check for download in progress
-    let download_key = format!("download:{}:{}", body.file_id, claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        use redis::AsyncCommands;
-        let exists: bool = redis_conn.exists(&download_key).await.unwrap_or(false);
-        if exists {
-            return ApiResponse::conflict("Cannot delete file: download in progress").into_response();
+        if let Ok(count) = redis_conn.get::<_, i32>(&transfers_key).await {
+            if count > 0 {
+                return ApiResponse::conflict("Cannot delete: transfers in progress").into_response();
+            }
         }
     }
 
@@ -627,18 +609,12 @@ pub async fn delete_folder_handler(
     claims: jwt::Claims,
     Json(body): Json<DeleteFolderRequest>,
 ) -> Response {
-    // Check for any active uploads under this folder
-    // We'll scan Redis for keys matching upload:*:{user_id} pattern
+    // Check if user has active transfers (uploads/downloads)
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
     if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        use redis::AsyncCommands;
-        // Get all active uploads for this user
-        let pattern = format!("upload:*:{}", claims.id);
-        if let Ok(keys) = redis_conn.keys::<_, Vec<String>>(&pattern).await {
-            if !keys.is_empty() {
-                // We have active uploads - need to check if any belong to this folder or its children
-                // For simplicity, block deletion if there are ANY active uploads
-                tracing::warn!("Blocking folder deletion: {} active uploads in progress", keys.len());
-                return ApiResponse::conflict("Cannot delete folder: uploads in progress").into_response();
+        if let Ok(count) = redis_conn.get::<_, i32>(&transfers_key).await {
+            if count > 0 {
+                return ApiResponse::conflict("Cannot delete folder: transfers in progress").into_response();
             }
         }
     }
@@ -840,17 +816,12 @@ pub async fn download_file_handler(
 
     let storage_client = state.storage_client.clone();
 
-    // Register download in Redis (counter + TTL)
+    // Increment user's active transfers counter in Redis
     let redis_client = state.redis_client.clone();
-    let start_key = format!("file:{}:downloads", file_id);
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
     if let Ok(mut con) = redis_client.get_multiplexed_async_connection().await {
-        let n: i64 = con.incr(&start_key, 1).await.unwrap_or(0);
-        if n == 1 {
-            // Set TTL to recover from crashes (1h default)
-            let _ : Option<bool> = con.expire(&start_key, 60 * 60).await.ok();
-        }
-    } else {
-        tracing::warn!("Could not connect to Redis to register download");
+        let _ = con.incr::<_, _, i32>(&transfers_key, 1).await;
+        let _ : Result<bool, _> = con.expire(&transfers_key, 86400).await; // 24h TTL
     }
 
     // Créer un stream qui télécharge et envoie chaque chunk
@@ -878,7 +849,7 @@ pub async fn download_file_handler(
     // Wrapper stream which decrements Redis counter when dropped (end of download or disconnect)
     struct WrappedStream {
         inner: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, std::io::Error>> + Send>>,
-        file_id: uuid::Uuid,
+        user_id: uuid::Uuid,
         redis_client: redis::Client,
     }
 
@@ -892,17 +863,15 @@ pub async fn download_file_handler(
 
     impl Drop for WrappedStream {
         fn drop(&mut self) {
-            let file_id = self.file_id.clone();
+            let user_id = self.user_id.clone();
             let client = self.redis_client.clone();
-            let key = format!("file:{}:downloads", file_id);
+            let transfers_key = format!("user:{}:transfers_count", user_id);
             tokio::spawn(async move {
                 if let Ok(mut con) = client.get_multiplexed_async_connection().await {
-                    let n: i64 = con.decr(&key, 1).await.unwrap_or(0);
-                    if n <= 0 {
-                        let _ : Option<()> = con.del(&key).await.ok();
+                    let count: i32 = con.decr(&transfers_key, 1).await.unwrap_or(0);
+                    if count <= 0 {
+                        let _ : Option<()> = con.del(&transfers_key).await.ok();
                     }
-                } else {
-                    tracing::warn!("Could not connect to Redis to decrement download counter");
                 }
             });
         }
@@ -912,7 +881,7 @@ pub async fn download_file_handler(
 
     let stream = WrappedStream {
         inner: boxed,
-        file_id,
+        user_id: claims.id,
         redis_client: redis_client.clone(),
     };
 

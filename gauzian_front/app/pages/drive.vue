@@ -34,64 +34,113 @@
     >
   </div>
 
-  <div class="div_pannel_up_dow_load" v-if="listUploadInProgress.length > 0 || listDownloadInProgress.length > 0">
-    <h3>Upload/Download Panel</h3>
-    <!-- Uploads -->
-    <div
-      class="fichier"
-      v-for="(file, index) in listUploadInProgress"
-      :key="'upload-' + index"
-    >
-      <div class="div_info_up">
-        <span class="nom_fichier">⬆️ {{ file.name }}</span>
-        <div class="div_barre">
-          <div
-            class="barre_progress"
-            :style="{
-              width: (fileProgressMap[file._uploadId] || 0) + '%',
-              transition: 'width 0.5s ease',
-            }"
-          ></div>
-          <span
-            v-if="fileProgressMap[file._uploadId] < 100"
-            class="loading-spinner"
-          ></span>
-        </div>
+  <!-- Panneau Upload/Download moderne -->
+  <div class="transfer-panel" v-if="listUploadInProgress.length > 0 || listDownloadInProgress.length > 0">
+    <div class="transfer-header">
+      <div class="transfer-title">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L16 6H13V12H11V6H8L12 2ZM2 20H22V22H2V20ZM13 16H11V14H13V16Z"/>
+        </svg>
+        <span>Transferts ({{ listToUpload.length + listUploadInProgress.length + listDownloadInProgress.length }})</span>
       </div>
-      <div class="div_cancel">
-        <button class="btn_cancel" @click="abort_upload(file._uploadId)">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path
-              d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"
-            ></path>
+      <div class="transfer-actions">
+        <button class="btn-action" @click="pauseAllTransfers" v-if="!allTransfersPaused" title="Tout mettre en pause">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 5H8V19H6V5ZM16 5H18V19H16V5Z"/>
+          </svg>
+        </button>
+        <button class="btn-action" @click="resumeAllTransfers" v-else title="Tout reprendre">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 5V19L17 12L7 5Z"/>
+          </svg>
+        </button>
+        <button class="btn-action btn-danger" @click="cancelAllTransfers" title="Tout annuler">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 10.5858L9.17157 7.75736L7.75736 9.17157L10.5858 12L7.75736 14.8284L9.17157 16.2426L12 13.4142L14.8284 16.2426L16.2426 14.8284L13.4142 12L16.2426 9.17157L14.8284 7.75736L12 10.5858Z"/>
+          </svg>
+        </button>
+        <button class="btn-collapse" @click="togglePanelCollapse">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" :class="{ rotated: isPanelCollapsed }">
+            <path d="M12 13.1716L16.9497 8.22186L18.3639 9.63607L12 16L5.63604 9.63607L7.05025 8.22186L12 13.1716Z"/>
           </svg>
         </button>
       </div>
     </div>
-    <!-- Downloads -->
-    <div
-      class="fichier"
-      v-for="(file, index) in listDownloadInProgress"
-      :key="'download-' + index"
-    >
-      <div class="div_info_up">
-        <span class="nom_fichier">⬇️ {{ file.name }}</span>
-        <div class="div_barre">
-          <div
-            class="barre_progress barre_download"
-            :style="{
-              width: (downloadProgressMap[file._downloadId] || 0) + '%',
-              transition: 'width 0.5s ease',
-            }"
-          ></div>
-          <span
-            v-if="downloadProgressMap[file._downloadId] < 100"
-            class="loading-spinner"
-          ></span>
+    
+    <div class="transfer-list" v-show="!isPanelCollapsed">
+      <!-- Uploads -->
+      <div class="transfer-item" v-for="file in listUploadInProgress" :key="file._uploadId">
+        <div class="transfer-icon upload-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 12.5858L16.2426 16.8284L14.8284 18.2426L13 16.4142V22H11V16.4142L9.17157 18.2426L7.75736 16.8284L12 12.5858ZM12 2C15.5934 2 18.5544 4.70761 18.9541 8.19395C21.2858 8.83154 23 10.9656 23 13.5C23 16.5376 20.5376 19 17.5 19H17V17H17.5C19.433 17 21 15.433 21 13.5C21 11.567 19.433 10 17.5 10C17.2912 10 17.0867 10.0183 16.8887 10.054C16.9616 9.7142 17 9.36158 17 9C17 6.23858 14.7614 4 12 4C9.23858 4 7 6.23858 7 9C7 9.36158 7.03838 9.7142 7.11205 10.0533C6.91331 10.0183 6.70879 10 6.5 10C4.567 10 3 11.567 3 13.5C3 15.433 4.567 17 6.5 17H7V19H6.5C3.46243 19 1 16.5376 1 13.5C1 10.9656 2.71424 8.83154 5.04648 8.19411C5.44561 4.70761 8.40661 2 12 2Z"/>
+          </svg>
+        </div>
+        <div class="transfer-info">
+          <div class="transfer-name">{{ file.name }}</div>
+          <div class="transfer-details">
+            <span class="progress-text">{{ Math.round(fileProgressMap[file._uploadId] || 0) }}%</span>
+            <span class="transfer-status">{{ getTransferStatus(file._uploadId, 'upload') }}</span>
+            <span class="transfer-speed">{{ formatSpeed(transferSpeeds[file._uploadId]) }}</span>
+            <span class="transfer-eta" v-if="transferETAs[file._uploadId]">{{ formatETA(transferETAs[file._uploadId]) }}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill upload-progress" :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"></div>
+          </div>
+        </div>
+        <div class="transfer-controls">
+          <button class="btn-control" @click="togglePauseTransfer(file._uploadId, 'upload')" v-if="!isPaused(file._uploadId)" title="Pause">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 5H8V19H6V5ZM16 5H18V19H16V5Z"/>
+            </svg>
+          </button>
+          <button class="btn-control" @click="togglePauseTransfer(file._uploadId, 'upload')" v-else title="Reprendre">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7 5V19L17 12L7 5Z"/>
+            </svg>
+          </button>
+          <button class="btn-control btn-cancel" @click="abort_upload(file._uploadId)" title="Annuler">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Downloads -->
+      <div class="transfer-item" v-for="file in listDownloadInProgress" :key="file._downloadId">
+        <div class="transfer-icon download-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19Z"/>
+          </svg>
+        </div>
+        <div class="transfer-info">
+          <div class="transfer-name">{{ file.name }}</div>
+          <div class="transfer-details">
+            <span class="transfer-status">{{ getTransferStatus(file._downloadId, 'download') }}</span>
+            <span class="progress-text">{{ Math.round(downloadProgressMap[file._downloadId] || 0) }}%</span>
+            <span class="transfer-speed">{{ formatSpeed(transferSpeeds[file._downloadId]) }}</span>
+            <span class="transfer-eta" v-if="transferETAs[file._downloadId]">{{ formatETA(transferETAs[file._downloadId]) }}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill download-progress" :style="{ width: (downloadProgressMap[file._downloadId] || 0) + '%' }"></div>
+          </div>
+        </div>
+        <div class="transfer-controls">
+          <button class="btn-control" @click="togglePauseTransfer(file._downloadId, 'download')" v-if="!isPaused(file._downloadId)" title="Pause">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 5H8V19H6V5ZM16 5H18V19H16V5Z"/>
+            </svg>
+          </button>
+          <button class="btn-control" @click="togglePauseTransfer(file._downloadId, 'download')" v-else title="Reprendre">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7 5V19L17 12L7 5Z"/>
+            </svg>
+          </button>
+          <button class="btn-control btn-cancel" @click="cancelDownload(file._downloadId)" title="Annuler">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 10.5858L14.8284 7.75736L16.2426 9.17157L13.4142 12L16.2426 14.8284L14.8284 16.2426L12 13.4142L9.17157 16.2426L7.75736 14.8284L10.5858 12L7.75736 9.17157L9.17157 7.75736L12 10.5858Z"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -127,12 +176,6 @@
             class="used-space"
             :style="{
               width: ((usedSpace / (maxspace)) * 100) + '%',
-            }"
-          ></div>
-          <div
-            class="free-space"
-            :style="{
-              width: ((totalSpaceLeft / (maxspace)) * 100) + '%',
             }"
           ></div>
         </div>
@@ -672,6 +715,109 @@ const click_on_item = (item, event) => {
 
 const listDownloadInProgress = ref([]);
 const downloadProgressMap = ref({});
+const transferSpeeds = ref({});
+const transferETAs = ref({});
+const pausedTransfers = ref(new Set());
+const allTransfersPaused = ref(false);
+const isPanelCollapsed = ref(false);
+const transferStartTimes = ref({});
+const transferLastProgress = ref({});
+const transferLastUpdate = ref({});
+
+const updateTransferStats = (transferId, progress, totalSize) => {
+  const now = Date.now();
+  
+  if (!transferStartTimes.value[transferId]) {
+    transferStartTimes.value[transferId] = now;
+    transferLastProgress.value[transferId] = 0;
+    transferLastUpdate.value[transferId] = now;
+    return;
+  }
+  
+  const timeDiff = (now - transferLastUpdate.value[transferId]) / 1000; // en secondes
+  
+  if (timeDiff > 0.5) { // Mise à jour toutes les 0.5 secondes
+    const progressDiff = progress - (transferLastProgress.value[transferId] || 0);
+    const bytesPerSecond = (totalSize * progressDiff / 100) / timeDiff;
+    
+    transferSpeeds.value[transferId] = bytesPerSecond;
+    
+    if (progress > 0 && progress < 100) {
+      const remainingProgress = 100 - progress;
+      const eta = (remainingProgress / progressDiff) * timeDiff;
+      transferETAs.value[transferId] = eta;
+    }
+    
+    transferLastProgress.value[transferId] = progress;
+    transferLastUpdate.value[transferId] = now;
+  }
+};
+
+const formatSpeed = (bytesPerSecond) => {
+  if (!bytesPerSecond || bytesPerSecond === 0) return '';
+  const sizes = ['o/s', 'Ko/s', 'Mo/s', 'Go/s'];
+  const i = Math.floor(Math.log(bytesPerSecond) / Math.log(1024));
+  return (bytesPerSecond / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+};
+
+const formatETA = (seconds) => {
+  if (!seconds || seconds === Infinity) return '';
+  if (seconds < 60) return Math.round(seconds) + 's restantes';
+  if (seconds < 3600) return Math.round(seconds / 60) + 'min restantes';
+  return Math.round(seconds / 3600) + 'h restantes';
+};
+
+const getTransferStatus = (transferId, type) => {
+  if (pausedTransfers.value.has(transferId)) return 'En pause';
+  const progress = type === 'upload' ? fileProgressMap.value[transferId] : downloadProgressMap.value[transferId];
+  if (progress >= 100) return 'Terminé';
+  if (progress > 0) return 'En cours';
+  return 'En attente';
+};
+
+const isPaused = (transferId) => {
+  return pausedTransfers.value.has(transferId);
+};
+
+const togglePauseTransfer = (transferId, type) => {
+  if (pausedTransfers.value.has(transferId)) {
+    pausedTransfers.value.delete(transferId);
+  } else {
+    pausedTransfers.value.add(transferId);
+  }
+};
+
+const pauseAllTransfers = () => {
+  allTransfersPaused.value = true;
+  listUploadInProgress.value.forEach(file => pausedTransfers.value.add(file._uploadId));
+  listDownloadInProgress.value.forEach(file => pausedTransfers.value.add(file._downloadId));
+};
+
+const resumeAllTransfers = () => {
+  allTransfersPaused.value = false;
+  pausedTransfers.value.clear();
+};
+
+const cancelAllTransfers = () => {
+  if (confirm('Voulez-vous vraiment annuler tous les transferts en cours ?')) {
+    [...listUploadInProgress.value].forEach(file => abort_upload(file._uploadId));
+    [...listDownloadInProgress.value].forEach(file => cancelDownload(file._downloadId));
+  }
+};
+
+const cancelDownload = (downloadId) => {
+  listDownloadInProgress.value = listDownloadInProgress.value.filter(
+    d => d._downloadId !== downloadId
+  );
+  delete downloadProgressMap.value[downloadId];
+  delete transferSpeeds.value[downloadId];
+  delete transferETAs.value[downloadId];
+  pausedTransfers.value.delete(downloadId);
+};
+
+const togglePanelCollapse = () => {
+  isPanelCollapsed.value = !isPanelCollapsed.value;
+};
 
 const downloadFile = async (item) => {
   const downloadId = `download-${Date.now()}-${Math.random()}`;
@@ -738,6 +884,11 @@ const downloadFile = async (item) => {
 
     // Télécharger et déchiffrer chunk par chunk
     for (let i = 0; i < chunks.length; i++) {
+      // Vérifier si en pause
+      while (isPaused(downloadId)) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       const chunk = chunks[i];
       console.log(`Downloading chunk ${i + 1}/${totalChunks}`);
 
@@ -768,7 +919,9 @@ const downloadFile = async (item) => {
       }
 
       // Mettre à jour la progression
-      downloadProgressMap.value[downloadId] = ((i + 1) / totalChunks) * 100;
+      const progress = ((i + 1) / totalChunks) * 100;
+      downloadProgressMap.value[downloadId] = progress;
+      updateTransferStats(downloadId, progress, metadata.size);
     }
 
     // Finaliser l'écriture
@@ -798,6 +951,8 @@ const downloadFile = async (item) => {
       d => d._downloadId !== downloadId
     );
     delete downloadProgressMap.value[downloadId];
+    delete transferSpeeds.value[downloadId];
+    delete transferETAs.value[downloadId];
     
   } catch (error) {
     console.error("Error downloading file:", error);
@@ -808,6 +963,8 @@ const downloadFile = async (item) => {
       d => d._downloadId !== downloadId
     );
     delete downloadProgressMap.value[downloadId];
+    delete transferSpeeds.value[downloadId];
+    delete transferETAs.value[downloadId];
   }
 };
 
@@ -858,7 +1015,15 @@ const downloadFolderAsZip = async (folderId, folderName) => {
 
     // Créer un ZIP
     const zip = new JSZip();
-    let downloadedCount = 0;
+    
+    // Calculer le nombre total de chunks pour la progression précise
+    const totalChunks = contents.reduce((sum, item) => {
+      if (item.type === 'file') {
+        return sum + (item.chunks?.length || 0);
+      }
+      return sum;
+    }, 0);
+    let processedChunks = 0;
 
     // Traiter chaque fichier
     for (const item of contents) {
@@ -876,7 +1041,8 @@ const downloadFolderAsZip = async (folderId, folderName) => {
           
           // Télécharger et déchiffrer tous les chunks du fichier
           const decryptedChunks = [];
-          for (const chunk of item.chunks) {
+          for (let i = 0; i < item.chunks.length; i++) {
+            const chunk = item.chunks[i];
             const chunkRes = await fetch(`${API_URL}/drive/download_chunk/${chunk.s3_key}`, {
               method: "GET",
               credentials: "include",
@@ -893,15 +1059,19 @@ const downloadFolderAsZip = async (folderId, folderName) => {
               dataKey
             );
             decryptedChunks.push(decryptedChunk);
+            
+            // Mettre à jour la progression après chaque chunk
+            processedChunks++;
+            const progress = (processedChunks / totalChunks) * 100;
+            downloadProgressMap.value[downloadId] = progress;
+            updateTransferStats(downloadId, progress, totalChunks * 1024 * 1024); // Estimation de la taille
           }
 
           // Ajouter le fichier au ZIP
           const fileBlob = new Blob(decryptedChunks, { type: item.mime_type });
           zip.file(`${item.path}${metadata.filename}`, fileBlob);
           
-          downloadedCount++;
-          downloadProgressMap.value[downloadId] = (downloadedCount / contents.length) * 100;
-          console.log(`Added file: ${metadata.filename} (${downloadedCount}/${contents.length})`);
+          console.log(`Added file: ${metadata.filename} (${processedChunks}/${totalChunks} chunks)`);
         } catch (fileError) {
           console.error("Error processing file:", fileError);
         }
@@ -1032,6 +1202,11 @@ const uploadFile = async (file, file_id, dataKey) => {
 
   // Cette fonction gère l'upload d'un index précis
   const uploadChunkByIndex = async (index) => {
+    // Vérifier si l'upload est en pause
+    while (isPaused(file_id)) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
     const start = index * chunkSize;
     const end = Math.min(start + chunkSize, file.size);
 
@@ -1064,6 +1239,9 @@ const uploadFile = async (file, file_id, dataKey) => {
       ...fileProgressMap.value,
       [file_id]: parseFloat(progress),
     };
+    
+    // Mise à jour des stats de transfert
+    updateTransferStats(file_id, parseFloat(progress), file.size);
 
     // Petit délai pour éviter le rate limiting (50ms entre chaque chunk)
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -1464,9 +1642,19 @@ const abort_upload = async (file_id) => {
     listUploadInProgress.value.splice(fileIndex, 1);
     console.log(`Removed file from upload queue`);
   }
+  
+  // Aussi retirer de la liste d'attente
+  listToUpload.value = listToUpload.value.filter(f => f._uploadId !== file_id);
+  listUploaded.value = listUploaded.value.filter(f => f._uploadId !== file_id);
 
-  // 3. Nettoyer la progression
+  // 3. Nettoyer la progression et stats
   delete fileProgressMap.value[file_id];
+  delete transferSpeeds.value[file_id];
+  delete transferETAs.value[file_id];
+  delete transferStartTimes.value[file_id];
+  delete transferLastProgress.value[file_id];
+  delete transferLastUpdate.value[file_id];
+  pausedTransfers.value.delete(file_id);
 
   // 4. Relancer les uploads pour passer au fichier suivant
   startUploads();
@@ -2730,6 +2918,248 @@ display: flex;
   color: #555;
 }
 
+/* Panneau de transferts moderne */
+.transfer-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 420px;
+  max-height: 600px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
 
+.transfer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.transfer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.transfer-title svg {
+  width: 20px;
+  height: 20px;
+}
+
+.transfer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-action, .btn-collapse {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.btn-action:hover, .btn-collapse:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.btn-action svg, .btn-collapse svg {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-collapse svg.rotated {
+  transform: rotate(180deg);
+}
+
+.btn-danger {
+  background: rgba(244, 67, 54, 0.8);
+}
+
+.btn-danger:hover {
+  background: rgba(244, 67, 54, 1);
+}
+
+.transfer-list {
+  overflow-y: auto;
+  max-height: 500px;
+  padding: 12px;
+}
+
+.transfer-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.transfer-item:hover {
+  background: #f0f2f5;
+}
+
+.transfer-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.upload-icon {
+  background: linear-gradient(135deg, #e8e8e8 0%, #d0d0d0 100%);
+  color: #555;
+}
+
+.download-icon {
+  background: linear-gradient(135deg, #e8e8e8 0%, #d0d0d0 100%);
+  color: #555;
+}
+
+.transfer-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.transfer-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.transfer-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #222;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-details {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #666;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.transfer-details span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transfer-status {
+  font-weight: 500;
+  color: #5b9bd5;
+}
+
+.transfer-speed {
+  color: #888;
+}
+
+.transfer-eta {
+  color: #999;
+  font-style: italic;
+}
+
+.progress-bar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.upload-progress {
+  background: linear-gradient(90deg, #5b9bd5 0%, #4a8fc5 100%);
+}
+
+.download-progress {
+  background: linear-gradient(90deg, #5b9bd5 0%, #4a8fc5 100%);
+}
+
+.progress-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5b9bd5;
+  min-width: 30px;
+}
+
+.transfer-controls {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-control {
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #555;
+}
+
+.btn-control:hover {
+  background: #f5f5f5;
+  border-color: #5b9bd5;
+  color: #5b9bd5;
+}
+
+.btn-control.btn-cancel {
+  color: #f44336;
+  border-color: #f44336;
+}
+
+.btn-control.btn-cancel:hover {
+  background: #f443361a;
+  border-color: #f44336;
+}
+
+.btn-control svg {
+  width: 16px;
+  height: 16px;
+}
 
 </style>
