@@ -394,6 +394,27 @@ pub async fn finalize_upload_handler(
 }
 
 #[derive(Deserialize)]
+pub struct FinalizeDownloadRequest {
+    file_id: Uuid,
+}
+pub async fn finalize_download_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(_body): Json<FinalizeDownloadRequest>,
+) -> Response {
+    // Decrement user's active transfers counter in Redis (download completed)
+    let transfers_key = format!("user:{}:transfers_count", claims.id);
+    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
+        let count: i32 = redis_conn.decr(&transfers_key, 1).await.unwrap_or(0);
+        if count <= 0 {
+            let _ = redis_conn.del::<_, ()>(&transfers_key).await;
+        }
+    }
+
+    ApiResponse::ok("Download finalized successfully").into_response()
+}
+
+#[derive(Deserialize)]
 pub struct CreateFolderRequest {
     encrypted_metadata: String,
     parent_folder_id: String,
@@ -817,17 +838,16 @@ pub async fn download_file_handler(
     let storage_client = state.storage_client.clone();
 
     // Increment user's active transfers counter in Redis
-    let redis_client = state.redis_client.clone();
     let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut con) = redis_client.get_multiplexed_async_connection().await {
+    if let Ok(mut con) = state.redis_client.get_multiplexed_async_connection().await {
         let _ = con.incr::<_, _, i32>(&transfers_key, 1).await;
         let _ : Result<bool, _> = con.expire(&transfers_key, 86400).await; // 24h TTL
     }
 
     // Créer un stream qui télécharge et envoie chaque chunk
-    let base_stream = futures::stream::iter(chunks)
+    let stream = futures::stream::iter(chunks)
         .then(move |chunk_info| {
-            let storage = storage_client.clone();
+            let storage = state.storage_client.clone();
             async move {
                 let s3_key = chunk_info.get("s3_key")?.as_str()?;
                 
@@ -845,45 +865,6 @@ pub async fn download_file_handler(
             use bytes::Bytes;
             Bytes::from(vec)
         }));
-
-    // Wrapper stream which decrements Redis counter when dropped (end of download or disconnect)
-    struct WrappedStream {
-        inner: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, std::io::Error>> + Send>>,
-        user_id: uuid::Uuid,
-        redis_client: redis::Client,
-    }
-
-    impl Stream for WrappedStream {
-        type Item = Result<bytes::Bytes, std::io::Error>;
-
-        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            Pin::new(&mut self.inner).poll_next(cx)
-        }
-    }
-
-    impl Drop for WrappedStream {
-        fn drop(&mut self) {
-            let user_id = self.user_id.clone();
-            let client = self.redis_client.clone();
-            let transfers_key = format!("user:{}:transfers_count", user_id);
-            tokio::spawn(async move {
-                if let Ok(mut con) = client.get_multiplexed_async_connection().await {
-                    let count: i32 = con.decr(&transfers_key, 1).await.unwrap_or(0);
-                    if count <= 0 {
-                        let _ : Option<()> = con.del(&transfers_key).await.ok();
-                    }
-                }
-            });
-        }
-    }
-
-    let boxed: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, std::io::Error>> + Send>> = Box::pin(base_stream);
-
-    let stream = WrappedStream {
-        inner: boxed,
-        user_id: claims.id,
-        redis_client: redis_client.clone(),
-    };
 
     let body = Body::from_stream(stream);
     
