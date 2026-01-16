@@ -1,0 +1,13 @@
+[Unit]
+Description=Kubernetes PostgreSQL Port Forward
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/kubectl port-forward -n gauzian --address 127.0.0.1 svc/postgres-service 5432:5432
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
