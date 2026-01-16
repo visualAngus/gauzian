@@ -410,6 +410,7 @@ const listUploaded = ref([]);
 const simultaneousUploads = 3;
 const fileProgressMap = ref({});
 const abortControllers = ref({}); // Map file_id -> AbortController
+const downloadAbortControllers = ref({}); // Map download_id -> AbortController pour les downloads
 let fileIdCounter = 0; // Compteur pour générer des IDs uniques
 const rightClikedItem = ref(null);
 
@@ -806,13 +807,28 @@ const cancelAllTransfers = () => {
 };
 
 const cancelDownload = (downloadId) => {
+  console.log(`Attempting to cancel download for ID: ${downloadId}`);
+  
+  // 1. Annuler les requêtes en cours via AbortController
+  const abortController = downloadAbortControllers.value[downloadId];
+  if (abortController) {
+    abortController.abort();
+    delete downloadAbortControllers.value[downloadId];
+    console.log(`AbortController signaled for download ID ${downloadId}`);
+  }
+  
+  // 2. Retirer de la liste des téléchargements
   listDownloadInProgress.value = listDownloadInProgress.value.filter(
     d => d._downloadId !== downloadId
   );
+  
+  // 3. Nettoyer la progression et stats
   delete downloadProgressMap.value[downloadId];
   delete transferSpeeds.value[downloadId];
   delete transferETAs.value[downloadId];
   pausedTransfers.value.delete(downloadId);
+  
+  console.log(`Download ${downloadId} has been cancelled.`);
 };
 
 const togglePanelCollapse = () => {
@@ -821,6 +837,10 @@ const togglePanelCollapse = () => {
 
 const downloadFile = async (item) => {
   const downloadId = `download-${Date.now()}-${Math.random()}`;
+  
+  // Créer un AbortController pour ce download
+  const abortController = new AbortController();
+  downloadAbortControllers.value[downloadId] = abortController;
   
   try {
     const filename = item.metadata?.filename || "download";
@@ -838,6 +858,7 @@ const downloadFile = async (item) => {
     const fileInfoRes = await fetch(`${API_URL}/drive/file/${item.file_id}`, {
       method: "GET",
       credentials: "include",
+      signal: abortController.signal, // Ajouter le signal d'annulation
     });
 
     if (!fileInfoRes.ok) {
@@ -896,6 +917,7 @@ const downloadFile = async (item) => {
       const chunkRes = await fetch(`${API_URL}/drive/download_chunk/${chunk.s3_key}`, {
         method: "GET",
         credentials: "include",
+        signal: abortController.signal, // Ajouter le signal d'annulation
       });
 
       if (!chunkRes.ok) {
@@ -946,6 +968,9 @@ const downloadFile = async (item) => {
 
     console.log("Download completed successfully");
     
+    // Nettoyer l'AbortController
+    delete downloadAbortControllers.value[downloadId];
+    
     // Retirer de la liste des téléchargements
     listDownloadInProgress.value = listDownloadInProgress.value.filter(
       d => d._downloadId !== downloadId
@@ -956,7 +981,14 @@ const downloadFile = async (item) => {
     
   } catch (error) {
     console.error("Error downloading file:", error);
-    alert(`Erreur lors du téléchargement: ${error.message}`);
+    
+    // Ne pas afficher d'alerte si l'erreur est due à un abort
+    if (error.name !== 'AbortError') {
+      alert(`Erreur lors du téléchargement: ${error.message}`);
+    }
+    
+    // Nettoyer l'AbortController
+    delete downloadAbortControllers.value[downloadId];
     
     // Retirer de la liste des téléchargements en cas d'erreur
     listDownloadInProgress.value = listDownloadInProgress.value.filter(
@@ -989,6 +1021,10 @@ const downloadItem = async (element) => {
 const downloadFolderAsZip = async (folderId, folderName) => {
   const downloadId = `download-${Date.now()}-${Math.random()}`;
   
+  // Créer un AbortController pour ce download
+  const abortController = new AbortController();
+  downloadAbortControllers.value[downloadId] = abortController;
+  
   try {
     console.log("Starting folder download as ZIP:", folderId);
 
@@ -1004,6 +1040,7 @@ const downloadFolderAsZip = async (folderId, folderName) => {
     const contentsRes = await fetch(`${API_URL}/drive/folder_contents/${folderId}`, {
       method: "GET",
       credentials: "include",
+      signal: abortController.signal, // Ajouter le signal d'annulation
     });
 
     if (!contentsRes.ok) {
@@ -1042,10 +1079,16 @@ const downloadFolderAsZip = async (folderId, folderName) => {
           // Télécharger et déchiffrer tous les chunks du fichier
           const decryptedChunks = [];
           for (let i = 0; i < item.chunks.length; i++) {
+            // Vérifier si en pause
+            while (isPaused(downloadId)) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
             const chunk = item.chunks[i];
             const chunkRes = await fetch(`${API_URL}/drive/download_chunk/${chunk.s3_key}`, {
               method: "GET",
               credentials: "include",
+              signal: abortController.signal, // Ajouter le signal d'annulation
             });
 
             if (!chunkRes.ok) {
@@ -1094,21 +1137,35 @@ const downloadFolderAsZip = async (folderId, folderName) => {
     
     console.log("ZIP download completed");
     
+    // Nettoyer l'AbortController
+    delete downloadAbortControllers.value[downloadId];
+    
     // Retirer de la liste des téléchargements
     listDownloadInProgress.value = listDownloadInProgress.value.filter(
       d => d._downloadId !== downloadId
     );
     delete downloadProgressMap.value[downloadId];
+    delete transferSpeeds.value[downloadId];
+    delete transferETAs.value[downloadId];
     
   } catch (error) {
     console.error("Error downloading folder as ZIP:", error);
-    alert(`Erreur lors du téléchargement: ${error.message}`);
+    
+    // Ne pas afficher d'alerte si l'erreur est due à un abort
+    if (error.name !== 'AbortError') {
+      alert(`Erreur lors du téléchargement: ${error.message}`);
+    }
+    
+    // Nettoyer l'AbortController
+    delete downloadAbortControllers.value[downloadId];
     
     // Retirer de la liste des téléchargements en cas d'erreur
     listDownloadInProgress.value = listDownloadInProgress.value.filter(
       d => d._downloadId !== downloadId
     );
     delete downloadProgressMap.value[downloadId];
+    delete transferSpeeds.value[downloadId];
+    delete transferETAs.value[downloadId];
   }
 }
 
@@ -1271,7 +1328,6 @@ const uploadFile = async (file, file_id, dataKey) => {
   };
 
   try {
-    // On lance 'CONCURRENCY_LIMIT' workers en parallèle
     const workers = [];
     for (let i = 0; i < Math.min(CONCURRENCY_LIMIT, totalChunks); i++) {
       workers.push(worker());
@@ -1280,9 +1336,11 @@ const uploadFile = async (file, file_id, dataKey) => {
     // On attend que tous les workers aient fini
     await Promise.all(workers);
 
+    let etat = abortController.signal.aborted ? "aborted" : "completed";
+
     console.log(`Finished uploading file: ${file.name}`);
 
-    const req = await fetch(`${API_URL}/drive/finalize_upload/${file_id}/completed`, {
+    const req = await fetch(`${API_URL}/drive/finalize_upload/${file_id}/${etat}`, {
       method: "POST",
       credentials: "include",
     });
@@ -2342,6 +2400,21 @@ watch(activeFolderId, () => {
     loadPath({ outIn: true });
   }
 });
+
+// si l'url change (folder_id) on met a jour activeFolderId
+watch(
+  () => route.query.folder_id,
+  (newFolderId) => {
+    if (newFolderId && newFolderId !== activeFolderId.value) {
+      activeFolderId.value = newFolderId;
+    } else if (!newFolderId && activeFolderId.value !== "root") {
+      activeFolderId.value = "root";
+    }
+  }
+);
+
+
+
 </script>
 
 <style>
