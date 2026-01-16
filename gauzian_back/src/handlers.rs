@@ -851,3 +851,26 @@ pub async fn get_folder_contents_handler(
     }
 }
 
+pub async fn finish_upload_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    match drive::finalize_file_upload(&state.db_pool, claims.id, file_id).await {
+        Ok(_) => ApiResponse::ok("File upload finalized successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to finalize file upload: {:?}", e);
+            ApiResponse::internal_error("Failed to finalize file upload").into_response()
+        }
+    }
+}

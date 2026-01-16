@@ -119,6 +119,8 @@ pub async fn get_files_and_folders_list(
                         ($2::uuid is null and fa2.folder_id is null)
                         or fa2.folder_id = $2::uuid
                     )
+                    and f.is_deleted is false
+                    and f.is_fully_uploaded = true
         "#,
     )
     .bind(user_id)
@@ -1080,4 +1082,32 @@ ORDER BY files.id, sk.index ASC
     }
 
     Ok(results)
+}
+
+
+pub async fn finalize_file_upload(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    // Verify user has access to the file
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Update the file to mark it as finalized (if there's such a field)
+    sqlx::query("UPDATE files SET updated_at = NOW(), is_fully_uploaded = TRUE WHERE id = $1")
+        .bind(file_id)
+        .execute(db_pool)
+        .await?;
+
+    Ok(())
 }
