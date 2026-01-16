@@ -4,7 +4,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use uuid::Uuid;
-use redis::AsyncCommands;
+// redis transfer-tracking removed from this file
 
 use crate::{auth, jwt, response::ApiResponse, state::AppState,drive};
 use base64::Engine;
@@ -229,14 +229,6 @@ pub async fn initialize_file_handler(
             return ApiResponse::internal_error("Failed to initialize file").into_response();
         }
     };
-
-    // Increment user's active transfers counter in Redis
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        let _ = redis_conn.incr::<_, _, i32>(&transfers_key, 1).await;
-        let _ : Result<bool, _> = redis_conn.expire(&transfers_key, 86400).await; // 24h TTL
-    }
-
     ApiResponse::ok(serde_json::json!({ "file_id": file_id })).into_response()
 }
 
@@ -372,47 +364,7 @@ pub async fn upload_chunk_handler(
     })).into_response()
 }
 
-#[derive(Deserialize)]
-pub struct FinalizeUploadRequest {
-    file_id: Uuid,
-}
-pub async fn finalize_upload_handler(
-    State(state): State<AppState>,
-    claims: jwt::Claims,
-    Json(_body): Json<FinalizeUploadRequest>,
-) -> Response {
-    // Decrement user's active transfers counter in Redis (upload completed)
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        let count: i32 = redis_conn.decr(&transfers_key, 1).await.unwrap_or(0);
-        if count <= 0 {
-            let _ = redis_conn.del::<_, ()>(&transfers_key).await;
-        }
-    }
-
-    ApiResponse::ok("Upload finalized successfully").into_response()
-}
-
-#[derive(Deserialize)]
-pub struct FinalizeDownloadRequest {
-    file_id: Uuid,
-}
-pub async fn finalize_download_handler(
-    State(state): State<AppState>,
-    claims: jwt::Claims,
-    Json(_body): Json<FinalizeDownloadRequest>,
-) -> Response {
-    // Decrement user's active transfers counter in Redis (download completed)
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        let count: i32 = redis_conn.decr(&transfers_key, 1).await.unwrap_or(0);
-        if count <= 0 {
-            let _ = redis_conn.del::<_, ()>(&transfers_key).await;
-        }
-    }
-
-    ApiResponse::ok("Download finalized successfully").into_response()
-}
+// Finalize endpoints removed: transfer lifecycle now handled differently
 
 #[derive(Deserialize)]
 pub struct CreateFolderRequest {
@@ -572,14 +524,7 @@ pub async fn abort_upload_handler(
     claims: jwt::Claims,
     Json(body): Json<AbortUploadRequest>,
 ) -> Response {
-    // Decrement user's active transfers counter in Redis
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        let count: i32 = redis_conn.decr(&transfers_key, 1).await.unwrap_or(0);
-        if count <= 0 {
-            let _ = redis_conn.del::<_, ()>(&transfers_key).await;
-        }
-    }
+    // transfer-tracking removed: no Redis decrement here
 
     match drive::abort_file_upload(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("Upload aborted successfully").into_response(),
@@ -599,16 +544,7 @@ pub async fn delete_file_handler(
     claims: jwt::Claims,
     Json(body): Json<DeleteFileRequest>,
 ) -> Response {
-    // Check if user has active transfers
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        if let Ok(count) = redis_conn.get::<_, i32>(&transfers_key).await {
-            if count > 0 {
-                return ApiResponse::conflict("Cannot delete: transfers in progress").into_response();
-            }
-        }
-    }
-
+    // transfer-tracking removed: deletions no longer blocked by Redis
     match drive::delete_file(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
@@ -630,16 +566,7 @@ pub async fn delete_folder_handler(
     claims: jwt::Claims,
     Json(body): Json<DeleteFolderRequest>,
 ) -> Response {
-    // Check if user has active transfers (uploads/downloads)
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut redis_conn) = state.redis_client.get_multiplexed_async_connection().await {
-        if let Ok(count) = redis_conn.get::<_, i32>(&transfers_key).await {
-            if count > 0 {
-                return ApiResponse::conflict("Cannot delete folder: transfers in progress").into_response();
-            }
-        }
-    }
-
+    // transfer-tracking removed: deletions no longer blocked by Redis
     match drive::delete_folder(&state.db_pool, &state.storage_client, claims.id, body.folder_id).await {
         Ok(_) => ApiResponse::ok("Folder deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
@@ -836,14 +763,6 @@ pub async fn download_file_handler(
     };
 
     let storage_client = state.storage_client.clone();
-
-    // Increment user's active transfers counter in Redis
-    let transfers_key = format!("user:{}:transfers_count", claims.id);
-    if let Ok(mut con) = state.redis_client.get_multiplexed_async_connection().await {
-        let _ = con.incr::<_, _, i32>(&transfers_key, 1).await;
-        let _ : Result<bool, _> = con.expire(&transfers_key, 86400).await; // 24h TTL
-    }
-
     // Créer un stream qui télécharge et envoie chaque chunk
     let stream = futures::stream::iter(chunks)
         .then(move |chunk_info| {
