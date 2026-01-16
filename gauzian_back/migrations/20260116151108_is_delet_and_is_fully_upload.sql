@@ -1,0 +1,17 @@
+-- Add migration script here
+ALTER TABLE files
+ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN is_fully_uploaded BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE folders
+ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE file_access
+ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE folder_access
+ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE files
+SET is_fully_uploaded = TRUE;
+

@@ -11,6 +11,12 @@ use base64::Engine;
 
 use axum::http::HeaderMap;
 
+
+use axum::body::Body;
+use axum::http::header;
+use futures::stream::StreamExt;
+
+
 #[derive(Serialize)]
 pub struct LoginResponse {
     pub message: String,
@@ -723,13 +729,6 @@ pub async fn get_file_info_handler(
     }
 }
 
-use axum::body::Body;
-use axum::http::header;
-use futures::stream::StreamExt;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use futures::Stream;
-use tokio;
 
 pub async fn download_file_handler(
     State(state): State<AppState>,
@@ -761,8 +760,6 @@ pub async fn download_file_handler(
             return ApiResponse::internal_error("Invalid file structure").into_response();
         }
     };
-
-    let storage_client = state.storage_client.clone();
     // Créer un stream qui télécharge et envoie chaque chunk
     let stream = futures::stream::iter(chunks)
         .then(move |chunk_info| {
