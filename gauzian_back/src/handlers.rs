@@ -851,10 +851,10 @@ pub async fn get_folder_contents_handler(
     }
 }
 
-pub async fn finish_upload_handler(
+pub async fn finalize_upload_handler(
     State(state): State<AppState>,
     claims: jwt::Claims,
-    Path(file_id): Path<String>,
+    Path((file_id, etat)): Path<(String, String)>,
 ) -> Response {
     let file_id = match Uuid::parse_str(&file_id) {
         Ok(id) => id,
@@ -863,14 +863,33 @@ pub async fn finish_upload_handler(
         }
     };
 
-    match drive::finalize_file_upload(&state.db_pool, claims.id, file_id).await {
-        Ok(_) => ApiResponse::ok("File upload finalized successfully").into_response(),
-        Err(sqlx::Error::RowNotFound) => {
-            ApiResponse::not_found("File not found or access denied").into_response()
+    match etat.as_str() {
+        "aborted" => {
+            // If upload was aborted, clean up
+            match drive::abort_file_upload(&state.db_pool, &state.storage_client, claims.id, file_id).await {
+                Ok(_) => return ApiResponse::ok("File upload aborted successfully").into_response(),
+                Err(e) => {
+                    tracing::error!("Failed to abort file upload: {:?}", e);
+                    return ApiResponse::internal_error("Failed to abort file upload").into_response();
+                }
+            }
         }
-        Err(e) => {
-            tracing::error!("Failed to finalize file upload: {:?}", e);
-            ApiResponse::internal_error("Failed to finalize file upload").into_response()
+        "completed" => {
+            // proceed to finalize
+            match drive::finalize_file_upload(&state.db_pool, claims.id, file_id).await {
+                Ok(_) => ApiResponse::ok("File upload finalized successfully").into_response(),
+                Err(sqlx::Error::RowNotFound) => {
+                    ApiResponse::not_found("File not found or access denied").into_response()
+                }
+                Err(e) => {
+                    tracing::error!("Failed to finalize file upload: {:?}", e);
+                    ApiResponse::internal_error("Failed to finalize file upload").into_response()
+                }
+            }
+        }
+        _ => {
+            return ApiResponse::bad_request("Invalid etat value (expected 'aborted' or 'completed')").into_response();
         }
     }
+
 }

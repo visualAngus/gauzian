@@ -20,7 +20,7 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/get_folder/{folder_id}", get(handlers::get_folder_handler))
         .route("/drive/file/{file_id}", get(handlers::get_file_info_handler))
         .route("/drive/download/{file_id}", get(handlers::download_file_handler))
-        .route("/drive/finish_upload/{file_id}", post(handlers::finish_upload_handler))
+        .route("/drive/finish_upload/{file_id}/{etat}", post(handlers::finalize_upload_handler))
         .route("/drive/download_chunk/{s3_key}", get(handlers::download_chunk_handler))
         .route("/drive/folder_contents/{folder_id}", get(handlers::get_folder_contents_handler))
         .route("/drive/abort_upload", post(handlers::abort_upload_handler))

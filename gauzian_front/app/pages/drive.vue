@@ -1281,9 +1281,22 @@ const uploadFile = async (file, file_id, dataKey) => {
     await Promise.all(workers);
 
     console.log(`Finished uploading file: ${file.name}`);
-    
-    // upload finalization removed (no finalize endpoint)
+
+    const req = await fetch(`${API_URL}/drive/finalize_upload/${file_id}/completed`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!req.ok) {
+      throw new Error("Failed to finalize file upload");
+    }
   } catch (error) {
+    const req = await fetch(`${API_URL}/drive/finalize_upload/${file_id}/aborted`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!req.ok) {
+      console.error("Failed to notify server about aborted upload");
+    }
     // upload finalization removed (no finalize endpoint)
     throw error;
   } finally {
