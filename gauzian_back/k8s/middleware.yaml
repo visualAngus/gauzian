@@ -17,3 +17,14 @@ spec:
   stripPrefix:
     prefixes:
       - /s3
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-50-per-1s
+  namespace: gauzian
+spec:
+  rateLimit:
+    average: 50
+    period: 1s
+    burst: 0
