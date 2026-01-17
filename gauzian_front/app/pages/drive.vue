@@ -167,6 +167,13 @@
           @toggle="toggleFolderNode"
           @context-menu="handleTreeContextMenu"
         />
+        <FolderTreeNode
+          :node="trashNode"
+          :active-id="activeFolderId"
+          @select="selectFolderFromTree"
+          @toggle="toggleFolderNode"
+          @context-menu="handleTreeContextMenu"
+        />
       </div>
 
       <div class="div_utilisation_storage">
@@ -427,6 +434,16 @@ const folderTree = ref({
   parent_folder_id: null,
 });
 
+const trashNode = ref({
+  folder_id: "corbeille",
+  metadata: { folder_name: "Corbeille" },
+  children: [],
+  isExpanded: true,
+  isLoaded: false,
+  isLoading: false,
+  parent_folder_id: null,
+});
+
 // Computed property pour combiner les fichiers en attente et en cours d'upload
 const pendingAndUploadingFiles = computed(() => {
   return [
@@ -656,6 +673,7 @@ const expandTreeToCurrentPath = async () => {
   }
 
   for (const pathItem of full_path.value) {
+    if (!pathItem) continue;
     const targetId = pathItem.folder_id;
     if (!targetId) continue;
 
@@ -1459,20 +1477,28 @@ const get_all_info = async () => {
   applyDriveItemsForDisplay(decryptedItems);
 
   for (const pathItem of fullPathData) {
-    const encryptedMetadata = pathItem.encrypted_metadata;
-    const decryptkey = await decryptWithStoredPrivateKey(
-      pathItem.encrypted_folder_key
-    );
-    const metadataStr = await decryptSimpleDataWithDataKey(
-      encryptedMetadata,
-      decryptkey
-    );
-    const metadata = JSON.parse(metadataStr);
-    full_path.value.push({
-      ...pathItem,
-      metadata: metadata,
-    });
-    console.log("Full path item:", full_path.value);
+    if (!pathItem || !pathItem.encrypted_folder_key || !pathItem.encrypted_metadata) {
+      console.warn("Invalid pathItem:", pathItem);
+      continue;
+    }
+    try {
+      const encryptedMetadata = pathItem.encrypted_metadata;
+      const decryptkey = await decryptWithStoredPrivateKey(
+        pathItem.encrypted_folder_key
+      );
+      const metadataStr = await decryptSimpleDataWithDataKey(
+        encryptedMetadata,
+        decryptkey
+      );
+      const metadata = JSON.parse(metadataStr);
+      full_path.value.push({
+        ...pathItem,
+        metadata: metadata,
+      });
+      console.log("Full path item:", full_path.value);
+    } catch (error) {
+      console.error("Failed to decrypt pathItem:", pathItem, error);
+    }
   }
   loadingDrive.value = false;
 };
@@ -1570,19 +1596,27 @@ const loadPath = async ({ outIn = false } = {}) => {
   // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
   const newFullPath = [];
   for (const pathItem of fullPathData) {
-    const encryptedMetadata = pathItem.encrypted_metadata;
-    const decryptkey = await decryptWithStoredPrivateKey(
-      pathItem.encrypted_folder_key
-    );
-    const metadataStr = await decryptSimpleDataWithDataKey(
-      encryptedMetadata,
-      decryptkey
-    );
-    const metadata = JSON.parse(metadataStr);
-    newFullPath.push({
-      ...pathItem,
-      metadata: metadata,
-    });
+    if (!pathItem || !pathItem.encrypted_folder_key || !pathItem.encrypted_metadata) {
+      console.warn("Invalid pathItem in loadPath:", pathItem);
+      continue;
+    }
+    try {
+      const encryptedMetadata = pathItem.encrypted_metadata;
+      const decryptkey = await decryptWithStoredPrivateKey(
+        pathItem.encrypted_folder_key
+      );
+      const metadataStr = await decryptSimpleDataWithDataKey(
+        encryptedMetadata,
+        decryptkey
+      );
+      const metadata = JSON.parse(metadataStr);
+      newFullPath.push({
+        ...pathItem,
+        metadata: metadata,
+      });
+    } catch (error) {
+      console.error("Failed to decrypt pathItem in loadPath:", pathItem, error);
+    }
   }
   // Remplacer en une seule opération pour éviter le clignotement
   full_path.value = newFullPath;
@@ -1767,6 +1801,24 @@ const setIsOver = (state) => {
   isOver.value = state;
 };
 
+const handleTreeContextMenu = ({ node, event }) => {
+  event.preventDefault();
+  const panel = rightClickPanel.value;
+  if (!panel) return;
+
+  // Créer un élément virtuel pour le dossier du tree
+  const virtualItem = document.createElement('div');
+  virtualItem.setAttribute('data-item-type', 'folder');
+  virtualItem.setAttribute('data-item-id', node.folder_id);
+  virtualItem.setAttribute('data-folder-name', node.metadata?.folder_name || 'Dossier');
+  
+  rightClikedItem.value = virtualItem;
+
+  panel.style.display = "flex";
+  panel.style.top = event.pageY + "px";
+  panel.style.left = event.pageX + "px";
+};
+
 // listener sur le click droit pour gérer le pannel
 onMounted(() => {
   const onContextMenu = (e) => {
@@ -1792,24 +1844,6 @@ onMounted(() => {
     panel.style.display = "flex";
     panel.style.top = e.pageY + "px";
     panel.style.left = e.pageX + "px";
-  };
-
-  const handleTreeContextMenu = ({ node, event }) => {
-    event.preventDefault();
-    const panel = rightClickPanel.value;
-    if (!panel) return;
-
-    // Créer un élément virtuel pour le dossier du tree
-    const virtualItem = document.createElement('div');
-    virtualItem.setAttribute('data-item-type', 'folder');
-    virtualItem.setAttribute('data-item-id', node.folder_id);
-    virtualItem.setAttribute('data-folder-name', node.metadata?.folder_name || 'Dossier');
-    
-    rightClikedItem.value = virtualItem;
-
-    panel.style.display = "flex";
-    panel.style.top = event.pageY + "px";
-    panel.style.left = event.pageX + "px";
   };
 
   const onClick = () => {
@@ -2400,19 +2434,6 @@ watch(activeFolderId, () => {
     loadPath({ outIn: true });
   }
 });
-
-// si l'url change (folder_id) on met a jour activeFolderId
-watch(
-  () => route.query.folder_id,
-  (newFolderId) => {
-    if (newFolderId && newFolderId !== activeFolderId.value) {
-      activeFolderId.value = newFolderId;
-    } else if (!newFolderId && activeFolderId.value !== "root") {
-      activeFolderId.value = "root";
-    }
-  }
-);
-
 
 
 </script>

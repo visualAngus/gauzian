@@ -534,6 +534,9 @@ pub async fn abort_upload_handler(
 
     match drive::abort_file_upload(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("Upload aborted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to abort upload: {:?}", e);
             ApiResponse::internal_error("Failed to abort upload").into_response()
