@@ -27,4 +27,4 @@ spec:
   rateLimit:
     average: 50
     period: 1s
-    burst: 0
+    burst: 10

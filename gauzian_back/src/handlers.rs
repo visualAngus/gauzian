@@ -554,7 +554,7 @@ pub async fn delete_file_handler(
     Json(body): Json<DeleteFileRequest>,
 ) -> Response {
     // transfer-tracking removed: deletions no longer blocked by Redis
-    match drive::delete_file(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
+    match drive::delete_file(&state.db_pool, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("File not found").into_response()
@@ -576,7 +576,7 @@ pub async fn delete_folder_handler(
     Json(body): Json<DeleteFolderRequest>,
 ) -> Response {
     // transfer-tracking removed: deletions no longer blocked by Redis
-    match drive::delete_folder(&state.db_pool, &state.storage_client, claims.id, body.folder_id).await {
+    match drive::delete_folder(&state.db_pool, claims.id, body.folder_id).await {
         Ok(_) => ApiResponse::ok("Folder deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder not found").into_response()
