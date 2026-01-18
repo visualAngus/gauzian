@@ -368,7 +368,7 @@ const autologin = async () => {
         console.warn(
           "Keys not found or invalid in IndexedDB during auto-login."
         );
-        // window.location.href = "/login";
+        window.location.href = "/login";
       }
       if (is_ok) {
         console.log("Auto-login successful, keys are valid.");
@@ -377,7 +377,7 @@ const autologin = async () => {
       }
     } else {
       console.log("No valid session found for auto-login.");
-      // window.location.href = "/login";
+      window.location.href = "/login";
     }
   } catch (error) {
     console.error("Auto-login failed:", error);
@@ -388,7 +388,7 @@ const autologin = async () => {
       );
       // Optionally clear IndexedDB here if needed
     }
-    // window.location.href = "/login";
+    window.location.href = "/login";
   }
 };
 
