@@ -44,7 +44,7 @@ body {
 
 button {
     padding: 10px 15px;
-	background-color: #333333;
+	background-color: var(--color-neutral-900);
 	color: white;
 	border: none;
 	border-radius: 4px;

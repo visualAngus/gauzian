@@ -30,7 +30,7 @@ const collectEntries = async (dataTransfer) => {
 }
 
 const buildHandlers = (el, binding) => {
-  const { inputRef, onFiles, onOverChange, highlightClass = "is-over" } = binding.value || {}
+  const { inputRef, onFiles, onOverChange, highlightClass = "is-over", isDisabled = false, disabledClass = "is-disabled" } = binding.value || {}
 
   const setOver = (state) => {
     if (state) {
@@ -41,14 +41,27 @@ const buildHandlers = (el, binding) => {
     onOverChange && onOverChange(state)
   }
 
+  const setDisabled = (disabled) => {
+    if (disabled) {
+      el.classList.add(disabledClass)
+    } else {
+      el.classList.remove(disabledClass)
+    }
+  }
+
   const onDragOver = (event) => {
+    if (isDisabled) return
     event.preventDefault()
     setOver(true)
   }
 
-  const onDragLeave = () => setOver(false)
+  const onDragLeave = () => {
+    if (isDisabled) return
+    setOver(false)
+  }
 
   const onDrop = async (event) => {
+    if (isDisabled) return
     event.preventDefault()
     setOver(false)
     if (!event.dataTransfer?.items?.length) return
@@ -63,10 +76,13 @@ const buildHandlers = (el, binding) => {
   }
 
   const onClick = () => {
+    if (isDisabled) return
     inputRef?.value?.click()
   }
 
-  return { onDragOver, onDragLeave, onDrop, onClick }
+  setDisabled(isDisabled)
+
+  return { onDragOver, onDragLeave, onDrop, onClick, setDisabled }
 }
 
 export default {
@@ -77,6 +93,12 @@ export default {
     el.addEventListener("dragleave", handlers.onDragLeave)
     el.addEventListener("drop", handlers.onDrop)
     el.addEventListener("click", handlers.onClick)
+  },
+  updated(el, binding) {
+    const handlers = el.__dropzoneHandlers
+    if (!handlers) return
+    const isDisabled = binding.value?.isDisabled || false
+    handlers.setDisabled(isDisabled)
   },
   unmounted(el) {
     const handlers = el.__dropzoneHandlers

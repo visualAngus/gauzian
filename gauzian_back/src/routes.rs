@@ -30,6 +30,9 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/rename_folder", post(handlers::rename_folder_handler))
         .route("/drive/move_file", post(handlers::move_file_handler))
         .route("/drive/move_folder", post(handlers::move_folder_handler))
+        .route("/drive/restore_file", post(handlers::restore_file_handler))
+        .route("/drive/restore_folder", post(handlers::restore_folder_handler))
+        .route("/drive/empty_trash", post(handlers::empty_trash_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
