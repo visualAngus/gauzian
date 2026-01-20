@@ -1,0 +1,841 @@
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+
+export function useFileActions({
+    API_URL,
+    activeFolderId,
+    listToUpload,
+    listUploadInProgress,
+    listUploaded,
+    fileProgressMap,
+    abortControllers,
+    refreshTreeNode,
+    loadPath,
+    usedSpace,
+    totalSpaceLeft,
+    downloadFile,
+    selectedItems,
+    selectedItemsMap,
+    clearSelection,
+    foldersList,
+} = {}) {
+
+    const router = useRouter();
+
+    // Local counter for generating unique file IDs when queuing uploads
+    let fileIdCounter = 0;
+
+    const isDragging = ref(false);
+    const activeItem = ref(null);
+    const draggedItems = ref([]); // Tous les items en cours de déplacement
+    if (!foldersList) foldersList = ref([]);
+    const mousePos = ref({ x: 0, y: 0 });
+
+    const fileInput = ref(null);
+    const rightClickPanel = ref(null);
+    const rightClikedItem = ref(null);
+
+    const isOver = ref(false);
+    // Style dynamique pour l'élément "fantôme" qui suit la souris
+    const ghostStyle = computed(() => ({
+        position: "fixed",
+        top: 0,
+        left: 0,
+        transform: `translate(${mousePos.value.x - 50}px, ${mousePos.value.y - 24
+            }px)`,
+        pointerEvents: "none", // Important pour ne pas bloquer les événements souris
+        zIndex: 9999,
+    }));
+
+    const click_on_item = (item, event) => {
+        // console.log("Item event:", item, event);
+
+        // Si on est en corbeille, restaurer l'item au lieu de l'ouvrir/télécharger
+        if (activeFolderId.value === "corbeille") {
+            restoreItem(item);
+            return;
+        }
+
+        if (item.type === "folder") {
+            // naviguer dans le dossier
+            router.push(`/drive?folder_id=${item.folder_id}`);
+            activeFolderId.value = item.folder_id;
+        } else if (item.type === "file") {
+            // télécharger le fichier via le handler fourni par useTransfers
+            if (typeof downloadFile === "function") {
+                downloadFile(item);
+            } else {
+                console.warn("downloadFile not provided to useFileActions");
+            }
+        }
+    };
+
+    const restoreItem = async (item) => {
+        // si item.type existe
+
+        if (!item.type || (item.type !== "file" && item.type !== "folder")) {
+            // c'est l'objet html avec les data-attributes
+
+            const itemType = item.dataset.itemType;
+            const itemId = item.dataset.itemId;
+
+            try {
+                if (itemType === "file") {
+                    const res = await fetch(`${API_URL}/drive/restore_file`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ file_id: itemId }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Failed to restore file ${itemId}`);
+                    }
+                } else if (itemType === "folder") {
+                    const res = await fetch(`${API_URL}/drive/restore_folder`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ folder_id: itemId }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Failed to restore folder ${itemId}`);
+                    }
+                }
+
+                await loadPath();
+                await refreshTreeNode(activeFolderId.value);
+            } catch (error) {
+                console.error("Error restoring item:", error);
+                alert("Erreur lors de la restauration de l'élément");
+                return;
+            }
+        } else {
+            // Se sont les donnés direct du serveur
+            try {
+                if (item.type === "file") {
+                    const res = await fetch(`${API_URL}/drive/restore_file`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ file_id: item.file_id }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Failed to restore file ${item.file_id}`);
+                    }
+                } else if (item.type === "folder") {
+                    const res = await fetch(`${API_URL}/drive/restore_folder`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ folder_id: item.folder_id }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Failed to restore folder ${item.folder_id}`);
+                    }
+                }
+
+                // Rafraîchir l'affichage
+                await loadPath();
+                await refreshTreeNode(activeFolderId.value);
+            } catch (error) {
+                console.error("Error restoring item:", error);
+                alert("Erreur lors de la restauration de l'élément");
+            }
+        }
+    };
+
+
+    const createFolder = async () => {
+        const folderName = "name_folder"; // Tu peux remplacer par une saisie utilisateur
+
+        const metat_data = {
+            folder_name: folderName,
+        };
+        // génération de la clé de données pour le dossier
+        const dataKey = await generateDataKey();
+        const encryptedFolderKey = await encryptWithStoredPublicKey(dataKey);
+        const stringifiedMetadata = JSON.stringify(metat_data);
+        const encryptedMetadata = await encryptSimpleDataWithDataKey(
+            stringifiedMetadata,
+            dataKey,
+        );
+        const res = await fetch(`${API_URL}/drive/create_folder`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                encrypted_metadata: encryptedMetadata,
+                encrypted_folder_key: encryptedFolderKey,
+                parent_folder_id: activeFolderId.value,
+            }),
+        });
+        if (!res.ok) {
+            throw new Error("Failed to create folder");
+        }
+        const resData = await res.json();
+        console.log("Folder created with ID:", resData.folder_id);
+        // Rafraîchir la liste des fichiers/dossiers
+        await loadPath();
+        await refreshTreeNode(activeFolderId.value);
+
+        // il faut reussir a seclection le nouveau dossier créé pour le renommer directement
+        await nextTick();
+        const id = resData.folder_id;
+        const newFolderElement = document.querySelector(
+            `.item[data-item-id="${id}"]`,
+        );
+
+        console.log("New folder element:", newFolderElement);
+        if (newFolderElement) {
+            renameItem(newFolderElement);
+        }
+    };
+
+
+    const setIsOver = (state) => {
+        isOver.value = state;
+    };
+
+    const handleTreeContextMenu = ({ node, event }) => {
+        event.preventDefault();
+        const panel = rightClickPanel.value;
+        if (!panel) return;
+
+        // Créer un élément virtuel pour le dossier du tree
+        const virtualItem = document.createElement("div");
+        virtualItem.setAttribute("data-item-type", "folder");
+        virtualItem.setAttribute("data-item-id", node.folder_id);
+        virtualItem.setAttribute(
+            "data-folder-name",
+            node.metadata?.folder_name || "Dossier",
+        );
+
+        rightClikedItem.value = virtualItem;
+
+        panel.style.display = "flex";
+        panel.style.top = event.pageY + "px";
+        panel.style.left = event.pageX + "px";
+    };
+
+
+    const openItemMenu = (item, event) => {
+        const panel = rightClickPanel.value;
+        if (!panel) return;
+
+        // Trouver l'élément DOM réel correspondant à l'item
+        const itemId = item.file_id || item.folder_id;
+        const realElement = document.querySelector(`.item[data-item-id="${itemId}"]`);
+        
+        if (!realElement) {
+            return;
+        }
+        
+        // Utiliser l'élément DOM réel qui a déjà tous les dataset nécessaires
+        rightClikedItem.value = realElement;
+
+        // Positionner le menu à l'endroit du clic
+        panel.style.display = "flex";
+        
+        // Si on a un event, on positionne au curseur, sinon position par défaut
+        if (event && event.pageY && event.pageX) {
+            panel.style.top = event.pageY + "px";
+            panel.style.left = event.pageX + "px";
+        } else {
+            // Position par défaut si pas d'event (cas du dotclick)
+            const rect = realElement.getBoundingClientRect();
+            panel.style.top = (rect.bottom + window.scrollY) + "px";
+            panel.style.left = (rect.left + window.scrollX) + "px";
+        }
+    };
+
+    // Gestionnaire pour le clic droit sur l'espace vide
+    const openEmptySpaceMenu = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const panel = rightClickPanel.value;
+        if (!panel) return;
+
+        rightClikedItem.value = null;
+
+        // Positionner le menu à l'endroit du clic
+        panel.style.display = "flex";
+        panel.style.top = event.pageY + "px";
+        panel.style.left = event.pageX + "px";
+    };
+
+    // Fonction pour fermer le menu contextuel
+    const closeContextMenu = () => {
+        const panel = rightClickPanel.value;
+        if (panel) {
+            panel.style.display = "none";
+        }
+        rightClikedItem.value = null;
+    };
+
+
+    const handleFileInputChange = async (event) => {
+        const files = event.target.files;
+        console.log("Files selected via input:", files);
+        if (files && files.length > 0) {
+            await onFilesFromDrop(files);
+        }
+        // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers à nouveau
+        event.target.value = "";
+    };
+
+    const onFilesFromDrop = async (files) => {
+        let someSize = 0;
+        const filesToUpload = [];
+
+        // Phase 1: Parser les fichiers et calculer la taille + créer les dossiers
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            someSize += file.size;
+
+            // Vérifier la taille si les refs sont fournies
+            if (
+                totalSpaceLeft &&
+                typeof totalSpaceLeft.value !== "undefined" &&
+                usedSpace &&
+                typeof usedSpace.value !== "undefined"
+            ) {
+                if (someSize > totalSpaceLeft.value - usedSpace.value) {
+                    alert("Not enough space left to upload these files.");
+                    return;
+                }
+            }
+
+            // Extraire le chemin et créer les dossiers
+            if (file.webkitRelativePath) {
+                const targetFolderId = await getOrCreateFolderHierarchy(
+                    file.webkitRelativePath,
+                    activeFolderId.value,
+                );
+                filesToUpload.push({ file, targetFolderId });
+            } else {
+                // Fichier sans chemin, upload dans le dossier actif
+                filesToUpload.push({ file, targetFolderId: activeFolderId.value });
+            }
+        }
+
+        await loadPath();
+
+        // Phase 2: Ajouter les fichiers à la liste d'upload
+        for (const { file, targetFolderId } of filesToUpload) {
+            // Conserver l'objet File natif pour garder size/type/lastModified
+            if (!file._uniqueId) {
+                file._uniqueId = `file-${Date.now()}-${fileIdCounter++}`;
+            }
+            file._targetFolderId = targetFolderId;
+            file.status = "pending";
+            listToUpload.value.push(file);
+        }
+
+        // console.log("Dossiers créés:", foldersList.value);
+        // console.log("Fichiers prêts pour upload:", filesToUpload);
+    };
+    const handleDragStart = (data) => {
+        isDragging.value = true;
+        activeItem.value = data.item;
+        mousePos.value = { x: data.x, y: data.y };
+
+        const itemId =
+            data.item.type === "file" ? data.item.file_id : data.item.folder_id;
+
+        // Si l'item draggé fait partie de la sélection multiple, on déplace tous les items sélectionnés
+        if (selectedItems.value.has(itemId) && selectedItems.value.size > 1) {
+            draggedItems.value = Array.from(selectedItemsMap.value.values());
+            console.log("Drag started with", draggedItems.value.length, "items");
+        } else {
+            // Sinon on déplace juste cet item
+            draggedItems.value = [data.item];
+            console.log("Drag started:", data.item);
+        }
+    };
+
+    const emptyTrash = async () => {
+        if (!confirm("Voulez-vous vraiment vider la corbeille ?")) {
+            return;
+        }
+
+        const res = await fetch(`${API_URL}/drive/empty_trash`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!res.ok) {
+            console.error("Failed to empty trash");
+            alert("Erreur lors du vidage de la corbeille");
+            return;
+        }
+
+        console.log("Trash emptied successfully");
+        await loadPath();
+        await refreshTreeNode("corbeille");
+    };
+
+    const handleDragMove = (data) => {
+        // Cette fonction est appelée à chaque pixel bougé par la souris
+        mousePos.value = { x: data.x, y: data.y };
+    };
+
+    const handleDragEnd = async (data) => {
+        if (!activeItem.value || draggedItems.value.length === 0) {
+            isDragging.value = false;
+            return;
+        }
+
+        // Trouver l'élément dossier sous la position du curseur
+        const elementUnderMouse = document.elementFromPoint(data.x, data.y);
+
+        const breadcrumbElement = elementUnderMouse?.closest(".breadcrumb-item");
+        const targetFolderElement = elementUnderMouse?.closest(
+            '.item[data-item-type="folder"]',
+        );
+        const folderTreeNodeElement = elementUnderMouse?.closest(".folder-three");
+
+        let targetFolderId = null;
+
+        if (breadcrumbElement) {
+            targetFolderId = breadcrumbElement.dataset?.itemId;
+        } else if (targetFolderElement) {
+            targetFolderId = targetFolderElement.dataset?.itemId;
+        } else if (folderTreeNodeElement) {
+            targetFolderId = folderTreeNodeElement.dataset?.folderId;
+        }
+
+        if (!targetFolderId) {
+            isDragging.value = false;
+            activeItem.value = null;
+            draggedItems.value = [];
+            return;
+        }
+
+        try {
+            // Vérifier qu'on ne déplace pas un dossier dans lui-même
+            for (const item of draggedItems.value) {
+                const itemId = item.file_id || item.folder_id;
+                if (item.type === "folder" && itemId === targetFolderId) {
+                    console.log("Cannot move a folder into itself");
+                    isDragging.value = false;
+                    activeItem.value = null;
+                    draggedItems.value = [];
+                    return;
+                }
+            }
+
+            console.log(
+                `Moving ${draggedItems.value.length} item(s) to folder ${targetFolderId}`,
+            );
+
+            // Déplacer tous les items
+            const movePromises = draggedItems.value.map((item) =>
+                moveItem(item, targetFolderId),
+            );
+            await Promise.all(movePromises);
+
+            console.log("All items moved successfully");
+
+            // Recharger le dossier courant
+            await loadPath();
+            await refreshTreeNode(activeFolderId.value);
+            await refreshTreeNode(targetFolderId);
+        } catch (error) {
+            console.error("Error moving items:", error);
+            alert("Erreur lors du déplacement des éléments");
+        }
+
+        isDragging.value = false;
+        activeItem.value = null;
+        draggedItems.value = [];
+    };
+
+
+    const toggleSidebar = () => {
+        isSidebarOpen.value = !isSidebarOpen.value;
+    };
+
+    const gohome = () => {
+        router.push(`/drive?folder_id=root`);
+        activeFolderId.value = "root";
+    };
+
+    const goToTrash = () => {
+        router.push(`/drive?folder_id=corbeille`);
+        activeFolderId.value = "corbeille";
+
+        loadPath({ outIn: true });
+    };
+
+    const formatBytes = (bytes) => {
+        const sizes = ["octets", "Ko", "Mo", "Go", "To"];
+        if (bytes === 0) return "0 octet";
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(2) + " " + sizes[i];
+    };
+
+    const getOrCreateFolderHierarchy = async (
+        relativePath,
+        parentFolderId = "root",
+    ) => {
+        const pathParts = relativePath.split("/").slice(0, -1); // Exclure le nom du fichier
+
+        if (pathParts.length === 0) {
+            return parentFolderId; // Le fichier est à la racine
+        }
+
+        let currentParentId = parentFolderId;
+
+        for (const folderName of pathParts) {
+            // Vérifier si le dossier existe déjà
+            const existingFolder = foldersList.value.find(
+                (f) => f.name === folderName && f.parent_folder_id === currentParentId,
+            );
+
+            if (existingFolder) {
+                currentParentId = existingFolder.folder_id;
+            } else {
+                // Créer le dossier
+                try {
+                    const dataKey = await generateDataKey();
+                    const encryptedFolderKey = await encryptWithStoredPublicKey(dataKey);
+                    const metadata = { folder_name: folderName };
+                    const stringifiedMetadata = JSON.stringify(metadata);
+                    const encryptedMetadata = await encryptSimpleDataWithDataKey(
+                        stringifiedMetadata,
+                        dataKey,
+                    );
+
+                    const res = await fetch(`${API_URL}/drive/create_folder`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            encrypted_metadata: encryptedMetadata,
+                            encrypted_folder_key: encryptedFolderKey,
+                            parent_folder_id: currentParentId,
+                        }),
+                    });
+
+                    if (!res.ok) {
+                        throw new Error("Failed to create folder");
+                    }
+
+                    const resData = await res.json();
+                    const newFolderId = resData.folder_id;
+
+                    // Ajouter à la liste locale
+                    foldersList.value.push({
+                        name: folderName,
+                        folder_id: newFolderId,
+                        parent_folder_id: currentParentId,
+                    });
+
+                    currentParentId = newFolderId;
+                } catch (err) {
+                    console.error(`Erreur création dossier ${folderName}:`, err);
+                    throw err;
+                }
+            }
+        }
+
+        return currentParentId;
+    };
+
+    const deleteItem = async (item) => {
+        // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
+        const itemId = item.dataset?.itemId;
+        const itemType = item.dataset?.itemType;
+
+        // Vérifier si cet item fait partie d'une sélection multiple
+        let itemsToDelete = [];
+
+        if (selectedItems.value.has(itemId) && selectedItems.value.size > 1) {
+            // Supprimer tous les items sélectionnés
+            itemsToDelete = Array.from(selectedItemsMap.value.values());
+            const confirmMessage = `Voulez-vous vraiment supprimer ${itemsToDelete.length} éléments ?`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+        } else {
+            // Supprimer juste cet item
+            itemsToDelete = [
+                {
+                    type: itemType,
+                    file_id: itemType === "file" ? itemId : null,
+                    folder_id: itemType === "folder" ? itemId : null,
+                },
+            ];
+        }
+
+        try {
+            // Supprimer tous les items
+            const deletePromises = itemsToDelete.map(async (itemToDelete) => {
+                const id = itemToDelete.file_id || itemToDelete.folder_id;
+                const type = itemToDelete.type;
+
+                if (type === "file") {
+                    const res = await fetch(`${API_URL}/drive/delete_file`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ file_id: id }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Failed to delete file ${id}`);
+                    }
+                } else if (type === "folder") {
+                    const res = await fetch(`${API_URL}/drive/delete_folder`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ folder_id: id }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(`Failed to delete folder ${id}`);
+                    }
+                }
+            });
+
+            await Promise.all(deletePromises);
+
+            console.log(`Successfully deleted ${itemsToDelete.length} item(s)`);
+
+            // Vider la sélection après suppression
+            clearSelection();
+
+            await loadPath();
+            await refreshTreeNode(activeFolderId.value);
+        } catch (error) {
+            console.error("Error deleting items:", error);
+            alert("Erreur lors de la suppression des éléments");
+        }
+    };
+
+
+    const renameItem = async (item) => {
+        const itemId = item.dataset?.itemId;
+        const itemType = item.dataset?.itemType;
+        const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
+        // console.log(metadata);
+
+        if (!metadata) {
+            console.error("No metadata found for item");
+            return;
+        }
+        const encrypted_data_key = metadata.encrypted_data_key;
+        if (!encrypted_data_key) {
+            console.error("No encrypted data key found in metadata");
+            return;
+        }
+
+        // enlever l'encrypted_data_key des metadata pour ne pas le modifier
+        delete metadata.encrypted_data_key;
+
+        // selectionné le span de classe filename ou foldername
+        const nameElement = item.querySelector(".filename, .foldername");
+        if (!nameElement) {
+            console.error("Name element not found");
+            return;
+        }
+
+        const name = itemType === "file" ? metadata.filename : metadata.folder_name;
+        console.log("Current name:", name);
+
+        // Préparer le style pour édition sur une seule ligne
+        nameElement.style.textOverflow = "clip";
+        nameElement.style.whiteSpace = "nowrap";
+        nameElement.style.overflow = "auto";
+        nameElement.style.display = "block";
+        nameElement.style.maxWidth = "100%";
+
+        // Remplacer le texte par le nom actuel
+        nameElement.textContent = name;
+
+        // Rendre le nom éditable
+        nameElement.contentEditable = "true";
+
+        // sélectionner le texte
+        // Sélectionner uniquement le nom sans l'extension
+        const dotIndex = name.lastIndexOf(".");
+        let start = 0;
+        let end = name.length;
+        if (dotIndex > 0 && itemType === "file") {
+            end = dotIndex;
+        }
+        const range = document.createRange();
+        range.setStart(nameElement.firstChild || nameElement, start);
+        range.setEnd(nameElement.firstChild || nameElement, end);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        nameElement.focus();
+
+        // Gérer la fin de l'édition
+        const finishEditing = async () => {
+            nameElement.contentEditable = "false";
+            const newName = nameElement.textContent.trim();
+
+            // Si le nom n'a pas changé, on annule
+            if (newName === name) {
+                nameElement.style.textOverflow = "ellipsis";
+                nameElement.style.whiteSpace = "nowrap";
+                nameElement.style.overflow = "hidden";
+                nameElement.style.display = "block";
+                nameElement.textContent = name;
+                return;
+            }
+
+            try {
+                const decryptkey = await decryptWithStoredPrivateKey(encrypted_data_key);
+
+                const encryptedMetadata = await encryptSimpleDataWithDataKey(
+                    JSON.stringify(
+                        itemType === "file"
+                            ? { ...metadata, filename: newName }
+                            : { ...metadata, folder_name: newName },
+                    ),
+                    decryptkey,
+                );
+
+                const endpoint =
+                    itemType === "file"
+                        ? `${API_URL}/drive/rename_file`
+                        : `${API_URL}/drive/rename_folder`;
+                const body =
+                    itemType === "file"
+                        ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
+                        : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
+                const res = await fetch(endpoint, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    throw new Error("Failed to rename item");
+                }
+
+                // Réinitialiser les styles
+                nameElement.style.textOverflow = "ellipsis";
+                nameElement.style.whiteSpace = "nowrap";
+                nameElement.style.overflow = "hidden";
+                nameElement.style.display = "block";
+
+                // Mettre à jour le texte avec le nouveau nom
+                nameElement.textContent = newName;
+
+                // Recharger le path pour synchroniser
+                await loadPath();
+                await refreshTreeNode(activeFolderId.value);
+            } catch (error) {
+                console.error("Error renaming item:", error);
+                // Restaurer le nom original en cas d'erreur
+                nameElement.style.textOverflow = "ellipsis";
+                nameElement.style.whiteSpace = "nowrap";
+                nameElement.style.overflow = "hidden";
+                nameElement.style.display = "block";
+                nameElement.textContent = name;
+                alert("Erreur lors du renommage de l'élément");
+            }
+        };
+        nameElement.addEventListener("blur", finishEditing, { once: true });
+        nameElement.addEventListener("keydown", (e) => {
+            // console.log(e.key);
+            if (e.key === "Enter") {
+                e.preventDefault();
+                nameElement.blur(); // Utiliser blur pour déclencher finishEditing
+            }
+            if (e.key === "Escape") {
+                e.preventDefault();
+                // Annuler l'édition
+                nameElement.contentEditable = "false";
+                nameElement.style.textOverflow = "ellipsis";
+                nameElement.style.whiteSpace = "nowrap";
+                nameElement.style.overflow = "hidden";
+                nameElement.style.display = "block";
+                nameElement.textContent = name;
+            }
+        });
+    };
+    const moveItem = async (item, targetFolderId) => {
+        const itemId = item.file_id || item.folder_id;
+        const itemType = item.type;
+
+        const endpoint =
+            itemType === "file"
+                ? `${API_URL}/drive/move_file`
+                : `${API_URL}/drive/move_folder`;
+
+        const body =
+            itemType === "file"
+                ? { file_id: itemId, new_parent_folder_id: targetFolderId }
+                : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+
+        const res = await fetch(endpoint, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+            throw new Error(`Failed to move ${itemType} ${itemId}`);
+        }
+    };
+
+
+    return {
+        click_on_item,
+        restoreItem,
+        createFolder,
+        setIsOver,
+        handleTreeContextMenu,
+        openItemMenu,
+        openEmptySpaceMenu,
+        closeContextMenu,
+        handleFileInputChange,
+        onFilesFromDrop,
+        handleDragStart,
+        handleDragMove,
+        handleDragEnd,
+        emptyTrash,
+        toggleSidebar,
+        gohome,
+        goToTrash,
+        formatBytes,
+        deleteItem,
+        renameItem,
+        isDragging,
+        ghostStyle,
+        activeItem,
+        draggedItems,
+        fileInput,
+        rightClickPanel,
+        rightClikedItem,
+    };
+}

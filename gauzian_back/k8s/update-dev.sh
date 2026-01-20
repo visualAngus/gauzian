@@ -26,3 +26,4 @@ echo "✅ Mise à jour terminée !"
 echo ""
 echo "📊 Statut des pods :"
 sudo kubectl get pods -n "$NAMESPACE" -l app=backend,app=front
+    

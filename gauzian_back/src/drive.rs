@@ -92,6 +92,7 @@ pub async fn get_files_and_folders_list(
                         ($2::uuid is null and f.parent_folder_id is null)
                         or f.parent_folder_id = $2::uuid
                     )
+                    and fa.is_deleted is false
         "#,
     )
     .bind(user_id)
@@ -119,7 +120,7 @@ pub async fn get_files_and_folders_list(
                         ($2::uuid is null and fa2.folder_id is null)
                         or fa2.folder_id = $2::uuid
                     )
-                    and f.is_deleted is false
+                    and fa2.is_deleted is false
                     and f.is_fully_uploaded = true
         "#,
     )
@@ -1314,5 +1315,410 @@ pub async fn finalize_file_upload(
         .execute(db_pool)
         .await?;
 
+    Ok(())
+}
+
+pub async fn get_corbeille_info(
+    db_pool: &PgPool,
+    user_id: Uuid,
+) -> Result<serde_json::Value, sqlx::Error> {
+    #[derive(FromRow)]
+    struct CorbeilleStats {
+        deleted_files_count: i64,
+        total_deleted_size: Option<i64>,
+    }
+
+    // Count deleted files and total size
+    let stats = sqlx::query_as::<_, CorbeilleStats>(
+        "
+        SELECT COUNT(*) as deleted_files_count, COALESCE(SUM(f.size), 0)::BIGINT as total_deleted_size
+        FROM file_access
+        LEFT JOIN files f ON f.id = file_access.file_id
+        WHERE file_access.user_id = $1 AND file_access.is_deleted = TRUE
+        ",
+    )
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    // Count deleted folders
+    let deleted_folders_count: i64 = sqlx::query_scalar::<_, i64>(
+        "
+        SELECT COUNT(*) FROM folder_access
+        WHERE user_id = $1 AND is_deleted = TRUE
+        ",
+    )
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    Ok(json!({
+        "deleted_files_count": stats.deleted_files_count,
+        "deleted_folders_count": deleted_folders_count,
+        "total_deleted_size": stats.total_deleted_size.unwrap_or(0),
+    }))
+}
+
+
+// files and folders in corbeille
+pub async fn get_corbeille_contents(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<serde_json::Value, sqlx::Error> {
+    #[derive(Debug, sqlx::FromRow)]
+    struct DeletedFileRow {
+        folder_id: Option<Uuid>,
+        file_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        file_size: i64,
+        mime_type: String,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+        access_level: String,
+        encrypted_file_key: Vec<u8>,
+        file_type: String,
+    }
+
+    let files: Vec<DeletedFileRow> = sqlx::query_as::<_, DeletedFileRow>(
+        r#"
+        select 
+            fa2.folder_id,
+            fa2.file_id as file_id,
+            f.encrypted_metadata,
+            f.size as file_size,
+            f.mime_type,
+            f.created_at::text as created_at,
+            f.updated_at::text as updated_at,
+            fa2.access_level,
+            fa2.encrypted_file_key,
+            'file'::text as file_type
+        from file_access fa2
+        join files f on f.id = fa2.file_id
+        where fa2.user_id = $1
+            and fa2.is_deleted is true
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(serde_json::json!({
+        "files": files.iter().map(|row| {
+            serde_json::json!({
+                "folder_id": row.folder_id,
+                "file_id": row.file_id,
+                "encrypted_metadata": bytes_to_text_or_b64(&row.encrypted_metadata),
+                "file_size": row.file_size,
+                "mime_type": row.mime_type,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "access_level": row.access_level,
+                "encrypted_file_key": bytes_to_text_or_b64(&row.encrypted_file_key),
+                "type": row.file_type,
+            })
+        }).collect::<Vec<_>>(),
+    }))
+}
+
+pub async fn restore_file_from_corbeille(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Verify user has deleted access to the file
+    let has_deleted_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND is_deleted = TRUE)",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !has_deleted_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Get the folder_id from file_access
+    let folder_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT folder_id FROM file_access WHERE file_id = $1 AND user_id = $2",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // If there's a folder_id, restore the entire folder hierarchy
+    if let Some(fid) = folder_id {
+        // Get all parent folders from the target folder up to the root that are deleted
+        let parent_folders: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+            "
+            WITH RECURSIVE folder_path AS (
+                SELECT f.id, f.parent_folder_id
+                FROM folders f
+                WHERE f.id = $1
+                
+                UNION ALL
+                
+                SELECT f.id, f.parent_folder_id
+                FROM folders f
+                JOIN folder_path fp ON f.id = fp.parent_folder_id
+            )
+            SELECT DISTINCT fp.id 
+            FROM folder_path fp
+            JOIN folder_access fa ON fa.folder_id = fp.id
+            WHERE fa.user_id = $2 AND fa.is_deleted = TRUE
+            ",
+        )
+        .bind(fid)
+        .bind(user_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // Restore all deleted parent folders
+        for parent_id in parent_folders {
+            // Restore folder_access
+            sqlx::query(
+                "
+                UPDATE folder_access
+                SET is_deleted = FALSE, updated_at = NOW()
+                WHERE folder_id = $1 AND user_id = $2
+                ",
+            )
+            .bind(parent_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+            // Note: No need to update folders table as is_deleted doesn't exist there
+        }
+    }
+
+    // Restore the file access
+    sqlx::query(
+        "
+        UPDATE file_access
+        SET is_deleted = FALSE, updated_at = NOW()
+        WHERE file_id = $1 AND user_id = $2
+        ",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Update the file to mark it as not deleted
+    sqlx::query(
+        "
+        UPDATE files
+        SET is_deleted = FALSE, updated_at = NOW()
+        WHERE id = $1
+        ",
+    )
+    .bind(file_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn restore_folder_from_corbeille(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Verify user has deleted access to the folder
+    let has_deleted_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = TRUE)",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !has_deleted_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Get all parent folders up to the root that are deleted
+    let parent_folders: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "
+        WITH RECURSIVE folder_path AS (
+            SELECT f.id, f.parent_folder_id
+            FROM folders f
+            WHERE f.id = $1
+            
+            UNION ALL
+            
+            SELECT f.id, f.parent_folder_id
+            FROM folders f
+            JOIN folder_path fp ON f.id = fp.parent_folder_id
+        )
+        SELECT DISTINCT fp.id 
+        FROM folder_path fp
+        JOIN folder_access fa ON fa.folder_id = fp.id
+        WHERE fa.user_id = $2 AND fa.is_deleted = TRUE
+        ",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // Restore all deleted parent folders first
+    for parent_id in parent_folders {
+        // Restore folder_access
+        sqlx::query(
+            "
+            UPDATE folder_access
+            SET is_deleted = FALSE, updated_at = NOW()
+            WHERE folder_id = $1 AND user_id = $2
+            ",
+        )
+        .bind(parent_id)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+        // Note: No need to update folders table as is_deleted doesn't exist there
+    }
+
+    // Now restore the target folder and all its children
+    // Restore the folder access
+    sqlx::query(
+        "
+        UPDATE folder_access
+        SET is_deleted = FALSE, updated_at = NOW()
+        WHERE folder_id = $1 AND user_id = $2
+        ",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Note: No need to update folders table as is_deleted doesn't exist there
+
+    // Recursively restore all child folders and their accesses
+    sqlx::query(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+            UNION ALL
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        UPDATE folder_access fa
+        SET is_deleted = FALSE, updated_at = NOW()
+        FROM folder_tree ft
+        WHERE fa.folder_id = ft.id AND fa.user_id = $2
+        ",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Recursively restore all files in the folder and its subfolders
+    sqlx::query(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+            UNION ALL
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        UPDATE file_access fa
+        SET is_deleted = FALSE, updated_at = NOW()
+        FROM folder_tree ft
+        WHERE fa.folder_id = ft.id AND fa.user_id = $2
+        ",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn empty_corbeille(
+    db_pool: &PgPool,
+    storage_client: &crate::storage::StorageClient,
+    user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Get all file_ids in the corbeille for this user
+    let file_ids: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "
+        SELECT file_id FROM file_access
+        WHERE user_id = $1 AND is_deleted = TRUE
+        ",
+    )
+    .bind(user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    // Delete files from storage and database
+    for file_id in file_ids.iter() {
+        // Get S3 keys
+        let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
+            "SELECT s3_key FROM s3_keys WHERE file_id = $1",
+        )
+        .bind(file_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        // Here you would call your storage client to delete the files from storage.
+        // For example:
+        for s3_key in s3_keys.iter() {
+            storage_client.delete_line(s3_key).await.map_err(|e| {
+                sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
+            })?;
+        }
+
+        // Delete from s3_keys
+        sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
+            .bind(file_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Delete from file_access
+        sqlx::query("DELETE FROM file_access WHERE file_id = $1")
+            .bind(file_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Delete from files
+        sqlx::query("DELETE FROM files WHERE id = $1")
+            .bind(file_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    // Delete folder_access entries marked as deleted for this user
+    sqlx::query(
+        "
+        DELETE FROM folder_access
+        WHERE user_id = $1 AND is_deleted = TRUE
+        ",
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
     Ok(())
 }

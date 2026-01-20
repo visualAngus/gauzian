@@ -10,8 +10,8 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-folder-name="item.metadata?.folder_name || 'Dossier'"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
-    @dblclick="$emit('click', item, $event)"
-    @click ="$emit('select', { item, event: $event })"
+    @click="handleDoubleTap(item, $event)"
+    @contextmenu.prevent="$emit('contextmenu', item, $event)"
     @mousedown="startDrag"
   >
     <span class="icon-wrapper">
@@ -59,7 +59,7 @@
       </svg>
     </span>
 
-    <span class="menu-dots" v-else @click="$emit('dotclick',item)">
+    <span class="menu-dots" v-else @click="$emit('dotclick', item, $event)">
       <svg viewBox="0 0 24 24">
         <circle cx="12" cy="5" r="1.5" />
         <circle cx="12" cy="12" r="1.5" />
@@ -93,6 +93,37 @@ const emit = defineEmits(["click", "select", "move-start","moving","move-end","d
 const DRAG_THRESHOLD = 5; // pixels avant d'activer le drag
 let dragStartPos = null;
 let isDragStarted = false;
+let lastTap = 0; // Pour stocker le moment du dernier clic
+let tapTimeout = null; // Pour gérer le délai du single tap
+
+const handleDoubleTap = (item, event) => {
+  event.preventDefault();
+
+  const isTouchEvent = event.type.startsWith('touch');
+  const currentTime = new Date().getTime();
+  const tapLength = currentTime - lastTap;
+
+  if (isTouchEvent) {
+    // Sur tactile, un simple tap ouvre le dossier
+    emit('click', item, event);
+    lastTap = 0;
+  } else if (tapLength < 300 && tapLength > 0) {
+    // Sur souris, double-click pour ouvrir
+    if (tapTimeout) {
+      clearTimeout(tapTimeout);
+      tapTimeout = null;
+    }
+    emit('click', item, event);
+    lastTap = 0;
+  } else {
+    tapTimeout = setTimeout(() => {
+      emit('select', { item, event });
+      tapTimeout = null;
+    }, 300);
+  }
+  
+  lastTap = currentTime;
+};
 
 const startDrag = (mouseDownEvent) => {
   dragStartPos = { x: mouseDownEvent.clientX, y: mouseDownEvent.clientY };
@@ -168,7 +199,7 @@ const displayName = computed(() => {
 }
 
 .item:hover {
-  background-color: #e2e7ed;
+  background-color: var(--color-surface-muted);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
@@ -181,8 +212,8 @@ const displayName = computed(() => {
 }
 
 .item.uploading {
-  background-color: #e8f4f8;
-  border: 1px solid #4c8eaf33;
+  background-color: var(--color-primary-soft);
+  border: 1px solid var(--color-primary)33;
 }
 
 @keyframes shimmer {
@@ -206,15 +237,15 @@ const displayName = computed(() => {
 .icon-wrapper svg {
   width: 20px;
   height: 20px;
-  color: #444746;
+  color: var(-color-text-muted);
 }
 
 .upload-spinner {
   position: absolute;
   width: 28px;
   height: 28px;
-  border: 2px solid #e2e7ed;
-  border-top: 2px solid #4c8eaf;
+  border: 2px solid var(--color-surface-muted);
+  border-top: 2px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -239,7 +270,7 @@ const displayName = computed(() => {
 .filename {
   font-size: 14px;
   font-weight: 500;
-  color: #1f1f1f;
+  color: var(-color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -247,9 +278,9 @@ const displayName = computed(() => {
 }
 /* lorsque le nom est édité */
 .filename[contenteditable="true"] {
-  border: 1px solid #4c8eaf;
+  border: 1px solid var(--color-primary);
   border-radius: 4px;
-  background-color: #e8f4f8;
+  background-color: var(--color-primary-soft);
   outline: none;
 }
 
@@ -257,14 +288,14 @@ const displayName = computed(() => {
 .inline-progress {
   width: 100%;
   height: 3px;
-  background-color: #d1dce5;
+  background-color: var(--color-progress-track);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .inline-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #4c8eaf 0%, #5ca3c7 100%);
+  background: linear-gradient(90deg, var(--color-primary) 0%, #5ca3c7 100%);
   border-radius: 2px;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 0 4px rgba(76, 142, 175, 0.4);
@@ -282,7 +313,7 @@ const displayName = computed(() => {
 .status-indicator svg {
   width: 18px;
   height: 18px;
-  color: #4c8eaf;
+  color: var(--color-primary);
 }
 
 .menu-dots {
@@ -299,7 +330,7 @@ const displayName = computed(() => {
 .menu-dots svg {
   width: 18px;
   height: 18px;
-  color: #444746;
+  color: var(-color-text-muted);
   transform: rotate(90deg);
 }
 

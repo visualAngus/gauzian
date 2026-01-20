@@ -1,6 +1,6 @@
 <template>
-  <div class="folder-three" :data-folder-id="node.folder_id">
-    <div class="div_name_bnt" :class="{ 'is-active-folder': activeId === node.folder_id }">
+  <div v-if="node" class="folder-three" :data-folder-id="node.folder_id" >
+    <div class="div-name-bnt" :class="{ 'is-active-folder': activeId === node.folder_id }">
       <button class="tree-toggle" @click.stop="$emit('toggle', node)" 
         :disabled="node.isLoading || ((node.children?.length ?? 0) === 0 && node.isLoaded)"
       >
@@ -12,7 +12,7 @@
       </button>
       <a
         class="three-folder-name tree-item"
-        :class="{ select_folder_three: activeId === node.folder_id }"
+        :class="{ 'select-folder-three': activeId === node.folder_id }"
         :data-item-type="'folder'"
         :data-item-id="node.folder_id"
         :data-folder-name="node.metadata?.folder_name || 'Dossier sans nom'"
@@ -22,9 +22,9 @@
         {{ node.metadata?.folder_name || "Dossier sans nom" }}
       </a>
     </div>
-    <div class="div_enfants" v-show="node.isExpanded">
+    <div class="div-enfants" v-show="node.isExpanded">
       <FolderTreeNode
-        v-for="child in node.children"
+        v-for="child in node.children?.filter(c => c)"
         :key="child.folder_id"
         :node="child"
         :active-id="activeId"
