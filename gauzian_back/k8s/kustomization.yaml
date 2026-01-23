@@ -13,6 +13,7 @@ resources:
   - minio-pvc.yaml
   - minio-deployment.yaml
   - backend-deployment.yaml
+  - backend-hpa.yaml
   - front-deployment.yaml
   - middleware.yaml
   - ingressroute.yaml
