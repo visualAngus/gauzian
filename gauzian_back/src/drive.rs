@@ -1057,6 +1057,30 @@ pub async fn move_folder(
         if !has_parent_access {
             return Err(sqlx::Error::RowNotFound);
         }
+
+        // Détection de cycle : vérifier que new_parent n'est pas un descendant de folder_id
+        // (on ne peut pas déplacer un dossier dans un de ses sous-dossiers)
+        let would_create_cycle = sqlx::query_scalar::<_, bool>(
+            r#"
+            WITH RECURSIVE descendants AS (
+                SELECT id FROM folders WHERE id = $1
+                UNION ALL
+                SELECT f.id FROM folders f
+                JOIN descendants d ON f.parent_folder_id = d.id
+            )
+            SELECT EXISTS(SELECT 1 FROM descendants WHERE id = $2)
+            "#,
+        )
+        .bind(folder_id)
+        .bind(parent_folder_id)
+        .fetch_one(db_pool)
+        .await?;
+
+        if would_create_cycle {
+            return Err(sqlx::Error::Protocol(
+                "Cannot move folder into its own descendant".into(),
+            ));
+        }
     }
 
     // Update the parent_folder_id in folders

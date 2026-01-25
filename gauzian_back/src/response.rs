@@ -78,10 +78,15 @@ impl<T: Serialize> IntoResponse for ApiResponse<T> {
         let mut response = (self.status, Json(self.data)).into_response();
 
         if let Some(token) = self.token {
+            // Secure=true par défaut (HTTPS requis), sauf si COOKIE_SECURE=false explicitement
+            let secure = std::env::var("COOKIE_SECURE")
+                .map(|v| v != "false")
+                .unwrap_or(true);
+
             let cookie = Cookie::build(("auth_token", token))
                 .path("/")
                 .http_only(true)
-                .secure(false) // ⚠️ METTRE true EN PROD (HTTPS)
+                .secure(secure)
                 .same_site(SameSite::Lax)
                 .max_age(cookie::time::Duration::days(10))
                 .build();

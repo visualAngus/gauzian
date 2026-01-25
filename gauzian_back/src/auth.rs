@@ -12,10 +12,14 @@ use axum::{
 use redis::AsyncCommands;
 use uuid::Uuid;
 use sqlx::PgPool;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use base64::{engine::general_purpose, Engine as _};
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 
 use crate::{jwt, state::AppState};
 
@@ -54,14 +58,23 @@ fn revoked_key(jti: &str) -> String {
     format!("revoked:{jti}")
 }
 
-async fn is_token_blacklisted(client: &redis::Client, jti: &str) -> bool {
-    // On récupère une connexion async
-    if let Ok(mut con) = client.get_multiplexed_async_connection().await {
-        // La commande EXISTS renvoie true si la clé existe
-        let exists: bool = con.exists(revoked_key(jti)).await.unwrap_or(false);
-        return exists;
-    }
-    false // Si Redis est down, on laisse passer (ou on bloque, selon ta politique de sécu)
+/// Vérifie si un token est révoqué.
+/// FAIL-CLOSED: si Redis est indisponible, on bloque l'accès par sécurité.
+async fn is_token_blacklisted(client: &redis::Client, jti: &str) -> Result<bool, AuthError> {
+    let mut con = client
+        .get_multiplexed_async_connection()
+        .await
+        .map_err(|e| {
+            tracing::error!("Redis connection failed (fail-closed): {}", e);
+            AuthError(StatusCode::SERVICE_UNAVAILABLE, "Authentication service temporarily unavailable".into())
+        })?;
+
+    let exists: bool = con.exists(revoked_key(jti)).await.map_err(|e| {
+        tracing::error!("Redis query failed (fail-closed): {}", e);
+        AuthError(StatusCode::SERVICE_UNAVAILABLE, "Authentication service temporarily unavailable".into())
+    })?;
+
+    Ok(exists)
 }
 
 impl FromRequestParts<AppState> for jwt::Claims {
@@ -81,7 +94,8 @@ impl FromRequestParts<AppState> for jwt::Claims {
             AuthError(StatusCode::UNAUTHORIZED, "Invalid token".into())
         })?;
 
-        if is_token_blacklisted(&state.redis_client, &claims.jti).await {
+        // FAIL-CLOSED: si Redis est down, on refuse l'accès
+        if is_token_blacklisted(&state.redis_client, &claims.jti).await? {
             return Err(AuthError(
                 StatusCode::UNAUTHORIZED,
                 "Token has been revoked".into(),
@@ -113,11 +127,10 @@ pub struct User {
     pub public_key: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct NewUser {
     pub username: String,
-    pub password: String,
-    pub password_hash: Option<String>,
+    pub password_hash: String,
     pub encrypted_private_key: String,
     pub public_key: String,
     pub email: String,
@@ -143,18 +156,28 @@ pub struct UserInfo {
 }
 
 
+/// Génère un salt aléatoire (legacy, pour rétrocompatibilité)
 pub async fn generate_salt() -> String {
     let mut salt = [0u8; 16];
     rand::rng().fill_bytes(&mut salt);
     general_purpose::STANDARD.encode(salt)
 }
-pub fn hash_password(password: &str, salt: &str) -> String {
 
+/// Hash SHA256 legacy - NE PAS UTILISER POUR LES NOUVEAUX UTILISATEURS
+fn hash_password_sha256_legacy(password: &str, salt: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(salt.as_bytes());
     hasher.update(password.as_bytes());
     let result = hasher.finalize();
     general_purpose::STANDARD.encode(result)
+}
+
+/// Hash avec Argon2id (recommandé OWASP 2024)
+/// Retourne un hash au format PHC (commence par $argon2id$)
+pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    Ok(argon2.hash_password(password.as_bytes(), &salt)?.to_string())
 }
 
 pub async fn create_user(
@@ -185,21 +208,35 @@ pub async fn get_user_by_email(
     pool: &PgPool,
     email: &str,
 ) -> Result<User, sqlx::Error> {
-    tracing::info!("Fetching user by email: {}", email);
     let user = sqlx::query_as::<_, User>(
         "SELECT id, username, password_hash, auth_salt, encrypted_private_key, private_key_salt, iv, public_key FROM users WHERE email = $1",
     )
     .bind(email)
     .fetch_one(pool)
     .await?;
-    tracing::info!("User fetched: {:?}", user.id);
+    tracing::debug!("User fetched: {:?}", user.id);
     Ok(user)
 }
 
+/// Vérifie le mot de passe.
+/// Supporte Argon2 (nouveau) et SHA256 (legacy) pour la rétrocompatibilité.
 pub fn verify_password(password: &str, password_hash: &str, salt: &str) -> bool {
-    let hashed_input = hash_password(password, salt);
-    tracing::info!("Comparing hashes: input={} stored={}", hashed_input, password_hash);
-    hashed_input == password_hash
+    // Les hash Argon2 commencent par "$argon2"
+    if password_hash.starts_with("$argon2") {
+        // Argon2 verification (le salt est inclus dans le hash PHC)
+        match PasswordHash::new(password_hash) {
+            Ok(parsed_hash) => {
+                Argon2::default()
+                    .verify_password(password.as_bytes(), &parsed_hash)
+                    .is_ok()
+            }
+            Err(_) => false,
+        }
+    } else {
+        // Legacy SHA256 verification
+        let hashed_input = hash_password_sha256_legacy(password, salt);
+        hashed_input == password_hash
+    }
 }
 
 

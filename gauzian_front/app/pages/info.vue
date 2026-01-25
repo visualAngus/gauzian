@@ -144,7 +144,7 @@ const encryptSecret = async () => {
     }
     try {
         encryptedSecret.value = await encryptWithStoredPublicKey(secretInput.value);
-        console.log("Information chiffrée :", encryptedSecret.value);
+        // SECURITY: Ne pas logger les données chiffrées/déchiffrées
     } catch (error) {
         console.error("Erreur lors du chiffrement de l'information :", error);
     }
@@ -157,7 +157,7 @@ const decryptSecret = async () => {
     }
     try {
         decryptedSecret.value = await decryptWithStoredPrivateKey(encryptedSecret.value);
-        console.log("Information déchiffrée :", decryptedSecret.value);
+        // SECURITY: Ne pas logger les données chiffrées/déchiffrées
     } catch (error) {
         console.error("Erreur lors du déchiffrement de l'information :", error);
     }
@@ -193,21 +193,18 @@ const generaterecoverykey = async () => {
         console.error("Failed to generate private key PEM.");
         return;
     }
-    console.log("Random private key generated:", privateKey);
+    // SECURITY: Ne jamais logger les clés privées
     const result = await generateRecordKey(privateKey);
-    
+
     // Store the values in refs for later use
     encrypted_private_key_reco.value = result.encrypted_private_key_reco;
     recovery_key.value = result.recovery_key;
-    
-    console.log("Encrypted private key:", encrypted_private_key_reco.value);
-    console.log("Recovery key (keep this safe!):", recovery_key.value);
 };
 
 const decryptrecoverykey = async (encrypted_private_key_reco, recovery_key) => {
     try {
         const decrypted_private_key = await decryptRecordKey(encrypted_private_key_reco, recovery_key);
-        console.log("Decrypted private key:", decrypted_private_key);
+        // SECURITY: Ne jamais logger les clés privées déchiffrées
     } catch (error) {
         console.error("Error decrypting recovery key:", error);
     }
