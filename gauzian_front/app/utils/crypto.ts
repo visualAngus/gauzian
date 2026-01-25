@@ -384,7 +384,7 @@ export async function encryptPrivateKeyPemWithPassword(privateKeyPem: string, pa
     {
       name: "PBKDF2",
       salt: toArrayBuffer(private_key_salt) as BufferSource,
-      iterations: 100000,
+      iterations: 310000, // OWASP 2024 recommendation
       hash: "SHA-256",
     },
     passwordKey,
@@ -432,7 +432,7 @@ export async function decryptPrivateKeyPemWithPassword(params: {
     {
       name: "PBKDF2",
       salt: toArrayBuffer(saltBuf) as BufferSource,
-      iterations: 100000,
+      iterations: 310000, // OWASP 2024 recommendation
       hash: "SHA-256",
     },
     passwordKey,

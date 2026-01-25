@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::{auth, drive, jwt, response::ApiResponse, state::AppState};
 use base64::Engine;
+use sqlx;
 
 use axum::http::HeaderMap;
 
@@ -90,20 +91,24 @@ pub async fn register_handler(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> Response {
-    // hash the password
-    let salt = auth::generate_salt().await; // Await the future
-    let password_hash = auth::hash_password(&req.password, &salt);
+    // Hash avec Argon2 (le salt est inclus dans le hash PHC)
+    let password_hash = match auth::hash_password(&req.password) {
+        Ok(hash) => hash,
+        Err(e) => {
+            tracing::error!("Failed to hash password: {:?}", e);
+            return ApiResponse::internal_error("Failed to process registration").into_response();
+        }
+    };
 
     let new_user = auth::NewUser {
         username: req.username,
-        password: req.password,
-        password_hash: Some(password_hash),
+        password_hash: password_hash,
         encrypted_private_key: req.encrypted_private_key,
         public_key: req.public_key,
         email: req.email,
         encrypted_settings: None,
         private_key_salt: req.private_key_salt,
-        auth_salt: Some(salt),
+        auth_salt: None, // Argon2 inclut le salt dans le hash
         iv: req.iv,
         encrypted_record_key: req.encrypted_record_key,
     };
@@ -123,7 +128,6 @@ pub async fn register_handler(
         }
     };
 
-    println!("Created user with ID: {}", user_id);
     let token = jwt::create_jwt(user_id, "user", state.jwt_secret.as_bytes()).unwrap();
 
     info!(%user_id, "Registration successful, setting cookie");
@@ -383,6 +387,26 @@ pub async fn upload_chunk_handler(
     claims: jwt::Claims,
     Json(body): Json<UploadChunkRequest>,
 ) -> Response {
+    // Vérifier que l'utilisateur a le droit d'uploader sur ce fichier
+    let has_access = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(body.file_id)
+    .bind(claims.id)
+    .fetch_one(&state.db_pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check file access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("File not found or access denied").into_response();
+    }
+
     let chunk_data = match base64::engine::general_purpose::STANDARD.decode(&body.chunk_data) {
         Ok(data) => data,
         Err(e) => {
@@ -942,9 +966,33 @@ pub async fn download_file_handler(
 
 pub async fn download_chunk_handler(
     State(state): State<AppState>,
-    _claims: jwt::Claims,
+    claims: jwt::Claims,
     Path(s3_key): Path<String>,
 ) -> Response {
+    // Vérifier que l'utilisateur a accès au fichier associé à ce chunk
+    let has_access = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(
+            SELECT 1 FROM s3_keys sk
+            JOIN file_access fa ON fa.file_id = sk.file_id
+            WHERE sk.s3_key = $1 AND fa.user_id = $2
+        )"
+    )
+    .bind(&s3_key)
+    .bind(claims.id)
+    .fetch_one(&state.db_pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check chunk access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("Chunk not found or access denied").into_response();
+    }
+
     match state.storage_client.download_line(&s3_key).await {
         Ok((data, metadata)) => ApiResponse::ok(serde_json::json!({
             "data": base64::engine::general_purpose::STANDARD.encode(&data),
