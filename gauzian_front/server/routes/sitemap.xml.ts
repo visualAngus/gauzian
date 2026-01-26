@@ -2,6 +2,12 @@ export default defineEventHandler((event) => {
   const baseUrl = 'https://gauzian.pupin.fr';
   const currentDate = new Date().toISOString().split('T')[0];
   
+  // Headers de sécurité pour le sitemap
+  setHeader(event, 'Content-Type', 'application/xml');
+  setHeader(event, 'X-Content-Type-Options', 'nosniff');
+  setHeader(event, 'X-Frame-Options', 'DENY');
+  setHeader(event, 'Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  
   const urls = [
     {
       loc: `${baseUrl}/`,
@@ -39,6 +45,5 @@ ${urls.map(url => `  <url>
   </url>`).join('\n')}
 </urlset>`;
 
-  setHeader(event, 'Content-Type', 'application/xml');
   return sitemap;
 });
