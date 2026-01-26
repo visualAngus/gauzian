@@ -10,6 +10,8 @@ import {
     generateDataKey,
 } from '~/utils/crypto';
 
+import { useAutoShare } from './useAutoShare';
+
 
 export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypted_items } = {}) {
     let fileIdCounter = 0;
@@ -666,7 +668,18 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             throw new Error("Failed to initialize file in DB");
         }
         const resData = await res.json();
-        return [resData.file_id, dataKey];
+        const fileId = resData.file_id;
+
+        // Propagation automatique des permissions si le fichier est créé dans un dossier partagé
+        // On ne bloque pas l'upload si la propagation échoue
+        if (folder_id && folder_id !== "root") {
+            const { propagateFileAccess } = useAutoShare(API_URL);
+            propagateFileAccess(fileId, folder_id, dataKey).catch(err => {
+                console.error('Failed to propagate file access:', err);
+            });
+        }
+
+        return [fileId, dataKey];
     };
 
 

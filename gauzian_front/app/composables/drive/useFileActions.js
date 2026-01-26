@@ -8,6 +8,8 @@ import {
     encryptSimpleDataWithDataKey
 } from '~/utils/crypto';
 
+import { useAutoShare } from './useAutoShare';
+
 export function useFileActions({
     API_URL,
     activeFolderId,
@@ -195,6 +197,17 @@ export function useFileActions({
         }
         const resData = await res.json();
         console.log("Folder created with ID:", resData.folder_id);
+
+        // Propagation automatique des permissions si le dossier parent est partagé
+        if (activeFolderId.value && activeFolderId.value !== "root") {
+            const { propagateFolderAccess } = useAutoShare(API_URL);
+            await propagateFolderAccess(
+                resData.folder_id,
+                activeFolderId.value,
+                dataKey
+            );
+        }
+
         // Rafraîchir la liste des fichiers/dossiers
         await loadPath();
         await refreshTreeNode(activeFolderId.value);
@@ -550,6 +563,16 @@ export function useFileActions({
 
                     const resData = await res.json();
                     const newFolderId = resData.folder_id;
+
+                    // Propagation automatique des permissions si le dossier parent est partagé
+                    if (currentParentId && currentParentId !== "root") {
+                        const { propagateFolderAccess } = useAutoShare(API_URL);
+                        await propagateFolderAccess(
+                            newFolderId,
+                            currentParentId,
+                            dataKey
+                        );
+                    }
 
                     // Ajouter à la liste locale
                     foldersList.value.push({

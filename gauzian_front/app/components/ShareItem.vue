@@ -75,9 +75,9 @@ const contacts = ref([]);
 const accessLevel = ref('read');
 
 const validateEmail = (email) => {
-  // RFC 5322 compliant email regex (simplifié mais plus strict)
-  const re = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  const final = re.test(email);
+  const re = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  const hasDotInDomain = email.includes('@') && email.split('@')[1].includes('.');
+  const final = re.test(email) && email.length <= 254 && !email.startsWith('.') && !email.endsWith('.') && hasDotInDomain;
 
   if (inputRef.value) {
     inputRef.value.style.color = final ? "var(--color-success)" : "var(--color-pastel-danger)";

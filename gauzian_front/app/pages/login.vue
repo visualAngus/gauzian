@@ -30,7 +30,14 @@
 							<h2>LOGIN</h2>
 							<form @submit.prevent="handleLogin">
 								<label for="login_email">Email :</label>
-								<input v-model="loginForm.email" type="email" id="login_email" required />
+								<input 
+									ref="emailInputRef"
+									v-model="loginForm.email" 
+									type="email" 
+									id="login_email" 
+									@input="validateEmail(loginForm.email)"
+									required 
+								>
 
 								<label for="login_password">Mot de passe :</label>
 								<div class="input-with-icon">
@@ -77,7 +84,14 @@
 								<input v-model="registerForm.username" type="text" id="register_username" required />
 
 								<label for="register_email">Email :</label>
-								<input v-model="registerForm.email" type="email" id="register_email" required />
+								<input 
+									ref="emailInputRef"
+									v-model="registerForm.email" 
+									type="email" 
+									id="register_email" 
+									@input="validateEmail(registerForm.email)"
+									required 
+								>
 
 								<label for="register_password">Mot de passe :</label>
 								<div class="input-with-icon">
@@ -152,6 +166,20 @@ const showLoginPassword = ref(false);
 const showRegisterPassword = ref(false);
 const passwordMsg = ref("");
 const passwordMsgColor = ref("");
+const emailInputRef = ref(null);
+
+
+const validateEmail = (email) => {
+	const re = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+	const hasDotInDomain = email.includes('@') && email.split('@')[1].includes('.');
+	const final = re.test(email) && email.length <= 254 && !email.startsWith('.') && !email.endsWith('.') && hasDotInDomain;
+
+	if (emailInputRef.value) {
+		emailInputRef.value.style.color = final ? "var(--color-success)" : "var(--color-pastel-danger)";
+	}
+
+	return final;
+};
 
 
 const changement = () => {
@@ -185,6 +213,12 @@ const changement = () => {
 
 
 const handleLogin = async () => {
+  // Valider l'email avant l'envoi
+  if (!validateEmail(loginForm.value.email)) {
+    alert("Email invalide");
+    return;
+  }
+
   loading.value = true;
   try {
 		const res = await fetch(`${API_URL}/login`, {
@@ -214,6 +248,17 @@ const handleLogin = async () => {
 };
 
 const handleRegister = async () => {
+  // Valider l'email et le mot de passe avant l'envoi
+  if (!validateEmail(registerForm.value.email)) {
+    alert("Email invalide");
+    return;
+  }
+
+  if (registerForm.value.password.length < 10) {
+    alert("Mot de passe invalide");
+    return;
+  }
+
   loading.value = true;
   try {
 		const { publicKey, privateKey } = await generateRsaKeyPairPem();

@@ -1312,6 +1312,112 @@ pub async fn get_public_key_handler_by_email(
     })).into_response()
 }
 
+/// Récupère la liste des utilisateurs ayant accès à un dossier (pour le partage dynamique)
+pub async fn get_folder_shared_users_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = match Uuid::parse_str(&folder_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid folder_id").into_response();
+        }
+    };
+
+    match drive::get_folder_shared_users(&state.db_pool, claims.id, folder_id).await {
+        Ok(users) => {
+            // Récupérer les clés publiques pour chaque utilisateur
+            let mut users_with_keys = Vec::new();
+            for (user_id, access_level) in users {
+                if let Ok(user_info) = auth::get_user_by_id(&state.db_pool, user_id).await {
+                    users_with_keys.push(serde_json::json!({
+                        "user_id": user_id,
+                        "access_level": access_level,
+                        "public_key": user_info.public_key,
+                        "username": user_info.username,
+                    }));
+                }
+            }
+            ApiResponse::ok(serde_json::json!({
+                "shared_users": users_with_keys
+            })).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get folder shared users: {:?}", e);
+            ApiResponse::internal_error("Failed to get folder shared users").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PropagateFileAccessRequest {
+    pub file_id: Uuid,
+    pub user_keys: Vec<UserKey>,
+}
+
+#[derive(Deserialize)]
+pub struct UserKey {
+    pub user_id: Uuid,
+    pub encrypted_key: String,
+    pub access_level: String,
+}
+
+/// Propage les permissions d'un fichier nouvellement créé
+pub async fn propagate_file_access_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<PropagateFileAccessRequest>,
+) -> Response {
+    let user_keys: Vec<(Uuid, String, String)> = body.user_keys
+        .into_iter()
+        .map(|uk| (uk.user_id, uk.encrypted_key, uk.access_level))
+        .collect();
+
+    match drive::propagate_file_access(&state.db_pool, claims.id, body.file_id, user_keys).await {
+        Ok(_) => ApiResponse::ok("File access propagated successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to propagate file access: {:?}", e);
+            ApiResponse::internal_error("Failed to propagate file access").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PropagateFolderAccessRequest {
+    pub folder_id: Uuid,
+    pub user_keys: Vec<UserKey>,
+}
+
+/// Propage les permissions d'un dossier nouvellement créé
+pub async fn propagate_folder_access_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<PropagateFolderAccessRequest>,
+) -> Response {
+    let user_keys: Vec<(Uuid, String, String)> = body.user_keys
+        .into_iter()
+        .map(|uk| (uk.user_id, uk.encrypted_key, uk.access_level))
+        .collect();
+
+    match drive::propagate_folder_access(&state.db_pool, claims.id, body.folder_id, user_keys).await {
+        Ok(_) => ApiResponse::ok("Folder access propagated successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to propagate folder access: {:?}", e);
+            ApiResponse::internal_error("Failed to propagate folder access").into_response()
+        }
+    }
+}
+
 /// Health check endpoint for Kubernetes readiness probe
 /// Tests connectivity to PostgreSQL, Redis, and MinIO
 #[instrument(skip(state))]
