@@ -78,12 +78,16 @@ impl StorageClient {
     /// **Fonction 1: Écrire une ligne (data_encrypted, index, date_upload) -> S3_id**
     ///
     /// Stocke les données chiffrées dans MinIO et retourne un identifiant unique
+    /// Inclut un retry automatique en cas d'échec réseau
     pub async fn upload_line(
         &self,
         data_encrypted: &[u8],
         index: String,
         iv: String,
     ) -> Result<StorageMetadata, StorageError> {
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY_MS: u64 = 500;
+
         let s3_id = Uuid::new_v4().to_string();
         let date_upload = Utc::now().to_rfc3339();
 
@@ -100,51 +104,120 @@ impl StorageClient {
             data_hash: data_hash.clone(),
         };
 
-        // Stocker les données chiffrées sous la clé s3_id
-        self.client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(&s3_id)
-            .body(aws_sdk_s3::primitives::ByteStream::from(data_encrypted.to_vec()))
-            .metadata("index", &index)
-            .metadata("date-upload", &date_upload)
-            .metadata("data-hash", &metadata.data_hash)
-            .metadata("iv", &metadata.iv.clone().unwrap_or_default())   
-            .send()
-            .await
-            .map_err(|e| StorageError::S3Error(format!("Failed to upload: {}", e)))?;
+        // Stocker les données chiffrées avec retry
+        let mut last_error = None;
+        for attempt in 1..=MAX_RETRIES {
+            match self.client
+                .put_object()
+                .bucket(&self.bucket)
+                .key(&s3_id)
+                .body(aws_sdk_s3::primitives::ByteStream::from(data_encrypted.to_vec()))
+                .metadata("index", &index)
+                .metadata("date-upload", &date_upload)
+                .metadata("data-hash", &metadata.data_hash)
+                .metadata("iv", &metadata.iv.clone().unwrap_or_default())
+                .send()
+                .await
+            {
+                Ok(_) => {
+                    if attempt > 1 {
+                        tracing::info!(
+                            "S3 upload succeeded after {} attempts: s3_id={}, index={}",
+                            attempt, s3_id, index
+                        );
+                    } else {
+                        tracing::info!(
+                            "Data uploaded to S3: s3_id={}, index={}, size={}",
+                            s3_id, index, data_encrypted.len()
+                        );
+                    }
+                    return Ok(metadata);
+                }
+                Err(e) => {
+                    let err_str = e.to_string();
+                    last_error = Some(err_str.clone());
 
-        tracing::info!(
-            "Data uploaded to S3: s3_id={}, index={}, size={}",
-            s3_id,
-            index,
-            data_encrypted.len()
-        );
+                    if attempt < MAX_RETRIES {
+                        let delay = RETRY_DELAY_MS * (1 << (attempt - 1)); // Backoff exponentiel
+                        tracing::warn!(
+                            "S3 upload failed (attempt {}/{}), retrying in {}ms: {}",
+                            attempt, MAX_RETRIES, delay, err_str
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    }
+                }
+            }
+        }
 
-        Ok(metadata)
+        Err(StorageError::S3Error(format!(
+            "Failed to upload after {} retries: {}",
+            MAX_RETRIES,
+            last_error.unwrap_or_default()
+        )))
     }
 
     /// **Fonction 2: Récupérer les données depuis S3_id**
     ///
     /// Récupère les données chiffrées et ses métadonnées
+    /// Inclut un retry automatique en cas d'échec réseau
     pub async fn download_line(
         &self,
         s3_id: &str,
     ) -> Result<(Vec<u8>, StorageMetadata), StorageError> {
-        let resp = self
-            .client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(s3_id)
-            .send()
-            .await
-            .map_err(|e| {
-                let err_str = e.to_string();
-                if err_str.contains("NoSuchKey") {
-                    return StorageError::NotFound;
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY_MS: u64 = 500;
+
+        let mut last_error = None;
+        let resp = {
+            let mut result = None;
+            for attempt in 1..=MAX_RETRIES {
+                match self.client
+                    .get_object()
+                    .bucket(&self.bucket)
+                    .key(s3_id)
+                    .send()
+                    .await
+                {
+                    Ok(r) => {
+                        if attempt > 1 {
+                            tracing::info!(
+                                "S3 download succeeded after {} attempts: s3_id={}",
+                                attempt, s3_id
+                            );
+                        }
+                        result = Some(r);
+                        break;
+                    }
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        // Ne pas retry si le fichier n'existe pas
+                        if err_str.contains("NoSuchKey") {
+                            return Err(StorageError::NotFound);
+                        }
+
+                        last_error = Some(err_str.clone());
+
+                        if attempt < MAX_RETRIES {
+                            let delay = RETRY_DELAY_MS * (1 << (attempt - 1));
+                            tracing::warn!(
+                                "S3 download failed (attempt {}/{}), retrying in {}ms: {}",
+                                attempt, MAX_RETRIES, delay, err_str
+                            );
+                            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                        }
+                    }
                 }
-                StorageError::S3Error(format!("Failed to download: {}", e))
-            })?;
+            }
+            result
+        };
+
+        let resp = resp.ok_or_else(|| {
+            StorageError::S3Error(format!(
+                "Failed to download after {} retries: {}",
+                MAX_RETRIES,
+                last_error.unwrap_or_default()
+            ))
+        })?;
 
         // Récupérer les métadonnées
         let metadata = StorageMetadata {

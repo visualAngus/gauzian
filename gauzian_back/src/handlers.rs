@@ -1152,3 +1152,162 @@ pub async fn empty_trash_handler(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct ShareFolderRequest {
+    pub folder_id: Uuid,
+    pub contact_id: Uuid,
+    pub encrypted_item_key: String,
+    pub access_level: String,
+}
+
+#[derive(Deserialize)]
+pub struct ShareFileRequest {
+    pub file_id: Uuid,
+    pub contact_id: Uuid,
+    pub encrypted_item_key: String,
+    pub access_level: String,
+}
+
+#[derive(Deserialize)]
+pub struct FolderKeyBatch {
+    pub folder_id: Uuid,
+    pub encrypted_folder_key: String,
+}
+
+#[derive(Deserialize)]
+pub struct FileKeyBatch {
+    pub file_id: Uuid,
+    pub encrypted_file_key: String,
+}
+
+#[derive(Deserialize)]
+pub struct ShareFolderBatchRequest {
+    pub folder_id: Uuid,
+    pub contact_id: Uuid,
+    pub access_level: String,
+    pub folder_keys: Vec<FolderKeyBatch>,  // Toutes les clés des sous-dossiers rechiffrées
+    pub file_keys: Vec<FileKeyBatch>,      // Toutes les clés des fichiers rechiffrées
+}
+
+pub async fn share_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<ShareFolderRequest>,
+) -> Response {
+    match drive::share_folder_with_contact(
+        &state.db_pool,
+        claims.id,
+        body.folder_id,
+        body.contact_id,
+        &body.encrypted_item_key,
+        &body.access_level,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share folder: {:?}", e);
+            ApiResponse::internal_error("Failed to share folder").into_response()
+        }
+    }
+}
+
+pub async fn share_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<ShareFileRequest>,
+) -> Response {
+    match drive::share_file_with_contact(
+        &state.db_pool,
+        claims.id,
+        body.file_id,
+        body.contact_id,
+        &body.encrypted_item_key,
+        &body.access_level,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("File shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share file: {:?}", e);
+            ApiResponse::internal_error("Failed to share file").into_response()
+        }
+    }
+}
+
+pub async fn share_folder_batch_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<ShareFolderBatchRequest>,
+) -> Response {
+    // Convertir les vecs en format attendu par drive::share_folder_batch
+    let folder_keys: Vec<(Uuid, String)> = body.folder_keys
+        .into_iter()
+        .map(|fk| (fk.folder_id, fk.encrypted_folder_key))
+        .collect();
+
+    let file_keys: Vec<(Uuid, String)> = body.file_keys
+        .into_iter()
+        .map(|fk| (fk.file_id, fk.encrypted_file_key))
+        .collect();
+
+    match drive::share_folder_batch(
+        &state.db_pool,
+        claims.id,
+        body.folder_id,
+        body.contact_id,
+        &body.access_level,
+        folder_keys,
+        file_keys,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder and contents shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share folder batch: {:?}", e);
+            ApiResponse::internal_error("Failed to share folder").into_response()
+        }
+    }
+}
+
+
+pub async fn get_public_key_handler_by_email(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(email): Path<String>,
+) -> Response {
+    let user_info = match auth::get_user_by_email(&state.db_pool, &email).await {
+        Ok(user) => user,
+        Err(sqlx::Error::RowNotFound) => {
+            return ApiResponse::not_found("User not found").into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve user info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve user info").into_response();
+        }
+    };
+    ApiResponse::ok(serde_json::json!({
+        "id": user_info.id,
+        "username": user_info.username,
+        "public_key": user_info.public_key,
+    })).into_response()
+}

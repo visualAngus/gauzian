@@ -357,6 +357,56 @@ export async function decryptWithStoredPrivateKey(
   return new TextDecoder().decode(decryptedData);
 }
 
+/**
+ * Importe une clé publique depuis un format PEM
+ */
+export async function importPublicKeyFromPem(pemString: string): Promise<CryptoKey> {
+  assertClient();
+
+  // Nettoyer le PEM (supprimer les en-têtes et les retours à la ligne)
+  const pemHeader = "-----BEGIN PUBLIC KEY-----";
+  const pemFooter = "-----END PUBLIC KEY-----";
+  const pemContents = pemString
+    .replace(pemHeader, "")
+    .replace(pemFooter, "")
+    .replace(/\s/g, "");
+
+  // Décoder le base64
+  const binaryDer = b64ToBuff(pemContents);
+
+  // Importer la clé
+  return await window.crypto.subtle.importKey(
+    "spki",
+    toArrayBuffer(binaryDer),
+    {
+      name: "RSA-OAEP",
+      hash: "SHA-256",
+    },
+    true,
+    ["encrypt"]
+  );
+}
+
+/**
+ * Chiffre des données avec une clé publique PEM (pour partager avec d'autres utilisateurs)
+ */
+export async function encryptWithPublicKey(
+  publicKeyPem: string,
+  data: string
+): Promise<string> {
+  assertClient();
+
+  const publicKey = await importPublicKeyFromPem(publicKeyPem);
+  const encodedData = new TextEncoder().encode(data) as U8;
+  const encryptedData = await window.crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    publicKey,
+    toArrayBuffer(encodedData) as BufferSource
+  );
+
+  return buffToB64(encryptedData);
+}
+
 export async function encryptPrivateKeyPemWithPassword(privateKeyPem: string, password: string): Promise<{
   encrypted_private_key: string;
   private_key_salt: string;

@@ -21,10 +21,10 @@ spec:
         - containerPort: 3000
         resources:
           requests:
-            cpu: 10m         # 0.01 CPU cores (raisonnable pour Rust)
+            cpu: 100m         # 0.1 CPU cores (raisonnable pour Rust)
             memory: 256Mi     # 256 MB de RAM
           limits:
-            cpu: 50m         # Maximum 0.05 CPU cores
+            cpu: 300m         # Maximum 0.3 CPU cores
             memory: 512Mi     # Maximum 512 MB de RAM
         env:
         - name: DB_USER
