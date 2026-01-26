@@ -366,6 +366,17 @@ impl StorageClient {
         tracing::warn!("S3 bucket initialization failed after {} retries, will retry on first use", MAX_RETRIES);
         Ok(())
     }
+
+    /// Health check for readiness probe - verifies S3 connectivity
+    pub async fn health_check(&self) -> Result<(), StorageError> {
+        self.client
+            .head_bucket()
+            .bucket(&self.bucket)
+            .send()
+            .await
+            .map_err(|e| StorageError::S3Error(format!("S3 health check failed: {}", e)))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

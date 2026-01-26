@@ -1311,3 +1311,45 @@ pub async fn get_public_key_handler_by_email(
         "public_key": user_info.public_key,
     })).into_response()
 }
+
+/// Health check endpoint for Kubernetes readiness probe
+/// Tests connectivity to PostgreSQL, Redis, and MinIO
+#[instrument(skip(state))]
+pub async fn health_check_handler(State(state): State<AppState>) -> Response {
+    use std::time::Duration;
+
+    // Test PostgreSQL
+    let db_ok = tokio::time::timeout(
+        Duration::from_secs(5),
+        sqlx::query("SELECT 1").fetch_one(&state.db_pool)
+    )
+    .await
+    .is_ok();
+
+    // Test Redis
+    let redis_ok = tokio::time::timeout(
+        Duration::from_secs(5),
+        async {
+            use redis::AsyncCommands;
+            let mut con = state.redis_client.get_multiplexed_async_connection().await?;
+            con.ping::<()>().await
+        }
+    )
+    .await
+    .is_ok();
+
+    // Test MinIO/S3
+    let s3_ok = tokio::time::timeout(
+        Duration::from_secs(5),
+        state.storage_client.health_check()
+    )
+    .await
+    .is_ok();
+
+    if db_ok && redis_ok && s3_ok {
+        (axum::http::StatusCode::OK, "Ready").into_response()
+    } else {
+        info!("Health check failed - DB: {}, Redis: {}, S3: {}", db_ok, redis_ok, s3_ok);
+        (axum::http::StatusCode::SERVICE_UNAVAILABLE, "Not ready").into_response()
+    }
+}

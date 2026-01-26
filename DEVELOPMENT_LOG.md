@@ -1,5 +1,47 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-01-26
+
+### [2026-01-26 14:15] - Ajout Kubernetes health checks pour éviter 503 au démarrage
+
+**Problème :** Pods marqués "Ready" avant que Redis/MinIO/PostgreSQL soient vraiment accessibles. Le trafic était routé sur des pods non-prêts, causant des 503 pendant 5-10 secondes après le déploiement.
+
+**Solution :** Implémentation complète des Kubernetes probes :
+
+1. **Backend Rust**
+   - Nouvel endpoint `/health/ready` qui teste la connectivité à PostgreSQL, Redis, et MinIO
+   - Returns 200 OK si tous les services sont accessibles, 503 sinon
+   - Timeout 5s par service pour éviter les blocages
+   - Ajouté dans `handlers.rs:1314`
+
+2. **StorageClient (S3)**
+   - Nouvelle méthode `health_check()` qui utilise `head_bucket()` pour vérifier MinIO
+   - Ajouté dans `storage.rs:371-378`
+
+3. **Kubernetes Config (backend-deployment.yaml)**
+   - **Startup Probe** : Donne max 60s au démarrage (30 attempts × 2s)
+   - **Readiness Probe** : Vérifie toutes les 5s que tout est accessible
+   - **Liveness Probe** : Vérifie toutes les 10s que l'app n'est pas figée
+
+**Comportement :**
+- Pod démarre → Service dependencies peuvent ne pas être prêts
+- K8s teste `/health/ready` jusqu'à ce qu'il passe
+- Une fois Ready → Le load balancer route le trafic
+- Si une dépendance tombe → Pod retiré du load balancer automatiquement
+
+**Fichiers modifiés:**
+- `gauzian_back/src/handlers.rs` : Ajout `health_check_handler()`
+- `gauzian_back/src/storage.rs` : Ajout `health_check()` dans `StorageClient`
+- `gauzian_back/src/routes.rs` : Route `GET /health/ready`
+- `gauzian_back/k8s/backend-deployment.yaml` : Probes (startup + readiness + liveness)
+
+**Résultat :**
+- ✅ Pas plus de 503 au démarrage
+- ✅ Déploiement déterministe
+- ✅ Auto-recovery si service devient unavailable
+
+---
+
 ## 2026-01-25
 
 ### [2026-01-25 22:00] - Retry backend S3 pour éviter les 502
