@@ -15,8 +15,8 @@ kubectl delete pods -n $NAMESPACE -l app=front
 sudo k3s crictl rmi --prune
 
 # recharger toute la conf yaml
-kubectl apply -f ./k8s/backend-deployment.yaml -n $NAMESPACE
-kubectl apply -f ./k8s/front-deployment.yaml -n $NAMESPACE
+kubectl apply -f ./backend-deployment.yaml -n $NAMESPACE
+kubectl apply -f ./front-deployment.yaml -n $NAMESPACE
 
 echo "⏳ Attente du redémarrage avec les nouvelles images..."
 kubectl rollout status deployment/backend -n $NAMESPACE
