@@ -252,3 +252,18 @@ pub async fn get_user_by_id(
     .await?;
     Ok(user)
 }
+
+
+pub async fn get_public_key_by_email(
+    pool: &PgPool,
+    email: &str,
+) -> Result<(Uuid, String), sqlx::Error> {
+    // récupérer la clé publique et l'id de l'utilisateur
+    let user_info = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT id, public_key FROM users WHERE email = $1",
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await?;
+    Ok(user_info)
+}

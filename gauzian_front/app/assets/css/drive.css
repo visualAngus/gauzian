@@ -329,7 +329,7 @@ main {
   display: none;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
+  /* width: 100%; */
   margin-bottom: 12px;
   top: 25px;
   left: 25px;

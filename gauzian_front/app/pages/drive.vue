@@ -1,4 +1,12 @@
 <template>
+  <ShareItemVue
+    v-if="isSharing && shareItemTarget"
+    :itemName="shareItemTarget.name"
+    :itemId="shareItemTarget.id"
+    @close="handleShareClose"
+    @annuler="() => { isSharing = false }"
+  />
+
   <div id="div_pannel_right_click" ref="rightClickPanel">
     <!-- Options quand c'est un dossier -->
     <a
@@ -47,6 +55,16 @@
           rightClikedItem.dataset.itemType === 'folder')
       "
       >Supprimer</a
+    >
+    <a
+      @click.stop="shareItem(rightClikedItem); closeContextMenu()"
+      v-if="
+        rightClikedItem?.dataset &&
+        (rightClikedItem.dataset.itemType === 'file' ||
+          rightClikedItem.dataset.itemType === 'folder') &&
+        activeFolderId !== 'corbeille'
+      "
+      >Partager</a
     >
 
     <!-- Options quand c'est l'espace vide -->
@@ -643,6 +661,7 @@ import { useContextMenu } from "~/composables/drive/useContextMenu";
 // Directives & Components
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
+import ShareItemVue from "~/components/ShareItem.vue";
 import FolderTreeNode from "~/components/FolderTreeNode.vue";
 
 const vDropzone = dropzone;
@@ -744,9 +763,13 @@ const {
   activeItem,
   draggedItems,
   ghostStyle,
+  isSharing,
+  shareItemTarget,
   // Fonctions
   createFolder,
   deleteItem,
+  shareItem,
+  shareItemServer,
   renameItem,
   restoreItem,
   emptyTrash,
@@ -764,7 +787,7 @@ const {
   handleDragStart,
   handleDragMove,
   handleDragEnd,
-  formatBytes
+  formatBytes,
 } = useFileActions({
   API_URL,
   activeFolderId,
@@ -780,8 +803,54 @@ const {
   loadPath,
   downloadFile,
   usedSpace,
-  totalSpaceLeft
+  totalSpaceLeft,
+  liste_decrypted_items
 });
+
+const handleShareClose = async (contacts, accessLevel) => {
+  if (!shareItemTarget?.value) {
+    isSharing.value = false;
+    return;
+  }
+
+  const contactsList = Array.isArray(contacts) ? contacts : [];
+
+  if (contactsList.length === 0) {
+    isSharing.value = false;
+    shareItemTarget.value = null;
+    return;
+  }
+
+  try {
+    await shareItemServer(
+      shareItemTarget.value.id,
+      shareItemTarget.value.type,
+      contactsList,
+      accessLevel.value
+    );
+
+    // Succès
+    const itemType = shareItemTarget.value.type === 'folder' ? 'dossier' : 'fichier';
+    const contactCount = contactsList.length;
+    const message = `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} partagé avec succès avec ${contactCount} contact${contactCount > 1 ? 's' : ''}`;
+
+    console.log(message);
+    alert(message); // TODO: Remplacer par un système de notifications plus élégant
+
+    // Rafraîchir pour voir les changements
+    await loadPath();
+
+  } catch (error) {
+    console.error("Error sharing item:", error);
+    const errorMessage = error.message || "Erreur lors du partage de l'élément";
+    alert(`Erreur: ${errorMessage}`);
+    // Ne pas fermer le modal en cas d'erreur pour permettre de réessayer
+    return;
+  }
+
+  isSharing.value = false;
+  shareItemTarget.value = null;
+};
 
 // 7. Context Menu Global
 const { showContextMenu, hideContextMenu } = useContextMenu();

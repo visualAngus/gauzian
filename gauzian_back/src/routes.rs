@@ -33,6 +33,10 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/restore_file", post(handlers::restore_file_handler))
         .route("/drive/restore_folder", post(handlers::restore_folder_handler))
         .route("/drive/empty_trash", post(handlers::empty_trash_handler))
+        .route("/drive/share_folder", post(handlers::share_folder_handler))
+        .route("/drive/share_folder_batch", post(handlers::share_folder_batch_handler))
+        .route("/drive/share_file", post(handlers::share_file_handler))
+        .route("/contacts/get_public_key/{email}", get(handlers::get_public_key_handler_by_email))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

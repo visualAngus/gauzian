@@ -14,6 +14,10 @@ import {
 export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypted_items } = {}) {
     let fileIdCounter = 0;
 
+    // Configuration retry
+    const MAX_RETRIES = 3;
+    const RETRY_BASE_DELAY = 1000; // 1 seconde, puis exponentiel
+
     // Upload-related state (was missing and caused undefined in templates)
     const abortControllers = ref({});
     const listToUpload = ref([]);
@@ -21,6 +25,9 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
     const listUploaded = ref([]);
     const fileProgressMap = ref({});
     const simultaneousUploads = 3;
+
+    // État des erreurs pour affichage UI
+    const transferErrors = ref({});
 
     const downloadAbortControllers = ref({});
 
@@ -35,6 +42,54 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
     const pausedTransfers = ref(new Set());
     const allTransfersPaused = ref(false);
     const isPanelCollapsed = ref(false);
+
+    /**
+     * Exécute une fonction avec retry automatique et backoff exponentiel
+     */
+    const withRetry = async (fn, options = {}) => {
+        const { maxRetries = MAX_RETRIES, baseDelay = RETRY_BASE_DELAY, transferId = null, chunkIndex = null } = options;
+
+        let lastError;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                lastError = error;
+
+                // Ne pas retry si c'est une annulation volontaire
+                if (error.name === 'AbortError') {
+                    throw error;
+                }
+
+                // Ne pas retry si c'est une erreur 4xx (erreur client, pas réseau)
+                if (error.status >= 400 && error.status < 500) {
+                    throw error;
+                }
+
+                const isLastAttempt = attempt === maxRetries - 1;
+                if (isLastAttempt) {
+                    console.error(`Échec définitif après ${maxRetries} tentatives`, error);
+                    throw error;
+                }
+
+                // Calcul du délai avec backoff exponentiel + jitter
+                const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
+                console.warn(`Tentative ${attempt + 1}/${maxRetries} échouée, retry dans ${Math.round(delay)}ms...`,
+                    chunkIndex !== null ? `(chunk ${chunkIndex})` : '');
+
+                // Mettre à jour l'état d'erreur pour l'UI
+                if (transferId) {
+                    transferErrors.value[transferId] = {
+                        message: `Retry ${attempt + 1}/${maxRetries}...`,
+                        retrying: true,
+                    };
+                }
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        throw lastError;
+    };
 
     const updateTransferStats = (transferId, progress, totalSize) => {
         const now = Date.now();
@@ -135,21 +190,30 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                         const chunk = chunks[i];
                         console.log(`Downloading chunk ${i + 1}/${totalChunks}`);
 
-                        // Télécharger le chunk
-                        const chunkRes = await fetch(
-                            `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
-                            {
-                                method: "GET",
-                                credentials: "include",
-                                signal: abortController.signal,
-                            },
-                        );
+                        // Télécharger le chunk avec retry automatique
+                        const chunkData = await withRetry(async () => {
+                            const chunkRes = await fetch(
+                                `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
+                                {
+                                    method: "GET",
+                                    credentials: "include",
+                                    signal: abortController.signal,
+                                },
+                            );
 
-                        if (!chunkRes.ok) {
-                            throw new Error(`Failed to download chunk ${i}`);
-                        }
+                            if (!chunkRes.ok) {
+                                const error = new Error(`Failed to download chunk ${i}`);
+                                error.status = chunkRes.status;
+                                throw error;
+                            }
 
-                        const chunkData = await chunkRes.json();
+                            // Succès - effacer l'état d'erreur
+                            if (transferErrors.value[downloadId]) {
+                                delete transferErrors.value[downloadId];
+                            }
+
+                            return await chunkRes.json();
+                        }, { transferId: downloadId, chunkIndex: i });
 
                         // Déchiffrer le chunk
                         const decryptedChunk = await decryptDataWithDataKey(
@@ -443,22 +507,33 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                             }
 
                             const chunk = item.chunks[i];
-                            const chunkRes = await fetch(
-                                `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
-                                {
-                                    method: "GET",
-                                    credentials: "include",
-                                    signal: abortController.signal,
-                                },
-                            );
 
-                            if (!chunkRes.ok) {
-                                throw new Error(
-                                    `Failed to download chunk for file ${metadata.filename}`,
+                            // Download chunk avec retry automatique
+                            const chunkData = await withRetry(async () => {
+                                const chunkRes = await fetch(
+                                    `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
+                                    {
+                                        method: "GET",
+                                        credentials: "include",
+                                        signal: abortController.signal,
+                                    },
                                 );
-                            }
 
-                            const chunkData = await chunkRes.json();
+                                if (!chunkRes.ok) {
+                                    const error = new Error(
+                                        `Failed to download chunk for file ${metadata.filename}`,
+                                    );
+                                    error.status = chunkRes.status;
+                                    throw error;
+                                }
+
+                                // Succès - effacer l'état d'erreur
+                                if (transferErrors.value[downloadId]) {
+                                    delete transferErrors.value[downloadId];
+                                }
+
+                                return await chunkRes.json();
+                            }, { transferId: downloadId, chunkIndex: i });
                             const decryptedChunk = await decryptDataWithDataKey(
                                 chunkData.data,
                                 chunkData.iv,
@@ -607,7 +682,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         // 3 à 5 est généralement un bon chiffre.
         const CONCURRENCY_LIMIT = 3;
 
-        // Cette fonction gère l'upload d'un index précis
+        // Cette fonction gère l'upload d'un index précis avec retry automatique
         const uploadChunkByIndex = async (index) => {
             // Vérifier si l'upload est en pause
             while (isPaused(file_id)) {
@@ -619,8 +694,6 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             const chunk = file.slice(start, end);
 
-            // console.log(file);
-
             const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
             const body = {
                 file_id: file_id,
@@ -628,19 +701,34 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                 chunk_data: cipherText,
                 iv: iv,
             };
-            const res = await fetch(`${API_URL}/drive/upload_chunk`, {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(body),
-                signal: abortController.signal, // Ajouter le signal d'annulation
-            });
-            if (!res.ok) {
-                throw new Error(`Failed to upload chunk ${index}`);
-            }
-            // Met à jour la progression - Utiliser la réactivité Vue correctement
+
+            // Upload avec retry automatique
+            await withRetry(async () => {
+                const res = await fetch(`${API_URL}/drive/upload_chunk`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                    signal: abortController.signal,
+                });
+
+                if (!res.ok) {
+                    const error = new Error(`Failed to upload chunk ${index}`);
+                    error.status = res.status;
+                    throw error;
+                }
+
+                // Succès - effacer l'état d'erreur
+                if (transferErrors.value[file_id]) {
+                    delete transferErrors.value[file_id];
+                }
+
+                return res;
+            }, { transferId: file_id, chunkIndex: index });
+
+            // Met à jour la progression
             const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
             fileProgressMap.value = {
                 ...fileProgressMap.value,
@@ -650,7 +738,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             // Mise à jour des stats de transfert
             updateTransferStats(file_id, parseFloat(progress), file.size);
 
-            // Petit délai pour éviter le rate limiting (50ms entre chaque chunk)
+            // Petit délai pour éviter le rate limiting
             await new Promise((resolve) => setTimeout(resolve, 50));
         };
 
@@ -824,6 +912,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         allTransfersPaused,
         transferSpeeds,
         transferETAs,
+        transferErrors,
         formatSpeed,
         formatETA,
         getTransferStatus,

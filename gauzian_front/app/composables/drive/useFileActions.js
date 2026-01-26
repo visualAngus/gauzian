@@ -1,5 +1,12 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+    decryptWithStoredPrivateKey,
+    encryptWithPublicKey,
+    generateDataKey,
+    encryptWithStoredPublicKey,
+    encryptSimpleDataWithDataKey
+} from '~/utils/crypto';
 
 export function useFileActions({
     API_URL,
@@ -18,6 +25,7 @@ export function useFileActions({
     selectedItemsMap,
     clearSelection,
     foldersList,
+    liste_decrypted_items,
 } = {}) {
 
     const router = useRouter();
@@ -34,6 +42,9 @@ export function useFileActions({
     const fileInput = ref(null);
     const rightClickPanel = ref(null);
     const rightClikedItem = ref(null);
+
+    const isSharing = ref(false);
+    const shareItemTarget = ref(null);
 
     const isOver = ref(false);
     // Style dynamique pour l'élément "fantôme" qui suit la souris
@@ -808,6 +819,220 @@ export function useFileActions({
         }
     };
 
+    const shareItem = (item) => {
+        const itemId = item.dataset?.itemId;
+        const itemType = item.dataset?.itemType;
+        const rawMetadata = item.dataset?.itemMetadata;
+
+        let itemName = item.dataset?.folderName || "Élément";
+
+        if (rawMetadata) {
+            try {
+                const parsed = JSON.parse(rawMetadata);
+                itemName = parsed.folder_name || parsed.filename || itemName;
+            } catch (error) {
+                console.warn("Unable to parse item metadata for sharing", error);
+            }
+        }
+
+        shareItemTarget.value = {
+            id: itemId,
+            type: itemType,
+            name: itemName,
+        };
+
+        isSharing.value = true;
+    }
+
+    /**
+     * Récupère récursivement tous les sous-dossiers ET fichiers d'un dossier en une seule requête
+     */
+    const getFolderContentsRecursive = async (folderId) => {
+        const res = await fetch(`${API_URL}/drive/folder_contents/${folderId}`, {
+            method: "GET",
+            credentials: "include",
+        });
+
+        if (!res.ok) {
+            console.warn(`Failed to fetch contents of folder ${folderId}`);
+            return { folders: [], files: [] };
+        }
+
+        const data = await res.json();
+
+        const contents = data.contents;
+        console.log(contents);
+
+        // Séparer les dossiers et fichiers
+        const folders = contents.filter(item => item.type === 'folder');
+        const files = contents.filter(item => item.type === 'file');
+
+        console.log(`Files and folders fetched for folder ${folderId}:`, { folders, files });
+
+        return { folders, files };
+    };
+
+    const shareItemServer = async (itemId, itemType, contacts, accessLevel) => {
+        // 1. Récupérer les clés publiques des contacts
+        const contactsList = [];
+        for (const contact of contacts) {
+            try {
+                const res = await fetch(`${API_URL}/contacts/get_public_key/${encodeURIComponent(contact.email)}`, {
+                    method: "GET",
+                    credentials: "include",
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+                    throw new Error(`Failed to get public key for ${contact.email}: ${errorData.error || res.statusText}`);
+                }
+
+                const resData = await res.json();
+                contactsList.push({
+                    contact_id: resData.id,
+                    contact_email: contact.email,
+                    public_key: resData.public_key,
+                });
+            } catch (error) {
+                console.error(`Error fetching public key for ${contact.email}:`, error);
+                throw error;
+            }
+        }
+
+        // 2. Traitement selon le type (fichier ou dossier)
+        if (itemType === "file") {
+            // PARTAGE DE FICHIER SIMPLE
+            const item = liste_decrypted_items.value.find(i => i.file_id === itemId);
+            if (!item || !item.encrypted_file_key) {
+                throw new Error("File not found or missing encrypted key");
+            }
+
+            // Déchiffrer la clé du fichier
+            const fileDataKey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
+
+            // Partager avec chaque contact
+            const sharePromises = contactsList.map(async (contact) => {
+                const encryptedFileKey = await encryptWithPublicKey(contact.public_key, fileDataKey);
+
+                const res = await fetch(`${API_URL}/drive/share_file`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        file_id: itemId,
+                        contact_id: contact.contact_id,
+                        encrypted_item_key: encryptedFileKey,
+                        access_level: accessLevel,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+                    throw new Error(`Failed to share file with ${contact.contact_email}: ${errorData.error || res.statusText}`);
+                }
+
+                return { success: true, contact: contact.contact_email };
+            });
+
+            const results = await Promise.all(sharePromises);
+            const failures = results.filter(r => !r.success);
+            if (failures.length > 0) {
+                throw new Error(`Failed to share with: ${failures.map(f => f.contact).join(", ")}`);
+            }
+
+        } else {
+            // PARTAGE DE DOSSIER AVEC PROPAGATION
+            console.log("Fetching all subfolders and files recursively...");
+
+            // Récupérer le dossier principal depuis la liste décryptée
+            const mainFolder = liste_decrypted_items.value.find(i => i.folder_id === itemId);
+            if (!mainFolder || !mainFolder.encrypted_folder_key) {
+                throw new Error("Folder not found or missing encrypted key");
+            }
+
+            // Récupérer TOUS les sous-dossiers ET fichiers en une seule requête récursive
+            const { folders: subfolders, files: allFiles } = await getFolderContentsRecursive(itemId);
+
+            // Construire la liste complète des dossiers (main + subfolders)
+            const allFolders = [mainFolder, ...subfolders];
+
+            console.log(`Found ${allFolders.length} folders and ${allFiles.length} files to share`);
+
+            // Pour chaque contact, rechiffrer toutes les clés et envoyer en batch
+            const sharePromises = contactsList.map(async (contact) => {
+                try {
+                    // Rechiffrer toutes les clés de dossiers
+                    const folderKeys = [];
+                    for (const folder of allFolders) {
+                        if (!folder.encrypted_folder_key) {
+                            console.warn(`Folder ${folder.folder_id} missing encrypted_folder_key, skipping`);
+                            continue;
+                        }
+
+                        const folderDataKey = await decryptWithStoredPrivateKey(folder.encrypted_folder_key);
+                        const encryptedFolderKeyForContact = await encryptWithPublicKey(contact.public_key, folderDataKey);
+
+                        folderKeys.push({
+                            folder_id: folder.folder_id,
+                            encrypted_folder_key: encryptedFolderKeyForContact,
+                        });
+                    }
+
+                    // Rechiffrer toutes les clés de fichiers
+                    const fileKeys = [];
+                    for (const file of allFiles) {
+                        if (!file.encrypted_file_key) {
+                            console.warn(`File ${file.file_id} missing encrypted_file_key, skipping`);
+                            continue;
+                        }
+
+                        const fileDataKey = await decryptWithStoredPrivateKey(file.encrypted_file_key);
+                        const encryptedFileKeyForContact = await encryptWithPublicKey(contact.public_key, fileDataKey);
+
+                        fileKeys.push({
+                            file_id: file.file_id,
+                            encrypted_file_key: encryptedFileKeyForContact,
+                        });
+                    }
+
+                    // Envoyer le batch
+                    const res = await fetch(`${API_URL}/drive/share_folder_batch`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            folder_id: itemId,
+                            contact_id: contact.contact_id,
+                            access_level: accessLevel,
+                            folder_keys: folderKeys,
+                            file_keys: fileKeys,
+                        }),
+                    });
+
+                    if (!res.ok) {
+                        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+                        throw new Error(`Failed to share folder with ${contact.contact_email}: ${errorData.error || res.statusText}`);
+                    }
+
+                    return { success: true, contact: contact.contact_email };
+
+                } catch (error) {
+                    console.error(`Error sharing with ${contact.contact_email}:`, error);
+                    return { success: false, contact: contact.contact_email, error: error.message };
+                }
+            });
+
+            const results = await Promise.all(sharePromises);
+            const failures = results.filter(r => !r.success);
+            if (failures.length > 0) {
+                const failedContacts = failures.map(f => f.contact).join(", ");
+                throw new Error(`Failed to share with: ${failedContacts}`);
+            }
+        }
+
+        console.log(`Successfully shared ${itemType} with ${contactsList.length} contact(s)`);
+    };
+
 
     return {
         click_on_item,
@@ -830,6 +1055,9 @@ export function useFileActions({
         formatBytes,
         deleteItem,
         renameItem,
+        shareItem,
+        shareItemTarget,
+        isSharing,
         isDragging,
         ghostStyle,
         activeItem,
@@ -837,5 +1065,6 @@ export function useFileActions({
         fileInput,
         rightClickPanel,
         rightClikedItem,
+        shareItemServer,
     };
 }
