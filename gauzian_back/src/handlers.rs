@@ -758,6 +758,16 @@ pub async fn rename_folder_handler(
     claims: jwt::Claims,
     Json(body): Json<RenameFolderRequest>,
 ) -> Response {
+    // Validate folder_id is a valid UUID (prevents injection attempts)
+    if body.folder_id.is_nil() {
+        return ApiResponse::bad_request("Invalid folder_id").into_response();
+    }
+
+    // Validate encrypted_metadata is not empty
+    if body.new_encrypted_metadata.trim().is_empty() {
+        return ApiResponse::bad_request("Encrypted metadata cannot be empty").into_response();
+    }
+
     match drive::rename_folder(
         &state.db_pool,
         claims.id,
