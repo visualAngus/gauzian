@@ -5,6 +5,7 @@ use crate::{handlers, state::AppState};
 
 pub fn app(state: AppState) -> Router {
     Router::new()
+        .route("/health/ready", get(handlers::health_check_handler))
         .route("/login", post(handlers::login_handler))
         .route("/register", post(handlers::register_handler))
         .route("/logout", post(handlers::logout_handler))

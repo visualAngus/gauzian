@@ -73,6 +73,33 @@ spec:
               key: JWT_SECRET
         - name: RUST_LOG
           value: "gauzian_back=info,tower_http=info"
+        # Startup Probe: Give the app time to initialize all connections
+        startupProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 2
+          timeoutSeconds: 5
+          failureThreshold: 30  # Max 60 seconds (30 * 2) to startup
+        # Readiness Probe: Check if app is ready to serve traffic
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        # Liveness Probe: Check if app is still alive
+        livenessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
