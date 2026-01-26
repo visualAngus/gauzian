@@ -678,7 +678,7 @@ pub async fn delete_folder(
         .execute(&mut *tx)
         .await?;
 
-        // 3. Suppression définitive des accès des autres utilisateurs sur les dossiers (pas de corbeille)
+        // 3. Suppression définitive des accès des autres utilisateurs sur les dossiers (pas de corbeille pour eux)
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -2079,6 +2079,169 @@ pub async fn share_file_with_contact(
     .bind(access_level)
     .execute(&mut *tx)
     .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Récupère la liste des utilisateurs ayant accès à un dossier (pour le partage dynamique)
+pub async fn get_folder_shared_users(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<Vec<(Uuid, String)>, sqlx::Error> {
+    #[derive(FromRow)]
+    struct SharedUser {
+        user_id: Uuid,
+        access_level: String,
+    }
+
+    // Verify that the user has access to the folder
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)"
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Get all users who have access to this folder (excluding the requester)
+    let shared_users = sqlx::query_as::<_, SharedUser>(
+        "
+        SELECT user_id, access_level
+        FROM folder_access
+        WHERE folder_id = $1 AND user_id != $2 AND is_deleted = FALSE
+        "
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(shared_users.into_iter().map(|u| (u.user_id, u.access_level)).collect())
+}
+
+/// Propage les permissions d'un fichier nouvellement créé aux utilisateurs ayant accès au dossier parent
+pub async fn propagate_file_access(
+    db_pool: &PgPool,
+    owner_id: Uuid,
+    file_id: Uuid,
+    user_keys: Vec<(Uuid, String, String)>, // (user_id, encrypted_file_key, access_level)
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Verify that the owner has owner access to the file
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(file_id)
+    .bind(owner_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !is_owner {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Get the folder_id from the owner's file_access
+    let folder_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT folder_id FROM file_access WHERE file_id = $1 AND user_id = $2"
+    )
+    .bind(file_id)
+    .bind(owner_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    // Insert access for each user
+    for (user_id, encrypted_key, access_level) in user_keys {
+        // Validate access_level
+        let access_level = match access_level.as_str() {
+            "owner" => "owner",
+            "editor" => "editor",
+            "viewer" => "viewer",
+            _ => continue, // Skip invalid access levels
+        };
+
+        sqlx::query(
+            "
+            INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE)
+            ON CONFLICT (file_id, user_id) DO UPDATE
+            SET encrypted_file_key = EXCLUDED.encrypted_file_key,
+                access_level = EXCLUDED.access_level,
+                updated_at = NOW(),
+                is_deleted = FALSE
+            "
+        )
+        .bind(Uuid::new_v4())
+        .bind(file_id)
+        .bind(user_id)
+        .bind(folder_id)
+        .bind(encrypted_key.as_bytes())
+        .bind(access_level)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Propage les permissions d'un dossier nouvellement créé aux utilisateurs ayant accès au dossier parent
+pub async fn propagate_folder_access(
+    db_pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+    user_keys: Vec<(Uuid, String, String)>, // (user_id, encrypted_folder_key, access_level)
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Verify that the owner has owner access to the folder
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !is_owner {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Insert access for each user
+    for (user_id, encrypted_key, access_level) in user_keys {
+        // Validate access_level
+        let access_level = match access_level.as_str() {
+            "owner" => "owner",
+            "editor" => "editor",
+            "viewer" => "viewer",
+            _ => continue, // Skip invalid access levels
+        };
+
+        sqlx::query(
+            "
+            INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE)
+            ON CONFLICT (folder_id, user_id) DO UPDATE
+            SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
+                access_level = EXCLUDED.access_level,
+                updated_at = NOW(),
+                is_deleted = FALSE
+            "
+        )
+        .bind(Uuid::new_v4())
+        .bind(folder_id)
+        .bind(user_id)
+        .bind(encrypted_key.as_bytes())
+        .bind(access_level)
+        .execute(&mut *tx)
+        .await?;
+    }
 
     tx.commit().await?;
     Ok(())

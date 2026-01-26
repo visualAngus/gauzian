@@ -2,6 +2,70 @@
 
 ## 2026-01-26
 
+### [2026-01-26 18:45] - Implémentation du partage dynamique avec propagation automatique des permissions
+
+**Problème :** Lorsqu'un dossier est partagé et qu'un fichier ou sous-dossier est créé dedans, les permissions ne se propagent pas automatiquement aux utilisateurs ayant accès au parent. Les nouveaux éléments restent accessibles uniquement au créateur.
+
+**Solution :** Système de propagation automatique E2EE des permissions lors de la création de fichiers/dossiers.
+
+**Backend (Rust) :**
+1. **Nouvelles fonctions dans `drive.rs`** :
+   - `get_folder_shared_users()` (ligne ~2087) : Récupère la liste des utilisateurs ayant accès à un dossier
+   - `propagate_file_access()` (ligne ~2116) : Propage les permissions d'un fichier nouvellement créé
+   - `propagate_folder_access()` (ligne ~2156) : Propage les permissions d'un dossier nouvellement créé
+
+2. **Nouveaux endpoints dans `routes.rs`** :
+   - `GET /drive/folder/{folder_id}/shared_users` : Liste des utilisateurs avec accès
+   - `POST /drive/propagate_file_access` : Propagation des permissions de fichier
+   - `POST /drive/propagate_folder_access` : Propagation des permissions de dossier
+
+3. **Nouveaux handlers dans `handlers.rs`** :
+   - `get_folder_shared_users_handler()` (ligne ~1293) : Retourne les utilisateurs avec leurs clés publiques
+   - `propagate_file_access_handler()` (ligne ~1322) : Reçoit les clés rechiffrées et les enregistre
+   - `propagate_folder_access_handler()` (ligne ~1348) : Idem pour les dossiers
+
+**Frontend (Vue/Nuxt) :**
+1. **Nouveau composable `useAutoShare.js`** :
+   - `getFolderSharedUsers()` : Récupère les utilisateurs ayant accès au parent
+   - `propagateFileAccess()` : Rechiffre la clé du fichier pour chaque utilisateur et propage
+   - `propagateFolderAccess()` : Rechiffre la clé du dossier pour chaque utilisateur et propage
+
+2. **Modifications dans `useFileActions.js`** :
+   - `createFolder()` : Appelle automatiquement `propagateFolderAccess()` après création
+   - `getOrCreateFolderHierarchy()` : Propage les permissions pour les dossiers créés lors d'upload récursif
+
+3. **Modifications dans `useTransfers.js`** :
+   - `initializeFileInDB()` : Appelle automatiquement `propagateFileAccess()` après initialisation
+
+**Fonctionnement :**
+1. Utilisateur crée un fichier/dossier dans un dossier partagé
+2. Frontend récupère la liste des utilisateurs ayant accès au parent
+3. Frontend rechiffre la clé de l'élément avec la clé publique de chaque utilisateur
+4. Frontend envoie les clés rechiffrées au backend
+5. Backend enregistre les permissions pour chaque utilisateur
+6. Tous les utilisateurs ayant accès au parent ont maintenant accès au nouvel élément
+
+**Sécurité E2EE maintenue :**
+- Le serveur ne voit jamais les clés en clair
+- Chaque clé est rechiffrée individuellement avec la clé publique du destinataire
+- Les permissions héritent du niveau d'accès du dossier parent
+
+**Fichiers modifiés :**
+- `gauzian_back/src/drive.rs`
+- `gauzian_back/src/handlers.rs`
+- `gauzian_back/src/routes.rs`
+- `gauzian_front/app/composables/drive/useAutoShare.js` (nouveau)
+- `gauzian_front/app/composables/drive/useFileActions.js`
+- `gauzian_front/app/composables/drive/useTransfers.js`
+
+**Résultat :**
+- Partage dynamique et automatique
+- Aucune action manuelle requise de l'utilisateur
+- E2EE préservé (zero-knowledge)
+- Compatible avec tous les niveaux d'accès (owner, editor, viewer)
+
+---
+
 ### [2026-01-26 14:30] - Fix partage de fichier (UnexpectedNullError)
 
 **Problème :** Erreur 500 lors du partage de fichier avec `ColumnDecode: UnexpectedNullError`.
