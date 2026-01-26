@@ -2046,24 +2046,25 @@ pub async fn share_file_with_contact(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Verify that the user has owner access to the file and get folder_id
-    let file_folder: Option<Uuid> = sqlx::query_scalar(
-        "SELECT folder_id FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner'"
+    // Verify that the user has owner access to the file
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
     .bind(file_id)
     .bind(user_id)
-    .fetch_optional(&mut *tx)
+    .fetch_one(&mut *tx)
     .await?;
 
-    if file_folder.is_none() {
+    if !has_access {
         return Err(sqlx::Error::RowNotFound);
     }
 
     // Insert or update the file_access for the contact
+    // IMPORTANT: folder_id is always NULL for shared files (they appear in recipient's root)
     sqlx::query(
         "
         INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE)
+        VALUES ($1, $2, $3, NULL, $4, $5, NOW(), NOW(), FALSE)
         ON CONFLICT (file_id, user_id) DO UPDATE
         SET encrypted_file_key = EXCLUDED.encrypted_file_key,
             access_level = EXCLUDED.access_level,
@@ -2074,7 +2075,6 @@ pub async fn share_file_with_contact(
     .bind(Uuid::new_v4())
     .bind(file_id)
     .bind(contact_user_id)
-    .bind(file_folder.unwrap())
     .bind(encrypted_file_key.as_bytes())
     .bind(access_level)
     .execute(&mut *tx)

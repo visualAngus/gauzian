@@ -2,6 +2,26 @@
 
 ## 2026-01-26
 
+### [2026-01-26 14:30] - Fix partage de fichier (UnexpectedNullError)
+
+**Problème :** Erreur 500 lors du partage de fichier avec `ColumnDecode: UnexpectedNullError`.
+
+**Cause :** La fonction `share_file_with_contact()` récupérait `folder_id` depuis `file_access` qui peut être NULL (signifiant "à la racine"). SQLx ne pouvait pas désérialiser le NULL.
+
+**Solution :** Les fichiers partagés apparaissent TOUJOURS à la racine du destinataire (`folder_id = NULL`) car :
+- Le destinataire n'a pas forcément accès au dossier parent
+- UX plus simple (fichiers partagés visibles directement)
+
+**Fichiers modifiés:**
+- `gauzian_back/src/drive.rs:2049-2080` : Suppression récupération `folder_id`, toujours NULL pour partage
+
+**Résultat :**
+- ✅ Partage de fichier fonctionne
+- ✅ Fichiers partagés apparaissent à la racine du destinataire
+- ✅ Cohérent avec le comportement des dossiers partagés
+
+---
+
 ### [2026-01-26 14:15] - Ajout Kubernetes health checks pour éviter 503 au démarrage
 
 **Problème :** Pods marqués "Ready" avant que Redis/MinIO/PostgreSQL soient vraiment accessibles. Le trafic était routé sur des pods non-prêts, causant des 503 pendant 5-10 secondes après le déploiement.

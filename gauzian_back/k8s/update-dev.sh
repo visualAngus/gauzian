@@ -7,6 +7,10 @@ TAG="dev"
 
 echo "🔄 Mise à jour des images de développement..."
 
+
+kubectl apply -f ./backend-deployment.yaml -n $NAMESPACE
+kubectl apply -f ./front-deployment.yaml -n $NAMESPACE
+
 # Pull les dernières images
 echo "📥 Téléchargement des images Docker Hub..."
 docker pull "$REGISTRY/gauzian-backend:$TAG"
