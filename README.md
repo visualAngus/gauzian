@@ -204,11 +204,27 @@ N'hésitez pas à créer un compte et à tester les fonctionnalités de partage 
 
 ## 📚 Documentation
 
+### Documentation Principale
+- **[README.md](README.md)** : Ce fichier - Présentation générale
 - **[CLAUDE.md](CLAUDE.md)** : Guide pour Claude Code (structure projet)
 - **[DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)** : Journal de développement détaillé
-- **[SECURITY_TESTING.md](SECURITY_TESTING.md)** : Guide de test de sécurité
-- **Backend** : `gauzian_back/CLAUDE.md`
-- **Frontend** : `gauzian_front/CLAUDE.md`
+
+### Documentation Technique
+- **[docs/](docs/)** : Documentation technique complète
+  - Sécurité et tests (SECURITY_TESTING.md)
+  - Implémentation du partage E2EE
+  - Guides techniques détaillés
+
+### Tests
+- **[tests/](tests/)** : Scripts de test automatisés
+  - Tests de sécurité (SQLMap)
+  - Tests de performance (k6)
+  - Voir [tests/README.md](tests/README.md) pour utilisation
+
+### Modules
+- **Backend** : [gauzian_back/CLAUDE.md](gauzian_back/CLAUDE.md)
+- **Backend K8s** : [gauzian_back/k8s/README.md](gauzian_back/k8s/README.md)
+- **Frontend** : [gauzian_front/CLAUDE.md](gauzian_front/CLAUDE.md)
 
 ---
 
