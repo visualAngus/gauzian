@@ -151,9 +151,22 @@ pub async fn protected_handler(claims: jwt::Claims) -> ApiResponse<String> {
 pub async fn auto_login_handler(
     State(state): State<AppState>,
     claims: jwt::Claims,
-) -> ApiResponse<String> {
+) -> Response {
     info!(user_id = %claims.id, "Access granted via Authorization header");
 
+
+    // verifier dans la base de données que l'utilisateur existe toujours
+    match auth::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(_) => {}
+        Err(_) => {
+            tracing::warn!("User ID from token not found in database: {}", claims.id);
+            // Répondre avec un token vide pour supprimer le token côté client
+            return ApiResponse::unauthorized("Invalid token: user not found")
+                .with_token("".to_string())
+                .into_response();
+        }
+    };
+    
     // générer un nouveau token
     let token = jwt::create_jwt(claims.id, &claims.role, state.jwt_secret.as_bytes()).unwrap();
 
@@ -162,6 +175,7 @@ pub async fn auto_login_handler(
         claims.id
     ))
     .with_token(token)
+    .into_response()
 }
 
 pub async fn logout_handler(
@@ -1363,6 +1377,92 @@ pub async fn get_folder_shared_users_handler(
     }
 }
 
+/// Récupère les informations de partage d'un fichier (pour le panneau InfoItem)
+pub async fn get_file_info_item_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    match drive::get_file_shared_users(&state.db_pool, claims.id, file_id).await {
+        Ok(users) => {
+            let mut shared_users_list: Vec<serde_json::Value> = Vec::new();
+
+            for (user_id, access_level) in users {
+                if let Ok(user_info) = auth::get_user_by_id(&state.db_pool, user_id).await {
+                    // construire la liste enrichie ici
+                    shared_users_list.push(serde_json::json!({
+                        "user_id": user_id,
+                        "permission": access_level,
+                        "public_key": user_info.public_key,
+                        "username": user_info.username,
+                    }) );
+                }
+            }
+            
+
+            ApiResponse::ok(serde_json::json!({
+                "shared_users": shared_users_list
+            })).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get file shared users: {:?}", e);
+            ApiResponse::internal_error("Failed to get file shared users").into_response()
+        }
+    }
+}
+
+/// Récupère les informations de partage d'un dossier (pour le panneau InfoItem)
+pub async fn get_folder_info_item_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = match Uuid::parse_str(&folder_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid folder_id").into_response();
+        }
+    };
+
+    match drive::get_folder_shared_users(&state.db_pool, claims.id, folder_id).await {
+        Ok(users) => {
+            let mut shared_users_list: Vec<serde_json::Value> = Vec::new();
+
+            for (user_id, access_level) in users {
+                if let Ok(user_info) = auth::get_user_by_id(&state.db_pool, user_id).await {
+                    // construire la liste enrichie ici
+                    shared_users_list.push(serde_json::json!({
+                        "user_id": user_id,
+                        "permission": access_level,
+                        "public_key": user_info.public_key,
+                        "username": user_info.username,
+                    }) );
+                }
+            }
+            ApiResponse::ok(serde_json::json!({
+                "shared_users": shared_users_list
+            })).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get folder shared users: {:?}", e);
+            ApiResponse::internal_error("Failed to get folder shared users").into_response()
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct PropagateFileAccessRequest {
     pub file_id: Uuid,
@@ -1467,5 +1567,50 @@ pub async fn health_check_handler(State(state): State<AppState>) -> Response {
     } else {
         info!("Health check failed - DB: {}, Redis: {}, S3: {}", db_ok, redis_ok, s3_ok);
         (axum::http::StatusCode::SERVICE_UNAVAILABLE, "Not ready").into_response()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RevokeAccessRequest {
+    item_type: String,
+    item_id: String,
+    contact_id: String,
+}
+
+pub async fn revoke_access_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<RevokeAccessRequest>,
+) -> Response {
+    let item_uuid = match Uuid::parse_str(&body.item_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid item_id").into_response();
+        }
+    };
+    let contact_uuid = match Uuid::parse_str(&body.contact_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid contact_id").into_response();
+        }
+    };
+
+    let result = match body.item_type.as_str() {
+        "file" => drive::revoke_file_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await,
+        "folder" => drive::revoke_folder_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await,
+        _ => {
+            return ApiResponse::bad_request("Invalid item_type (expected 'file' or 'folder')").into_response();
+        }
+    };
+
+    match result {
+        Ok(_) => ApiResponse::ok("Access revoked successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Item or contact not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to revoke access: {:?}", e);
+            ApiResponse::internal_error("Failed to revoke access").into_response()
+        }
     }
 }

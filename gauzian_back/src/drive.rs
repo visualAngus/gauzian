@@ -58,6 +58,7 @@ pub async fn get_files_and_folders_list(
         is_root: bool,
         parent_folder_id: Option<Uuid>,
         file_type: String,
+        folder_size: Option<i64>,
     }
 
     #[derive(Debug, sqlx::FromRow)]
@@ -84,7 +85,11 @@ pub async fn get_files_and_folders_list(
             f.updated_at::text as updated_at,
             f.is_root,
             f.parent_folder_id,
-            'folder'::text as file_type
+            'folder'::text as file_type,
+            (select COALESCE(SUM(fi.size),0) from files fi
+                join file_access fia on fia.file_id = fi.id
+                where fia.folder_id = f.id and fia.user_id = $1 and fia.is_deleted is false and fi.is_fully_uploaded = true
+            )::BIGINT as folder_size
         from folder_access fa
         join folders f on f.id = fa.folder_id
                 where fa.user_id = $1
@@ -140,6 +145,7 @@ pub async fn get_files_and_folders_list(
                 "updated_at": row.updated_at,
                 "is_root": row.is_root,
                 "type": row.file_type,
+                "folder_size": row.folder_size,
             })
         }).collect::<Vec<_>>(),
         "files": files.iter().map(|row| {
@@ -2125,6 +2131,44 @@ pub async fn get_folder_shared_users(
     Ok(shared_users.into_iter().map(|u| (u.user_id, u.access_level)).collect())
 }
 
+/// Récupère la liste des utilisateurs ayant accès à un fichier (pour le panneau InfoItem)
+pub async fn get_file_shared_users(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<Vec<(Uuid, String)>, sqlx::Error> {
+    #[derive(FromRow)]
+    struct SharedUser {
+        user_id: Uuid,
+        access_level: String,
+    }
+
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND is_deleted = FALSE)"
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(db_pool)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+    let shared_users = sqlx::query_as::<_, SharedUser>(
+        "
+        SELECT user_id, access_level
+        FROM file_access
+        WHERE file_id = $1 AND user_id != $2 AND is_deleted = FALSE
+        "
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(shared_users.into_iter().map(|u| (u.user_id, u.access_level)).collect())
+}
+
 /// Propage les permissions d'un fichier nouvellement créé aux utilisateurs ayant accès au dossier parent
 pub async fn propagate_file_access(
     db_pool: &PgPool,
@@ -2242,6 +2286,115 @@ pub async fn propagate_folder_access(
         .execute(&mut *tx)
         .await?;
     }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn revoke_file_access(
+    db_pool: &PgPool,
+    owner_id: Uuid,
+    file_id: Uuid,
+    target_user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Verify that the owner has owner access to the file
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(file_id)
+    .bind(owner_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !is_owner {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Delete the target user's access
+    sqlx::query(
+        "
+        DELETE FROM file_access
+        WHERE file_id = $1 AND user_id = $2
+        "
+    )
+    .bind(file_id)
+    .bind(target_user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+// le folder et de tout les enfants
+pub async fn revoke_folder_access(
+    db_pool: &PgPool,
+    owner_id: Uuid,
+    folder_id: Uuid,
+    target_user_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = db_pool.begin().await?;
+
+    // Verify that the owner has owner access to the folder
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(folder_id)
+    .bind(owner_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !is_owner {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // Delete the target user's access for the folder and all its descendants
+    sqlx::query(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        DELETE FROM folder_access
+        WHERE folder_id IN (SELECT id FROM folder_tree) AND user_id = $2
+        "
+    )
+    .bind(folder_id)
+    .bind(target_user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Also delete file access for all files in these folders
+    sqlx::query(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id
+            FROM folders
+            WHERE id = $1
+
+            UNION ALL
+
+            SELECT f.id
+            FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        DELETE FROM file_access
+        WHERE folder_id IN (SELECT id FROM folder_tree) AND user_id = $2
+        "
+    )
+    .bind(folder_id)
+    .bind(target_user_id)
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
     Ok(())

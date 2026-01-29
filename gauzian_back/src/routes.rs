@@ -41,6 +41,9 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/propagate_file_access", post(handlers::propagate_file_access_handler))
         .route("/drive/propagate_folder_access", post(handlers::propagate_folder_access_handler))
         .route("/contacts/get_public_key/{email}", get(handlers::get_public_key_handler_by_email))
+        .route("/drive/folder/{folder_id}/InfoItem", get(handlers::get_folder_info_item_handler))
+        .route("/drive/file/{file_id}/InfoItem", get(handlers::get_file_info_item_handler))
+        .route("/drive/revoke-access", post(handlers::revoke_access_handler))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
