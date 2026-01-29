@@ -25,9 +25,13 @@ export function useAuth(API_URL) {
         }
       } else {
         console.log("No valid session found for auto-login.");
+        etat.value = "login";
+        window.location.href = "/login";
       }
     } catch (error) {
       console.error("Auto-login failed:", error);
+      etat.value = "login";
+      window.location.href = "/login";
     }
   };
 
