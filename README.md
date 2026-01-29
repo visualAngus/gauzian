@@ -179,6 +179,29 @@ Des tests de sécurité exhaustifs (SQLMap, k6 load testing) ont été réalisé
 
 ---
 
+## 🌐 Essayer Gauzian
+
+Une **instance de démonstration** est disponible en ligne pour tester le service :
+
+### 🔗 [gauzian.pupin.fr](https://gauzian.pupin.fr)
+
+**Fonctionnalités disponibles :**
+- ✅ Création de compte (chiffrement E2EE automatique)
+- ✅ Upload/download de fichiers chiffrés
+- ✅ Partage sécurisé avec d'autres utilisateurs
+- ✅ Gestion des permissions (owner/editor/viewer)
+- ✅ Interface moderne et responsive
+
+**⚠️ Notes importantes :**
+- 🧪 **Instance Beta** : service en développement actif
+- 🔒 **Vos données sont chiffrées** : le serveur ne peut pas lire vos fichiers (zero-knowledge)
+- 💾 **Limite actuelle** : 3 Go par compte (freemium)
+- 🇫🇷 **Hébergement** : VPS en France avec certificat SSL Let's Encrypt
+
+N'hésitez pas à créer un compte et à tester les fonctionnalités de partage E2EE ! 🚀
+
+---
+
 ## 📚 Documentation
 
 - **[CLAUDE.md](CLAUDE.md)** : Guide pour Claude Code (structure projet)
