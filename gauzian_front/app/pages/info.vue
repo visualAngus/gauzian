@@ -133,7 +133,7 @@ const autologin = async () => {
         }
     } catch (error) {
         console.error("Auto-login failed:", error);
-        // window.location.href = "/login";
+        window.location.href = "/login";
     }
 };
 
