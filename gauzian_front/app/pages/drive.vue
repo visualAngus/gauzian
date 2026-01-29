@@ -1,16 +1,54 @@
 <template>
+  <Transition name="notif-pop">
+    <Notification
+      v-if="notifications.length > 0"
+      :key="notifications[0].id"
+      @close="removeNotification(notifications[0].id)"
+    >
+      <template #title>{{ notifications[0].title || "Notification" }}</template>
+      {{ notifications[0].message }}
+    </Notification>
+  </Transition>
+  <Transition name="info-pop">
+    <InfoItem
+      v-if="infoPanelVisible && infoItemData"
+      :item-id="infoItemData.id"
+      :shared_persons="infoItemData.sharedPersons"
+      @close="closeInfoPanel"
+      @revoke="handleRevokeAccess"
+      @rename="handleRenameItem"
+      @download="handleDownloadItem"
+      @share="handleShareItem"
+      @delete="handleDeleteItem"
+    >
+      <template #name>{{ infoItemData.name }}</template>
+      <template #type>{{ infoItemData.type }}</template>
+      <template #size>{{ infoItemData.size }}</template>
+      <template #created>{{ infoItemData.created }}</template>
+      <template #modified>{{ infoItemData.modified }}</template>
+      <template #owner>{{ infoItemData.owner }}</template>
+    </InfoItem>
+  </Transition>
+
   <ShareItemVue
     v-if="isSharing && shareItemTarget"
     :itemName="shareItemTarget.name"
     :itemId="shareItemTarget.id"
     @close="handleShareClose"
-    @annuler="() => { isSharing = false }"
+    @annuler="
+      () => {
+        isSharing = false;
+      }
+    "
   />
 
   <div id="div_pannel_right_click" ref="rightClickPanel">
     <!-- Options quand c'est un dossier -->
     <a
-      @click.stop="createFolder(); closeContextMenu()"
+      @click.stop="
+        createFolder();
+        closeContextMenu();
+      "
       v-if="
         rightClikedItem?.dataset?.itemType === 'folder' &&
         activeFolderId !== 'corbeille'
@@ -18,7 +56,10 @@
       >Nouveau dossier</a
     >
     <a
-      @click.stop="downloadItem(rightClikedItem); closeContextMenu()"
+      @click.stop="
+        downloadItem(rightClikedItem);
+        closeContextMenu();
+      "
       v-if="
         rightClikedItem?.dataset &&
         (rightClikedItem.dataset.itemType === 'file' ||
@@ -28,7 +69,10 @@
       >Télécharger</a
     >
     <a
-      @click.stop="renameItem(rightClikedItem); closeContextMenu()"
+      @click.stop="
+        renameItem(rightClikedItem);
+        closeContextMenu();
+      "
       v-if="
         rightClikedItem?.dataset &&
         (rightClikedItem.dataset.itemType === 'file' ||
@@ -38,7 +82,10 @@
       >Renommer</a
     >
     <a
-      @click.stop="restoreItem(rightClikedItem); closeContextMenu()"
+      @click.stop="
+        restoreItem(rightClikedItem);
+        closeContextMenu();
+      "
       v-if="
         rightClikedItem?.dataset &&
         (rightClikedItem.dataset.itemType === 'file' ||
@@ -48,7 +95,10 @@
       >Restaurer</a
     >
     <a
-      @click.stop="deleteItem(rightClikedItem); closeContextMenu()"
+      @click.stop="
+        deleteItem(rightClikedItem);
+        closeContextMenu();
+      "
       v-if="
         rightClikedItem?.dataset &&
         (rightClikedItem.dataset.itemType === 'file' ||
@@ -57,7 +107,22 @@
       >Supprimer</a
     >
     <a
-      @click.stop="shareItem(rightClikedItem); closeContextMenu()"
+      @click.stop="
+        openPropertiesFromContext();
+        closeContextMenu();
+      "
+      v-if="
+        rightClikedItem?.dataset &&
+        (rightClikedItem.dataset.itemType === 'file' ||
+          rightClikedItem.dataset.itemType === 'folder')
+      "
+      >Propriétés</a
+    >
+    <a
+      @click.stop="
+        shareItem(rightClikedItem);
+        closeContextMenu();
+      "
       v-if="
         rightClikedItem?.dataset &&
         (rightClikedItem.dataset.itemType === 'file' ||
@@ -69,12 +134,18 @@
 
     <!-- Options quand c'est l'espace vide -->
     <a
-      @click.stop="createFolder(); closeContextMenu()"
+      @click.stop="
+        createFolder();
+        closeContextMenu();
+      "
       v-if="rightClikedItem === null && activeFolderId !== 'corbeille'"
       >Nouveau dossier</a
     >
     <a
-      @click.stop="fileInput.click(); closeContextMenu()"
+      @click.stop="
+        fileInput.click();
+        closeContextMenu();
+      "
       v-if="rightClikedItem === null && activeFolderId !== 'corbeille'"
       >Importer des fichiers</a
     >
@@ -126,10 +197,10 @@
           title="Tout reprendre"
         >
           <svg
-          loadPath,
-          downloadFile,
-          usedSpace,
-          totalSpaceLeft
+            loadPath,
+            downloadFile,
+            usedSpace,
+            totalSpaceLeft
             fill="currentColor"
           >
             <path d="M7 5V19L17 12L7 5Z" />
@@ -549,7 +620,11 @@
       </div>
 
       <div
-        :class="['section_items', { is_empty: displayedDriveItems.length === 0 }]"
+        :class="[
+          'section_items',
+          { is_empty: displayedDriveItems.length === 0 },
+          {panel_ouvert: infoPanelVisible }
+        ]"
         @click.self="clearSelection"
         @contextmenu.self="openEmptySpaceMenu"
         v-dropzone="{
@@ -645,7 +720,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, watch, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useHead } from "#imports";
 
@@ -655,14 +730,18 @@ import { useLayout } from "~/composables/drive/useLayout";
 import { useSelection } from "~/composables/drive/useSelection";
 import { useDriveData } from "~/composables/drive/useDriveData";
 import { useFileActions } from "~/composables/drive/useFileActions";
+import { useInfoPanel } from "~/composables/drive/useInfoPanel";
 import { useTransfers } from "~/composables/drive/useTransfers";
 import { useContextMenu } from "~/composables/drive/useContextMenu";
+import { useNotification } from "~/composables/useNotification";
 
 // Directives & Components
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
 import ShareItemVue from "~/components/ShareItem.vue";
 import FolderTreeNode from "~/components/FolderTreeNode.vue";
+import Notification from "~/components/Notification.vue";
+import InfoItem from "~/components/InfoItem.vue";
 
 const vDropzone = dropzone;
 const API_URL = "https://gauzian.pupin.fr/api";
@@ -674,16 +753,11 @@ definePageMeta({ headerTitle: "GZDRIVE" });
 // 1. Authentification
 const { etat, autologin } = useAuth(API_URL);
 
-// 2. Layout & Stockage
-const { 
-  isSidebarOpen, 
-  toggleSidebar, 
-  usedSpace, 
-  maxspace, 
-  totalSpaceLeft 
-} = useLayout(
-  API_URL,
-);
+const { notifications, addNotification, removeNotification } =
+  useNotification();
+
+const { isSidebarOpen, toggleSidebar, usedSpace, maxspace, totalSpaceLeft } =
+  useLayout(API_URL, addNotification);
 
 // 3. Données Drive (Tree, Items, Navigation)
 // Note: on injecte usedSpace ici si loadPath met à jour l'espace utilisé
@@ -704,18 +778,12 @@ const {
   breadcrumbRef,
   onBreadcrumbWheel,
   navigateToBreadcrumb,
-  loadingDrive
-} = useDriveData(router, API_URL, usedSpace); 
+  loadingDrive,
+} = useDriveData(router, API_URL, usedSpace, addNotification);
 
 // 4. Sélection Multiple
-const { 
-  selectedItems, 
-  selectedItemsMap, 
-  selectItem, 
-  clearSelection 
-} = useSelection(
-  API_URL,
-);
+const { selectedItems, selectedItemsMap, selectItem, clearSelection } =
+  useSelection(API_URL);
 
 // 5. Transferts (Upload/Download)
 const {
@@ -745,12 +813,13 @@ const {
   getTransferStatus,
   togglePanelCollapse,
   isPaused,
-  downloadFile
+  downloadFile,
 } = useTransfers({
   API_URL,
   activeFolderId,
   loadPath, // Callback quand un upload est fini
   liste_decrypted_items,
+  addNotification,
 });
 
 // 6. Actions Fichiers (Drag&Drop, Renommer, Supprimer...)
@@ -804,8 +873,30 @@ const {
   downloadFile,
   usedSpace,
   totalSpaceLeft,
-  liste_decrypted_items
+  liste_decrypted_items,
+  addNotification,
 });
+const {
+  infoPanelVisible,
+  infoItemData,
+  closeInfoPanel,
+  handleRevokeAccess,
+  handleRenameItem,
+  handleDownloadItem,
+  handleDeleteItem,
+  handleShareItem,
+  openInfoPanel,
+} =  useInfoPanel({
+    API_URL,
+    selectedItemsMap,
+    formatBytes,
+    addNotification,
+    clearSelection,
+    renameItem,
+    downloadFile,
+    deleteItem,
+    shareItem,
+  });
 
 const handleShareClose = async (contacts, accessLevel) => {
   if (!shareItemTarget?.value) {
@@ -826,20 +917,24 @@ const handleShareClose = async (contacts, accessLevel) => {
       shareItemTarget.value.id,
       shareItemTarget.value.type,
       contactsList,
-      accessLevel.value
+      accessLevel.value,
     );
 
     // Succès
-    const itemType = shareItemTarget.value.type === 'folder' ? 'dossier' : 'fichier';
+    const itemType =
+      shareItemTarget.value.type === "folder" ? "dossier" : "fichier";
     const contactCount = contactsList.length;
-    const message = `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} partagé avec succès avec ${contactCount} contact${contactCount > 1 ? 's' : ''}`;
+    const message = `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} partagé avec succès avec ${contactCount} contact${contactCount > 1 ? "s" : ""}`;
 
     console.log(message);
-    alert(message); // TODO: Remplacer par un système de notifications plus élégant
+    addNotification({
+      title: "Partage réussi",
+      message: message,
+      duration: 5000,
+    });
 
     // Rafraîchir pour voir les changements
     await loadPath();
-
   } catch (error) {
     console.error("Error sharing item:", error);
     const errorMessage = error.message || "Erreur lors du partage de l'élément";
@@ -861,31 +956,95 @@ const { showContextMenu, hideContextMenu } = useContextMenu();
 const pendingAndUploadingFiles = computed(() => {
   return [
     ...listToUpload.value
-      .filter((file) => (file._targetFolderId || "root") === activeFolderId.value)
-      .map((file) => ({ ...file, _status: "pending", _name: file.name, _progress: 0 })),
+      .filter(
+        (file) => (file._targetFolderId || "root") === activeFolderId.value,
+      )
+      .map((file, idx) => ({
+        ...file,
+        _status: "pending",
+        _name: file.name,
+        _progress: 0,
+        _uniqueId: file._uniqueId || `pending-${file.name}-${idx}`,
+      })),
     ...listUploadInProgress.value
-      .filter((file) => (file._targetFolderId || "root") === activeFolderId.value)
-      .map((file) => ({ ...file, _status: "uploading", _name: file.name, _progress: fileProgressMap.value[file._uploadId] || 0 })),
+      .filter(
+        (file) => (file._targetFolderId || "root") === activeFolderId.value,
+      )
+      .map((file) => ({
+        ...file,
+        _status: "uploading",
+        _name: file.name,
+        _progress: fileProgressMap.value[file._uploadId] || 0,
+        _uniqueId: file._uploadId,
+      })),
     ...listUploaded.value
-      .filter((file) => (file._targetFolderId || "root") === activeFolderId.value)
-      .map((file) => ({ ...file, _status: "uploaded", _name: file.name, _progress: 100 })),
+      .filter(
+        (file) => (file._targetFolderId || "root") === activeFolderId.value,
+      )
+      .map((file, idx) => ({
+        ...file,
+        _status: "uploaded",
+        _name: file.name,
+        _progress: 100,
+        _uniqueId:
+          file._uploadId || file.file_id || file.folder_id || `uploaded-${idx}`,
+      })),
   ];
 });
+
+const findItemById = (id) => {
+  if (!id) return null;
+  const fromDisplayed = displayedDriveItems.value.find(
+    (it) => it.file_id === id || it.folder_id === id,
+  );
+  if (fromDisplayed) return fromDisplayed;
+
+  const fromPending = pendingAndUploadingFiles.value.find(
+    (it) => it.file_id === id || it.folder_id === id || it._uniqueId === id,
+  );
+  if (fromPending) return fromPending;
+
+  return null;
+};
+
+const openPropertiesFromContext = () => {
+  const el = rightClikedItem.value;
+  if (!el || !el.dataset) return;
+  const id = el.dataset.itemId;
+  const type = el.dataset.itemType;
+  if (!id) return;
+
+  const item =
+    findItemById(id) || {
+      file_id: type === "file" ? id : undefined,
+      folder_id: type === "folder" ? id : undefined,
+      type,
+      metadata: {
+        folder_name: el.dataset.folderName,
+        filename: el.dataset.fileName,
+      },
+    };
+
+  selectedItems.value = new Set([id]);
+  selectedItemsMap.value = new Map([[id, item]]);
+  // Ouvrir explicitement le panneau des propriétés (action du menu contextuel)
+  openInfoPanel?.();
+};
 
 // Initialisation
 const activeSection = ref("my_drive"); // Simple ref UI locale
 
 // Démarrage
 autologin(() => {
-    // Callback succès login : on charge les données
-    get_all_info(); 
+  // Callback succès login : on charge les données
+  get_all_info();
 });
 
 onMounted(async () => {
   // Initialisation Tree
   await loadTreeNode(folderTree.value);
   await expandTreeToCurrentPath();
-  
+
   // Setup URL params
   const urlParams = new URLSearchParams(window.location.search);
   const folderIdFromUrl = urlParams.get("folder_id");
@@ -900,14 +1059,12 @@ onMounted(async () => {
     }
   };
   document.addEventListener("click", closeContextMenu);
-  
+
   // Nettoyer l'événement au démontage
   onBeforeUnmount(() => {
     document.removeEventListener("click", closeContextMenu);
   });
 });
-
-
 
 watch(
   selectedItems,
@@ -926,9 +1083,7 @@ watch(
       }
     });
   },
-  { deep: true }
+  { deep: true },
 );
-
 </script>
 <style src="~/assets/css/drive.css"></style>
-

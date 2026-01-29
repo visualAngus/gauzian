@@ -1,8 +1,8 @@
 import { ref, watch } from 'vue';
-import { nextTick } from 'vue'; 
+import { nextTick } from 'vue';
 import { decryptWithStoredPrivateKey, decryptSimpleDataWithDataKey } from '~/utils/crypto';
 
-export function useDriveData(router, API_URL, usedSpace, listUploaded) {
+export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotification) {
     const activeFolderId = ref("root");
     const liste_decrypted_items = ref([]);
     const displayedDriveItems = ref([]);
@@ -157,7 +157,7 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded) {
         }
     };
 
- const flushQueuedDriveItems = async () => {
+    const flushQueuedDriveItems = async () => {
         if (!queuedDriveItems) {
             driveListTransition.value.leaving = false;
             return;
@@ -516,29 +516,34 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded) {
         loadingDrive.value = false;
     };
 
-const breadcrumbRef = ref(null);
+    const breadcrumbRef = ref(null);
 
-const onBreadcrumbWheel = (event) => {
-  const breadcrumb = breadcrumbRef.value;
-  if (!breadcrumb) return;
+    const onBreadcrumbWheel = (event) => {
+        const breadcrumb = breadcrumbRef.value;
+        if (!breadcrumb) return;
 
-  // Récupérer la direction du scroll
-  const deltaY = event.deltaY || 0;
+        // Récupérer la direction du scroll
+        const deltaY = event.deltaY || 0;
 
-  // Convertir le scroll vertical en scroll horizontal
-  // Positif = vers la droite, négatif = vers la gauche
-  breadcrumb.scrollLeft += deltaY;
-};
+        // Convertir le scroll vertical en scroll horizontal
+        // Positif = vers la droite, négatif = vers la gauche
+        breadcrumb.scrollLeft += deltaY;
+    };
 
-const navigateToBreadcrumb = (pathItem, index) => {
-  console.log("Navigating to breadcrumb:", pathItem, index);
-  if (index !== full_path.value.length - 1 && pathItem.folder_id) {
-    router.push(`/drive?folder_id=${pathItem.folder_id}`);
-    activeFolderId.value = pathItem.folder_id;
-  }
-};
+    const navigateToBreadcrumb = (pathItem, index) => {
+        console.log("Navigating to breadcrumb:", pathItem, index);
+        if (index !== full_path.value.length - 1 && pathItem.folder_id) {
+            router.push(`/drive?folder_id=${pathItem.folder_id}`);
+            activeFolderId.value = pathItem.folder_id;
+            addNotification({
+                title: "Navigation",
+                message: `Vous avez navigué vers "${pathItem.metadata.folder_name}".`,
+                duration: 3000,
+            });
+        }
+    };
 
- watch(activeFolderId, () => {
+    watch(activeFolderId, () => {
         // On évite de recharger si on est déjà en train de charger (loadingDrive est défini dans ce fichier ?)
         // Si loadingDrive n'est pas dispo ici, retire la condition pour l'instant
         // console.log("Active folder changed to:", activeFolderId.value);
@@ -576,6 +581,6 @@ const navigateToBreadcrumb = (pathItem, index) => {
         loadingDrive,
         driveListTransition,
         onFileListAfterLeave,
-        
+
     };
 }

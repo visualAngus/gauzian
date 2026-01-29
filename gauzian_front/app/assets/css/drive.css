@@ -59,7 +59,7 @@ main {
   justify-content: flex-start;
   gap: 5px;
   width: 100%;
-  height: calc(100vh - 128px);
+  height: calc(100vh - 88px);
 }
 
 /* quand on s'appret a drop des fichiers */
@@ -1490,4 +1490,13 @@ main {
 
 #empty-trash-button:active {
   transform: translateY(0);
+}
+
+.panel_ouvert{
+  width: calc(100% - 350px);
+}
+@media  screen and (max-width: 768px) {
+  .panel_ouvert{
+    width: 100%;
+  }
 }
