@@ -2,6 +2,55 @@
 
 ## 2026-01-29
 
+### [2026-01-29 23:35] - Réorganisation structure du projet
+
+**Contexte :**
+- Racine du projet encombrée avec 12+ fichiers de documentation et tests
+- Manque de séparation claire entre docs technique, tests et fichiers essentiels
+- Navigation difficile pour nouveaux contributeurs
+
+**Réorganisation effectuée :**
+
+1. **Création répertoire `docs/`** - Documentation technique
+   - SECURITY_TESTING.md
+   - SHARING_E2EE_SOLUTION.md
+   - SHARING_IMPLEMENTATION.md
+   - SHARING_TEST_GUIDE.md
+   - COMMIT_SUMMARY.md (historique)
+   - README.md (index de la documentation)
+
+2. **Création répertoire `tests/`** - Scripts de test
+   - `tests/security/` : sqlmap_test.sh, sqlmap_quick_test.sh
+   - `tests/k6/` : test-complete-stress.js, test-login-k6.js, test-upload-advanced.js
+   - README.md (guide d'utilisation des tests)
+
+3. **Racine nettoyée** - Seulement fichiers essentiels
+   - README.md (présentation)
+   - CLAUDE.md (guide Claude Code)
+   - DEVELOPMENT_LOG.md (journal)
+   - push_docker_hub.sh (script déploiement)
+   - update.sh (script mise à jour)
+
+4. **README.md principal mis à jour**
+   - Section "Documentation" restructurée
+   - Liens vers docs/ et tests/
+   - Organisation par catégories (Principale, Technique, Tests, Modules)
+
+**Avantages :**
+- ✅ Racine professionnelle et navigable (5 fichiers essentiels au lieu de 17)
+- ✅ Documentation technique regroupée et indexée
+- ✅ Tests organisés par type avec guides
+- ✅ Historique Git préservé (git mv)
+- ✅ Structure scalable pour futurs ajouts
+
+**Fichiers déplacés :**
+- 5 fichiers .md → docs/
+- 2 scripts SQLMap → tests/security/
+- 3 scripts k6 → tests/k6/
+- 2 README.md créés (docs/, tests/)
+
+---
+
 ### [2026-01-29 23:00] - Correction mentions Caddy → Traefik
 
 **Contexte :**
