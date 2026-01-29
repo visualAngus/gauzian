@@ -10,6 +10,7 @@
     :data-item-id="item.file_id || item.folder_id"
     :data-folder-name="item.metadata?.folder_name || 'Dossier'"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
+    :data-item-size="item.size || item.folder_size || item.metadata?.file_size || item.metadata?.folder_size || 0"
     @click="handleDoubleTap(item, $event)"
     @contextmenu.prevent="$emit('contextmenu', item, $event)"
     @mousedown="startDrag"

@@ -13,7 +13,7 @@ import {
 import { useAutoShare } from './useAutoShare';
 
 
-export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypted_items } = {}) {
+export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypted_items, addNotification } = {}) {
     let fileIdCounter = 0;
 
     // Configuration retry
@@ -71,6 +71,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                 const isLastAttempt = attempt === maxRetries - 1;
                 if (isLastAttempt) {
                     console.error(`Échec définitif après ${maxRetries} tentatives`, error);
+                    addNotification({
+                        title: "Erreur de transfert",
+                        message: `Le transfert a échoué après plusieurs tentatives. Veuillez réessayer plus tard.`,
+                        duration: 8000,
+                    });
                     throw error;
                 }
 
@@ -127,7 +132,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
     const downloadFile = async (item) => {
         const downloadId = `download-${Date.now()}-${Math.random()}`;
-
+    
         // Créer un AbortController pour ce download
         const abortController = new AbortController();
         downloadAbortControllers.value[downloadId] = abortController;
@@ -135,6 +140,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         try {
             const filename = item.metadata?.filename || "download";
             console.log("Starting download for:", filename);
+            addNotification({
+                title: "Téléchargement démarré",
+                message: `Le téléchargement de "${filename}" a commencé.`,
+                duration: 3000,
+            });
 
             // Ajouter à la liste des téléchargements
             listDownloadInProgress.value.push({
@@ -261,6 +271,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             URL.revokeObjectURL(url);
 
             console.log("Download completed successfully");
+            addNotification({
+                title: "Téléchargement terminé",
+                message: `Le téléchargement de "${filename}" est terminé.`,
+                duration: 5000,
+            });
 
             // Nettoyer l'AbortController
             delete downloadAbortControllers.value[downloadId];
@@ -277,7 +292,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             // Ne pas afficher d'alerte si l'erreur est due à un abort
             if (error.name !== "AbortError") {
-                alert(`Erreur lors du téléchargement: ${error.message}`);
+                addNotification({
+                    title: "Erreur de téléchargement",
+                    message: `Erreur lors du téléchargement: ${error.message}`,
+                    duration: 8000,
+                });
             }
 
             // Nettoyer l'AbortController
@@ -370,6 +389,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         pausedTransfers.value.delete(downloadId);
 
         console.log(`Download ${downloadId} has been cancelled.`);
+        addNotification({
+            title: "Téléchargement annulé",
+            message: `Le téléchargement a été annulé.`,
+            duration: 5000,
+        });
     };
 
     const togglePanelCollapse = () => {
@@ -446,6 +470,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
         try {
             console.log("Starting folder download as ZIP:", folderId);
+            addNotification({
+                title: "Téléchargement démarré",
+                message: `Le téléchargement du dossier "${folderName}" a commencé.`,
+                duration: 3000,
+            });
 
             // Ajouter à la liste des téléchargements
             listDownloadInProgress.value.push({
@@ -467,6 +496,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             if (!contentsRes.ok) {
                 throw new Error("Failed to fetch folder contents");
+                addNotification({
+                    title: "Erreur de téléchargement",
+                    message: `Erreur lors du téléchargement: Impossible de récupérer le contenu du dossier.`,
+                    duration: 8000,
+                });
             }
 
             const { contents } = await contentsRes.json();
@@ -583,6 +617,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             URL.revokeObjectURL(url);
 
             console.log("ZIP download completed");
+            addNotification({
+                title: "Téléchargement terminé",
+                message: `Le téléchargement du dossier "${folderName}" est terminé.`,
+                duration: 5000,
+            });
 
             // Nettoyer l'AbortController
             delete downloadAbortControllers.value[downloadId];
@@ -596,6 +635,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             delete transferETAs.value[downloadId];
         } catch (error) {
             console.error("Error downloading folder as ZIP:", error);
+            addNotification({
+                title: "Erreur de téléchargement",
+                message: `Erreur lors du téléchargement: ${error.message}`,
+                duration: 8000,
+            });
 
             // Ne pas afficher d'alerte si l'erreur est due à un abort
             if (error.name !== "AbortError") {
@@ -771,6 +815,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                     // Si l'erreur est une annulation, on arrête le worker
                     if (err.name === "AbortError") {
                         console.log(`Upload annulé pour le fichier ${file.name}`);
+                        addNotification({
+                            title: "Upload annulé",
+                            message: `L'upload de "${file.name}" a été annulé.`,
+                            duration: 5000,
+                        });
                         return; // Sortir du worker
                     }
                     console.error(`Echec chunk ${index}`, err);

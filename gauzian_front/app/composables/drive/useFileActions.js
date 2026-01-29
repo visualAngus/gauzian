@@ -28,6 +28,7 @@ export function useFileActions({
     clearSelection,
     foldersList,
     liste_decrypted_items,
+    addNotification
 } = {}) {
 
     const router = useRouter();
@@ -118,6 +119,13 @@ export function useFileActions({
                         throw new Error(`Failed to restore folder ${itemId}`);
                     }
                 }
+                addNotification({
+                    title: "Restauration réussie",
+                    message: `L'élément a été restauré avec succès.`,
+                    duration: 5000,
+                });
+
+
 
                 await loadPath();
                 await refreshTreeNode(activeFolderId.value);
@@ -154,7 +162,11 @@ export function useFileActions({
                         throw new Error(`Failed to restore folder ${item.folder_id}`);
                     }
                 }
-
+                addNotification({
+                    title: "Restauration réussie",
+                    message: `L'élément a été restauré avec succès.`,
+                    duration: 5000,
+                });
                 // Rafraîchir l'affichage
                 await loadPath();
                 await refreshTreeNode(activeFolderId.value);
@@ -197,7 +209,7 @@ export function useFileActions({
         }
         const resData = await res.json();
         console.log("Folder created with ID:", resData.folder_id);
-
+        
         // Propagation automatique des permissions si le dossier parent est partagé
         if (activeFolderId.value && activeFolderId.value !== "root") {
             const { propagateFolderAccess } = useAutoShare(API_URL);
@@ -211,18 +223,21 @@ export function useFileActions({
         // Rafraîchir la liste des fichiers/dossiers
         await loadPath();
         await refreshTreeNode(activeFolderId.value);
-
+        
         // il faut reussir a seclection le nouveau dossier créé pour le renommer directement
         await nextTick();
         const id = resData.folder_id;
         const newFolderElement = document.querySelector(
             `.item[data-item-id="${id}"]`,
         );
-
-        console.log("New folder element:", newFolderElement);
         if (newFolderElement) {
             renameItem(newFolderElement);
         }
+        addNotification({
+            title: "Dossier créé",
+            message: `Un nouveau dossier a été créé avec succès.`,
+            duration: 5000,
+        });
     };
 
 
@@ -335,7 +350,11 @@ export function useFileActions({
                 typeof usedSpace.value !== "undefined"
             ) {
                 if (someSize > totalSpaceLeft.value - usedSpace.value) {
-                    alert("Not enough space left to upload these files.");
+                    addNotification({
+                        title: "Espace insuffisant",
+                        message: `Espace insuffisant pour uploader le fichier "${file.name}".`,
+                        duration: 8000,
+                    });
                     return;
                 }
             }
@@ -406,7 +425,11 @@ export function useFileActions({
             alert("Erreur lors du vidage de la corbeille");
             return;
         }
-
+        addNotification({
+            title: "Corbeille vidée",
+            message: `La corbeille a été vidée avec succès.`,
+            duration: 5000,
+        });
         console.log("Trash emptied successfully");
         await loadPath();
         await refreshTreeNode("corbeille");
@@ -473,6 +496,11 @@ export function useFileActions({
             await Promise.all(movePromises);
 
             console.log("All items moved successfully");
+            addNotification({
+                title: "Éléments déplacés",
+                message: `${draggedItems.value.length} élément(s) ont été déplacés avec succès.`,
+                duration: 5000,
+            });
 
             // Recharger le dossier courant
             await loadPath();
@@ -654,6 +682,11 @@ export function useFileActions({
             await Promise.all(deletePromises);
 
             console.log(`Successfully deleted ${itemsToDelete.length} item(s)`);
+            addNotification({
+                title: "Éléments supprimés",
+                message: `${itemsToDelete.length} élément(s) ont été supprimés avec succès.`,
+                duration: 5000,
+            });
 
             // Vider la sélection après suppression
             clearSelection();
@@ -781,6 +814,12 @@ export function useFileActions({
                 // Mettre à jour le texte avec le nouveau nom
                 nameElement.textContent = newName;
 
+                addNotification({
+                    title: "Élément renommé",
+                    message: `L'élément a été renommé en "${newName}".`,
+                    duration: 5000,
+                });
+
                 // Recharger le path pour synchroniser
                 await loadPath();
                 await refreshTreeNode(activeFolderId.value);
@@ -792,7 +831,11 @@ export function useFileActions({
                 nameElement.style.overflow = "hidden";
                 nameElement.style.display = "block";
                 nameElement.textContent = name;
-                alert("Erreur lors du renommage de l'élément");
+                addNotification({
+                    title: "Erreur",
+                    message: "Erreur lors du renommage de l'élément",
+                    duration: 5000,
+                });
             }
         };
         nameElement.addEventListener("blur", finishEditing, { once: true });
@@ -839,6 +882,12 @@ export function useFileActions({
 
         if (!res.ok) {
             throw new Error(`Failed to move ${itemType} ${itemId}`);
+        }else {
+            addNotification({
+                title: "Élément déplacé",
+                message: `L'élément a été déplacé avec succès.`,
+                duration: 5000,
+            });
         }
     };
 
