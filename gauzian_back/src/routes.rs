@@ -1,10 +1,11 @@
 use axum::{routing::{get, post}, Router};
 use tower_http::trace::TraceLayer;
 
-use crate::{handlers, state::AppState};
+use crate::{handlers,metrics, state::AppState};
 
 pub fn app(state: AppState) -> Router {
     Router::new()
+        .route("/metrics", get(| | async { metrics::metrics_text() }))
         .route("/health/ready", get(handlers::health_check_handler))
         .route("/login", post(handlers::login_handler))
         .route("/register", post(handlers::register_handler))
