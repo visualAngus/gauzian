@@ -106,6 +106,8 @@ kind: Service
 metadata:
   name: backend
   namespace: gauzian
+  labels:
+    app: backend
 spec:
   selector:
     app: backend
