@@ -1,11 +1,12 @@
-use axum::{routing::{get, post}, Router};
+use axum::{middleware, routing::{get, post}, Router};
 use tower_http::trace::TraceLayer;
 
-use crate::{handlers,metrics, state::AppState};
+use crate::{handlers, metrics, state::AppState};
 
 pub fn app(state: AppState) -> Router {
     Router::new()
-        .route("/metrics", get(| | async { metrics::metrics_text() }))
+        // L'endpoint /metrics ne doit PAS être tracké pour éviter la pollution des métriques
+        .route("/metrics", get(|| async { metrics::metrics_text() }))
         .route("/health/ready", get(handlers::health_check_handler))
         .route("/login", post(handlers::login_handler))
         .route("/register", post(handlers::register_handler))
@@ -15,7 +16,7 @@ pub fn app(state: AppState) -> Router {
         .route("/info", get(handlers::info_handler))
         .route("/drive/initialize_file", post(handlers::initialize_file_handler))
         .route("/drive/upload_chunk", post(handlers::upload_chunk_handler))
-        
+
         .route("/drive/get_all_drive_info/{parent_id}", get(handlers::get_account_and_drive_info_handler))
         .route("/drive/create_folder", post(handlers::create_folder_handler))
         .route("/drive/get_file_folder/{parent_id}", get(handlers::get_file_folder_handler))
@@ -45,6 +46,8 @@ pub fn app(state: AppState) -> Router {
         .route("/drive/folder/{folder_id}/InfoItem", get(handlers::get_folder_info_item_handler))
         .route("/drive/file/{file_id}/InfoItem", get(handlers::get_file_info_item_handler))
         .route("/drive/revoke-access", post(handlers::revoke_access_handler))
+        // Ajouter le middleware de métriques AVANT TraceLayer pour capturer toutes les requêtes
+        .layer(middleware::from_fn(metrics::track_metrics))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

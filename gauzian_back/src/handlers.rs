@@ -57,6 +57,7 @@ pub async fn login_handler(
         Ok(user) => user,
         Err(_) => {
             tracing::warn!("Email not found: {}", req.email);
+            crate::metrics::track_auth_attempt("login", false);
             return ApiResponse::unauthorized("Invalid email or password").into_response();
         }
     };
@@ -69,6 +70,7 @@ pub async fn login_handler(
         true => {
             let token = jwt::create_jwt(user.id, "user", state.jwt_secret.as_bytes()).unwrap();
             info!(%user.id, "Login successful, setting cookie");
+            crate::metrics::track_auth_attempt("login", true);
             return ApiResponse::ok(LoginResponse {
                 message: "Login successful".to_string(),
                 user_id: user.id,
@@ -82,6 +84,7 @@ pub async fn login_handler(
         }
         false => {
             tracing::warn!("Login failed for email: {}", req.email);
+            crate::metrics::track_auth_attempt("login", false);
             return ApiResponse::unauthorized("Invalid email or password").into_response();
         }
     }
@@ -431,12 +434,20 @@ pub async fn upload_chunk_handler(
 
     let storage_client = &state.storage_client;
 
+    // Mesurer la durée d'upload du chunk vers S3
+    let upload_start = std::time::Instant::now();
     let meta_data_s3 = match storage_client
         .upload_line(&chunk_data, body.index.to_string(), body.iv.clone())
         .await
     {
-        Ok(meta) => meta,
+        Ok(meta) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, true);
+            meta
+        }
         Err(e) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, false);
             tracing::error!("Failed to upload chunk to storage: {:?}", e);
             return ApiResponse::internal_error("Failed to upload chunk").into_response();
         }
@@ -933,10 +944,12 @@ pub async fn download_file_handler(
     let file_info = match drive::get_file_info(&state.db_pool, claims.id, file_id).await {
         Ok(info) => info,
         Err(sqlx::Error::RowNotFound) => {
+            crate::metrics::track_file_download(false);
             return ApiResponse::not_found("File not found or access denied").into_response();
         }
         Err(e) => {
             tracing::error!("Failed to get file info: {:?}", e);
+            crate::metrics::track_file_download(false);
             return ApiResponse::internal_error("Failed to get file info").into_response();
         }
     };
@@ -947,6 +960,9 @@ pub async fn download_file_handler(
             return ApiResponse::internal_error("Invalid file structure").into_response();
         }
     };
+
+    // Track successful download (file exists and chunks are valid)
+    crate::metrics::track_file_download(true);
     // Créer un stream qui télécharge et envoie chaque chunk
     let stream = futures::stream::iter(chunks)
         .then(move |chunk_info| {
@@ -1017,14 +1033,22 @@ pub async fn download_chunk_handler(
         return ApiResponse::not_found("Chunk not found or access denied").into_response();
     }
 
+    // Mesurer la durée de download du chunk depuis S3
+    let download_start = std::time::Instant::now();
     match state.storage_client.download_line(&s3_key).await {
-        Ok((data, metadata)) => ApiResponse::ok(serde_json::json!({
-            "data": base64::engine::general_purpose::STANDARD.encode(&data),
-            "iv": metadata.iv,
-            "index": metadata.index,
-        }))
-        .into_response(),
+        Ok((data, metadata)) => {
+            let download_duration = download_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_download_duration(download_duration, true);
+            ApiResponse::ok(serde_json::json!({
+                "data": base64::engine::general_purpose::STANDARD.encode(&data),
+                "iv": metadata.iv,
+                "index": metadata.index,
+            }))
+            .into_response()
+        }
         Err(e) => {
+            let download_duration = download_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_download_duration(download_duration, false);
             tracing::error!("Failed to download chunk: {:?}", e);
             ApiResponse::internal_error("Failed to download chunk").into_response()
         }
@@ -1088,6 +1112,7 @@ pub async fn finalize_upload_handler(
             .await
             {
                 Ok(_) => {
+                    crate::metrics::track_file_upload(false, 0);
                     return ApiResponse::ok("File upload aborted successfully").into_response();
                 }
                 Err(e) => {
@@ -1100,12 +1125,23 @@ pub async fn finalize_upload_handler(
         "completed" => {
             // proceed to finalize
             match drive::finalize_file_upload(&state.db_pool, claims.id, file_id).await {
-                Ok(_) => ApiResponse::ok("File upload finalized successfully").into_response(),
+                Ok(_) => {
+                    // Récupérer la taille du fichier pour les métriques
+                    let file_size: i64 = sqlx::query_scalar("SELECT size FROM files WHERE id = $1")
+                        .bind(file_id)
+                        .fetch_one(&state.db_pool)
+                        .await
+                        .unwrap_or(0);
+
+                    crate::metrics::track_file_upload(true, file_size as u64);
+                    ApiResponse::ok("File upload finalized successfully").into_response()
+                }
                 Err(sqlx::Error::RowNotFound) => {
                     ApiResponse::not_found("File not found or access denied").into_response()
                 }
                 Err(e) => {
                     tracing::error!("Failed to finalize file upload: {:?}", e);
+                    crate::metrics::track_file_upload(false, 0);
                     ApiResponse::internal_error("Failed to finalize file upload").into_response()
                 }
             }

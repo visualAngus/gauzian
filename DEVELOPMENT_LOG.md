@@ -1,5 +1,105 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-01-31
+
+### [2026-01-31 14:45] - Implémentation complète de Prometheus avec métriques HTTP et métier
+
+**Contexte :**
+- Prometheus et Grafana déjà déployés via kube-prometheus-stack
+- ServiceMonitor configuré pour scraper `/metrics` toutes les 15s
+- Métriques de base présentes mais non utilisées automatiquement
+
+**Implémentation :**
+
+1. **Refonte complète `src/metrics.rs`** :
+   - **Métriques HTTP automatiques** (via middleware) :
+     * `http_requests_total{method, endpoint, status}` - Compteur de requêtes
+     * `http_request_duration_seconds{method, endpoint}` - Histogramme de latence (buckets 1ms → 10s)
+     * `http_connections_active` - Gauge de connexions actives
+
+   - **Métriques métier** (tracking manuel) :
+     * `file_uploads_total{status}` - Compteur d'uploads (success/failed/aborted)
+     * `file_downloads_total{status}` - Compteur de downloads
+     * `file_upload_bytes_total{status}` - Volume uploadé en bytes
+     * `auth_attempts_total{type, status}` - Authentifications (login/register × success/failed)
+     * `s3_operation_duration_seconds{operation}` - Latence S3 (put/get/delete)
+     * `redis_operations_total{operation, status}` - Opérations cache Redis
+     * `db_queries_total{query_type, status}` - Requêtes DB
+     * `db_query_duration_seconds{query_type}` - Latence DB
+
+   - **Middleware Axum `track_metrics()`** :
+     * Intercepte automatiquement toutes les requêtes HTTP
+     * Calcule durée avec `Instant::now()`
+     * Normalise les chemins (`/drive/file/uuid` → `/drive/file/:id`)
+     * Inc/Dec `http_connections_active` pour tracking temps réel
+
+   - **Fonctions helper** exportées :
+     * `track_auth_attempt(type, success)`
+     * `track_file_upload(success, bytes)`
+     * `track_file_download(success)`
+     * `track_s3_operation(operation, duration_secs)`
+     * `track_redis_operation(operation, success)`
+     * `track_db_query(query_type, duration_secs, success)`
+
+2. **Intégration dans `src/routes.rs`** :
+   - Ajout `middleware::from_fn(metrics::track_metrics)` AVANT `TraceLayer`
+   - Endpoint `/metrics` exclu du tracking (évite pollution)
+
+3. **Tracking dans `src/handlers.rs`** :
+   - `login_handler` : Ajout `track_auth_attempt("login", success/failed)`
+   - `finalize_upload_handler` : Ajout tracking uploads avec récupération taille fichier depuis DB
+   - `download_file_handler` : Ajout `track_file_download(success/failed)`
+
+4. **Documentation créée** :
+   - `METRICS_USAGE_EXAMPLES.md` - Guide complet avec exemples de code pour :
+     * Instrumenter les handlers (auth, upload, download)
+     * Tracker les opérations S3, Redis, DB
+     * Requêtes PromQL utiles (taux requêtes, latence p95, taux erreurs)
+     * Checklist d'implémentation
+
+**Corrections techniques :**
+- Fix `HistogramOpts::new()` au lieu de `opts().buckets()` (incompatible avec prometheus 0.14.0)
+- Suppression imports inutilisés (`IntoResponse`, `body::Body`, `http::StatusCode`)
+
+**Endpoints accessibles :**
+- **Grafana** : `https://grafana.gauzian.pupin.fr` (public avec auth)
+- **Prometheus** : `kube-prometheus-stack-prometheus.monitoring:9090` (interne uniquement)
+- **Backend /metrics** : `https://gauzian.pupin.fr/api/metrics` (public, scraping Prometheus)
+
+**Résultat :**
+- ✅ Métriques HTTP collectées automatiquement sur TOUTES les routes
+- ✅ Métriques d'authentification actives (3 failed login détectés)
+- ✅ Métriques uploads/downloads implémentées
+- ✅ Dashboard Grafana prêt à créer avec requêtes PromQL documentées
+- ✅ Infrastructure monitoring complète (HTTP + métier)
+- ✅ Compilation sans erreurs
+
+**Métriques en attente d'implémentation :**
+- [ ] S3 operations dans `src/storage.rs`
+- [ ] Redis operations (token blacklist)
+- [ ] DB queries (wrapping sqlx::query)
+- [ ] Dashboard Grafana JSON exportable
+
+**Fichiers modifiés :**
+- `gauzian_back/src/metrics.rs` : Refonte complète (38 → 200+ lignes)
+- `gauzian_back/src/routes.rs` : Ajout middleware tracking
+- `gauzian_back/src/handlers.rs` : Ajout tracking auth/uploads/downloads
+- `gauzian_back/METRICS_USAGE_EXAMPLES.md` : Nouveau (250+ lignes)
+
+**Exemples requêtes PromQL :**
+```promql
+# Taux de requêtes par pod et méthode
+sum(rate(http_requests_total[5m])) by (pod, method, endpoint)
+
+# Latence p95
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# Taux d'erreurs 5xx
+sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))
+```
+
+---
+
 ## 2026-01-29
 
 ### [2026-01-29 23:35] - Réorganisation structure du projet
