@@ -116,6 +116,9 @@
   border-right: 1px solid #e0e0e0;
   border-bottom: 2px solid #e0e0e0;
   background-color: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .agenda-page--center-center__header {
@@ -125,6 +128,9 @@
   grid-template-columns: repeat(var(--grid-columns, 7), 1fr);
   min-height: 80px;
   background-color: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .agenda-page--center-center__header--day {
