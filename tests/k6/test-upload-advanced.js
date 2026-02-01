@@ -171,10 +171,10 @@ function uploadMultipleChunksParallel(token, fileId, numChunks = 5) {
 function finalizeUpload(token, fileId) {
     const payload = JSON.stringify({
         file_id: fileId,
-        etat: 'fully_uploaded',
+        etat: 'completed',  // 'completed' ou 'aborted' (backend validation)
     });
 
-    const res = http.post(`${BASE_URL}/drive/finalize_upload/${fileId}/fully_uploaded`, payload, {
+    const res = http.post(`${BASE_URL}/drive/finalize_upload/${fileId}/completed`, payload, {
         headers: getAuthHeaders(token),
     });
 
