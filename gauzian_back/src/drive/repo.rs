@@ -1,13 +1,14 @@
-use axum::{
-    Json,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
-use base64::Engine; // Add this import for .encode()
-use serde_json::json;
+// Repository - Accès aux données du drive
+// Queries SQL pour files, folders, file_access, folder_access
+
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
+// use serde::{Serialize, Deserialize};
+use serde_json::json;
+use base64::Engine;
 
+// ========== Helper Functions ==========
+    
 fn bytes_to_text_or_b64(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
         Ok(s) if !s.trim().is_empty() => s.to_string(),
@@ -15,24 +16,35 @@ fn bytes_to_text_or_b64(bytes: &[u8]) -> String {
     }
 }
 
-pub struct AuthError(pub StatusCode, pub String);
+// ========== Queries ==========
 
-impl IntoResponse for AuthError {
-    fn into_response(self) -> Response {
-        (self.0, Json(serde_json::json!({"error": self.1}))).into_response()
-    }
+/// Vérifier l'existence d'un dossier et l'accès de l'utilisateur
+pub async fn user_has_folder_access(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(has_access)
 }
 
+/// Récupérer les informations du drive (espace utilisé, nombre de fichiers et dossiers)
 pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<(i64, i64, i64), sqlx::Error> {
     let (used_space, file_count, folder_count) = sqlx::query_as::<_, (i64, i64, i64)>(
         "
-        select 
+        select
             COALESCE(SUM(f.size),0)::BIGINT as used_space,
             COUNT(f.id)::BIGINT as file_count,
             COUNT(fa.id)::BIGINT as folder_count
-        from users u 
+        from users u
         left join folder_access fa on fa.user_id = u.id
-        left join file_access fa2 on fa2.user_id = u.id 
+        left join file_access fa2 on fa2.user_id = u.id
         left join files f on f.id = fa2.file_id
         where u.id = $1 and fa2.access_level = 'owner' and fa.access_level = 'owner'
         ",
@@ -43,6 +55,7 @@ pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<(i64, i64, i
     Ok((used_space, file_count, folder_count))
 }
 
+/// Récupérer la liste des fichiers et dossiers dans un dossier parent
 pub async fn get_files_and_folders_list(
     pool: &PgPool,
     user_id: Uuid,
@@ -77,7 +90,7 @@ pub async fn get_files_and_folders_list(
 
     let folders: Vec<FolderRow> = sqlx::query_as::<_, FolderRow>(
         r#"
-        select 
+        select
             f.id as folder_id,
             f.encrypted_metadata,
             fa.encrypted_folder_key,
@@ -107,7 +120,7 @@ pub async fn get_files_and_folders_list(
 
     let files: Vec<FileRow> = sqlx::query_as::<_, FileRow>(
         r#"
-        select 
+        select
             fa2.folder_id,
             fa2.file_id as file_id,
             f.encrypted_metadata,
@@ -165,22 +178,21 @@ pub async fn get_files_and_folders_list(
     }))
 }
 
+/// Récupérer seulement les dossiers d'un dossier parent
 pub async fn get_folder_contents(
     pool: &PgPool,
     user_id: Uuid,
     folder_id: Option<Uuid>,
 ) -> Result<serde_json::Value, sqlx::Error> {
     let contents = get_files_and_folders_list(pool, user_id, folder_id).await?;
-    // only return the "folders" field
-
     let folders = contents
         .get("folders")
         .cloned()
         .unwrap_or_else(|| serde_json::json!([]));
-
     Ok(folders)
 }
 
+/// Initialiser un fichier dans la base de données
 pub async fn initialize_file_in_db(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -193,7 +205,6 @@ pub async fn initialize_file_in_db(
     let mut tx = db_pool.begin().await?;
 
     if let Some(folder_id) = folder_id {
-        // Ensure the folder exists AND the user has access to it.
         let has_access = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
         )
@@ -238,18 +249,6 @@ pub async fn initialize_file_in_db(
     .await?;
 
     tx.commit().await?;
-
-    // // ajouter dans le S3 avec upload_line
-    // let data = vec![]; // données vides pour l'instant
-    // let storage_client = crate::storage::StorageClient::new(
-    //     std::env::var("S3_BUCKET").unwrap_or_else(|_| "gauzian".to_string())
-    // ).await
-    // .map_err(|e| {
-    //     sqlx::Error::Protocol(format!("Failed to initialize StorageClient: {}", e).into())
-    // })?;
-    // storage_client.upload_line(&data, file_id.to_string()).await
-    //     .map_err(|e| sqlx::Error::Protocol(format!("Failed to upload to storage: {}", e).into()))?;
-
     Ok(rec)
 }
 
@@ -278,6 +277,7 @@ pub async fn save_chunk_metadata(
     Ok(id)
 }
 
+/// Créer un dossier dans la base de données
 pub async fn create_folder_in_db(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -321,75 +321,67 @@ pub async fn create_folder_in_db(
 struct FolderPathRow {
     path_index: i32,
     id: Uuid,
-    encrypted_metadata: Vec<u8>,           // Type BYTEA en base
-    encrypted_folder_key: Option<Vec<u8>>, // Type BYTEA, peut être null
+    encrypted_metadata: Vec<u8>,
+    encrypted_folder_key: Option<Vec<u8>>,
 }
 
+/// Récupérer le chemin complet d'un dossier
 pub async fn get_full_path(
     db_pool: &PgPool,
     user_id: Uuid,
-    start_folder_id: Option<Uuid>, // Renommé pour la clarté
+    start_folder_id: Option<Uuid>,
 ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
-    // Si pas d'ID de départ, on renvoie une liste vide tout de suite
     let Some(folder_id) = start_folder_id else {
         return Ok(Vec::new());
     };
 
-    // 2. On exécute la requête UNE SEULE FOIS avec fetch_all
     let rows = sqlx::query_as::<_, FolderPathRow>(
         "
         WITH RECURSIVE breadcrumb AS (
-            -- 1. ANCRAGE
-            SELECT 
-                f.id, 
-                f.parent_folder_id, 
+            SELECT
+                f.id,
+                f.parent_folder_id,
                 f.encrypted_metadata,
                 0 AS path_index
-            FROM 
+            FROM
                 folders f
-            WHERE 
+            WHERE
                 f.id = $1
 
             UNION ALL
 
-            -- 2. RÉCURSION
-            SELECT 
-                parent.id, 
-                parent.parent_folder_id, 
+            SELECT
+                parent.id,
+                parent.parent_folder_id,
                 parent.encrypted_metadata,
                 child.path_index + 1
-            FROM 
+            FROM
                 folders parent
-            INNER JOIN 
+            INNER JOIN
                 breadcrumb child ON parent.id = child.parent_folder_id
         )
-        -- 3. SÉLECTION FINALE
-        SELECT 
+        SELECT
             b.path_index,
             b.id,
             b.encrypted_metadata,
             fa.encrypted_folder_key
-        FROM 
+        FROM
             breadcrumb b
-        LEFT JOIN 
+        LEFT JOIN
             folder_access fa ON b.id = fa.folder_id AND fa.user_id = $2
-        ORDER BY 
-            b.path_index DESC; -- DESC pour avoir Racine -> ... -> Enfant direct
+        ORDER BY
+            b.path_index DESC;
         ",
     )
     .bind(folder_id)
     .bind(user_id)
-    .fetch_all(db_pool) // <--- C'est ici que la magie opère : on récupère tout le tableau
+    .fetch_all(db_pool)
     .await?;
 
-    // 3. On transforme les résultats en JSON
     let path: Vec<serde_json::Value> = rows
         .into_iter()
         .map(|row| {
-            // J'utilise ta fonction existante (supposée) pour convertir les bytes
             let metadata_str = bytes_to_text_or_b64(&row.encrypted_metadata);
-
-            // Gestion de la clé optionnelle
             let key_str = match row.encrypted_folder_key {
                 Some(k) => Some(bytes_to_text_or_b64(&k)),
                 None => None,
@@ -407,6 +399,7 @@ pub async fn get_full_path(
     Ok(path)
 }
 
+/// Annuler un upload de fichier (supprimer le fichier et ses chunks)
 pub async fn abort_file_upload(
     db_pool: &PgPool,
     storage_client: &crate::storage::StorageClient,
@@ -415,7 +408,6 @@ pub async fn abort_file_upload(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Lock all access rows for this file to prevent races (share/unshare/delete).
     let access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
         "SELECT user_id FROM file_access WHERE file_id = $1 FOR UPDATE",
     )
@@ -423,14 +415,12 @@ pub async fn abort_file_upload(
     .fetch_all(&mut *tx)
     .await?;
 
-    // Must have at least the caller's access.
     if !access_users.iter().any(|u| *u == user_id) {
         return Err(sqlx::Error::RowNotFound);
     }
 
     let other_users_still_have_access = access_users.iter().any(|u| *u != user_id);
     if other_users_still_have_access {
-        // Abort for this user only: remove their access, keep file for others.
         sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
             .bind(file_id)
             .bind(user_id)
@@ -447,14 +437,12 @@ pub async fn abort_file_upload(
             .fetch_all(&mut *tx)
             .await?;
 
-    // Supprimer les entrées dans minio
     for s3_key in s3_keys.iter() {
         storage_client.delete_line(s3_key).await.map_err(|e| {
             sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
         })?;
     }
 
-    // Delete DB rows (order matters because of FK constraints)
     sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
         .bind(file_id)
         .execute(&mut *tx)
@@ -474,7 +462,7 @@ pub async fn abort_file_upload(
     Ok(())
 }
 
-
+/// Supprimer un fichier (soft delete pour owner, hard delete pour non-owner)
 pub async fn delete_file(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -482,7 +470,6 @@ pub async fn delete_file(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Vérifier le niveau d'accès de l'utilisateur
     let user_access_level: Option<String> = sqlx::query_scalar(
         "SELECT access_level FROM file_access WHERE file_id = $1 AND user_id = $2 FOR UPDATE",
     )
@@ -499,9 +486,6 @@ pub async fn delete_file(
     let is_owner = access_level == "owner";
 
     if is_owner {
-        // OWNER : Soft delete pour lui (corbeille) + suppression définitive des accès des autres
-
-        // 1. Soft delete pour le owner (va dans sa corbeille)
         sqlx::query(
             "UPDATE file_access
              SET is_deleted = TRUE, updated_at = NOW()
@@ -512,7 +496,6 @@ pub async fn delete_file(
         .execute(&mut *tx)
         .await?;
 
-        // 2. Suppression définitive des accès des autres utilisateurs (pas de corbeille pour eux)
         sqlx::query(
             "DELETE FROM file_access
              WHERE file_id = $1 AND user_id != $2",
@@ -522,7 +505,6 @@ pub async fn delete_file(
         .execute(&mut *tx)
         .await?;
 
-        // 3. Marquer le fichier comme supprimé
         sqlx::query(
             "UPDATE files
              SET is_deleted = TRUE, updated_at = NOW()
@@ -531,9 +513,7 @@ pub async fn delete_file(
         .bind(file_id)
         .execute(&mut *tx)
         .await?;
-
     } else {
-        // NON-OWNER : Suppression définitive de son propre accès uniquement (pas de corbeille)
         sqlx::query(
             "DELETE FROM file_access
              WHERE file_id = $1 AND user_id = $2",
@@ -548,76 +528,7 @@ pub async fn delete_file(
     Ok(())
 }
 
-
-
-// pub async fn delete_file(
-//     db_pool: &PgPool,
-//     storage_client: &crate::storage::StorageClient,
-//     user_id: Uuid,
-//     file_id: Uuid,
-// ) -> Result<(), sqlx::Error> {
-//     let mut tx = db_pool.begin().await?;
-
-//     // Lock all access rows for this file to prevent races (share/unshare/delete).
-//     let access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
-//         "SELECT user_id FROM file_access WHERE file_id = $1 FOR UPDATE",
-//     )
-//     .bind(file_id)
-//     .fetch_all(&mut *tx)
-//     .await?;
-
-//     // Must have at least the caller's access.
-//     if !access_users.iter().any(|u| *u == user_id) {
-//         return Err(sqlx::Error::RowNotFound);
-//     }
-
-//     let other_users_still_have_access = access_users.iter().any(|u| *u != user_id);
-//     if other_users_still_have_access {
-//         // The file is shared: remove only the caller's access.
-//         sqlx::query("DELETE FROM file_access WHERE file_id = $1 AND user_id = $2")
-//             .bind(file_id)
-//             .bind(user_id)
-//             .execute(&mut *tx)
-//             .await?;
-
-//         tx.commit().await?;
-//         return Ok(());
-//     }
-
-//     // Only this user has access: delete everything.
-//     let s3_keys: Vec<String> =
-//         sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = $1")
-//             .bind(file_id)
-//             .fetch_all(&mut *tx)
-//             .await?;
-
-//     // Supprimer les entrées dans minio
-//     for s3_key in s3_keys.iter() {
-//         storage_client.delete_line(s3_key).await.map_err(|e| {
-//             sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
-//         })?;
-//     }
-
-//     // Delete DB rows (order matters because of FK constraints)
-//     sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
-//         .bind(file_id)
-//         .execute(&mut *tx)
-//         .await?;
-
-//     sqlx::query("DELETE FROM file_access WHERE file_id = $1")
-//         .bind(file_id)
-//         .execute(&mut *tx)
-//         .await?;
-
-//     sqlx::query("DELETE FROM files WHERE id = $1")
-//         .bind(file_id)
-//         .execute(&mut *tx)
-//         .await?;
-
-//     tx.commit().await?;
-//     Ok(())
-// }
-
+/// Supprimer un dossier et son contenu (soft delete pour owner, hard delete pour non-owner)
 pub async fn delete_folder(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -625,7 +536,6 @@ pub async fn delete_folder(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Vérifier le niveau d'accès de l'utilisateur sur le dossier racine
     let user_access_level: Option<String> = sqlx::query_scalar(
         "SELECT access_level FROM folder_access WHERE folder_id = $1 AND user_id = $2 FOR UPDATE",
     )
@@ -642,9 +552,6 @@ pub async fn delete_folder(
     let is_owner = access_level == "owner";
 
     if is_owner {
-        // OWNER : Soft delete pour lui (corbeille) + suppression définitive des accès des autres
-
-        // 1. Soft delete pour le owner sur le dossier racine et tous les sous-dossiers
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -664,7 +571,6 @@ pub async fn delete_folder(
         .execute(&mut *tx)
         .await?;
 
-        // 2. Soft delete pour le owner sur les fichiers du subtree
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -684,7 +590,6 @@ pub async fn delete_folder(
         .execute(&mut *tx)
         .await?;
 
-        // 3. Suppression définitive des accès des autres utilisateurs sur les dossiers (pas de corbeille pour eux)
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -703,7 +608,6 @@ pub async fn delete_folder(
         .execute(&mut *tx)
         .await?;
 
-        // 4. Suppression définitive des accès des autres utilisateurs sur les fichiers (pas de corbeille)
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -722,7 +626,6 @@ pub async fn delete_folder(
         .execute(&mut *tx)
         .await?;
 
-        // 5. Marquer tous les fichiers comme supprimés
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -742,11 +645,7 @@ pub async fn delete_folder(
         .bind(folder_id)
         .execute(&mut *tx)
         .await?;
-
     } else {
-        // NON-OWNER : Suppression définitive de ses propres accès uniquement (pas de corbeille)
-
-        // Supprimer ses accès sur les dossiers du subtree
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -765,7 +664,6 @@ pub async fn delete_folder(
         .execute(&mut *tx)
         .await?;
 
-        // Supprimer ses accès sur les fichiers du subtree
         sqlx::query(
             "
             WITH RECURSIVE folder_tree AS (
@@ -789,195 +687,13 @@ pub async fn delete_folder(
     Ok(())
 }
 
-
-// pub async fn delete_folder(
-//     db_pool: &PgPool,
-//     storage_client: &crate::storage::StorageClient,
-//     user_id: Uuid,
-//     folder_id: Uuid,
-// ) -> Result<(), sqlx::Error> {
-//     let mut tx = db_pool.begin().await?;
-
-//     // Build the subtree of folders starting from the target.
-//     let folder_rows: Vec<(Uuid, i32)> = sqlx::query_as(
-//         "
-//         WITH RECURSIVE folder_tree AS (
-//             SELECT id, parent_folder_id, 0 AS depth
-//             FROM folders
-//             WHERE id = $1
-
-//             UNION ALL
-
-//             SELECT f.id, f.parent_folder_id, ft.depth + 1
-//             FROM folders f
-//             JOIN folder_tree ft ON f.parent_folder_id = ft.id
-//         )
-//         SELECT id, depth FROM folder_tree
-//         ",
-//     )
-//     .bind(folder_id)
-//     .fetch_all(&mut *tx)
-//     .await?;
-
-//     if folder_rows.is_empty() {
-//         return Err(sqlx::Error::RowNotFound);
-//     }
-
-//     let folder_ids: Vec<Uuid> = folder_rows.iter().map(|(id, _)| *id).collect();
-
-//     // Lock all access rows for the root folder to prevent concurrent share/delete.
-//     let root_access_users: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
-//         "SELECT user_id FROM folder_access WHERE folder_id = $1 FOR UPDATE",
-//     )
-//     .bind(folder_id)
-//     .fetch_all(&mut *tx)
-//     .await?;
-
-//     // Must have at least the caller's access.
-//     if !root_access_users.iter().any(|u| *u == user_id) {
-//         return Err(sqlx::Error::RowNotFound);
-//     }
-
-//     // Lock file access rows under this subtree to avoid races with concurrent share/delete.
-//     sqlx::query("SELECT 1 FROM file_access WHERE folder_id = ANY($1) FOR UPDATE")
-//         .bind(&folder_ids)
-//         .execute(&mut *tx)
-//         .await?;
-
-//     // Determine if any other user still has access to any folder or file in the subtree.
-//     let others_exist = sqlx::query_scalar::<_, bool>(
-//         "
-//         SELECT EXISTS(
-//             SELECT 1 FROM folder_access WHERE folder_id = ANY($1) AND user_id <> $2
-//             UNION
-//             SELECT 1 FROM file_access WHERE folder_id = ANY($1) AND user_id <> $2
-//         )
-//         ",
-//     )
-//     .bind(&folder_ids)
-//     .bind(user_id)
-//     .fetch_one(&mut *tx)
-//     .await?;
-
-//     // Files in the subtree that the current user can see.
-//     let file_ids_for_user: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
-//         "SELECT DISTINCT file_id FROM file_access WHERE folder_id = ANY($1) AND user_id = $2",
-//     )
-//     .bind(&folder_ids)
-//     .bind(user_id)
-//     .fetch_all(&mut *tx)
-//     .await?;
-
-//     // Files where this user is the only accessor.
-//     let files_owned_only_by_user: Vec<Uuid> = if file_ids_for_user.is_empty() {
-//         Vec::new()
-//     } else {
-//         sqlx::query_scalar::<_, Uuid>(
-//             "
-//             SELECT file_id
-//             FROM file_access
-//             WHERE file_id = ANY($1)
-//             GROUP BY file_id
-//             HAVING COUNT(*) FILTER (WHERE user_id <> $2) = 0
-//             ",
-//         )
-//         .bind(&file_ids_for_user)
-//         .bind(user_id)
-//         .fetch_all(&mut *tx)
-//         .await?
-//     };
-
-//     // Files shared with someone else (the user only loses their access).
-//     let files_shared: Vec<Uuid> = file_ids_for_user
-//         .iter()
-//         .filter(|id| !files_owned_only_by_user.contains(id))
-//         .copied()
-//         .collect();
-
-//     // Delete files that only this user could access.
-//     if !files_owned_only_by_user.is_empty() {
-//         let s3_keys: Vec<String> =
-//             sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = ANY($1)")
-//                 .bind(&files_owned_only_by_user)
-//                 .fetch_all(&mut *tx)
-//                 .await?;
-
-//         for s3_key in s3_keys.iter() {
-//             storage_client.delete_line(s3_key).await.map_err(|e| {
-//                 sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
-//             })?;
-//         }
-
-//         sqlx::query("DELETE FROM s3_keys WHERE file_id = ANY($1)")
-//             .bind(&files_owned_only_by_user)
-//             .execute(&mut *tx)
-//             .await?;
-
-//         sqlx::query("DELETE FROM file_access WHERE file_id = ANY($1)")
-//             .bind(&files_owned_only_by_user)
-//             .execute(&mut *tx)
-//             .await?;
-
-//         sqlx::query("DELETE FROM files WHERE id = ANY($1)")
-//             .bind(&files_owned_only_by_user)
-//             .execute(&mut *tx)
-//             .await?;
-//     }
-
-//     if others_exist {
-//         if !files_shared.is_empty() {
-//             sqlx::query("DELETE FROM file_access WHERE user_id = $1 AND file_id = ANY($2)")
-//                 .bind(user_id)
-//                 .bind(&files_shared)
-//                 .execute(&mut *tx)
-//                 .await?;
-//         }
-
-//         sqlx::query("DELETE FROM folder_access WHERE user_id = $1 AND folder_id = ANY($2)")
-//             .bind(user_id)
-//             .bind(&folder_ids)
-//             .execute(&mut *tx)
-//             .await?;
-
-//         tx.commit().await?;
-//         return Ok(());
-//     }
-
-//     // No other users anywhere in the subtree: remove everything.
-//     if !files_shared.is_empty() {
-//         sqlx::query("DELETE FROM file_access WHERE user_id = $1 AND file_id = ANY($2)")
-//             .bind(user_id)
-//             .bind(&files_shared)
-//             .execute(&mut *tx)
-//             .await?;
-//     }
-
-//     sqlx::query("DELETE FROM folder_access WHERE folder_id = ANY($1)")
-//         .bind(&folder_ids)
-//         .execute(&mut *tx)
-//         .await?;
-
-//     // Delete folders bottom-up to satisfy FK constraints.
-//     let mut folders_desc = folder_rows.clone();
-//     folders_desc.sort_by(|a, b| b.1.cmp(&a.1));
-//     for (folder_id, _) in folders_desc {
-//         sqlx::query("DELETE FROM folders WHERE id = $1")
-//             .bind(folder_id)
-//             .execute(&mut *tx)
-//             .await?;
-//     }
-
-//     tx.commit().await?;
-//     Ok(())
-// }
-
+/// Renommer un fichier (modifier encrypted_metadata)
 pub async fn rename_file(
     db_pool: &PgPool,
     user_id: Uuid,
     file_id: Uuid,
     new_encrypted_metadata: &str,
 ) -> Result<(), sqlx::Error> {
-    // Verify user has access to the file
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
     )
@@ -990,7 +706,6 @@ pub async fn rename_file(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Update the encrypted metadata
     sqlx::query("UPDATE files SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2")
         .bind(new_encrypted_metadata.as_bytes())
         .bind(file_id)
@@ -1000,13 +715,13 @@ pub async fn rename_file(
     Ok(())
 }
 
+/// Renommer un dossier (modifier encrypted_metadata)
 pub async fn rename_folder(
     db_pool: &PgPool,
     user_id: Uuid,
     folder_id: Uuid,
     new_encrypted_metadata: &str,
 ) -> Result<(), sqlx::Error> {
-    // Verify user has access to the folder
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
     )
@@ -1019,7 +734,6 @@ pub async fn rename_folder(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Update the encrypted metadata
     sqlx::query("UPDATE folders SET encrypted_metadata = $1, updated_at = NOW() WHERE id = $2")
         .bind(new_encrypted_metadata.as_bytes())
         .bind(folder_id)
@@ -1029,13 +743,13 @@ pub async fn rename_folder(
     Ok(())
 }
 
+/// Déplacer un fichier vers un autre dossier
 pub async fn move_file(
     db_pool: &PgPool,
     user_id: Uuid,
     file_id: Uuid,
     new_folder_id: Option<Uuid>,
 ) -> Result<(), sqlx::Error> {
-    // Verify user has access to the file
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
     )
@@ -1048,7 +762,6 @@ pub async fn move_file(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // If new_folder_id is Some, verify user has access to the target folder
     if let Some(folder_id) = new_folder_id {
         let has_folder_access = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
@@ -1063,7 +776,6 @@ pub async fn move_file(
         }
     }
 
-    // Update the folder_id in file_access
     sqlx::query("UPDATE file_access SET folder_id = $1 WHERE file_id = $2 AND user_id = $3")
         .bind(new_folder_id)
         .bind(file_id)
@@ -1074,13 +786,13 @@ pub async fn move_file(
     Ok(())
 }
 
+/// Déplacer un dossier vers un autre parent
 pub async fn move_folder(
     db_pool: &PgPool,
     user_id: Uuid,
     folder_id: Uuid,
     new_parent_folder_id: Option<Uuid>,
 ) -> Result<(), sqlx::Error> {
-    // Verify user has access to the folder
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND (access_level = 'owner' OR access_level = 'editor'))",
     )
@@ -1093,7 +805,6 @@ pub async fn move_folder(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // If new_parent_folder_id is Some, verify user has access to the target parent folder
     if let Some(parent_folder_id) = new_parent_folder_id {
         let has_parent_access = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
@@ -1107,8 +818,6 @@ pub async fn move_folder(
             return Err(sqlx::Error::RowNotFound);
         }
 
-        // Détection de cycle : vérifier que new_parent n'est pas un descendant de folder_id
-        // (on ne peut pas déplacer un dossier dans un de ses sous-dossiers)
         let would_create_cycle = sqlx::query_scalar::<_, bool>(
             r#"
             WITH RECURSIVE descendants AS (
@@ -1132,7 +841,6 @@ pub async fn move_folder(
         }
     }
 
-    // Update the parent_folder_id in folders
     sqlx::query("UPDATE folders SET parent_folder_id = $1, is_root = $2 WHERE id = $3")
         .bind(new_parent_folder_id)
         .bind(new_parent_folder_id.is_none())
@@ -1143,7 +851,7 @@ pub async fn move_folder(
     Ok(())
 }
 
-// Récupérer les infos d'un fichier avec ses chunks
+/// Récupérer les infos d'un fichier avec ses chunks
 pub async fn get_file_info(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -1167,10 +875,9 @@ pub async fn get_file_info(
         chunk_id: Uuid,
     }
 
-    // Vérifier que l'utilisateur a accès au fichier
     let file_info = sqlx::query_as::<_, FileInfo>(
         r#"
-        SELECT 
+        SELECT
             f.id as file_id,
             f.encrypted_metadata,
             f.size,
@@ -1188,7 +895,6 @@ pub async fn get_file_info(
     .fetch_one(db_pool)
     .await?;
 
-    // Récupérer tous les chunks ordonnés par index
     let chunks = sqlx::query_as::<_, ChunkInfo>(
         r#"
         SELECT id as chunk_id, s3_key, index
@@ -1218,31 +924,27 @@ pub async fn get_file_info(
     }))
 }
 
-// Récupérer tous les IDs et clés chiffrées d'un dossier récursivement (pour le partage E2EE)
+/// Récupérer tous les IDs et clés chiffrées d'un dossier récursivement
 pub async fn get_folder_contents_recursive(
     pool: &PgPool,
     user_id: Uuid,
     folder_id: Option<Uuid>,
 ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
-    // Structure minimale pour les dossiers (seulement ID + clé)
     #[derive(FromRow)]
     struct FolderItem {
         folder_id: Uuid,
         encrypted_folder_key: Vec<u8>,
     }
 
-    // Structure minimale pour les fichiers (seulement ID + clé)
     #[derive(FromRow)]
     struct FileItem {
         file_id: Uuid,
         encrypted_file_key: Vec<u8>,
     }
 
-    // 1. Récupérer tous les sous-dossiers récursivement (seulement ID + clé)
     let folders: Vec<FolderItem> = sqlx::query_as::<_, FolderItem>(
         r#"
 WITH RECURSIVE folder_tree AS (
-    -- Cas de base: enfants directs du dossier de départ
     SELECT f.id as folder_id
     FROM folders f
     JOIN folder_access fa ON fa.folder_id = f.id
@@ -1255,7 +957,6 @@ WITH RECURSIVE folder_tree AS (
 
     UNION ALL
 
-    -- Cas récursif: tous les descendants
     SELECT f.id as folder_id
     FROM folders f
     JOIN folder_tree ft ON f.parent_folder_id = ft.folder_id
@@ -1274,11 +975,9 @@ JOIN folder_access fa ON fa.folder_id = ft.folder_id AND fa.user_id = $1
     .fetch_all(pool)
     .await?;
 
-    // 2. Récupérer tous les fichiers dans le dossier racine et ses descendants (seulement ID + clé)
     let files: Vec<FileItem> = sqlx::query_as::<_, FileItem>(
         r#"
 WITH RECURSIVE folder_tree AS (
-    -- Dossier de départ
     SELECT f.id as folder_id
     FROM folders f
     WHERE ($1::uuid IS NULL AND f.parent_folder_id IS NULL)
@@ -1286,7 +985,6 @@ WITH RECURSIVE folder_tree AS (
 
     UNION ALL
 
-    -- Descendants
     SELECT f.id as folder_id
     FROM folders f
     JOIN folder_tree ft ON f.parent_folder_id = ft.folder_id
@@ -1308,7 +1006,6 @@ WHERE fa.is_deleted = FALSE
 
     let mut results = Vec::new();
 
-    // Ajouter tous les dossiers (juste ID + clé)
     for folder in folders {
         results.push(json!({
             "type": "folder",
@@ -1317,7 +1014,6 @@ WHERE fa.is_deleted = FALSE
         }));
     }
 
-    // Ajouter tous les fichiers (juste ID + clé)
     for file in files {
         results.push(json!({
             "type": "file",
@@ -1329,13 +1025,12 @@ WHERE fa.is_deleted = FALSE
     Ok(results)
 }
 
-
+/// Finaliser un upload de fichier
 pub async fn finalize_file_upload(
     db_pool: &PgPool,
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    // Verify user has access to the file
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')",
     )
@@ -1348,7 +1043,6 @@ pub async fn finalize_file_upload(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Update the file to mark it as finalized (if there's such a field)
     sqlx::query("UPDATE files SET updated_at = NOW(), is_fully_uploaded = TRUE WHERE id = $1")
         .bind(file_id)
         .execute(db_pool)
@@ -1357,6 +1051,7 @@ pub async fn finalize_file_upload(
     Ok(())
 }
 
+/// Récupérer les infos de la corbeille
 pub async fn get_corbeille_info(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -1367,7 +1062,6 @@ pub async fn get_corbeille_info(
         total_deleted_size: Option<i64>,
     }
 
-    // Count deleted files and total size
     let stats = sqlx::query_as::<_, CorbeilleStats>(
         "
         SELECT COUNT(*) as deleted_files_count, COALESCE(SUM(f.size), 0)::BIGINT as total_deleted_size
@@ -1380,7 +1074,6 @@ pub async fn get_corbeille_info(
     .fetch_one(db_pool)
     .await?;
 
-    // Count deleted folders
     let deleted_folders_count: i64 = sqlx::query_scalar::<_, i64>(
         "
         SELECT COUNT(*) FROM folder_access
@@ -1398,8 +1091,7 @@ pub async fn get_corbeille_info(
     }))
 }
 
-
-// files and folders in corbeille
+/// Récupérer le contenu de la corbeille
 pub async fn get_corbeille_contents(
     pool: &PgPool,
     user_id: Uuid,
@@ -1420,7 +1112,7 @@ pub async fn get_corbeille_contents(
 
     let files: Vec<DeletedFileRow> = sqlx::query_as::<_, DeletedFileRow>(
         r#"
-        select 
+        select
             fa2.folder_id,
             fa2.file_id as file_id,
             f.encrypted_metadata,
@@ -1459,6 +1151,7 @@ pub async fn get_corbeille_contents(
     }))
 }
 
+/// Restaurer un fichier de la corbeille
 pub async fn restore_file_from_corbeille(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -1466,7 +1159,6 @@ pub async fn restore_file_from_corbeille(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Verify user has deleted access to the file
     let has_deleted_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND is_deleted = TRUE)",
     )
@@ -1479,7 +1171,6 @@ pub async fn restore_file_from_corbeille(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Get the folder_id from file_access
     let folder_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT folder_id FROM file_access WHERE file_id = $1 AND user_id = $2",
     )
@@ -1488,23 +1179,21 @@ pub async fn restore_file_from_corbeille(
     .fetch_one(&mut *tx)
     .await?;
 
-    // If there's a folder_id, restore the entire folder hierarchy
     if let Some(fid) = folder_id {
-        // Get all parent folders from the target folder up to the root that are deleted
         let parent_folders: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
             "
             WITH RECURSIVE folder_path AS (
                 SELECT f.id, f.parent_folder_id
                 FROM folders f
                 WHERE f.id = $1
-                
+
                 UNION ALL
-                
+
                 SELECT f.id, f.parent_folder_id
                 FROM folders f
                 JOIN folder_path fp ON f.id = fp.parent_folder_id
             )
-            SELECT DISTINCT fp.id 
+            SELECT DISTINCT fp.id
             FROM folder_path fp
             JOIN folder_access fa ON fa.folder_id = fp.id
             WHERE fa.user_id = $2 AND fa.is_deleted = TRUE
@@ -1515,9 +1204,7 @@ pub async fn restore_file_from_corbeille(
         .fetch_all(&mut *tx)
         .await?;
 
-        // Restore all deleted parent folders
         for parent_id in parent_folders {
-            // Restore folder_access
             sqlx::query(
                 "
                 UPDATE folder_access
@@ -1529,12 +1216,9 @@ pub async fn restore_file_from_corbeille(
             .bind(user_id)
             .execute(&mut *tx)
             .await?;
-
-            // Note: No need to update folders table as is_deleted doesn't exist there
         }
     }
 
-    // Restore the file access
     sqlx::query(
         "
         UPDATE file_access
@@ -1547,7 +1231,6 @@ pub async fn restore_file_from_corbeille(
     .execute(&mut *tx)
     .await?;
 
-    // Update the file to mark it as not deleted
     sqlx::query(
         "
         UPDATE files
@@ -1563,6 +1246,7 @@ pub async fn restore_file_from_corbeille(
     Ok(())
 }
 
+/// Restaurer un dossier de la corbeille
 pub async fn restore_folder_from_corbeille(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -1570,7 +1254,6 @@ pub async fn restore_folder_from_corbeille(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Verify user has deleted access to the folder
     let has_deleted_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = TRUE)",
     )
@@ -1583,21 +1266,20 @@ pub async fn restore_folder_from_corbeille(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Get all parent folders up to the root that are deleted
     let parent_folders: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
         "
         WITH RECURSIVE folder_path AS (
             SELECT f.id, f.parent_folder_id
             FROM folders f
             WHERE f.id = $1
-            
+
             UNION ALL
-            
+
             SELECT f.id, f.parent_folder_id
             FROM folders f
             JOIN folder_path fp ON f.id = fp.parent_folder_id
         )
-        SELECT DISTINCT fp.id 
+        SELECT DISTINCT fp.id
         FROM folder_path fp
         JOIN folder_access fa ON fa.folder_id = fp.id
         WHERE fa.user_id = $2 AND fa.is_deleted = TRUE
@@ -1608,9 +1290,7 @@ pub async fn restore_folder_from_corbeille(
     .fetch_all(&mut *tx)
     .await?;
 
-    // Restore all deleted parent folders first
     for parent_id in parent_folders {
-        // Restore folder_access
         sqlx::query(
             "
             UPDATE folder_access
@@ -1622,12 +1302,8 @@ pub async fn restore_folder_from_corbeille(
         .bind(user_id)
         .execute(&mut *tx)
         .await?;
-
-        // Note: No need to update folders table as is_deleted doesn't exist there
     }
 
-    // Now restore the target folder and all its children
-    // Restore the folder access
     sqlx::query(
         "
         UPDATE folder_access
@@ -1640,9 +1316,6 @@ pub async fn restore_folder_from_corbeille(
     .execute(&mut *tx)
     .await?;
 
-    // Note: No need to update folders table as is_deleted doesn't exist there
-
-    // Recursively restore all child folders and their accesses
     sqlx::query(
         "
         WITH RECURSIVE folder_tree AS (
@@ -1665,7 +1338,6 @@ pub async fn restore_folder_from_corbeille(
     .execute(&mut *tx)
     .await?;
 
-    // Recursively restore all files in the folder and its subfolders
     sqlx::query(
         "
         WITH RECURSIVE folder_tree AS (
@@ -1692,6 +1364,7 @@ pub async fn restore_folder_from_corbeille(
     Ok(())
 }
 
+/// Vider la corbeille (suppression définitive)
 pub async fn empty_corbeille(
     db_pool: &PgPool,
     storage_client: &crate::storage::StorageClient,
@@ -1699,7 +1372,6 @@ pub async fn empty_corbeille(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Get all file_ids in the corbeille for this user
     let file_ids: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
         "
         SELECT file_id FROM file_access
@@ -1710,9 +1382,7 @@ pub async fn empty_corbeille(
     .fetch_all(&mut *tx)
     .await?;
 
-    // Delete files from storage and database
     for file_id in file_ids.iter() {
-        // Get S3 keys
         let s3_keys: Vec<String> = sqlx::query_scalar::<_, String>(
             "SELECT s3_key FROM s3_keys WHERE file_id = $1",
         )
@@ -1720,34 +1390,28 @@ pub async fn empty_corbeille(
         .fetch_all(&mut *tx)
         .await?;
 
-        // Here you would call your storage client to delete the files from storage.
-        // For example:
         for s3_key in s3_keys.iter() {
             storage_client.delete_line(s3_key).await.map_err(|e| {
                 sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
             })?;
         }
 
-        // Delete from s3_keys
         sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
             .bind(file_id)
             .execute(&mut *tx)
             .await?;
 
-        // Delete from file_access
         sqlx::query("DELETE FROM file_access WHERE file_id = $1")
             .bind(file_id)
             .execute(&mut *tx)
             .await?;
 
-        // Delete from files
         sqlx::query("DELETE FROM files WHERE id = $1")
             .bind(file_id)
             .execute(&mut *tx)
             .await?;
     }
 
-    // Delete folder_access entries marked as deleted for this user
     sqlx::query(
         "
         DELETE FROM folder_access
@@ -1762,157 +1426,16 @@ pub async fn empty_corbeille(
     Ok(())
 }
 
-pub async fn share_folder_with_contact(
-    db_pool: &PgPool,
-    user_id: Uuid,
-    folder_id: Uuid,
-    contact_user_id: Uuid,
-    encrypted_folder_key: &str,
-    access_level: &str,
-) -> Result<(), sqlx::Error> {
-    let mut tx = db_pool.begin().await?;
-    let access_level = match access_level {
-        "owner" => "owner",
-        "editor" => "editor",
-        "viewer" => "viewer",
-        _ => return Err(sqlx::Error::Protocol("Invalid access level".into())),
-    };
-
-    // verify that the contact_user_id exists
-    let contact_exists = sqlx::query_scalar::<_, bool>(
-        "
-        SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)
-        ",
-    )
-    .bind(contact_user_id)
-    .fetch_one(&mut *tx)
-    .await?;
-    if !contact_exists {
-        return Err(sqlx::Error::RowNotFound);
-    }
-
-    // ne pas permettre de se partager à soi-même
-    if contact_user_id == user_id {
-        return Err(sqlx::Error::Protocol("Cannot share folder with oneself".into()));
-    }
-
-    // Verify that the user has owner access to the folder
-    let has_owner_access = sqlx::query_scalar::<_, bool>(
-        "
-        SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')
-        ",
-    )
-    .bind(folder_id)
-    .bind(user_id)
-    .fetch_one(&mut *tx)
-    .await?;
-    if !has_owner_access {
-        return Err(sqlx::Error::RowNotFound);
-    }
-    // Insert or update the folder_access for the contact
-    sqlx::query(
-        "
-        INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
-        VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE)
-        ON CONFLICT (folder_id, user_id) DO UPDATE
-        SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
-            access_level = EXCLUDED.access_level,
-            updated_at = NOW(),
-            is_deleted = FALSE
-        ",
-    )
-    .bind(Uuid::new_v4())
-    .bind(folder_id)
-    .bind(contact_user_id)
-    .bind(encrypted_folder_key.as_bytes())
-    .bind(access_level)
-    .execute(&mut *tx)
-    .await?;
-
-    // Propagate permissions to all subfolders recursively
-    sqlx::query(
-        "
-        WITH RECURSIVE folder_tree AS (
-            -- Start with the shared folder's children
-            SELECT id
-            FROM folders
-            WHERE parent_folder_id = $1
-
-            UNION ALL
-
-            -- Recursively get all descendants
-            SELECT f.id
-            FROM folders f
-            JOIN folder_tree ft ON f.parent_folder_id = ft.id
-        )
-        INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
-        SELECT gen_random_uuid(), ft.id, $2, $3, $4, NOW(), NOW(), FALSE
-        FROM folder_tree ft
-        ON CONFLICT (folder_id, user_id) DO UPDATE
-        SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
-            access_level = EXCLUDED.access_level,
-            updated_at = NOW(),
-            is_deleted = FALSE
-        ",
-    )
-    .bind(folder_id)
-    .bind(contact_user_id)
-    .bind(encrypted_folder_key.as_bytes())
-    .bind(access_level)
-    .execute(&mut *tx)
-    .await?;
-
-    // Share all files in the folder and subfolders recursively
-    sqlx::query(
-        "
-        WITH RECURSIVE folder_tree AS (
-            -- Start with the shared folder
-            SELECT id
-            FROM folders
-            WHERE id = $1
-
-            UNION ALL
-
-            -- Recursively get all descendants
-            SELECT f.id
-            FROM folders f
-            JOIN folder_tree ft ON f.parent_folder_id = ft.id
-        )
-        INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
-        SELECT gen_random_uuid(), fa_owner.file_id, $2, fa_owner.folder_id, $3, $4, NOW(), NOW(), FALSE
-        FROM file_access fa_owner
-        JOIN folder_tree ft ON fa_owner.folder_id = ft.id
-        WHERE fa_owner.user_id = $5 AND fa_owner.access_level = 'owner'
-        ON CONFLICT (file_id, user_id) DO UPDATE
-        SET encrypted_file_key = EXCLUDED.encrypted_file_key,
-            access_level = EXCLUDED.access_level,
-            updated_at = NOW(),
-            is_deleted = FALSE
-        ",
-    )
-    .bind(folder_id)
-    .bind(contact_user_id)
-    .bind(encrypted_folder_key.as_bytes())
-    .bind(access_level)
-    .bind(user_id)
-    .execute(&mut *tx)
-    .await?;
-
-    tx.commit().await?;
-    Ok(())
-}
-
-/// Partage un dossier avec tous ses sous-dossiers et fichiers (avec clés rechiffrées par le frontend)
+/// Partager un dossier avec un contact (avec clés rechiffrées)
 pub async fn share_folder_batch(
     db_pool: &PgPool,
     user_id: Uuid,
     folder_id: Uuid,
     contact_user_id: Uuid,
     access_level: &str,
-    folder_keys: Vec<(Uuid, String)>,  // (folder_id, encrypted_folder_key)
-    file_keys: Vec<(Uuid, String)>,     // (file_id, encrypted_file_key)
+    folder_keys: Vec<(Uuid, String)>,
+    file_keys: Vec<(Uuid, String)>,
 ) -> Result<(), sqlx::Error> {
-    // Validate access_level
     let access_level = match access_level {
         "owner" => "owner",
         "editor" => "editor",
@@ -1920,14 +1443,12 @@ pub async fn share_folder_batch(
         _ => return Err(sqlx::Error::Protocol("Invalid access level".into())),
     };
 
-    // Cannot share with yourself
     if contact_user_id == user_id {
         return Err(sqlx::Error::Protocol("Cannot share folder with oneself".into()));
     }
 
     let mut tx = db_pool.begin().await?;
 
-    // Verify that the contact exists
     let contact_exists = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)"
     )
@@ -1939,7 +1460,6 @@ pub async fn share_folder_batch(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Verify that the user has owner access to the main folder
     let has_owner_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
@@ -1952,7 +1472,6 @@ pub async fn share_folder_batch(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Insert folder permissions (all folders including the main one)
     for (fid, encrypted_key) in folder_keys {
         sqlx::query(
             "
@@ -1974,9 +1493,7 @@ pub async fn share_folder_batch(
         .await?;
     }
 
-    // Insert file permissions
     for (file_id, encrypted_key) in file_keys {
-        // Retrieve the folder location from the owner's access row instead of a non-existent column on files
         let folder_id_for_file: Option<Uuid> = sqlx::query_scalar(
             "
             SELECT folder_id
@@ -2016,16 +1533,15 @@ pub async fn share_folder_batch(
     Ok(())
 }
 
-/// Partage un fichier avec un contact
-pub async fn share_file_with_contact(
+/// Partager un dossier avec un contact (version simple, sans propagation aux enfants)
+pub async fn share_folder_with_contact(
     db_pool: &PgPool,
     user_id: Uuid,
-    file_id: Uuid,
+    folder_id: Uuid,
     contact_user_id: Uuid,
-    encrypted_file_key: &str,
+    encrypted_folder_key: &str,
     access_level: &str,
 ) -> Result<(), sqlx::Error> {
-    // Validate access_level
     let access_level = match access_level {
         "owner" => "owner",
         "editor" => "editor",
@@ -2033,14 +1549,12 @@ pub async fn share_file_with_contact(
         _ => return Err(sqlx::Error::Protocol("Invalid access level".into())),
     };
 
-    // Cannot share with yourself
     if contact_user_id == user_id {
-        return Err(sqlx::Error::Protocol("Cannot share file with oneself".into()));
+        return Err(sqlx::Error::Protocol("Cannot share folder with oneself".into()));
     }
 
     let mut tx = db_pool.begin().await?;
 
-    // Verify that the contact exists
     let contact_exists = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)"
     )
@@ -2052,7 +1566,74 @@ pub async fn share_file_with_contact(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Verify that the user has owner access to the file
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !has_access {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    sqlx::query(
+        "
+        INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE)
+        ON CONFLICT (folder_id, user_id) DO UPDATE
+        SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
+            access_level = EXCLUDED.access_level,
+            updated_at = NOW(),
+            is_deleted = FALSE
+        ",
+    )
+    .bind(Uuid::new_v4())
+    .bind(folder_id)
+    .bind(contact_user_id)
+    .bind(encrypted_folder_key.as_bytes())
+    .bind(access_level)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Partager un fichier avec un contact
+pub async fn share_file_with_contact(
+    db_pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+    contact_user_id: Uuid,
+    encrypted_file_key: &str,
+    access_level: &str,
+) -> Result<(), sqlx::Error> {
+    let access_level = match access_level {
+        "owner" => "owner",
+        "editor" => "editor",
+        "viewer" => "viewer",
+        _ => return Err(sqlx::Error::Protocol("Invalid access level".into())),
+    };
+
+    if contact_user_id == user_id {
+        return Err(sqlx::Error::Protocol("Cannot share file with oneself".into()));
+    }
+
+    let mut tx = db_pool.begin().await?;
+
+    let contact_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)"
+    )
+    .bind(contact_user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !contact_exists {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
@@ -2065,8 +1646,6 @@ pub async fn share_file_with_contact(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Insert or update the file_access for the contact
-    // IMPORTANT: folder_id is always NULL for shared files (they appear in recipient's root)
     sqlx::query(
         "
         INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
@@ -2090,7 +1669,7 @@ pub async fn share_file_with_contact(
     Ok(())
 }
 
-/// Récupère la liste des utilisateurs ayant accès à un dossier (pour le partage dynamique)
+/// Récupérer la liste des utilisateurs ayant accès à un dossier
 pub async fn get_folder_shared_users(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -2102,7 +1681,6 @@ pub async fn get_folder_shared_users(
         access_level: String,
     }
 
-    // Verify that the user has access to the folder
     let has_access = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)"
     )
@@ -2115,7 +1693,6 @@ pub async fn get_folder_shared_users(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Get all users who have access to this folder (excluding the requester)
     let shared_users = sqlx::query_as::<_, SharedUser>(
         "
         SELECT user_id, access_level
@@ -2131,7 +1708,7 @@ pub async fn get_folder_shared_users(
     Ok(shared_users.into_iter().map(|u| (u.user_id, u.access_level)).collect())
 }
 
-/// Récupère la liste des utilisateurs ayant accès à un fichier (pour le panneau InfoItem)
+/// Récupérer la liste des utilisateurs ayant accès à un fichier
 pub async fn get_file_shared_users(
     db_pool: &PgPool,
     user_id: Uuid,
@@ -2169,16 +1746,15 @@ pub async fn get_file_shared_users(
     Ok(shared_users.into_iter().map(|u| (u.user_id, u.access_level)).collect())
 }
 
-/// Propage les permissions d'un fichier nouvellement créé aux utilisateurs ayant accès au dossier parent
+/// Propager les permissions d'un fichier nouvellement créé
 pub async fn propagate_file_access(
     db_pool: &PgPool,
     owner_id: Uuid,
     file_id: Uuid,
-    user_keys: Vec<(Uuid, String, String)>, // (user_id, encrypted_file_key, access_level)
+    user_keys: Vec<(Uuid, String, String)>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Verify that the owner has owner access to the file
     let is_owner = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
@@ -2191,7 +1767,6 @@ pub async fn propagate_file_access(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Get the folder_id from the owner's file_access
     let folder_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT folder_id FROM file_access WHERE file_id = $1 AND user_id = $2"
     )
@@ -2200,14 +1775,12 @@ pub async fn propagate_file_access(
     .fetch_optional(&mut *tx)
     .await?;
 
-    // Insert access for each user
     for (user_id, encrypted_key, access_level) in user_keys {
-        // Validate access_level
         let access_level = match access_level.as_str() {
             "owner" => "owner",
             "editor" => "editor",
             "viewer" => "viewer",
-            _ => continue, // Skip invalid access levels
+            _ => continue,
         };
 
         sqlx::query(
@@ -2235,16 +1808,15 @@ pub async fn propagate_file_access(
     Ok(())
 }
 
-/// Propage les permissions d'un dossier nouvellement créé aux utilisateurs ayant accès au dossier parent
+/// Propager les permissions d'un dossier nouvellement créé
 pub async fn propagate_folder_access(
     db_pool: &PgPool,
     owner_id: Uuid,
     folder_id: Uuid,
-    user_keys: Vec<(Uuid, String, String)>, // (user_id, encrypted_folder_key, access_level)
+    user_keys: Vec<(Uuid, String, String)>,
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Verify that the owner has owner access to the folder
     let is_owner = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
@@ -2257,14 +1829,12 @@ pub async fn propagate_folder_access(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Insert access for each user
     for (user_id, encrypted_key, access_level) in user_keys {
-        // Validate access_level
         let access_level = match access_level.as_str() {
             "owner" => "owner",
             "editor" => "editor",
             "viewer" => "viewer",
-            _ => continue, // Skip invalid access levels
+            _ => continue,
         };
 
         sqlx::query(
@@ -2291,6 +1861,7 @@ pub async fn propagate_folder_access(
     Ok(())
 }
 
+/// Révoquer l'accès à un fichier pour un utilisateur
 pub async fn revoke_file_access(
     db_pool: &PgPool,
     owner_id: Uuid,
@@ -2299,7 +1870,6 @@ pub async fn revoke_file_access(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Verify that the owner has owner access to the file
     let is_owner = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
@@ -2312,7 +1882,6 @@ pub async fn revoke_file_access(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Delete the target user's access
     sqlx::query(
         "
         DELETE FROM file_access
@@ -2328,7 +1897,7 @@ pub async fn revoke_file_access(
     Ok(())
 }
 
-// le folder et de tout les enfants
+/// Révoquer l'accès à un dossier pour un utilisateur (incluant enfants)
 pub async fn revoke_folder_access(
     db_pool: &PgPool,
     owner_id: Uuid,
@@ -2337,7 +1906,6 @@ pub async fn revoke_folder_access(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    // Verify that the owner has owner access to the folder
     let is_owner = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND access_level = 'owner')"
     )
@@ -2350,7 +1918,6 @@ pub async fn revoke_folder_access(
         return Err(sqlx::Error::RowNotFound);
     }
 
-    // Delete the target user's access for the folder and all its descendants
     sqlx::query(
         "
         WITH RECURSIVE folder_tree AS (
@@ -2373,7 +1940,6 @@ pub async fn revoke_folder_access(
     .execute(&mut *tx)
     .await?;
 
-    // Also delete file access for all files in these folders
     sqlx::query(
         "
         WITH RECURSIVE folder_tree AS (

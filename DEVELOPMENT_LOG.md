@@ -2,6 +2,783 @@
 
 ## 2026-02-01
 
+### [2026-02-01 20:30] - DOCS : Mise à jour complète de l'architecture backend
+
+**Documentation exhaustive de l'architecture modulaire**
+
+Réécriture complète de `gauzian_back/src/ARCHITECTURE.md` pour refléter l'état exact du code après la restructuration modulaire.
+
+**Sections ajoutées/mises à jour :**
+- Structure complète du projet (src/, migrations/, k8s/, docker-compose)
+- Diagramme détaillé du flux de responsabilités (routes → handlers → services/repo)
+- Explication du partage d'AppState via le système de types Rust
+- Documentation complète des 2 modules (auth/ et drive/)
+- Liste exhaustive des 39 routes (7 auth + 32 drive)
+- Signatures des fonctions services et repo avec exemples
+- Flux complet d'une requête POST /login (8 étapes détaillées)
+- Documentation des métriques Prometheus
+- ApiResponse<T> avec gestion des cookies JWT
+- Guide de sécurité (JWT, Argon2, permissions, soft delete)
+- Section merge() vs nest() pour la composition de routes
+- Avantages de l'architecture (séparation, type safety, testabilité)
+- Checklist pour ajouter un nouveau module
+- Erreurs courantes à éviter avec exemples ❌/✅
+- Guide de migration depuis monolithe
+
+**Bénéfices :**
+- Documentation synchronisée à 100% avec le code actuel
+- Guide complet pour onboarding nouveau développeur
+- Référence pour maintenir la cohérence architecturale
+- Exemples concrets de patterns Rust + Axum
+
+---
+
+### [2026-02-01 20:15] - REFACTOR : Unification du parsing UUID avec gestion d'erreurs
+
+**Centralisation du parsing UUID**
+
+Remplacement de tous les patterns de parsing UUID manuel par la fonction centralisée `parse_uuid_or_error` dans `drive/services.rs`.
+
+**Modifications :**
+- `drive/handlers.rs` : 7 occurrences remplacées dans les handlers suivants :
+  - `initialize_file_handler` : folder_id (ligne ~133)
+  - `create_folder_handler` : parent_folder_id (ligne ~298)
+  - `get_file_with_metadata_handler` : file_id (ligne ~394)
+  - `get_folder_handler` : folder_id (ligne ~443)
+  - `move_file_handler` : new_parent_folder_id (ligne ~618)
+  - `move_folder_handler` : new_parent_folder_id (ligne ~665)
+  - `get_folder_contents_handler` : folder_id (ligne ~858)
+
+**Bénéfices :**
+- Gestion d'erreurs unifiée et cohérente
+- Messages d'erreur standardisés ("Invalid UUID format")
+- Support natif de "null", "root", et UUID vides
+- Réduction de ~15 lignes de code par handler (total ~105 lignes supprimées)
+- Code plus maintenable et testable
+
+**Compilation :** ✅ 0 erreurs, 1 warning (unused variable)
+
+---
+
+### [2026-02-01 19:45] - REFACTOR : Restructuration complète backend en architecture modulaire
+
+**Architecture modulaire Clean Architecture**
+
+Migration complète du monolithe backend vers une architecture modulaire avec séparation claire des responsabilités.
+
+**Migrations effectuées :**
+- `src/dqssdfds.rs` (2400 lignes) → `src/drive/repo.rs` : Toutes les fonctions SQL
+- `src/handlers.rs` (1415 lignes) → `src/drive/handlers.rs` : Tous les handlers HTTP
+- Suppression des fichiers obsolètes (dqssdfds.rs, handlers.rs, "src old/")
+
+**Structure modulaire finale :**
+```
+src/
+├── auth/          # Module d'authentification
+│   ├── handlers.rs  # Handlers HTTP (login, register, logout)
+│   ├── routes.rs    # Routes d'authentification
+│   ├── repo.rs      # Queries SQL utilisateurs
+│   └── services.rs  # JWT, password hashing, blacklist Redis
+│
+├── drive/         # Module gestion fichiers/dossiers
+│   ├── handlers.rs  # 47 handlers HTTP (fichiers, dossiers, partage, corbeille)
+│   ├── routes.rs    # Routes du drive
+│   ├── repo.rs      # 1900 lignes de queries SQL (files, folders, access, sharing)
+│   └── services.rs  # Helpers utilitaires
+│
+├── routes.rs      # Composition globale (merge auth + drive)
+├── state.rs       # AppState (DB, Redis, S3, JWT)
+├── response.rs    # ApiResponse wrapper
+└── ...
+```
+
+**Corrections apportées :**
+- Ajout de `share_folder_with_contact()` dans repo.rs
+- Ajout du handler `initialize_file_handler` manquant
+- Correction des imports : `crate::jwt` → `crate::auth::Claims`
+- Correction des appels : `auth::get_user_by_id` → `crate::auth::repo::get_user_by_id`
+- Fix `ApiResponse::new()` → `ApiResponse::ok()` dans auth/handlers.rs
+- Fix `with_cookie()` → `with_token()` dans le login handler
+
+**Résultat :**
+- ✅ Compilation réussie (0 erreurs, 7 warnings mineurs)
+- ✅ Architecture modulaire propre et maintenable
+- ✅ Séparation claire : repo (SQL), services (logique), handlers (HTTP)
+- ✅ Facilite tests unitaires et scalabilité future
+
+**Documentation :**
+- `src/ARCHITECTURE.md` : Guide complet de l'architecture modulaire (260 lignes)
+  - Pattern de partage d'AppState via types génériques
+  - Flux de requêtes HTTP
+  - Clean Architecture par module
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 22:45] - DOC : Marquage points d'intégration API backend
+
+**Préparation intégration backend**
+
+Ajout de commentaires `#ICIBACK` dans tout le code pour identifier les points où remplacer localStorage par des appels API REST.
+
+**Fichiers modifiés avec marqueurs #ICIBACK :**
+
+1. **useEvents.js** :
+   - `loadEvents()` - GET /api/events
+   - `saveEvents()` - À supprimer (appels directs dans CRUD)
+   - `createEvent()` - POST /api/events
+   - `updateEvent()` - PUT /api/events/:id
+   - `deleteEvent()` - DELETE /api/events/:id
+
+2. **useCategories.js** :
+   - Chargement initial - GET /api/categories
+   - `addCustomCategory()` - POST /api/categories
+   - `updateCustomCategory()` - PUT /api/categories/:id
+   - `removeCustomCategory()` - DELETE /api/categories/:id
+
+**Documentation API créée :**
+- `gauzian_front/API_ENDPOINTS.md` : Spécification complète des endpoints
+  - Tous les endpoints Events et Categories
+  - Format des requêtes/réponses JSON
+  - Notes d'implémentation (auth, dayId, couleurs, etc.)
+  - Gestion d'erreurs HTTP
+  - Liste des catégories par défaut
+
+**Structure API :**
+```
+GET    /api/events
+POST   /api/events
+PUT    /api/events/:id
+DELETE /api/events/:id
+
+GET    /api/categories
+POST   /api/categories
+PUT    /api/categories/:id
+DELETE /api/categories/:id
+```
+
+**Prochaines étapes :**
+1. Implémenter les endpoints backend en Rust (Axum)
+2. Remplacer localStorage par appels fetch() dans les composables
+3. Ajouter gestion d'erreurs et loading states
+4. Tests d'intégration frontend/backend
+
+---
+
+### [2026-02-01 22:10] - FEATURE : Implémentation vue mensuelle complète
+
+**Nouvelle vue : Calendrier mensuel**
+
+Ajout d'un calendrier mensuel complet avec affichage compact des événements.
+
+**Implémentation :**
+
+1. **useNavigation.js** : Ajout de `getMonthDayIds()`
+   - Fonction pour récupérer tous les jours du mois avec dayId
+   - Inclut les jours de remplissage (début/fin du mois)
+   - Retourne métadonnées : isCurrentMonth, isToday, isWeekend
+
+2. **agenda.vue** :
+   - Affichage conditionnel : grille semaine/jour vs calendrier mensuel
+   - Grille 7 colonnes (Lun-Dim) avec lignes dynamiques
+   - Headers des jours de la semaine
+   - Cellules pour chaque jour avec :
+     - Numéro du jour
+     - Liste compacte des événements (max 3 affichés)
+     - Clic sur cellule : créer événement
+     - Clic sur événement : ouvrir modal
+
+3. **getEventsForDay()** : Fonction pour filtrer événements par jour
+
+4. **Style** :
+   - Design sobre et moderne
+   - Différenciation visuelle :
+     - Jours hors mois actuel (opacité réduite)
+     - Aujourd'hui (fond bleu clair + badge bleu)
+     - Week-ends (fond gris léger)
+   - Événements compacts avec couleurs de catégorie
+   - Hover effects pour meilleure UX
+
+**Résultat** : Navigation complète entre vues Jour/Semaine/Mois avec le bouton de vue dans la toolbar.
+
+**Fichiers modifiés** :
+- gauzian_front/app/composables/agenda/useNavigation.js (getMonthDayIds)
+- gauzian_front/app/pages/agenda.vue (vue mensuelle, styles)
+
+---
+
+### [2026-02-01 21:35] - FEATURE : Segmentation événements multi-jours + Fix validation heures
+
+**Implémentation majeure : Découpage des événements multi-jours en segments par jour**
+
+**Problème** : Les événements multi-jours s'étendaient horizontalement sur plusieurs colonnes, ne permettant pas d'afficher correctement les heures spécifiques (ex: Mardi 20h → Mercredi 8h).
+
+**Solution** : Implémentation d'un système de segmentation qui découpe chaque événement multi-jours en segments journaliers :
+
+1. **Fonction `splitMultiDayEvent()`** : Découpe un événement en segments par jour
+   - Premier jour : startHour → 24h
+   - Jours intermédiaires : 0h → 24h (automatiquement → all-day)
+   - Dernier jour : 0h → endHour
+
+2. **Computed `eventSegments`** : Traite tous les événements et génère les segments
+
+3. **Référence parent** : Chaque segment garde `originalEventId` et `isSegment: true` pour retrouver l'événement parent lors de l'édition/suppression
+
+Exemple :
+- Événement : Dimanche 16h → Mardi 10h
+- Segments générés :
+  - Dimanche 16h-24h (normal)
+  - Lundi 0h-24h (all-day automatique)
+  - Mardi 0h-10h (normal)
+
+**Fix validation heures pour événements multi-jours** :
+
+Ligne modifiée dans EventModal.vue:178 :
+```vue
+<!-- Avant -->
+:disabled="formData.startHour !== null && hour <= formData.startHour"
+
+<!-- Après -->
+:disabled="!formData.isMultiDay && formData.startHour !== null && hour <= formData.startHour"
+```
+
+Pour les événements multi-jours, toutes les heures de fin sont disponibles car elles sont sur un jour différent (ex: Jeudi 23h → Vendredi 8h est valide).
+
+**Fichiers modifiés** :
+- gauzian_front/app/pages/agenda.vue (fonction splitMultiDayEvent, computed eventSegments, handleEventClick)
+- gauzian_front/app/components/agenda/EventModal.vue (validation heures)
+- gauzian_front/app/components/EventAgenda.vue (TODO pour empêcher drag des segments)
+
+---
+
+### [2026-02-01 21:15] - FIX : Catégorie par défaut "other" + Correction offset zoom aux limites
+
+**Corrections finales agenda :**
+
+#### 1. Catégorie par défaut changée en "other"
+
+**Problème** : La catégorie par défaut était la première de la liste au lieu de "other".
+
+**Solution** :
+```javascript
+// Avant
+const defaultCategory = computed(() => {
+    return categories.value.length > 0 ? categories.value[0].id : 'other';
+});
+
+// Après
+const defaultCategory = computed(() => {
+    return 'other';
+});
+```
+
+**Fichier modifié** : gauzian_front/app/components/agenda/EventModal.vue:268-270
+
+#### 2. Correction offset drag aux limites de zoom
+
+**Problème** : Lorsqu'on atteint la limite du dézoom (20px), déplacer un événement créait un décalage incorrect.
+
+**Cause** : Le calcul de position pendant le drag ne prenait pas en compte la hauteur de la ligne all-day events (row 2) quand `hasAllDayEvents` est true.
+
+**Solution** : Ajout du calcul dynamique de la hauteur de la ligne all-day et soustraction dans le calcul de position :
+```javascript
+const allDayElement = gridContainer.querySelector('.all-day-row-spacer');
+const allDayRowHeight = (props.hasAllDayEvents && allDayElement) ? allDayElement.offsetHeight : 0;
+const hourIndex = Math.floor((mouseY - headerHeight - allDayRowHeight) / rowHeight);
+```
+
+Le calcul soustrait maintenant :
+- La hauteur du header
+- La hauteur de la ligne all-day (si elle existe)
+- Puis divise par la hauteur d'une cellule pour obtenir l'index d'heure correct
+
+**Fichier modifié** : gauzian_front/app/components/EventAgenda.vue:120-135
+
+**Résultat** : Le drag & drop fonctionne correctement à tous les niveaux de zoom, y compris aux limites (20px-150px).
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 19:45] - FIX : Catégories modifiables + Bug zoom/drag + Catégorie par défaut
+
+**Corrections et améliorations :**
+
+#### 1. Toutes les catégories modifiables/supprimables
+
+Suppression de la distinction entre catégories "prédéfinies" et "personnalisées". Toutes les catégories ont maintenant le même statut.
+
+**Modifications :**
+- CategoryManager.vue : Retrait de la condition `:disabled="!category.custom"`
+- CategoryManager.vue : Retrait du `v-if="category.custom"` sur le bouton Supprimer
+- useCategories.js : Retrait de `&& cat.custom` dans `removeCustomCategory()` et `updateCustomCategory()`
+
+**Résultat** : L'utilisateur a un contrôle total sur toutes les catégories
+
+#### 2. Catégorie par défaut à la création
+
+Ajout d'une catégorie sélectionnée par défaut lors de la création d'un événement.
+
+**Implémentation :**
+```javascript
+const defaultCategory = computed(() => {
+    return categories.value.length > 0 ? categories.value[0].id : 'other';
+});
+```
+
+- La première catégorie disponible est sélectionnée par défaut
+- Couleur associée automatiquement récupérée
+- Appliqué dans `formData` et `resetForm()`
+
+#### 3. Fix bug zoom + drag & drop
+
+**Problème** : Après avoir zoomé avec Shift+Scroll puis déplacé un événement, l'offset était incorrect.
+
+**Cause** : Le zoom modifiait seulement la hauteur des cellules (`.body-cell`) mais pas celle des labels d'heures (`.hour-label`), créant un désalignement.
+
+**Solution** :
+```javascript
+// Modifier les cellules ET les labels d'heures
+cells.forEach(cell => cell.style.height = `${newHeight}px`);
+hourLabels.forEach(label => label.style.height = `${newHeight}px`);
+```
+
+Les deux éléments gardent maintenant la même hauteur, préservant l'alignement de la grille.
+
+**Fichiers modifiés :**
+- `gauzian_front/app/components/agenda/CategoryManager.vue` : UI toutes catégories modifiables
+- `gauzian_front/app/composables/agenda/useCategories.js` : Suppression conditions custom
+- `gauzian_front/app/components/agenda/EventModal.vue` : Catégorie par défaut
+- `gauzian_front/app/pages/agenda.vue` : Fix zoom alignement
+
+**Résultat :**
+✅ Toutes catégories modifiables/supprimables
+✅ Catégorie par défaut sélectionnée
+✅ Zoom + drag fonctionne correctement
+✅ Alignement grille préservé
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 19:30] - FEATURE : Événements multi-jours + Corrections UX drag & drop
+
+**Nouvelles fonctionnalités majeures :**
+
+#### 1. Événements multi-jours complets
+
+Implémentation complète des événements qui s'étendent sur plusieurs jours ou semaines.
+
+**Modèle de données étendu :**
+```javascript
+{
+    startDayId: number,  // Jour de début
+    endDayId: number,    // Jour de fin
+    isMultiDay: boolean, // Flag multi-jours
+    dayId: number        // Maintenu pour compatibilité
+}
+```
+
+**EventModal.vue amélioré :**
+- Nouvelle checkbox "Événement sur plusieurs jours"
+- Mode simple : Un seul sélecteur de jour
+- Mode multi-jours : Deux sélecteurs (début et fin)
+- Validation : jour de fin >= jour de début
+- Désactivation des jours antérieurs dans le select de fin
+
+**Affichage adaptatif :**
+
+1. **All-day multi-jours** :
+   - S'étendent horizontalement sur plusieurs colonnes
+   - `grid-column: start / end`
+   - Affichés dans la zone all-day (row 2)
+
+2. **Multi-jours normaux** :
+   - S'étendent sur plusieurs colonnes ET lignes d'heures
+   - `grid-column: start / end` + `grid-row: startHour / endHour`
+   - Affichage dans la grille horaire
+   - Pas de gestion d'overlap pour ces événements (z-index: 15)
+
+3. **Gestion des vues** :
+   - Événements partiellement visibles gérés (clipping aux bords)
+   - Si event hors vue : `display: none`
+   - Calcul des bornes visibles : `Math.max(0, startIndex)` / `Math.min(length-1, endIndex)`
+
+**Fonctions de style :**
+- `getAllDayEventStyle()` : Calcul pour all-day (single ou multi)
+- `getMultiDayNormalEventStyle()` : Calcul pour multi-jours normaux
+
+#### 2. Fix drag & drop + modal
+
+**Problème** : Cliquer après un drag ouvrait le modal d'édition.
+
+**Solution** : Détection du mouvement de souris
+- Variables `hasMoved`, `startX`, `startY` pour tracker la position
+- Seuil de 5px pour éviter les micro-mouvements
+- `handleEventClick` vérifie `hasMoved` avant d'émettre
+- Reset après 50ms pour préparer le prochain drag
+
+**Code clé** :
+```javascript
+const deltaX = Math.abs(e.clientX - startX);
+const deltaY = Math.abs(e.clientY - startY);
+if (deltaX > 5 || deltaY > 5) {
+    hasMoved = true;
+}
+```
+
+#### 3. Fermeture modale avec Echap
+
+EventModal.vue écoute maintenant la touche Escape :
+- Listener ajouté quand modal ouvert
+- Listener retiré quand modal fermé
+- Appelle `closeModal()` sur Escape
+
+**Fichiers modifiés :**
+- `gauzian_front/app/composables/agenda/useEvents.js` : Support startDayId/endDayId/isMultiDay
+- `gauzian_front/app/components/agenda/EventModal.vue` : UI multi-jours + Echap
+- `gauzian_front/app/components/EventAgenda.vue` : Détection drag movement
+- `gauzian_front/app/pages/agenda.vue` : Affichage multi-jours + styles
+
+**Résultat :**
+✅ Événements multi-jours fonctionnels (jours et semaines)
+✅ Drag & drop sans ouverture intempestive du modal
+✅ Modal fermable avec Echap
+✅ Affichage horizontal pour multi-jours
+✅ Gestion intelligente des vues partielles
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 19:00] - UX : Événements "Toute la journée" intégrés dans la grille
+
+**Amélioration de positionnement :**
+
+Les événements "toute la journée" sont maintenant intégrés directement dans la grille CSS, positionnés entre le header (dates) et la ligne 0h, au lieu d'être affichés séparément au-dessus.
+
+**Implémentation technique :**
+
+1. **Structure de la grille ajustée** :
+   - Row 1 : Header (jours de la semaine + dates)
+   - Row 2 : Événements all-day (si présents)
+   - Row 3+ : Heures (0h-23h) si all-day présents, sinon Row 2+
+
+2. **Décalage conditionnel** :
+   - Computed `hasAllDayEvents` pour détecter la présence d'événements all-day
+   - Tous les éléments (heures, cellules, événements normaux) décalés de +1 row si all-day présents
+   - Formule : `gridRow: (hasAllDayEvents ? 3 : 2) + index`
+
+3. **Affichage des all-day** :
+   - Chaque événement all-day positionné sur sa colonne de jour
+   - `grid-column: 2 + dayIndex`
+   - `grid-row: 2`
+   - Style compact avec badge coloré
+
+4. **Spacer pour la colonne des heures** :
+   - Div vide `.all-day-row-spacer` sur `grid-column: 1` pour combler l'espace
+
+**Bénéfices UX :**
+- ✅ Meilleure intégration visuelle
+- ✅ Positionnement logique (entre date et première heure)
+- ✅ Pas de scroll supplémentaire
+- ✅ Alignement parfait avec les colonnes de jours
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Intégration inline des all-day
+- `gauzian_front/app/components/EventAgenda.vue` : Support du décalage conditionnel
+- Suppression de l'import `AllDayEvents.vue` (non utilisé)
+
+**CSS ajouté :**
+```css
+.all-day-row-spacer { min-height: 36px; }
+.agenda-event-allday {
+    padding: 6px 10px;
+    border-left: 3px solid;
+}
+```
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 18:45] - FEATURE : Événements "Toute la journée" + Gestion des catégories
+
+**Nouvelles fonctionnalités majeures :**
+
+#### 1. Événements "Toute la journée"
+
+Ajout de la possibilité de créer des événements qui durent toute la journée, affichés séparément en haut de l'agenda.
+
+**Implémentation :**
+- Ajout du champ `isAllDay` dans les événements (useEvents.js)
+- Checkbox "Toute la journée" dans EventModal.vue
+- Validation conditionnelle : heures non requises si `isAllDay = true`
+- Nouveau composant `AllDayEvents.vue` pour affichage séparé
+- Filtrage automatique : événements all-day exclus de la grille horaire
+- Placement au-dessus de la grille pour une meilleure visibilité
+
+**Composant AllDayEvents.vue :**
+```vue
+- Affichage horizontal aligné avec les jours
+- Style compact avec badges colorés
+- Click pour ouvrir le modal d'édition
+- Responsive avec mêmes couleurs que les événements normaux
+```
+
+#### 2. Gestion complète des catégories
+
+Système complet pour créer, modifier et supprimer des catégories personnalisées.
+
+**Composant CategoryManager.vue (nouveau) :**
+- Modal de gestion des catégories
+- Liste des catégories existantes (9 prédéfinies non modifiables)
+- Formulaire d'ajout/édition avec :
+  - Nom de la catégorie
+  - Initiales (2 lettres)
+  - Sélection de couleur (8 couleurs disponibles)
+- Modification des catégories personnalisées uniquement
+- Suppression avec confirmation
+- Design moderne avec grille de couleurs cliquable
+
+**Améliorations useCategories.js :**
+- Fonction `updateCustomCategory()` pour modifier une catégorie
+- Export de la nouvelle fonction
+- Gestion de la persistance (déjà en place via watch)
+
+**Intégration :**
+- Bouton "Gérer" dans CategoryFilter.vue
+- Émission d'événement `@manage-categories`
+- Modal intégré dans agenda.vue
+- État `isCategoryManagerOpen` géré globalement
+
+#### 3. Header sticky
+
+Le header de la grille (jours de la semaine) reste maintenant visible lors du scroll vertical.
+
+**CSS :**
+```css
+.agenda-page--center-center__header,
+.agenda-page--center-center__header-corner {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+```
+
+#### 4. Améliorations visuelles
+
+- **Jour actuel** : Badge arrondi plus subtil au lieu du cercle complet
+- **AllDayEvents** : Placé au-dessus de la grille (hors du grid layout)
+- **Affichage conditionnel** : AllDayEvents visible uniquement si events all-day existent
+
+**Fichiers créés :**
+- `gauzian_front/app/components/agenda/AllDayEvents.vue` (nouveau)
+- `gauzian_front/app/components/agenda/CategoryManager.vue` (nouveau)
+
+**Fichiers modifiés :**
+- `gauzian_front/app/composables/agenda/useEvents.js` : Support isAllDay
+- `gauzian_front/app/composables/agenda/useCategories.js` : updateCustomCategory
+- `gauzian_front/app/components/agenda/EventModal.vue` : Checkbox + validation
+- `gauzian_front/app/components/agenda/CategoryFilter.vue` : Bouton "Gérer"
+- `gauzian_front/app/pages/agenda.vue` : Intégration complète
+- `gauzian_front/app/assets/css/agenda.css` : Header sticky
+
+**Résultat :**
+✅ Événements toute la journée fonctionnels
+✅ Gestion complète des catégories personnalisées
+✅ Header sticky lors du scroll
+✅ Interface moderne et intuitive
+✅ Séparation visuelle claire entre all-day et événements horaires
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 18:15] - FIX + UX : Corrections multiples pour interface sobre et fonctionnelle
+
+**Problèmes corrigés :**
+
+1. **Événements affichés sur toutes les semaines**
+   - Cause : Aucun filtrage par période, tous les événements s'affichaient
+   - Solution : Ajout d'un filtre dans `filteredEvents` pour ne garder que les événements dont le `dayId` correspond aux jours visibles
+   - Code : `events.value.filter(event => visibleDayIds.includes(event.dayId))`
+
+2. **Touche 'T' ne fonctionnait pas**
+   - Cause : Le raccourci clavier se déclenchait même dans les inputs
+   - Solution : Ajout d'une vérification pour ignorer les événements clavier dans les champs éditables
+   - Code : `if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;`
+
+3. **Balises `<mark>` dans la recherche**
+   - Suppression complète de la fonction `highlightMatch()`
+   - Affichage direct du texte sans markup
+   - Suppression des styles CSS associés
+
+4. **Emojis remplacés par style sobre**
+   - **Catégories** : Emojis remplacés par initiales (RE, PR, DL, UR, PE, FO, SP, BL, AU)
+   - **Vue switcher** : Suppression des icônes emoji, texte uniquement
+   - Style adapté : `font-size: 11-12px; font-weight: 700; letter-spacing: -0.5px`
+
+5. **Boutons invisibles dans la toolbar**
+   - Cause : Boutons blancs sur fond blanc avec bordure très claire
+   - Solution : Changement du fond des boutons de `#ffffff` à `#f9fafb` (gris très clair)
+   - Amélioration du contraste : couleur texte `#374151` au lieu de `#6b7280`
+   - Ajout de `svg { stroke: currentColor; }` pour garantir la visibilité des icônes
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Filtrage des événements par période
+- `gauzian_front/app/composables/agenda/useNavigation.js` : Protection raccourcis clavier
+- `gauzian_front/app/composables/agenda/useCategories.js` : Remplacement emojis par initiales
+- `gauzian_front/app/components/agenda/EventSearch.vue` : Suppression highlight `<mark>`
+- `gauzian_front/app/components/agenda/EventModal.vue` : Style initiales catégories
+- `gauzian_front/app/components/agenda/CategoryFilter.vue` : Style initiales catégories
+- `gauzian_front/app/components/agenda/AgendaToolbar.vue` : Amélioration visibilité boutons + suppression emojis
+
+**Résultat :**
+✅ Interface sobre et moderne
+✅ Boutons bien visibles avec bon contraste
+✅ Événements affichés uniquement pour la période courante
+✅ Raccourcis clavier fonctionnels
+✅ Pas d'emojis, design professionnel
+
+---
+
+## 2026-02-01
+
+### [2026-02-01 17:30] - FEATURE : Système d'agenda complet avec composables et composants UI
+
+**Architecture mise en place :**
+
+J'ai développé un système d'agenda complet et professionnel avec une architecture modulaire basée sur les composables Vue 3. Voici l'organisation complète :
+
+**1. Composables créés (gauzian_front/app/composables/agenda/) :**
+
+- **useEvents.js** (321 lignes)
+  - Système CRUD complet pour les événements
+  - Persistance automatique dans LocalStorage
+  - Fonctions : createEvent, updateEvent, deleteEvent, searchEvents, filterEvents
+  - Utilitaires : moveEvent, resizeEvent, duplicateEvent
+  - Statistiques : getEventCount, getBusiestDay, getEventsByHour
+  - Inclut 6 événements de démonstration par défaut
+
+- **useCategories.js** (238 lignes)
+  - Gestion des catégories d'événements (9 catégories prédéfinies)
+  - Système de filtrage : toggleFilter, addFilter, removeFilter, clearFilters
+  - Catégories : meeting (blue), project (green), deadline (orange), urgent (red), personal (purple), learning (teal), special (pink), blocked (gray), other (blue)
+  - Statistiques par catégorie
+  - Support des catégories personnalisées
+
+- **useView.js** (290 lignes)
+  - Gestion des vues : jour, semaine, mois, année
+  - Options d'affichage : showWeekends, workingHoursOnly, compactMode
+  - Densité d'affichage : compact, normal, comfortable
+  - Zoom : zoomIn, zoomOut, resetZoom
+  - Persistance des préférences dans LocalStorage
+  - Configuration des heures visibles et jours visibles
+
+- **useNavigation.js** (350 lignes)
+  - Navigation temporelle : nextDay, previousDay, nextWeek, previousWeek, nextMonth, previousMonth
+  - Conversion date <-> dayId avec epoch reference (1er janvier 2020)
+  - Génération de jours : getWeekDays, getMonthDays, getWeekDayIds
+  - Raccourcis clavier : Flèches (navigation), 'T' (aujourd'hui), Ctrl+Flèches (sauts)
+  - Formatage des périodes en français
+
+- **useLayout.js** (210 lignes)
+  - Algorithme de column-packing pour gérer les chevauchements d'événements
+  - Fonction eventsOverlap pour détecter les collisions
+  - Calcul automatique des colonnes et largeurs
+  - Utilitaires : getDayDensity, getBusiestHour, isTimeSlotFree, findNextFreeSlot
+
+**2. Composants UI créés (gauzian_front/app/components/agenda/) :**
+
+- **EventModal.vue** (530 lignes)
+  - Modal création/édition d'événements
+  - Formulaire complet : titre, description, jour, heures, catégorie
+  - Validation des champs avec messages d'erreur
+  - Sélection visuelle des catégories avec icônes et couleurs
+  - Mode création vs édition avec suppression
+  - Animation d'entrée/sortie fluide
+  - Responsive mobile
+
+- **AgendaToolbar.vue** (280 lignes)
+  - Barre d'outils complète pour l'agenda
+  - Navigation : Aujourd'hui, Précédent, Suivant
+  - View switcher : Jour / Semaine / Mois
+  - Actions : Recherche, Filtres, Paramètres
+  - Bouton "Nouvel événement"
+  - Affichage dynamique de la période actuelle
+  - Responsive avec adaptations mobile
+
+- **CategoryFilter.vue** (320 lignes)
+  - Filtre de catégories dans la sidebar
+  - Checkboxes avec couleurs des catégories
+  - Actions : Tout sélectionner, Tout effacer
+  - Compteur d'événements par catégorie
+  - Résumé des filtres actifs
+  - Design cohérent avec les couleurs des événements
+
+- **EventSearch.vue** (380 lignes)
+  - Recherche en temps réel dans les événements
+  - Highlight des résultats correspondants avec <mark>
+  - Affichage des résultats avec catégorie et horaires
+  - Clic sur résultat pour ouvrir le modal d'édition
+  - Fermeture sur Escape ou clic extérieur
+  - Animation des résultats
+
+**3. Intégration dans agenda.vue :**
+
+- Importation de tous les composables et composants
+- Remplacement des données hardcodées par le système dynamique
+- Sidebar gauche avec EventSearch et CategoryFilter
+- Toolbar avec AgendaToolbar
+- Grille agenda avec gestion des clics sur cellules
+- Modal EventModal pour création/édition
+- Zoom vertical conservé (Shift + Scroll)
+- Navigation clavier activée
+- Sauvegarde automatique LocalStorage
+- Highlight du jour actuel
+
+**4. Améliorations apportées à EventAgenda.vue :**
+
+- Ajout de l'émission 'event-click' pour ouvrir le modal
+- Classes de couleur dynamiques selon la catégorie
+- Fix du bug dayId : utilisation de `.dayId` au lieu de `.id` pour displayDays
+
+**Fonctionnalités complètes :**
+
+✅ Création, modification, suppression d'événements
+✅ Drag & drop des événements (déjà implémenté)
+✅ Gestion des chevauchements (column-packing)
+✅ Filtrage par catégories avec sidebar
+✅ Recherche en temps réel
+✅ Navigation temporelle (jour/semaine/mois)
+✅ Raccourcis clavier
+✅ Zoom vertical (Shift + Scroll)
+✅ Persistance LocalStorage
+✅ Responsive design
+✅ Animations fluides
+✅ Design moderne et cohérent
+
+**Fichiers créés/modifiés :**
+- `gauzian_front/app/composables/agenda/useEvents.js` (nouveau)
+- `gauzian_front/app/composables/agenda/useCategories.js` (nouveau)
+- `gauzian_front/app/composables/agenda/useView.js` (nouveau)
+- `gauzian_front/app/composables/agenda/useNavigation.js` (nouveau)
+- `gauzian_front/app/composables/agenda/useLayout.js` (nouveau)
+- `gauzian_front/app/components/agenda/EventModal.vue` (nouveau)
+- `gauzian_front/app/components/agenda/AgendaToolbar.vue` (nouveau)
+- `gauzian_front/app/components/agenda/CategoryFilter.vue` (nouveau)
+- `gauzian_front/app/components/agenda/EventSearch.vue` (nouveau)
+- `gauzian_front/app/pages/agenda.vue` (refactorisé complètement)
+- `gauzian_front/app/components/EventAgenda.vue` (amélioré)
+
+**Total :** ~2500 lignes de code ajoutées, système d'agenda production-ready !
+
+---
+
+## 2026-02-01
+
 ### [2026-02-01 13:20] - FIX : Correction querySelector avec bonnes classes + fallbacks
 
 **Erreur :**
