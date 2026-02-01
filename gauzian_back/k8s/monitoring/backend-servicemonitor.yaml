@@ -15,5 +15,5 @@ spec:
   endpoints:
     - port: http
       path: /metrics
-      interval: 10s
-      scrapeTimeout: 8s  # Doit être < interval
+      interval: 5s        # Scrape toutes les 5s (aligné avec Grafana refresh)
+      scrapeTimeout: 4s   # Doit être < interval (timeout si backend répond lentement)
