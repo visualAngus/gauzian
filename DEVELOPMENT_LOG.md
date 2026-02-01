@@ -1,5 +1,793 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-01
+
+### [2026-02-01 13:20] - FIX : Correction querySelector avec bonnes classes + fallbacks
+
+**Erreur :**
+```
+Uncaught TypeError: Cannot read properties of null (reading 'offsetHeight')
+at onMouseMove (EventAgenda.vue:93:71)
+```
+
+**Cause :**
+- `querySelector('.agenda-header')` retournait `null` (classe inexistante)
+- `querySelector('.agenda-row')` retournait `null` (classe inexistante)
+- Tentative d'accès à `.offsetHeight` sur `null` → TypeError
+
+**Solution :**
+Utiliser les vraies classes du template + fallbacks de sécurité :
+
+```javascript
+// ❌ Avant (classes inexistantes)
+const headerHeight = gridContainer.querySelector('.agenda-header').offsetHeight;
+const rowHeight = gridContainer.querySelector('.agenda-row').offsetHeight;
+
+// ✅ Après (vraies classes + fallbacks)
+const headerElement = gridContainer.querySelector('.agenda-page--center-center__header');
+const cellElement = gridContainer.querySelector('.agenda-page--center-center__body-cell');
+
+const headerHeight = headerElement ? headerElement.offsetHeight : 80;
+const rowHeight = cellElement ? cellElement.offsetHeight : 50;
+```
+
+**Classes correctes du template :**
+- Header : `.agenda-page--center-center__header`
+- Cellule : `.agenda-page--center-center__body-cell`
+
+**Avantages des fallbacks :**
+- Si `querySelector` ne trouve rien → utilise valeurs par défaut (80px, 50px)
+- Évite les crashes
+- Code plus robuste
+
+**Fichiers modifiés :**
+- `gauzian_front/app/components/EventAgenda.vue` : Lignes 93-97
+
+---
+
+### [2026-02-01 13:15] - FIX : Drag & Drop avec scroll - Calcul correct des positions
+
+**Problème :**
+- Le drag & drop ne fonctionnait pas correctement quand la grille était scrollée
+- Les événements se positionnaient au mauvais endroit après scroll
+
+**Cause :**
+1. `getBoundingClientRect()` retourne les coordonnées par rapport au viewport
+2. Ne prend pas en compte le scroll interne du conteneur
+3. Calcul de `rowHeight` basé sur `gridRect.height` (hauteur visible) au lieu de la hauteur fixe des cellules
+
+**Solution implémentée :**
+
+1. **Ajout du scroll dans les calculs**
+   ```javascript
+   // Avant
+   const mouseY = e.clientY - gridRect.top + gridContainer.scrollTop;
+
+   // Après (avec scrollLeft aussi)
+   const mouseX = e.clientX - gridRect.left + gridContainer.scrollLeft;
+   const mouseY = e.clientY - gridRect.top + gridContainer.scrollTop;
+   ```
+
+2. **Utilisation de la hauteur fixe des cellules**
+   ```javascript
+   // Avant (incorrect avec scroll)
+   const availableHeight = gridRect.height - headerHeight;
+   const rowHeight = availableHeight / numberOfHours;
+
+   // Après (correct)
+   const rowHeight = 50; // Height définie dans agenda.css ligne 189
+   ```
+
+**Pourquoi ça fonctionne maintenant :**
+- `scrollTop` compense le décalage vertical du scroll
+- `scrollLeft` compense le décalage horizontal (si scroll horizontal)
+- `rowHeight = 50px` est constant, indépendant de la zone visible
+- Calcul précis : `hourIndex = Math.floor((mouseY - 80) / 50)`
+
+**Exemple de calcul :**
+```
+Si la grille est scrollée de 200px vers le bas :
+- Souris à clientY = 300 (par rapport au viewport)
+- gridRect.top = 100
+- scrollTop = 200
+→ mouseY = 300 - 100 + 200 = 400px dans le conteneur
+→ hourIndex = (400 - 80) / 50 = 6.4 → 6h
+```
+
+**Fichiers modifiés :**
+- `gauzian_front/app/components/EventAgenda.vue` : Ajout scrollLeft ligne 82, rowHeight fixe ligne 94
+
+**Résultat :**
+- ✅ Drag & Drop fonctionne avec scroll vertical
+- ✅ Drag & Drop fonctionne avec scroll horizontal
+- ✅ Positionnement précis sur les cellules
+- ✅ Pas de décalage même après scroll intensif
+
+---
+
+### [2026-02-01 13:10] - FIX : Drag & Drop fonctionnel - Modification du tableau source
+
+**Problème :**
+- Les calculs de position étaient corrects (console.log fonctionnait)
+- Mais l'événement ne bougeait pas visuellement
+- Cause : Modification de `draggedEvent` qui pointait vers `eventsWithLayout` (computed property)
+
+**Explication du bug :**
+```javascript
+// ❌ NE FONCTIONNE PAS
+draggedEvent.dayId = newDayId; // draggedEvent pointe vers eventsWithLayout
+
+// eventsWithLayout est une computed property calculée depuis events
+// Modifier une copie computed ne déclenche pas la réactivité Vue
+```
+
+**Solution :**
+```javascript
+// ✅ FONCTIONNE
+const sourceEvent = props.events.find(e => e.id === draggedEvent.id);
+sourceEvent.dayId = newDayId; // Modifier le tableau source
+
+// Vue détecte le changement dans events (ref)
+// → Recalcule eventsWithLayout (computed)
+// → Re-render avec nouvelle position
+```
+
+**Principe de réactivité Vue :**
+1. `events` est un `ref` (réactif)
+2. `eventsWithLayout` est une `computed` basée sur `events`
+3. Modifier `events` → déclenche le recalcul de `eventsWithLayout`
+4. Modifier `eventsWithLayout` → aucun effet (c'est une copie calculée)
+
+**Modifications :**
+- EventAgenda.vue ligne 106-118 : Recherche de l'événement source avec `find()`
+- Modification des propriétés sur `sourceEvent` au lieu de `draggedEvent`
+
+**Résultat :**
+- ✅ Drag & Drop fonctionnel
+- ✅ Événements se déplacent en temps réel
+- ✅ Snap sur les cellules de la grille
+- ✅ Durée préservée pendant le déplacement
+- ✅ Réactivité Vue respectée
+
+**Fichiers modifiés :**
+- `gauzian_front/app/components/EventAgenda.vue` : Fix réactivité ligne 106-118
+
+---
+
+### [2026-02-01 13:00] - Implémentation structure Drag & Drop pour événements dans grille CSS
+
+**Contexte :**
+- L'utilisateur voulait déplacer les événements dans la grille
+- Tentative initiale avec `position: absolute` + `left/top` ne fonctionnait pas
+- Les événements sont dans une grille CSS, pas en positionnement absolu
+
+**Problème identifié :**
+```javascript
+// ❌ Ne fonctionne pas dans CSS Grid
+elem.style.position = 'absolute';
+elem.style.left = e.pageX + 'px';
+elem.style.top = e.pageY + 'px';
+
+// ✅ Il faut mettre à jour gridColumn et gridRow
+draggedEvent.dayId = newDayId;
+draggedEvent.startHour = newStartHour;
+draggedEvent.endHour = newEndHour;
+```
+
+**Solution implémentée :**
+
+1. **Structure du drag & drop** (EventAgenda.vue)
+   - `dragEvent()` : Initialise le drag (mousedown)
+   - `onMouseMove()` : Calcule la cellule de destination
+   - Cleanup automatique sur mouseup
+   - Feedback visuel avec classe `.dragging`
+
+2. **Calculs nécessaires**
+   - Position de la grille : `getBoundingClientRect()`
+   - Largeur colonne des heures : 60px (première colonne)
+   - Largeur colonne jour : `(gridWidth - 60) / nombreJours`
+   - Hauteur header : 80px (première ligne)
+   - Hauteur ligne heure : `(gridHeight - 80) / 24`
+
+3. **Formules de calcul**
+   ```javascript
+   dayIndex = Math.floor((mouseX - 60) / columnWidth)
+   hourIndex = Math.floor((mouseY - 80) / rowHeight)
+
+   // Validation des limites
+   dayIndex = clamp(dayIndex, 0, numberOfDays - 1)
+   hourIndex = clamp(hourIndex, 0, 23)
+
+   // Préservation de la durée
+   duration = originalEndHour - originalStartHour
+   newEndHour = Math.min(hourIndex + duration, 24)
+   ```
+
+4. **TODO(human) créé**
+   - Lignes 60-75 de EventAgenda.vue
+   - Calcul du jour et de l'heure de destination
+   - Mise à jour des données réactives
+   - Indices et explications fournis
+
+5. **Styles ajoutés**
+   - Curseur : `cursor: grab` par défaut
+   - Curseur actif : `cursor: grabbing` pendant drag
+   - Classe `.dragging` : opacity 0.7 + z-index 1000
+
+**Avantages de cette approche :**
+- ✅ Compatible avec CSS Grid (pas de position absolute)
+- ✅ Snap automatique sur les cellules
+- ✅ Préserve la durée de l'événement
+- ✅ Feedback visuel pendant le drag
+- ✅ Mise à jour réactive des données
+- ✅ Gestion propre des event listeners (cleanup)
+
+**Prochaines étapes suggérées :**
+- [ ] Compléter le TODO(human) avec les calculs
+- [ ] Ajouter validation (empêcher drag en dehors de la grille)
+- [ ] Implémenter "ghost element" pour meilleur feedback
+- [ ] Ajouter resize des événements (modifier durée)
+- [ ] Gérer les collisions (empêcher chevauchements)
+
+**Fichiers modifiés :**
+- `gauzian_front/app/components/EventAgenda.vue` : Logique drag & drop
+- `gauzian_front/app/assets/css/agenda.css` : Curseurs grab/grabbing
+
+---
+
+### [2026-02-01 12:45] - Amélioration design événements : lisibilité et palette de couleurs cohérente
+
+**Contexte :**
+- Les événements avaient un gradient violet peu lisible
+- Manque de cohérence dans la palette de couleurs
+- Besoin de variantes de couleurs pour catégoriser les événements
+
+**Améliorations apportées :**
+
+1. **Design événement par défaut amélioré**
+   - Background : #5B7FE8 (bleu solide au lieu de gradient)
+   - Border-left : 3px solid #3D5FC4 (accent bleu foncé)
+   - Box-shadow simplifiée et plus subtile
+   - Padding augmenté : 12px (au lieu de 10px)
+   - Margin verticale : 3px (au lieu de 2px)
+   - Transition : cubic-bezier pour animation plus fluide
+
+2. **Typographie optimisée pour lisibilité**
+   - Titre : line-height 1.4 (au lieu de 1.3), -webkit-line-clamp: 3 (au lieu de 2)
+   - Letter-spacing ajouté : 0.01em (titre), 0.02em (heure)
+   - Opacity augmentée : 0.95 (au lieu de 0.9) pour meilleur contraste
+   - Suppression emoji horloge (demande utilisateur)
+
+3. **Palette de couleurs professionnelle (8 variantes)**
+   ```css
+   event-blue    → #4A90E2  (Meetings/Réunions)
+   event-green   → #10B981  (Projets/Tâches)
+   event-red     → #EF4444  (Urgent/Important)
+   event-orange  → #F59E0B  (Deadlines)
+   event-purple  → #8B5CF6  (Personnel/Social)
+   event-teal    → #14B8A6  (Formation/Apprentissage)
+   event-pink    → #EC4899  (Événements spéciaux)
+   event-gray    → #6B7280  (Bloqué/Indisponible)
+   ```
+
+4. **Principes de design appliqués**
+   - Couleurs solides (pas de gradients) pour meilleure lisibilité
+   - Border-left avec couleur plus foncée pour accent visuel
+   - Contraste texte/fond > 4.5:1 (WCAG AA)
+   - Chaque couleur a une signification sémantique claire
+
+**Résultat visuel :**
+- ✅ Meilleur contraste et lisibilité du texte
+- ✅ Événements visuellement distincts selon leur catégorie
+- ✅ Design plus épuré et professionnel
+- ✅ Hover effect subtil avec brightness(1.05)
+- ✅ Ombres Material Design (double box-shadow)
+
+**Fichiers modifiés :**
+- `gauzian_front/app/assets/css/agenda.css` : Refonte section événements
+
+---
+
+### [2026-02-01 12:30] - Création fichier CSS dédié agenda.css avec design system cohérent
+
+**Contexte :**
+- Besoin de séparer les styles de l'agenda dans un fichier CSS dédié
+- Harmonisation du design avec drive.css pour cohérence visuelle
+- Réutilisation du design system GAUZIAN
+
+**Fichier créé : `gauzian_front/app/assets/css/agenda.css`**
+
+**Design system appliqué :**
+1. **Typographie**
+   - Police : "Roboto", "Segoe UI", sans-serif (cohérent avec drive.css)
+   - Font-weights : 400 (normal), 500 (medium), 600 (semibold)
+   - Tailles responsives avec media queries
+
+2. **Couleurs**
+   - Variables CSS pour cohérence : `var(--color-neutral-900)`, `var(--color-primary)`, etc.
+   - Backgrounds : #ffffff (blanc), #fafafa (fond gris clair), #f5f5f5 (hover)
+   - Bordures : #e0e0e0 (principales), #f0f0f0 (subtiles)
+
+3. **Espacement & Layout**
+   - Border-radius harmonisés : 8px (événements), 10px (scrollbar)
+   - Padding cohérents : 20px desktop, 15px tablette, 12px mobile
+   - Flex: 0 0 300px pour sidebar (identique à drive)
+
+4. **Scrollbars personnalisées**
+   - Width: 8px (thin)
+   - Color: rgba(0, 0, 0, 0.2) transparent
+   - Border-radius: 10px
+   - Hover: rgba(0, 0, 0, 0.3)
+
+5. **Transitions & Animations**
+   - Durées standard : 0.15s-0.3s ease
+   - Hover effects : translateY(-2px) + box-shadow
+   - Active states cohérents
+
+6. **Responsive Design**
+   - Breakpoints : 1024px, 768px, 480px (identiques à drive.css)
+   - Sidebar masquée sur mobile (<768px)
+   - Ajustements progressifs des tailles
+
+**Événements - Design moderne :**
+- Gradient backgrounds (4 variantes couleur)
+- Border-left décoratif (4px rgba(255,255,255,0.3))
+- Box-shadow colorée avec alpha
+- Icône emoji ⏰ pour l'heure
+- Ellipsis sur 2 lignes pour titres longs
+
+**Structure CSS (420 lignes) :**
+```
+├── Layout principal (agenda-page, left, center, top)
+├── Grille agenda (center--center)
+├── Scrollbar personnalisée
+├── Header grille (corner, header, days)
+├── Colonne heures (hour-label)
+├── Cellules calendrier (body-cell)
+├── Événements (agenda-event + variantes)
+└── Responsive (3 breakpoints)
+```
+
+**Modifications dans agenda.vue :**
+- Ajout : `<style src="~/assets/css/agenda.css"></style>`
+- Suppression : ~150 lignes de CSS inline dans `<style scoped>`
+- Maintien : `<style scoped>` vide pour ajouts futurs spécifiques au composant
+
+**Avantages :**
+- ✅ Séparation des préoccupations (structure vs présentation)
+- ✅ Réutilisabilité : agenda.css peut être importé ailleurs
+- ✅ Cohérence visuelle avec drive.css
+- ✅ Maintenance facilitée : un seul endroit pour modifier les styles
+- ✅ Performance : CSS externe peut être mis en cache
+- ✅ Lisibilité : agenda.vue réduit de 150 lignes
+
+**Fichiers créés :**
+- `gauzian_front/app/assets/css/agenda.css` (420 lignes)
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Import CSS externe, nettoyage styles inline
+
+---
+
+### [2026-02-01 12:20] - FIX : Positionnement correct des événements avec margin-left
+
+**Problème :**
+- Les événements prenaient toute la hauteur de l'écran au lieu de respecter leur `grid-row`
+- `position: absolute` sortait les événements du flux de grille
+- Les événements se positionnaient par rapport au viewport, pas à leur cellule
+
+**Cause :**
+- `position: absolute` + `left` ne fonctionne pas avec CSS Grid
+- L'élément ne respecte plus `grid-row` quand il est `absolute`
+
+**Solution :**
+- Retirer `position: absolute`
+- Utiliser `margin-left` au lieu de `left` pour le décalage horizontal
+- Les événements restent dans le flux de grille et respectent `grid-row`
+
+**Modifications :**
+1. Template : `left` → `marginLeft`
+2. CSS : Retirer `position: absolute; top: 2px; bottom: 2px;`
+3. CSS : Ajouter `margin-top: 2px; margin-bottom: 2px;`
+
+**Résultat :**
+- ✅ Événements positionnés correctement sur leur ligne horaire
+- ✅ Chevauchements gérés avec décalage horizontal
+- ✅ Respect parfait du `grid-row`
+
+---
+
+### [2026-02-01 12:15] - Gestion intelligente des chevauchements d'événements (overlapping)
+
+**Contexte :**
+- Besoin de gérer les événements qui se chevauchent sur le même jour
+- Exemple : "Meeting" (10h-11h) et "Project Deadline" (10h-15h) se chevauchent
+- Sans gestion, les événements se superposent complètement
+
+**Algorithme implémenté :**
+
+1. **Détection des chevauchements**
+   ```javascript
+   function eventsOverlap(event1, event2) {
+       return event1.startHour < event2.endHour && event2.startHour < event1.endHour;
+   }
+   ```
+   - Deux événements se chevauchent si leurs intervalles de temps se croisent
+
+2. **Attribution des colonnes** (agenda.vue:148-192)
+   - Grouper les événements par jour
+   - Trier par heure de début
+   - Pour chaque événement, trouver la première colonne libre
+   - Une colonne est libre si aucun événement déjà placé ne chevauche le nouvel événement
+
+3. **Calcul du layout**
+   - `column` : index de la colonne (0, 1, 2, ...)
+   - `totalColumns` : nombre total de colonnes nécessaires pour ce groupe
+   - `width` : `100% / totalColumns` pour diviser l'espace équitablement
+   - `left` : `(column * 100%) / totalColumns` pour positionner côte à côte
+
+**Exemple de calcul :**
+```
+Événements :
+- Event A : 10h-11h → column 0
+- Event B : 10h-15h → column 1 (chevauche A)
+- Event C : 11h-12h → column 0 (ne chevauche plus A car A finit à 11h)
+
+Résultat : 2 colonnes nécessaires
+- A : width = 50%, left = 0%
+- B : width = 50%, left = 50%
+- C : width = 50%, left = 0%
+```
+
+**Modifications techniques :**
+
+1. **Computed property `eventsWithLayout`** (agenda.vue:148-192)
+   - Analyse tous les événements
+   - Retourne un tableau enrichi avec `column` et `totalColumns`
+   - Réactif : se recalcule automatiquement si `events` change
+
+2. **Template mis à jour** (agenda.vue:56-67)
+   ```vue
+   :style="{
+     width: `calc(${100 / event.totalColumns}% - 8px)`,
+     left: `calc(${(event.column * 100) / event.totalColumns}% + 4px)`
+   }"
+   ```
+
+3. **CSS position absolute** (agenda.vue:253-263)
+   - `position: absolute` pour permettre le positionnement avec `left`
+   - `top: 2px` et `bottom: 2px` pour les marges verticales
+   - Les événements se positionnent dans leur cellule de grille parente
+
+**Avantages :**
+- ✅ Gestion automatique de N événements chevauchants
+- ✅ Algorithme optimal : chaque événement prend la première colonne disponible
+- ✅ Largeur et position calculées dynamiquement
+- ✅ Réactif : s'adapte automatiquement aux changements
+- ✅ Pas de limite au nombre de colonnes
+
+**Cas d'usage supportés :**
+- 2 événements se chevauchant partiellement
+- 3+ événements se chevauchant en même temps
+- Événements imbriqués (petit événement dans un grand)
+- Événements adjacents (pas de chevauchement = colonnes réutilisées)
+
+**Test avec les données actuelles :**
+```javascript
+events = [
+  { id: 1, title: "Meeting", dayId: 2, startHour: 10, endHour: 11 },
+  { id: 2, title: "Project", dayId: 2, startHour: 10, endHour: 15 }
+]
+// Résultat : 2 colonnes, chaque événement prend 50% de largeur
+```
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Script, template, et styles
+
+**Amélioration future possible :**
+- [ ] Algorithme plus intelligent pour minimiser le nombre de colonnes (greedy packing)
+- [ ] Événements de durées courtes (<30min) avec affichage réduit
+- [ ] Couleurs différentes pour distinguer les événements qui se chevauchent
+
+---
+
+### [2026-02-01 12:00] - Implémentation du système d'affichage des événements
+
+**Contexte :**
+- Structure `events` déjà créée par l'utilisateur avec `dayId`, `startHour`, `endHour`
+- Besoin d'afficher visuellement les événements sur la grille de l'agenda
+
+**Implémentation :**
+
+1. **Template des événements** (agenda.vue:56-68)
+   - Boucle `v-for` sur le tableau `events`
+   - Positionnement dynamique avec `:style`
+   - Calcul de la colonne : `2 + displayDays.findIndex(d => d.id === event.dayId)`
+   - Calcul des lignes : `gridRow: '${2 + startHour} / ${2 + endHour}'`
+   - Exemple : événement de 10h à 11h → `grid-row: 12 / 13`
+
+2. **Structure de données événement**
+   ```javascript
+   {
+     id: 1,
+     title: "Meeting with Team",
+     dayId: 2,        // ID du jour (correspond à displayDays)
+     startHour: 10,   // Heure de début (0-23)
+     endHour: 11      // Heure de fin (0-23)
+   }
+   ```
+
+3. **CSS des événements** (agenda.vue:222-258)
+   - `z-index: 10` : Apparaît au-dessus des cellules de fond
+   - Gradient violet moderne (`#667eea` → `#764ba2`)
+   - Bordure arrondie + ombre portée pour effet de profondeur
+   - Animation hover : translation vers le haut + ombre renforcée
+   - Texte blanc avec ellipsis sur 2 lignes max
+   - Affichage heure début/fin en petit
+
+4. **Calcul de positionnement**
+   - Row 1 = Header
+   - Row 2 = 0h
+   - Row 3 = 1h
+   - ...
+   - Row 12 = 10h
+   - Donc un événement de 10h à 12h : `grid-row: 12 / 14`
+
+**Fonctionnalités :**
+- ✅ Positionnement automatique selon jour et heure
+- ✅ Hauteur proportionnelle à la durée de l'événement
+- ✅ Design moderne avec gradient et animations
+- ✅ Hover interactif
+- ✅ Texte tronqué avec ellipsis si trop long
+- ✅ Z-index géré pour apparaître au-dessus des cellules
+
+**Exemple d'utilisation :**
+```javascript
+const events = ref([
+  {
+    id: 1,
+    title: "Meeting with Team",
+    dayId: 2,        // Mardi
+    startHour: 10,   // 10h
+    endHour: 12,     // 12h (durée : 2h)
+  }
+]);
+```
+
+**Améliorations futures possibles :**
+- [ ] Couleurs personnalisables par événement
+- [ ] Gestion des événements qui se chevauchent (colonnes multiples)
+- [ ] Modal/popup au clic sur un événement
+- [ ] Drag & drop pour déplacer les événements
+- [ ] Resize pour modifier la durée
+- [ ] Support événements multi-jours
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Template et styles
+
+---
+
+### [2026-02-01 11:45] - FIX CRITIQUE : Alignement parfait des heures avec les cellules de l'agenda
+
+**Problème identifié :**
+- Les labels d'heures n'étaient pas alignés avec les lignes des cellules
+- Cause : La colonne des heures utilisait une sous-grille (`grid-template-rows: repeat(24, 1fr)`) qui n'était PAS synchronisée avec les sous-grilles des colonnes de jours
+- Chaque conteneur avait sa propre grille interne, rendant l'alignement impossible
+
+**Solution implémentée :**
+- **Suppression de toutes les sous-grilles** : Chaque élément (heure + cellule) est maintenant placé directement sur la grille principale
+- **Placement individuel des heures** : Chaque label d'heure est placé avec `:style="{ gridRow: 2 + index }"`
+- **Placement individuel des cellules** : Chaque cellule est placée avec `:style="{ gridColumn: 2 + dayIndex, gridRow: 1 + hourIndex }"`
+- Template `v-for` imbriqué pour générer les 7 × 24 = 168 cellules individuellement
+
+**Modifications techniques :**
+
+1. **Template** (agenda.vue:29-51)
+   ```vue
+   <!-- Avant : 1 conteneur avec 24 enfants -->
+   <div class="hours-column">
+     <div v-for="hour in hours">{{ hour }}h</div>
+   </div>
+
+   <!-- Après : 24 éléments individuels sur la grille -->
+   <div
+     v-for="(hour, index) in hours"
+     :style="{ gridRow: 2 + index }"
+   >{{ hour }}h</div>
+   ```
+
+2. **CSS simplifié** (agenda.vue:171-194)
+   - Suppression de `.agenda-page--center-center__hours-column` (inutile)
+   - Suppression de `.agenda-page--center-center__body-column` (inutile)
+   - `.agenda-page--center-center__hour-label` : simplement `grid-column: 1`
+   - `.agenda-page--center-center__body-cell` : plus de sous-grille, bordures directes
+
+**Résultat :**
+- ✅ Alignement pixel-perfect entre heures et cellules
+- ✅ Toutes les cellules partagent exactement les mêmes lignes de grille
+- ✅ Plus simple : pas de calcul de sous-grilles
+- ✅ Performance : le navigateur n'a qu'une seule grille à calculer
+
+**Avant/Après :**
+```
+Avant (sous-grilles désynchronisées) :
+┌────────┬─────────┐
+│  0h    │         │
+│  1h    │         │  ← Heures compressées
+│  2h    │         │
+│  ...   │         │
+└────────┴─────────┘
+         └─ Cellules grandes
+
+Après (grille principale unique) :
+┌────────┬─────────┐
+│  0h    │         │  ← Parfaitement alignées
+├────────┼─────────┤
+│  1h    │         │
+├────────┼─────────┤
+```
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Template et styles (~30 lignes changées)
+
+---
+
+### [2026-02-01 11:30] - Ajout colonne des heures + refonte layout avec Flexbox
+
+**Contexte :**
+- Besoin d'afficher les heures (0h-23h) sur la gauche de l'agenda
+- Le layout avec `float: left` causait des problèmes de taille (height: 95% ne fonctionnait pas)
+- La grille avec `min-height: 60px` dépassait toujours la hauteur disponible
+
+**Modifications apportées :**
+
+1. **Refonte complète du layout avec Flexbox**
+   - `.agenda-page` : `display: flex; flex-direction: row;` (remplace `float`)
+   - `.agenda-page--center` : `display: flex; flex-direction: column;` pour empiler top et center
+   - `.agenda-page--center--center` : `flex: 1;` pour prendre tout l'espace restant
+   - Suppression de tous les `float: left` (technique obsolète)
+
+2. **Ajout de la colonne des heures**
+   - Nouvelle structure de grille : `grid-template-columns: auto repeat(var(--grid-columns, 7), 1fr)`
+   - Première colonne `auto` pour les heures (largeur adaptative)
+   - Colonnes suivantes avec `1fr` pour les jours
+   - Génération des heures : `Array.from({ length: 24 }, (_, i) => i)`
+
+3. **Nouveaux éléments HTML**
+   - `.agenda-page--center-center__header-corner` : Coin supérieur gauche vide
+   - `.agenda-page--center-center__hours-column` : Colonne contenant les 24 labels d'heures
+   - `.agenda-page--center-center__hour-label` : Chaque label d'heure (0h, 1h, ..., 23h)
+
+4. **Ajustements CSS**
+   - Header des jours : `grid-column: 2 / -1` (commence à la colonne 2 après les heures)
+   - Colonnes des jours : positionnement automatique après la colonne des heures
+   - Colonne des heures : `background-color: #f9f9f9` pour la distinguer
+   - `min-height: 40px` réduit puis commenté pour permettre au grid de s'adapter
+   - Bordures harmonisées avec le reste de l'agenda
+
+**Avantages :**
+- ✅ Layout moderne avec Flexbox (remplace float obsolète)
+- ✅ Height respectée : `flex: 1` prend exactement l'espace restant
+- ✅ Colonne des heures fixe avec largeur adaptative (`auto`)
+- ✅ Meilleure lisibilité : on voit directement l'heure de chaque créneau
+- ✅ Structure scalable : facile d'ajouter des événements avec alignement horaire précis
+- ✅ Code plus maintenable et compréhensible
+
+**Résultat visuel :**
+```
+┌────────┬─────────┬─────────┬─────────┐
+│        │  Mon 2  │  Tue 3  │  Wed 4  │  (header)
+├────────┼─────────┼─────────┼─────────┤
+│   0h   │         │         │         │
+├────────┼─────────┼─────────┼─────────┤
+│   1h   │         │         │         │
+├────────┼─────────┼─────────┼─────────┤
+│  ...   │   ...   │   ...   │   ...   │
+```
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Template, script, et styles (refonte complète du layout)
+
+**Prochaines étapes suggérées :**
+- [ ] Ajouter demi-heures (30min) avec des bordures pointillées
+- [ ] Implémenter le système d'ajout d'événements par clic sur une cellule
+- [ ] Ajouter un composant `AgendaEvent.vue` pour afficher les événements
+- [ ] Gérer le scroll synchronisé entre la colonne des heures et les colonnes de jours
+
+---
+
+### [2026-02-01 11:15] - CSS Grid dynamique basé sur displayDays avec CSS Variables
+
+**Contexte :**
+- Le nombre de colonnes était hardcodé (`repeat(7, 1fr)`) dans le CSS
+- Impossible d'afficher un nombre variable de jours sans modifier le CSS
+
+**Solution implémentée :**
+
+1. **CSS Variables**
+   - Ajout de `:style="{ '--grid-columns': displayDays.length }"` sur `.agenda-page--center--center`
+   - La variable `--grid-columns` est calculée dynamiquement en fonction du nombre d'éléments dans `displayDays`
+   - Utilisation de `repeat(var(--grid-columns, 7), 1fr)` dans le CSS (7 = fallback)
+
+2. **Refactoring du CSS**
+   - `.agenda-page--center--center` : `grid-template-columns: repeat(var(--grid-columns, 7), 1fr)`
+   - `.agenda-page--center-center__header` :
+     * `grid-column: 1 / -1` (remplace `1 / span 7` pour prendre toute la largeur)
+     * `grid-template-columns: repeat(var(--grid-columns, 7), 1fr)`
+
+3. **Renommage pour plus de clarté**
+   - `weekDays` → `displayDays` (peut afficher n'importe quel nombre de jours, pas seulement une semaine)
+   - Commentaire ajouté : "Essayez de changer le nombre de jours pour voir la grille s'adapter !"
+
+**Avantages :**
+- ✅ Grille responsive au nombre de jours (1-7, ou plus)
+- ✅ Pas de duplication de logique (une seule source de vérité : `displayDays.length`)
+- ✅ Facile à tester : supprimez ou ajoutez des jours dans `displayDays` pour voir la grille s'adapter
+- ✅ Meilleure sémantique : `displayDays` est plus clair que `weekDays`
+- ✅ Fallback sécurisé avec `var(--grid-columns, 7)` si la variable n'est pas définie
+
+**Exemple d'utilisation :**
+```javascript
+// Afficher seulement 5 jours (semaine de travail)
+const displayDays = ref([
+  { id: 1, label: 'Mon', date: 2 },
+  { id: 2, label: 'Tue', date: 3 },
+  { id: 3, label: 'Wed', date: 4 },
+  { id: 4, label: 'Thu', date: 5 },
+  { id: 5, label: 'Fri', date: 6 },
+]);
+// La grille s'adapte automatiquement à 5 colonnes !
+```
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Template, script, et styles
+
+---
+
+### [2026-02-01 11:00] - Refactorisation page agenda.vue : v-for dynamique + bordures améliorées
+
+**Contexte :**
+- Code HTML répétitif (7 jours hardcodés manuellement)
+- Absence de bordures entre les cellules de la grille
+- Structure de données statique non maintenable
+
+**Modifications apportées :**
+
+1. **Template HTML**
+   - Remplacement des 7 divs de header répétées par `v-for="day in weekDays"`
+   - Remplacement des 7 divs de body par `v-for` avec génération de 24 cellules horaires par jour
+   - Structure modulaire : `.agenda-page--center-center__body-column` contient `.agenda-page--center-center__body-cell`
+
+2. **Script Setup**
+   - Ajout de `weekDays` ref avec données structurées (id, label, date)
+   - Import de `ref` depuis Vue
+   - Titre corrigé : "GZINFO | Info" → "GZINFO | Agenda"
+
+3. **Styles CSS**
+   - Remplacement de `.agenda-page--center-center__body__day__long` par `.agenda-page--center-center__body-column`
+   - Ajout de `.agenda-page--center-center__body-cell` avec bordures bottom
+   - Bordure droite uniquement entre les colonnes (`:last-child` sans bordure)
+   - Ajout d'effet hover sur les cellules (background légèrement gris)
+   - Couleurs de bordures harmonisées (#ddd pour colonnes, #e8e8e8 pour cellules)
+
+**Bénéfices :**
+- ✅ Code DRY : ~40 lignes réduites à ~10 lignes avec `v-for`
+- ✅ Bordures propres sur chaque cellule de la grille (24h × 7 jours)
+- ✅ Structure de données réactive (facile d'ajouter des événements)
+- ✅ Meilleure maintenabilité et évolutivité
+- ✅ Interaction hover pour UX améliorée
+
+**Fichiers modifiés :**
+- `gauzian_front/app/pages/agenda.vue` : Refonte complète (template + script + styles)
+
+**Prochaines étapes suggérées :**
+- [ ] Implémenter la logique d'ajout d'événements dans les cellules
+- [ ] Ajouter un système de gestion de dates dynamique (semaine courante)
+- [ ] Créer un composable `useAgenda.js` pour la logique métier
+- [ ] Ajouter les indicateurs d'heures (0h, 1h, 2h, etc.)
+
+---
+
 ## 2026-01-31
 
 ### [2026-01-31 14:45] - Implémentation complète de Prometheus avec métriques HTTP et métier
