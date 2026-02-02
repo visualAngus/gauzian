@@ -1478,7 +1478,7 @@ pub async fn health_check_handler(State(state): State<AppState>) -> Response {
         Duration::from_secs(5),
         async {
             use redis::AsyncCommands;
-            let mut con = state.redis_client.get_multiplexed_async_connection().await?;
+            let mut con = state.redis_manager.clone();
             con.ping::<()>().await
         }
     )

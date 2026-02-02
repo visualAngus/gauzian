@@ -107,7 +107,8 @@ pub async fn logout_handler(
     claims: services::Claims, // Extrait automatiquement depuis le token
 ) -> Result<ApiResponse<String>, (StatusCode, String)> {
     // Ajouter le token à la blacklist Redis
-    services::blacklist_token(&state.redis_client, &claims.jti, 10 * 24 * 3600)
+    let mut redis_conn = state.redis_manager.clone();
+    services::blacklist_token(&mut redis_conn, &claims.jti, 10 * 24 * 3600)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis error: {}", e)))?;
 
