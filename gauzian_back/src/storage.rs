@@ -1,5 +1,6 @@
 use aws_sdk_s3::{config::Region, Client};
 use aws_credential_types::Credentials;
+use bytes::Bytes;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
@@ -81,7 +82,7 @@ impl StorageClient {
     /// Inclut un retry automatique en cas d'échec réseau
     pub async fn upload_line(
         &self,
-        data_encrypted: &[u8],
+        data_encrypted: Bytes,
         index: String,
         iv: String,
     ) -> Result<StorageMetadata, StorageError> {
@@ -93,7 +94,7 @@ impl StorageClient {
 
         // Créer les métadonnées
         let mut hasher = Sha256::new();
-        hasher.update(data_encrypted);
+        hasher.update(&data_encrypted);
         let data_hash = format!("{:x}", hasher.finalize());
 
         let metadata = StorageMetadata {
@@ -111,7 +112,7 @@ impl StorageClient {
                 .put_object()
                 .bucket(&self.bucket)
                 .key(&s3_id)
-                .body(aws_sdk_s3::primitives::ByteStream::from(data_encrypted.to_vec()))
+                .body(aws_sdk_s3::primitives::ByteStream::from(data_encrypted.clone()))
                 .metadata("index", &index)
                 .metadata("date-upload", &date_upload)
                 .metadata("data-hash", &metadata.data_hash)
@@ -163,7 +164,7 @@ impl StorageClient {
     pub async fn download_line(
         &self,
         s3_id: &str,
-    ) -> Result<(Vec<u8>, StorageMetadata), StorageError> {
+    ) -> Result<(Bytes, StorageMetadata), StorageError> {
         const MAX_RETRIES: u32 = 3;
         const RETRY_DELAY_MS: u64 = 500;
 
@@ -269,7 +270,7 @@ impl StorageClient {
             bytes.len()
         );
 
-        Ok((bytes.to_vec(), metadata))
+        Ok((bytes, metadata))
     }
 
     /// **Fonction 3: Supprimer les données depuis S3_id**
