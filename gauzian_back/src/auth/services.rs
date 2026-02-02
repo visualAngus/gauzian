@@ -105,19 +105,8 @@ fn revoked_key(jti: &str) -> String {
 
 /// Vérifie si un token est révoqué.
 /// FAIL-CLOSED: si Redis est indisponible, on bloque l'accès par sécurité.
-async fn is_token_blacklisted(client: &redis::Client, jti: &str) -> Result<bool, AuthError> {
-    let mut con = client
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| {
-            tracing::error!("Redis connection failed (fail-closed): {}", e);
-            AuthError(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Authentication service temporarily unavailable".into(),
-            )
-        })?;
-
-    let exists: bool = con.exists(revoked_key(jti)).await.map_err(|e| {
+async fn is_token_blacklisted(manager: &mut redis::aio::ConnectionManager, jti: &str) -> Result<bool, AuthError> {
+    let exists: bool = manager.exists(revoked_key(jti)).await.map_err(|e| {
         tracing::error!("Redis query failed (fail-closed): {}", e);
         AuthError(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -130,12 +119,11 @@ async fn is_token_blacklisted(client: &redis::Client, jti: &str) -> Result<bool,
 
 /// Ajoute un token à la blacklist Redis
 pub async fn blacklist_token(
-    client: &redis::Client,
+    manager: &mut redis::aio::ConnectionManager,
     jti: &str,
     ttl_seconds: usize,
 ) -> Result<(), redis::RedisError> {
-    let mut con = client.get_multiplexed_async_connection().await?;
-    con.set_ex(revoked_key(jti), "revoked", ttl_seconds as u64)
+    manager.set_ex(revoked_key(jti), "revoked", ttl_seconds as u64)
         .await
 }
 
@@ -159,7 +147,8 @@ impl FromRequestParts<AppState> for Claims {
         })?;
 
         // FAIL-CLOSED: si Redis est down, on refuse l'accès
-        if is_token_blacklisted(&state.redis_client, &claims.jti).await? {
+        let mut redis_conn = state.redis_manager.clone();
+        if is_token_blacklisted(&mut redis_conn, &claims.jti).await? {
             return Err(AuthError(
                 StatusCode::UNAUTHORIZED,
                 "Token has been revoked".into(),
