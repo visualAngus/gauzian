@@ -205,7 +205,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                         // Télécharger le chunk avec retry automatique
                         const chunkData = await withRetry(async () => {
                             const chunkRes = await fetch(
-                                `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
+                                `${API_URL}/drive/download_chunk_binary/${chunk.s3_key}`,
                                 {
                                     method: "GET",
                                     credentials: "include",
@@ -224,11 +224,19 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                                 delete transferErrors.value[downloadId];
                             }
 
-                            return await chunkRes.json();
+                            const iv = chunkRes.headers.get("x-chunk-iv");
+                            if (!iv) {
+                                const error = new Error(`Missing IV for chunk ${i}`);
+                                error.status = 500;
+                                throw error;
+                            }
+
+                            const data = await chunkRes.arrayBuffer();
+                            return { data, iv };
                         }, { transferId: downloadId, chunkIndex: i });
 
                         // Déchiffrer le chunk
-                        const decryptedChunk = await decryptDataWithDataKey(
+                        const decryptedChunk = await decryptDataWithDataKeyRaw(
                             chunkData.data,
                             chunkData.iv,
                             dataKey,
@@ -547,7 +555,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                             // Download chunk avec retry automatique
                             const chunkData = await withRetry(async () => {
                                 const chunkRes = await fetch(
-                                    `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
+                                    `${API_URL}/drive/download_chunk_binary/${chunk.s3_key}`,
                                     {
                                         method: "GET",
                                         credentials: "include",
@@ -568,9 +576,19 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                                     delete transferErrors.value[downloadId];
                                 }
 
-                                return await chunkRes.json();
+                                const iv = chunkRes.headers.get("x-chunk-iv");
+                                if (!iv) {
+                                    const error = new Error(
+                                        `Missing IV for file ${metadata.filename}`,
+                                    );
+                                    error.status = 500;
+                                    throw error;
+                                }
+
+                                const data = await chunkRes.arrayBuffer();
+                                return { data, iv };
                             }, { transferId: downloadId, chunkIndex: i });
-                            const decryptedChunk = await decryptDataWithDataKey(
+                            const decryptedChunk = await decryptDataWithDataKeyRaw(
                                 chunkData.data,
                                 chunkData.iv,
                                 dataKey,
@@ -751,23 +769,24 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             const chunk = file.slice(start, end);
 
-            const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
-            const body = {
+            const { cipherBytes, iv } = await encryptDataWithDataKeyRaw(chunk, dataKey);
+            const params = new URLSearchParams({
                 file_id: file_id,
-                index: index,
-                chunk_data: cipherText,
+                index: index.toString(),
                 iv: iv,
-            };
+            });
 
             // Upload avec retry automatique
             await withRetry(async () => {
-                const res = await fetch(`${API_URL}/drive/upload_chunk`, {
+                const res = await fetch(
+                    `${API_URL}/drive/upload_chunk_binary?${params.toString()}`,
+                    {
                     method: "POST",
                     credentials: "include",
                     headers: {
-                        "Content-Type": "application/json",
+                        "Content-Type": "application/octet-stream",
                     },
-                    body: JSON.stringify(body),
+                    body: cipherBytes,
                     signal: abortController.signal,
                 });
 

@@ -1,5 +1,7 @@
 use sqlx::PgPool;
 use crate::storage::StorageClient;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -7,6 +9,8 @@ pub struct AppState {
     pub redis_client: redis::Client,
     pub db_pool: PgPool,
     pub storage_client: StorageClient,
+    // Limite le nombre d'uploads concurrents pour éviter la saturation RAM
+    pub upload_semaphore: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -21,11 +25,19 @@ impl AppState {
             .await
             .expect("Failed to initialize S3 client");
 
+        // Limite à 50 uploads concurrents (ajustable via env var)
+        let max_concurrent_uploads = std::env::var("MAX_CONCURRENT_UPLOADS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(50);
+        tracing::info!("Max concurrent uploads: {}", max_concurrent_uploads);
+
         Self {
             jwt_secret,
             redis_client,
             db_pool,
             storage_client,
+            upload_semaphore: Arc::new(Semaphore::new(max_concurrent_uploads)),
         }
     }
 }

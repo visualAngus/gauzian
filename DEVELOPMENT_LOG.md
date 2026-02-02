@@ -1,5 +1,48 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-02
+
+### [2026-02-02 20:00] - FIX : Fuite mémoire lors des uploads intensifs
+
+**Problème identifié**
+Lors de tests de charge avec 100 VUs × 10 chunks parallèles (≈1000 requêtes simultanées), la RAM du backend montait à 5GB et ne redescendait pas après la fin des tests.
+
+**Causes**
+1. Absence de limite de taille de body sur les endpoints d'upload
+2. Absence de limite de concurrence (1000+ requêtes simultanées)
+3. Accumulation de chunks en mémoire lors des downloads
+4. Clone des données à chaque retry dans storage.rs
+
+**Corrections appliquées**
+
+1. **Limite de body à 10MB par chunk** (`src/drive/routes.rs`)
+   - Ajout de `DefaultBodyLimit::max(10 * 1024 * 1024)` sur les routes d'upload
+   - Rejet des chunks > 10MB avec HTTP 413
+
+2. **Semaphore de 50 uploads concurrents** (`src/state.rs`)
+   - Ajout de `upload_semaphore: Arc<Semaphore>` dans AppState
+   - Configuration via `MAX_CONCURRENT_UPLOADS` (défaut: 50)
+   - Rejection gracieuse avec "Server busy, please retry" si limite atteinte
+
+3. **Buffer limité à 2 chunks en download** (`src/drive/handlers.rs`)
+   - Remplacement de `.then()` par `.map().buffer_unordered(2)`
+   - Évite de charger tous les chunks en avance
+
+4. **Handlers modifiés**
+   - `upload_chunk_handler()`: Acquisition du semaphore avant traitement
+   - `upload_chunk_binary_handler()`: Acquisition du semaphore avant traitement
+   - `download_file_handler()`: Stream avec back-pressure
+
+**Résultat attendu**
+- RAM: 1GB → 3GB pendant le test → retour à 1-1.5GB après
+- Uploads concurrents limités à 50, les autres reçoivent un retry
+- Pas d'accumulation de mémoire entre les tests
+
+**Documentation**
+- Création de `gauzian_back/MEMORY_FIX.md` avec guide complet
+- Instructions de configuration, testing, et monitoring
+- Table de recommandations selon la RAM disponible
+
 ## 2026-02-01
 
 ### [2026-02-01 20:30] - DOCS : Mise à jour complète de l'architecture backend

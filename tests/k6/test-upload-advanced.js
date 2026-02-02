@@ -1,9 +1,7 @@
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { randomString } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
-
-// Configuration très stressante pour upload
-import encoding from 'k6/encoding';
+import { randomBytes } from 'k6/crypto';
 
 export let options = {
     scenarios: {
@@ -52,6 +50,13 @@ function generateUniqueUser() {
 function getAuthHeaders(token) {
     return {
         'Content-Type': 'application/json',
+        'Cookie': `token=${token}`,
+    };
+}
+
+function getAuthHeadersBinary(token) {
+    return {
+        'Content-Type': 'application/octet-stream',
         'Cookie': `token=${token}`,
     };
 }
@@ -126,15 +131,9 @@ function initializeFile(token, filename = null) {
     return { fileId, response: res };
 }
 
-// Ajouter une fonction pour générer du Base64 valide
-function generateBase64ChunkData(sizeBytes = 1024) {
-    // Générer des données binaires aléatoires
-    let data = '';
-    for (let i = 0; i < sizeBytes; i++) {
-        data += String.fromCharCode(Math.floor(Math.random() * 256));
-    }
-    // Encoder en Base64 avec le module encoding de K6
-    return encoding.b64encode(data);
+// Générer des données binaires aléatoires
+function generateChunkBytes(sizeBytes = 1024) {
+    return randomBytes(sizeBytes);
 }
 // Upload un chunk
 function uploadMultipleChunksParallel(token, fileId, numChunks = 5) {
@@ -143,15 +142,10 @@ function uploadMultipleChunksParallel(token, fileId, numChunks = 5) {
     for (let i = 0; i < numChunks; i++) {
         requests.push({
             method: 'POST',
-            url: `${BASE_URL}/drive/upload_chunk`,
-            body: JSON.stringify({
-                file_id: fileId,
-                index: i,
-                chunk_data: generateBase64ChunkData(512),
-                iv: 'mock_iv_' + randomString(32),
-            }),
+            url: `${BASE_URL}/drive/upload_chunk_binary?file_id=${fileId}&index=${i}&iv=mock_iv_${randomString(32)}`,
+            body: generateChunkBytes(512),
             params: {
-                headers: getAuthHeaders(token),
+                headers: getAuthHeadersBinary(token),
             },
         });
     }

@@ -1,4 +1,4 @@
-use axum::extract::{Json, Path, State};
+use axum::extract::{Json, Path, Query, State};
 use axum::response::{IntoResponse, Response};
 // use chrono::Utc;
 use serde::{Deserialize};
@@ -13,7 +13,7 @@ use sqlx;
 
 // use axum::http::HeaderMap;
 
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::http::header;
 use futures::stream::StreamExt;
 
@@ -201,11 +201,28 @@ pub struct UploadChunkRequest {
     chunk_data: String, // base64 encoded
     iv: String,
 }
+
+#[derive(Deserialize)]
+pub struct UploadChunkBinaryQuery {
+    file_id: Uuid,
+    index: i32,
+    iv: String,
+}
+
 pub async fn upload_chunk_handler(
     State(state): State<AppState>,
     claims: Claims,
     Json(body): Json<UploadChunkRequest>,
 ) -> Response {
+    // Acquérir un permit pour limiter les uploads concurrents
+    let _permit = match state.upload_semaphore.try_acquire() {
+        Ok(permit) => permit,
+        Err(_) => {
+            tracing::warn!("Upload rejected: too many concurrent uploads");
+            return ApiResponse::bad_request("Server busy, please retry").into_response();
+        }
+    };
+
     // Vérifier que l'utilisateur a le droit d'uploader sur ce fichier
     let has_access = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
@@ -227,7 +244,7 @@ pub async fn upload_chunk_handler(
     }
 
     let chunk_data = match base64::engine::general_purpose::STANDARD.decode(&body.chunk_data) {
-        Ok(data) => data,
+        Ok(data) => bytes::Bytes::from(data),
         Err(e) => {
             tracing::error!("Failed to decode chunk data: {:?}", e);
             return ApiResponse::bad_request("Invalid chunk data").into_response();
@@ -239,7 +256,7 @@ pub async fn upload_chunk_handler(
     // Mesurer la durée d'upload du chunk vers S3
     let upload_start = std::time::Instant::now();
     let meta_data_s3 = match storage_client
-        .upload_line(&chunk_data, body.index.to_string(), body.iv.clone())
+        .upload_line(chunk_data, body.index.to_string(), body.iv.clone())
         .await
     {
         Ok(meta) => {
@@ -259,6 +276,91 @@ pub async fn upload_chunk_handler(
         &state.db_pool,
         body.file_id,
         body.index,
+        &meta_data_s3.s3_id,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to insert S3 key into database: {:?}", e);
+            return ApiResponse::internal_error("Failed to record chunk metadata").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "s3_record_id": s3_record_id,
+        "s3_id": meta_data_s3.s3_id,
+        "index": meta_data_s3.index,
+        "date_upload": meta_data_s3.date_upload,
+        "data_hash": meta_data_s3.data_hash,
+    }))
+    .into_response()
+}
+
+pub async fn upload_chunk_binary_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Query(query): Query<UploadChunkBinaryQuery>,
+    body: Bytes,
+) -> Response {
+    // Acquérir un permit pour limiter les uploads concurrents
+    let _permit = match state.upload_semaphore.try_acquire() {
+        Ok(permit) => permit,
+        Err(_) => {
+            tracing::warn!("Upload rejected: too many concurrent uploads");
+            return ApiResponse::bad_request("Server busy, please retry").into_response();
+        }
+    };
+
+    // Vérifier que l'utilisateur a le droit d'uploader sur ce fichier
+    let has_access = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(query.file_id)
+    .bind(claims.id)
+    .fetch_one(&state.db_pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check file access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("File not found or access denied").into_response();
+    }
+
+    if body.is_empty() {
+        return ApiResponse::bad_request("Empty chunk body").into_response();
+    }
+
+    let storage_client = &state.storage_client;
+
+    // Mesurer la durée d'upload du chunk vers S3
+    let upload_start = std::time::Instant::now();
+    let meta_data_s3 = match storage_client
+        .upload_line(body, query.index.to_string(), query.iv.clone())
+        .await
+    {
+        Ok(meta) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, true);
+            meta
+        }
+        Err(e) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, false);
+            tracing::error!("Failed to upload chunk to storage: {:?}", e);
+            return ApiResponse::internal_error("Failed to upload chunk").into_response();
+        }
+    };
+
+    let s3_record_id = match repo::save_chunk_metadata(
+        &state.db_pool,
+        query.file_id,
+        query.index,
         &meta_data_s3.s3_id,
     )
     .await
@@ -715,14 +817,15 @@ pub async fn download_file_handler(
     // Track successful download (file exists and chunks are valid)
     crate::metrics::track_file_download(true);
     // Créer un stream qui télécharge et envoie chaque chunk
+    // buffer_unordered(2) limite le nombre de chunks chargés en avance
     let stream = futures::stream::iter(chunks)
-        .then(move |chunk_info| {
+        .map(move |chunk_info| {
             let storage = state.storage_client.clone();
             async move {
                 let s3_key = chunk_info.get("s3_key")?.as_str()?;
 
                 match storage.download_line(s3_key).await {
-                    Ok((vec, _metadata)) => Some(Ok::<_, std::io::Error>(vec)),
+                    Ok((bytes, _metadata)) => Some(Ok::<_, std::io::Error>(bytes)),
                     Err(e) => {
                         tracing::error!("Failed to download chunk {}: {:?}", s3_key, e);
                         None
@@ -730,13 +833,8 @@ pub async fn download_file_handler(
                 }
             }
         })
-        .filter_map(|x| async move { x })
-        .map(|result| {
-            result.map(|vec| {
-                use bytes::Bytes;
-                Bytes::from(vec)
-            })
-        });
+        .buffer_unordered(2) // Limite à 2 chunks chargés en avance pour réduire l'utilisation RAM
+        .filter_map(|x| async move { x });
 
     let body = Body::from_stream(stream);
 
@@ -796,6 +894,60 @@ pub async fn download_chunk_handler(
                 "index": metadata.index,
             }))
             .into_response()
+        }
+        Err(e) => {
+            let download_duration = download_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_download_duration(download_duration, false);
+            tracing::error!("Failed to download chunk: {:?}", e);
+            ApiResponse::internal_error("Failed to download chunk").into_response()
+        }
+    }
+}
+
+pub async fn download_chunk_binary_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(s3_key): Path<String>,
+) -> Response {
+    // Vérifier que l'utilisateur a accès au fichier associé à ce chunk
+    let has_access = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(
+            SELECT 1 FROM s3_keys sk
+            JOIN file_access fa ON fa.file_id = sk.file_id
+            WHERE sk.s3_key = $1 AND fa.user_id = $2
+        )"
+    )
+    .bind(&s3_key)
+    .bind(claims.id)
+    .fetch_one(&state.db_pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check chunk access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("Chunk not found or access denied").into_response();
+    }
+
+    // Mesurer la durée de download du chunk depuis S3
+    let download_start = std::time::Instant::now();
+    match state.storage_client.download_line(&s3_key).await {
+        Ok((data, metadata)) => {
+            let download_duration = download_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_download_duration(download_duration, true);
+
+            let response = axum::response::Response::builder()
+                .header(header::CONTENT_TYPE, "application/octet-stream")
+                .header("x-chunk-index", metadata.index)
+                .header("x-chunk-iv", metadata.iv.unwrap_or_default())
+                .body(Body::from(data))
+                .unwrap();
+
+            response
         }
         Err(e) => {
             let download_duration = download_start.elapsed().as_secs_f64();
@@ -1095,7 +1247,7 @@ pub async fn share_folder_batch_handler(
 
 pub async fn get_public_key_handler_by_email(
     State(state): State<AppState>,
-    claims: Claims,
+    _claims: Claims,
     Path(email): Path<String>,
 ) -> Response {
     let user_info = match crate::auth::repo::get_user_by_email(&state.db_pool, &email).await {
