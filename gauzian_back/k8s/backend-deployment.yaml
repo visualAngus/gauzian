@@ -22,10 +22,10 @@ spec:
         resources:
           requests:
             cpu: 100m         # 0.1 CPU cores (raisonnable pour Rust)
-            memory: 256Mi     # 256 MB de RAM
+            memory: 512Mi     # 512 MB de RAM (augmenté pour uploads concurrents)
           limits:
-            cpu: 300m         # Maximum 0.3 CPU cores
-            memory: 512Mi     # Maximum 512 MB de RAM
+            cpu: 500m         # Maximum 0.5 CPU cores
+            memory: 1Gi       # Maximum 1 GB de RAM (pour gérer les pics d'upload)
         env:
         - name: DB_USER
           valueFrom:
@@ -73,6 +73,8 @@ spec:
               key: JWT_SECRET
         - name: RUST_LOG
           value: "gauzian_back=info,tower_http=info"
+        - name: MAX_CONCURRENT_UPLOADS
+          value: "30"  # Limite à 30 uploads concurrents (adapté pour 512MB RAM)
         # Startup Probe: Give the app time to initialize all connections
         startupProbe:
           httpGet:

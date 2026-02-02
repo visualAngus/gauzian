@@ -1,7 +1,11 @@
 // Routes du module drive
 // Gestion des fichiers, dossiers, upload, download, partage
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    extract::DefaultBodyLimit,
+    routing::{get, post},
+    Router
+};
 use crate::state::AppState;
 
 use super::handlers;
@@ -9,15 +13,22 @@ use super::handlers;
 /// Toutes les routes liées au drive (fichiers/dossiers)
 /// Retourne un Router<AppState> qui sera composé dans routes.rs principal
 pub fn drive_routes() -> Router<AppState> {
+    // Routes d'upload avec limite de 2MB par chunk
+    let upload_routes = Router::new()
+        .route("/upload_chunk", post(handlers::upload_chunk_handler))
+        .route("/upload_chunk_binary", post(handlers::upload_chunk_binary_handler))
+        .layer(DefaultBodyLimit::max(2 * 1024 * 1024)); // 2 MB max par chunk
+
     Router::new()
         // Gestion des fichiers
         .route("/initialize_file", post(handlers::initialize_file_handler))
-        .route("/upload_chunk", post(handlers::upload_chunk_handler))
+        .merge(upload_routes)
         .route("/finalize_upload/{file_id}/{etat}", post(handlers::finalize_upload_handler))
         .route("/abort_upload", post(handlers::abort_upload_handler))
         .route("/file/{file_id}", get(handlers::get_file_info_handler))
         .route("/download/{file_id}", get(handlers::download_file_handler))
         .route("/download_chunk/{s3_key}", get(handlers::download_chunk_handler))
+        .route("/download_chunk_binary/{s3_key}", get(handlers::download_chunk_binary_handler))
         .route("/delete_file", post(handlers::delete_file_handler))
         .route("/rename_file", post(handlers::rename_file_handler))
         .route("/move_file", post(handlers::move_file_handler))

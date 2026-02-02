@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { randomString } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
-import encoding from 'k6/encoding';
+import { randomBytes } from 'k6/crypto';
 
 // Configuration STRESS TEST COMPLET - 25-30 minutes
 export let options = {
@@ -88,22 +88,16 @@ function getAuthHeaders(token) {
     };
 }
 
-// Générer des chunks Base64 de taille variable (optimisé pour gros chunks)
-function generateBase64ChunkData(sizeKB = 1) {
-    // Générer des données par blocs pour éviter les problèmes de mémoire
-    const blockSize = 1024; // 1KB par bloc
-    const numBlocks = sizeKB;
-    let data = '';
-    
-    for (let i = 0; i < numBlocks; i++) {
-        let block = '';
-        for (let j = 0; j < blockSize; j++) {
-            block += String.fromCharCode(Math.floor(Math.random() * 256));
-        }
-        data += block;
-    }
-    
-    return encoding.b64encode(data);
+function getAuthHeadersBinary(token) {
+    return {
+        'Content-Type': 'application/octet-stream',
+        'Cookie': `token=${token}`,
+    };
+}
+
+// Générer des chunks binaires (1KB par unité)
+function generateChunkBytes(sizeKB = 1) {
+    return randomBytes(sizeKB * 1024);
 }
 
 // Register
@@ -279,16 +273,12 @@ function initializeFile(token, sizeBytes = 5242880, folderId = 'root') {
 
 // Upload un chunk simple (max 1MB = 1024KB)
 function uploadChunk(token, fileId, index, chunkSizeKB = 256) {
-    const payload = JSON.stringify({
-        file_id: fileId,
-        index: index,
-        chunk_data: generateBase64ChunkData(chunkSizeKB),
-        iv: 'mock_iv_' + randomString(32),
-    });
-
-    const res = http.post(`${BASE_URL}/drive/upload_chunk`, payload, {
-        headers: getAuthHeaders(token),
-    });
+    const iv = 'mock_iv_' + randomString(32);
+    const res = http.post(
+        `${BASE_URL}/drive/upload_chunk_binary?file_id=${fileId}&index=${index}&iv=${iv}`,
+        generateChunkBytes(chunkSizeKB),
+        { headers: getAuthHeadersBinary(token) }
+    );
 
     check(res, {
         'upload chunk OK': (r) => r.status === 200,
@@ -302,17 +292,13 @@ function uploadChunksBatch(token, fileId, numChunks = 5, chunkSizeKB = 256) {
     const requests = [];
 
     for (let i = 0; i < numChunks; i++) {
+        const iv = 'mock_iv_' + randomString(32);
         requests.push({
             method: 'POST',
-            url: `${BASE_URL}/drive/upload_chunk`,
-            body: JSON.stringify({
-                file_id: fileId,
-                index: i,
-                chunk_data: generateBase64ChunkData(chunkSizeKB),
-                iv: 'mock_iv_' + randomString(32),
-            }),
+            url: `${BASE_URL}/drive/upload_chunk_binary?file_id=${fileId}&index=${i}&iv=${iv}`,
+            body: generateChunkBytes(chunkSizeKB),
             params: {
-                headers: getAuthHeaders(token),
+                headers: getAuthHeadersBinary(token),
             },
         });
     }

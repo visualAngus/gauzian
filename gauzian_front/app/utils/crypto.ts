@@ -625,6 +625,45 @@ export async function encryptDataWithDataKey(
     iv: buffToB64(iv),
   };
 }
+
+// Version binaire pour éviter base64 (upload/download chunks)
+export async function encryptDataWithDataKeyRaw(
+  data: string | ArrayBuffer | Blob,
+  dataKeyB64: string
+): Promise<{ cipherBytes: Uint8Array; iv: string }> {
+  assertClient();
+  const dataKeyBuf = b64ToBuff(dataKeyB64);
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(dataKeyBuf) as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+
+  const iv = new Uint8Array(12);
+  window.crypto.getRandomValues(iv);
+
+  let dataBuffer: ArrayBuffer;
+  if (typeof data === "string") {
+    dataBuffer = toArrayBuffer(strToBuff(data));
+  } else if (data instanceof Blob) {
+    dataBuffer = await data.arrayBuffer();
+  } else {
+    dataBuffer = data;
+  }
+
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
+    aesKey,
+    dataBuffer as BufferSource
+  );
+
+  return {
+    cipherBytes: new Uint8Array(encryptedBuffer),
+    iv: buffToB64(iv),
+  };
+}
   
 export async function decryptDataWithDataKey(
   cipherTextB64: string,
@@ -648,6 +687,37 @@ export async function decryptDataWithDataKey(
     { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
     aesKey,
     toArrayBuffer(cipherBuffer) as BufferSource
+  );
+
+  return new Uint8Array(decryptedBuffer);
+}
+
+// Version binaire pour chunks (body octet-stream)
+export async function decryptDataWithDataKeyRaw(
+  cipherBytes: ArrayBuffer | Uint8Array,
+  ivB64: string,
+  dataKeyB64: string
+): Promise<Uint8Array> {
+  assertClient();
+  const dataKeyBuf = b64ToBuff(dataKeyB64);
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw",
+    toArrayBuffer(dataKeyBuf) as BufferSource,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const iv = b64ToBuff(ivB64);
+  const cipherBuffer =
+    cipherBytes instanceof Uint8Array
+      ? toArrayBuffer(cipherBytes)
+      : cipherBytes;
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: toArrayBuffer(iv) as BufferSource },
+    aesKey,
+    cipherBuffer as BufferSource
   );
 
   return new Uint8Array(decryptedBuffer);
