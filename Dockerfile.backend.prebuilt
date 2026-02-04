@@ -1,0 +1,11 @@
+# Dockerfile pour Clever Cloud - Pull image pre-built depuis Docker Hub
+# Déploiement ultra-rapide (~30 secondes)
+
+FROM angusvisual/gauzian-backend:latest
+
+ENV HOST=0.0.0.0
+ENV PORT=8080
+
+EXPOSE 8080
+
+CMD ["./server"]
