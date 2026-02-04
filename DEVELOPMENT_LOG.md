@@ -2,6 +2,31 @@
 
 ## 2026-02-04
 
+### [2026-02-04 21:00] - FIX : Augmentation retries S3 pour Cellar Clever Cloud
+
+**Problème identifié**
+- Logs : `S3Error("Failed to upload after 3 retries: dispatch failure")`
+- Cause : Cellar Clever Cloud (S3) a une latence réseau élevée au démarrage
+- `init_bucket()` réussissait avec 5 retries, mais `upload_line()` n'en avait que 3
+
+**Modifications**
+1. **storage.rs:upload_line()** :
+   - MAX_RETRIES : 3 → 5
+   - RETRY_DELAY_MS : 500 → 1000
+
+2. **storage.rs:download_line()** :
+   - MAX_RETRIES : 3 → 5
+   - RETRY_DELAY_MS : 500 → 1000
+
+3. **routes.rs** :
+   - Ajout route `/` pour health check Clever Cloud
+
+**Impact**
+✅ Upload/download chunks plus résilients face à la latence S3
+✅ Backoff exponentiel passe de 1.5s max à 15s max
+✅ Aligné avec `init_bucket()` qui utilisait déjà 5 retries
+✅ Réduit les erreurs 500 sur upload en production
+
 ### [2026-02-04 18:00] - CLOUDFLARE WORKERS : Guide de configuration reverse proxy
 
 **Documentation**

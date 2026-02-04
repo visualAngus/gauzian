@@ -6,6 +6,7 @@ use crate::{auth, drive,agenda, metrics, state::AppState};
 pub fn app(state: AppState) -> Router {
     Router::new()
         // Endpoints système (health check, métriques)
+        .route("/", get(health_check_handler))  // Pour Clever Cloud health check
         .route("/health/ready", get(health_check_handler))
         .route("/metrics", get(|| async { metrics::metrics_text() }))
         // Composition des modules
