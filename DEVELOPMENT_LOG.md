@@ -2,6 +2,31 @@
 
 ## 2026-02-04
 
+### [2026-02-04 17:30] - CLEVER CLOUD : Dockerfiles wrapper pour monorepo
+
+**Modifications**
+1. **Dockerfile.backend** (nouveau à la racine) :
+   - Dockerfile wrapper qui build depuis `gauzian_back/`
+   - Compatible avec Clever Cloud via `CC_DOCKERFILE=Dockerfile.backend`
+   - Build multi-stage : Rust builder + Debian runtime
+   - Port 8080 par défaut
+
+2. **Dockerfile.frontend** (nouveau à la racine) :
+   - Dockerfile wrapper qui build depuis `gauzian_front/`
+   - Compatible avec Clever Cloud via `CC_DOCKERFILE=Dockerfile.frontend`
+   - Build multi-stage : Node builder + Node runtime
+   - Port 8080 par défaut
+
+3. **CLEVER_CLOUD_DEPLOY.md** :
+   - Mise à jour des instructions : `CC_DOCKER_BUILD_DIR` → `CC_DOCKERFILE`
+   - Documentation de la structure monorepo avec Dockerfiles wrapper
+
+**Impact**
+✅ Structure monorepo propre et compatible Clever Cloud
+✅ Les Dockerfiles originaux dans les sous-dossiers restent intacts (K8s, dev local)
+✅ Pattern standard pour monorepos Docker (Google, Meta, etc.)
+✅ Pas besoin de séparer le repo en deux
+
 ### [2026-02-04 10:45] - FRONTEND : Configuration dynamique de l'API URL
 
 **Modifications**

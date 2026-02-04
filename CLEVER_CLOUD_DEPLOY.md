@@ -30,9 +30,9 @@ Branche : main (ou feat/micros-sevices-prometheus selon votre workflow)
 
 **Configuration Docker :**
 ```bash
-CC_DOCKER_BUILD_DIR=gauzian_back
-CC_DOCKER_EXPOSED_HTTP_PORT=8080  # Optionnel (8080 par défaut)
+CC_DOCKERFILE=Dockerfile.backend
 ```
+> ⚠️ **Important** : Cette variable indique à Clever Cloud d'utiliser le fichier `Dockerfile.backend` à la racine du repo
 
 **Base de données :**
 ```bash
@@ -88,9 +88,9 @@ Branche : main
 
 **Configuration Docker :**
 ```bash
-CC_DOCKER_BUILD_DIR=gauzian_front
-CC_DOCKER_EXPOSED_HTTP_PORT=8080  # Optionnel (8080 par défaut)
+CC_DOCKERFILE=Dockerfile.frontend
 ```
+> ⚠️ **Important** : Cette variable indique à Clever Cloud d'utiliser le fichier `Dockerfile.frontend` à la racine du repo
 
 **API Backend :**
 ```bash
@@ -238,7 +238,11 @@ clever logs --app gauzian-backend --since 5m
 
 1. **Port 3000 → 8080** : Les Dockerfiles ont été modifiés pour Clever Cloud
 2. **Rétrocompatibilité K8s** : Définir `PORT=3000` en env var dans vos deployments K8s
-3. **Monorepo** : Pas besoin de séparer le repo, `CC_DOCKER_BUILD_DIR` gère tout
+3. **Monorepo** :
+   - Structure propre avec des Dockerfiles wrapper à la racine
+   - `Dockerfile.backend` → Build depuis `gauzian_back/`
+   - `Dockerfile.frontend` → Build depuis `gauzian_front/`
+   - Les Dockerfiles originaux dans les sous-dossiers restent pour K8s/dev local
 4. **Migrations DB** : Elles s'exécutent automatiquement au démarrage du backend (voir `main.rs:18-21`)
 
 ---
