@@ -1,6 +1,5 @@
-# Dockerfile pour Clever Cloud - Pull image pre-built depuis Docker Hub
-# Déploiement ultra-rapide (~30 secondes)
-
+# Force pull de la dernière image à chaque build
+ARG CACHEBUST=1
 FROM angusvisual/gauzian-backend:latest
 
 ENV HOST=0.0.0.0
