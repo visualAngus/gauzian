@@ -86,8 +86,8 @@ impl StorageClient {
         index: String,
         iv: String,
     ) -> Result<StorageMetadata, StorageError> {
-        const MAX_RETRIES: u32 = 3;
-        const RETRY_DELAY_MS: u64 = 500;
+        const MAX_RETRIES: u32 = 5;  // Augmenté pour Cellar Clever Cloud
+        const RETRY_DELAY_MS: u64 = 1000;  // 1s au lieu de 500ms
 
         let s3_id = Uuid::new_v4().to_string();
         let date_upload = Utc::now().to_rfc3339();
@@ -165,8 +165,8 @@ impl StorageClient {
         &self,
         s3_id: &str,
     ) -> Result<(Bytes, StorageMetadata), StorageError> {
-        const MAX_RETRIES: u32 = 3;
-        const RETRY_DELAY_MS: u64 = 500;
+        const MAX_RETRIES: u32 = 5;  // Augmenté pour Cellar Clever Cloud
+        const RETRY_DELAY_MS: u64 = 1000;  // 1s au lieu de 500ms
 
         let mut last_error = None;
         let resp = {
