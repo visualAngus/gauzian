@@ -2,6 +2,37 @@
 
 ## 2026-02-04
 
+### [2026-02-04 18:00] - CLOUDFLARE WORKERS : Guide de configuration reverse proxy
+
+**Documentation**
+1. **CLOUDFLARE_WORKERS_SETUP.md** (nouveau) :
+   - Guide complet pour configurer Cloudflare Workers comme reverse proxy
+   - Code Worker avec routing Frontend/Backend
+   - Configuration rate limiting et monitoring
+   - Instructions pour domaine custom
+   - Troubleshooting et best practices
+
+**Architecture finale**
+```
+User → Cloudflare Workers (Edge - 300+ datacenters)
+         ├─ / → Frontend Clever Cloud
+         └─ /api → Backend Clever Cloud (préfixe /api retiré)
+```
+
+**Avantages de cette architecture**
+✅ Gratuit (10M requêtes/mois Cloudflare)
+✅ CDN mondial automatique
+✅ Rate limiting intégré
+✅ Pas de CORS (même domaine)
+✅ SSL automatique
+✅ Analytics en temps réel
+✅ Pas de 3e app Clever Cloud à payer
+
+**Configuration requise**
+- Frontend : `NUXT_PUBLIC_API_URL=/api` (chemin relatif)
+- Backend : Aucune modification (pas de CORS nécessaire)
+- Worker : Variables `FRONTEND_URL` et `BACKEND_URL`
+
 ### [2026-02-04 17:30] - CLEVER CLOUD : Dockerfiles wrapper pour monorepo
 
 **Modifications**
