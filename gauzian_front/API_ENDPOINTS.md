@@ -4,15 +4,24 @@ Ce document liste tous les endpoints API nécessaires pour l'agenda. Tous les ap
 
 ## Base URL
 ```
-/api
+/api/agenda
 ```
 
 ---
 
 ## Événements
 
-### GET /api/events
-Récupérer tous les événements de l'utilisateur connecté
+### GET /api/agenda/events
+Récupérer les événements de l'utilisateur connecté dans un intervalle donné
+
+**Query Parameters:**
+- `startDayId` (required) - Début de l'intervalle (nombre de jours depuis le 1er janvier 2020)
+- `endDayId` (required) - Fin de l'intervalle (nombre de jours depuis le 1er janvier 2020)
+
+**Example:**
+```
+GET /api/agenda/events?startDayId=2200&endDayId=2230
+```
 
 **Response:**
 ```json
@@ -36,11 +45,13 @@ Récupérer tous les événements de l'utilisateur connecté
 ]
 ```
 
+**Note:** Retourne uniquement les événements où `startDayId` ou `endDayId` intersecte avec l'intervalle demandé. Pour les événements multi-jours, l'événement est inclus si une partie chevauche l'intervalle.
+
 **Fichier:** `gauzian_front/app/composables/agenda/useEvents.js:12`
 
 ---
 
-### POST /api/events
+### POST /api/agenda/events
 Créer un nouvel événement
 
 **Request Body:**
@@ -84,7 +95,7 @@ Créer un nouvel événement
 
 ---
 
-### PUT /api/events/:id
+### PUT /api/agenda/events/:id
 Mettre à jour un événement existant
 
 **Request Body:**
@@ -121,7 +132,7 @@ Mettre à jour un événement existant
 
 ---
 
-### DELETE /api/events/:id
+### DELETE /api/agenda/events/:id
 Supprimer un événement
 
 **Response:**
@@ -138,7 +149,7 @@ Supprimer un événement
 
 ## Catégories
 
-### GET /api/categories
+### GET /api/agenda/categories
 Récupérer toutes les catégories de l'utilisateur (prédéfinies + personnalisées)
 
 **Response:**
@@ -167,7 +178,7 @@ Récupérer toutes les catégories de l'utilisateur (prédéfinies + personnalis
 
 ---
 
-### POST /api/categories
+### POST /api/agenda/categories
 Créer une nouvelle catégorie personnalisée
 
 **Request Body:**
@@ -196,7 +207,7 @@ Créer une nouvelle catégorie personnalisée
 
 ---
 
-### PUT /api/categories/:id
+### PUT /api/agenda/categories/:id
 Mettre à jour une catégorie
 
 **Request Body:**
@@ -225,7 +236,7 @@ Mettre à jour une catégorie
 
 ---
 
-### DELETE /api/categories/:id
+### DELETE /api/agenda/categories/:id
 Supprimer une catégorie
 
 **Response:**
@@ -258,6 +269,25 @@ Tous les endpoints nécessitent une authentification. Les requêtes doivent incl
 ### dayId
 Le `dayId` est calculé comme le nombre de jours depuis le 1er janvier 2020 (epoch).
 Voir `gauzian_front/app/composables/agenda/useNavigation.js:288` pour la conversion.
+
+### Intervalle de chargement
+**Important:** Toujours spécifier `start_day_id` et `end_day_id` lors du chargement des événements pour limiter la quantité de données transférées.
+
+**Recommandations:**
+- Vue mensuelle : charger le mois courant (ex: `start_day_id=2200`, `end_day_id=2230`)
+- Vue hebdomadaire : charger la semaine courante ± 1 semaine (tampon)
+- Vue journalière : charger le jour courant ± 3 jours (tampon)
+
+**Exemple de calcul:**
+```javascript
+// Charger le mois de février 2026
+const startDayId = dayIdFromDate(new Date('2026-02-01')); // 2222
+const endDayId = dayIdFromDate(new Date('2026-02-28'));   // 2249
+
+const response = await fetch(`/api/agenda/events?startDayId=${startDayId}&endDayId=${endDayId}`, {
+    credentials: 'include'
+});
+```
 
 ### Événements multi-jours
 - `isMultiDay: true` quand `startDayId !== endDayId`

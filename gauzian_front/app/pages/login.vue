@@ -156,7 +156,8 @@ import {
 
 } from "~/utils/crypto";
 
-const API_URL = "https://gauzian.pupin.fr/api";
+// Configuration dynamique de l'API URL (Clever Cloud, K8s, local)
+const API_URL = useApiUrl();
 
 const etat = ref("login");
 const loading = ref(false);

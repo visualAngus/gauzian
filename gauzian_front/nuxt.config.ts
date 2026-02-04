@@ -3,7 +3,16 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   css: ['~/assets/css/theme.css'],
-  
+
+  // Configuration runtime (accessible client-side)
+  runtimeConfig: {
+    public: {
+      // La variable NUXT_PUBLIC_API_URL sera automatiquement mappée ici
+      // Valeur par défaut pour le développement local
+      apiUrl: 'https://gauzian.pupin.fr/api'
+    }
+  },
+
   // Configuration de sécurité
   nitro: {
     routeRules: {
@@ -34,7 +43,8 @@ export default defineNuxtConfig({
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: https:",
-            "connect-src 'self' https://gauzian.pupin.fr http://localhost:*",
+            // Support multi-environnements : local, K8s, Clever Cloud
+            "connect-src 'self' https://gauzian.pupin.fr https://*.cleverapps.io http://localhost:*",
             "frame-ancestors 'none'", // Anti-ClickJacking moderne
             "base-uri 'self'",
             "form-action 'self'"

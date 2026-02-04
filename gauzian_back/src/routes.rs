@@ -1,7 +1,7 @@
 use axum::{middleware, routing::get, Router};
 use tower_http::trace::TraceLayer;
 
-use crate::{auth, drive, metrics, state::AppState};
+use crate::{auth, drive,agenda, metrics, state::AppState};
 
 pub fn app(state: AppState) -> Router {
     Router::new()
@@ -11,6 +11,7 @@ pub fn app(state: AppState) -> Router {
         // Composition des modules
         .merge(auth::auth_routes())
         .nest("/drive", drive::drive_routes())
+        .nest("/agenda", agenda::agenda_routes())
         // Middlewares globaux
         .layer(middleware::from_fn(metrics::track_metrics))
         .layer(TraceLayer::new_for_http())

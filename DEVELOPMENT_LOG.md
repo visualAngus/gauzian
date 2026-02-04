@@ -1,5 +1,264 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-04
+
+### [2026-02-04 10:45] - FRONTEND : Configuration dynamique de l'API URL
+
+**Modifications**
+1. **gauzian_front/nuxt.config.ts** :
+   - Ajout de `runtimeConfig.public.apiUrl` pour exposer l'URL de l'API
+   - Mapping automatique de la variable d'environnement `NUXT_PUBLIC_API_URL`
+   - CSP mise à jour : ajout de `https://*.cleverapps.io` dans `connect-src`
+
+2. **gauzian_front/app/composables/useApiUrl.js** (nouveau) :
+   - Composable pour récupérer l'URL de l'API depuis la runtime config
+   - Accessible dans toutes les pages et composables
+
+3. **Pages modifiées** :
+   - `login.vue` : ligne 160
+   - `drive.vue` : ligne 747
+   - `info.vue` : ligne 95
+   - Remplacement de `const API_URL = "https://gauzian.pupin.fr/api"` par `const API_URL = useApiUrl()`
+
+**Impact**
+✅ L'URL de l'API est maintenant configurable via `NUXT_PUBLIC_API_URL`
+✅ Support multi-environnements : local, K8s, Clever Cloud
+✅ Pas besoin de rebuild pour changer l'URL (runtime config)
+✅ CSP permet les connexions vers Clever Cloud (*.cleverapps.io)
+
+### [2026-02-04 10:30] - CLEVER CLOUD : Adaptation des ports pour compatibilité
+
+**Modifications**
+1. **gauzian_back/src/main.rs** :
+   - Port par défaut changé de 3000 → 8080 (ligne 59)
+   - Compatible avec la variable d'environnement `PORT` de Clever Cloud
+
+2. **gauzian_back/Dockerfile** :
+   - EXPOSE 8080 (au lieu de 3000)
+
+3. **gauzian_front/Dockerfile** :
+   - ENV PORT=8080 (au lieu de 3000)
+   - EXPOSE 8080 (au lieu de 3000)
+
+**Impact**
+✅ Les deux applications sont maintenant compatibles avec Clever Cloud
+✅ Le port 8080 est la valeur par défaut attendue par `CC_DOCKER_EXPOSED_HTTP_PORT`
+✅ Rétrocompatible : on peut toujours définir `PORT=3000` en variable d'environnement pour K8s
+
+## 2026-02-03
+
+### [2026-02-03 08:45] - CODE : Adaptation du code pour le chiffrement de l'agenda
+
+**Modifications**
+1. **handlers.rs** :
+   - Struct `Event` : Modification des types pour les champs cryptés (i64 → String)
+   - Struct `Event` : Ajout de `encrypted_data_key: String` pour retourner la clé au client
+   - Struct `CreateEventPayload` : Modification des types pour les champs cryptés (i64 → String)
+
+2. **repo.rs** :
+   - Ajout de la fonction helper `bytes_to_text_or_b64()` pour convertir BYTEA → String
+   - Ajout de la struct `EventRow` pour mapper les BYTEA depuis la DB
+   - Implémentation du trait `From<EventRow>` pour convertir EventRow → Event
+   - `get_events_date_to_date()` : Retrait des CAST, ajout de encrypted_data_key dans SELECT, mapping BYTEA → String
+   - `create_event()` : Ajout de encrypted_data_key dans INSERT avec `.as_bytes()`, retrait des CAST, mapping de retour
+   - `add_event_participant()` : Renommage du paramètre pour cohérence (encrypted_data_key → encrypted_event_key)
+
+**Pattern utilisé**
+- **Insertion (String → BYTEA)** : `.as_bytes()`
+- **Lecture (BYTEA → String)** : `bytes_to_text_or_b64(&row.field)`
+
+**Impact**
+✅ Le backend est maintenant compatible avec le système de chiffrement E2EE de l'agenda
+✅ Les clés de chiffrement sont stockées en BYTEA (efficace, compact)
+✅ Les données cryptées (title, description, etc.) restent en TEXT pour la compatibilité JSON/Base64
+
+### [2026-02-03 08:26] - MIGRATION : Chiffrement des champs agenda_events
+
+**Objectif**
+Passer les événements de l'agenda en mode chiffré côté client (E2EE).
+
+**Modification**
+Création de la migration `20260203072635_encrypt_agenda_fields.sql` :
+1. Ajout de `encrypted_data_key` BYTEA NOT NULL dans `agenda_events` (clé de chiffrement des données de l'événement)
+2. Ajout de `encrypted_event_key` BYTEA NOT NULL dans `agenda_event_participants` (clé pour déchiffrer l'événement partagé)
+3. Ajout de `category` TEXT (nom de catégorie chiffré, distinct de `category_id`)
+4. Conversion des champs numériques en TEXT pour supporter le chiffrement :
+   - `start_day_id` : NUMERIC → TEXT
+   - `end_day_id` : NUMERIC → TEXT
+   - `start_hour` : NUMERIC → TEXT
+   - `end_hour` : NUMERIC → TEXT
+
+**Champs non modifiés**
+- `day_id` : reste NUMERIC (non chiffré)
+- `is_all_day`, `is_multi_day` : restent BOOLEAN (non chiffrés)
+- `title`, `description`, `color` : déjà TEXT (contiendront des données chiffrées)
+
+**Notes**
+- Type **BYTEA** utilisé pour les clés de chiffrement (uniformité avec `encrypted_folder_key` et `encrypted_file_key`)
+- Type **TEXT** utilisé pour les données chiffrées (title, description, color, category)
+- ⚠️ La conversion NUMERIC → TEXT utilisera `USING column::TEXT` pour convertir les données existantes. Effectuer une sauvegarde avant de lancer la migration en production.
+
+## 2026-02-02
+
+### [2026-02-03 00:00] - FIX : Noms de colonnes PostgreSQL en minuscules
+
+**Problème**
+Erreur "no column found for name: dayID" - PostgreSQL convertit automatiquement les noms de colonnes non-quotés en minuscules.
+
+**Cause**
+Dans la migration, les colonnes étaient définies sans guillemets (`dayID`), ce qui fait que PostgreSQL les stocke en minuscules (`dayid`). Les requêtes SQL utilisaient la casse mixte et ne trouvaient pas les colonnes.
+
+**Solution**
+Mise à jour de toutes les requêtes SQL pour utiliser les noms en minuscules :
+- `dayID` → `dayid`
+- `startDayId` → `startdayid`
+- `endDayId` → `enddayid`
+- `startHour` → `starthour`, etc.
+
+Modifié dans :
+- SELECT (get_events)
+- INSERT (create_event)
+- WHERE et ORDER BY
+
+**Résultat**
+✅ Les requêtes fonctionnent correctement avec la structure réelle de la DB
+
+### [2026-02-02 23:55] - FEAT : Ajout de startDayId et endDayId pour événements multi-jours
+
+**Problème**
+Contrainte NOT NULL violée sur `startDayId` et `endDayId` lors de la création d'événements.
+
+**Solution**
+Intégration complète des champs pour la gestion des événements multi-jours :
+1. **Event struct** : Ajout de `start_day_id` et `end_day_id`
+2. **CreateEventPayload** : Ajout de `start_day_id` et `end_day_id`
+3. **Requête INSERT** : Inclusion des colonnes `startDayId` et `endDayId`
+4. **Requêtes SELECT** : Retour des champs dans tous les endpoints
+
+**Résultat**
+✅ Création d'événements avec support complet des événements multi-jours
+✅ API cohérente avec la documentation frontend
+
+### [2026-02-02 23:50] - FIX : Types Option<String> pour colonnes nullable
+
+**Problème**
+Erreur de compilation : `Option<String>` ne peut pas être converti en `String` pour les colonnes nullable de la DB.
+
+**Solution**
+Modification des structs pour refléter la nullabilité des colonnes :
+- `Event.description`: `String` → `Option<String>`
+- `Event.color`: `String` → `Option<String>` (déjà fait)
+- `CreateEventPayload.description`: `String` → `Option<String>`
+
+**Résultat**
+✅ Compilation réussie sans erreurs de type
+
+### [2026-02-02 23:45] - CONFIG : Configuration automatique SQLx + tunnel SSH
+
+**Problème**
+Impossible de compiler sans connexion manuelle à la base de données distante, ce qui ralentit le développement.
+
+**Solutions implémentées**
+1. **Fichier `.env`** créé avec credentials VPS
+2. **Config SSH** (~/.ssh/config) : tunnel automatique sur `ssh vps`
+3. **Script `sqlx-prepare.sh`** : automatise tunnel + sqlx prepare
+4. **Migration query_as! → query_as** : élimine besoin de connexion DB à la compilation
+5. **Casts SQL** : NUMERIC → BIGINT, TIMESTAMP → TEXT pour compatibilité types Rust
+6. **Dépendance bigdecimal** ajoutée à Cargo.toml
+
+**Résultat**
+✅ `cargo build` fonctionne sans connexion DB
+✅ Développement fluide sans commandes manuelles
+✅ Le tunnel SSH se crée automatiquement quand nécessaire
+
+### [2026-02-02 23:30] - FIX : Frontend envoie query params en camelCase
+
+**Problème**
+Le frontend envoyait `start_day_id` et `end_day_id` (snake_case) alors que le backend attend `startDayId` et `endDayId` (camelCase).
+
+**Solution**
+- Correction de l'URL dans `useEvents.js:15` : `startDayId` et `endDayId`
+- Mise à jour de la documentation API pour refléter le camelCase
+- Correction des exemples de code dans API_ENDPOINTS.md
+
+**Résultat**
+L'API fonctionne correctement avec la convention camelCase standard JavaScript/JSON.
+
+### [2026-02-02 23:25] - FIX : Query parameters avec annotations individuelles
+
+**Problème**
+Erreur de désérialisation : "missing field `startDayId`". L'attribut `#[serde(rename_all = "camelCase")]` ne fonctionnait pas correctement avec les query parameters Axum.
+
+**Solution**
+Remplacement de `rename_all` par des annotations individuelles `#[serde(rename = "...")]` sur chaque champ concerné :
+- EventsQuery : `startDayId`, `endDayId`
+- CreateEventPayload : `dayId`, `startHour`, `endHour`, `isAllDay`, `isMultiDay`
+- Event : annotations individuelles pour serde et sqlx
+
+**Résultat**
+Les query parameters et JSON body sont correctement désérialisés.
+
+### [2026-02-02 23:20] - FIX : Conversion snake_case pour les structs Rust de l'agenda
+
+**Problème**
+Rust affichait des warnings car les champs des structs utilisaient `camelCase` (dayID, startHour, isAllDay) au lieu de la convention Rust `snake_case`.
+
+**Solution**
+- Ajout de `#[serde(rename_all = "camelCase")]` pour la sérialisation JSON
+- Ajout de `#[sqlx(rename_all = "camelCase")]` pour le mapping SQL
+- Renommage de tous les champs en `snake_case` (day_id, start_hour, is_all_day)
+- Mise à jour des références dans `handlers.rs` et `repo.rs`
+
+**Résultat**
+- Code Rust idiomatique (snake_case)
+- API JSON reste en camelCase (pas de breaking change)
+- Colonnes SQL restent en camelCase (pas de migration nécessaire)
+
+### [2026-02-02 23:15] - DOCS : Mise à jour du préfixe API pour l'agenda
+
+**Modification**
+Mise à jour de la documentation API frontend (`gauzian_front/API_ENDPOINTS.md`) pour refléter la nouvelle structure des routes :
+- Base URL modifiée de `/api` vers `/api/agenda`
+- Tous les endpoints d'événements : `/api/events` → `/api/agenda/events`
+- Tous les endpoints de catégories : `/api/categories` → `/api/agenda/categories`
+- Exemples de code mis à jour avec le nouveau préfixe
+
+**Raison**
+Organisation des routes par module (agenda, drive, auth...) pour une meilleure structure du backend.
+
+### [2026-02-02 22:35] - FEAT : Ajout de paramètres d'intervalle pour GET /api/events
+
+**Problème identifié**
+L'endpoint GET /api/events récupérait tous les événements de l'utilisateur sans filtrage, ce qui est inefficace et génère du trafic inutile. Pour un agenda avec des années d'historique, cela pourrait charger des milliers d'événements alors qu'on n'affiche que 7-31 jours.
+
+**Solution implémentée**
+1. **Documentation API mise à jour** (`gauzian_front/API_ENDPOINTS.md`)
+   - Ajout des query parameters obligatoires : `start_day_id` et `end_day_id`
+   - Exemple : `GET /api/events?start_day_id=2200&end_day_id=2230`
+   - Section d'aide avec recommandations selon la vue (mois/semaine/jour)
+
+2. **Frontend mis à jour** (`gauzian_front/app/composables/agenda/useEvents.js`)
+   - `loadEvents()` accepte maintenant `startDayId` et `endDayId` en paramètres
+   - Filtrage local implémenté pour simulation (avant intégration backend)
+   - Support des événements multi-jours qui chevauchent l'intervalle
+
+3. **Rechargement automatique** (`gauzian_front/app/pages/agenda.vue`)
+   - Nouvelle méthode `reloadEventsForCurrentView()` qui calcule l'intervalle depuis `displayDays`
+   - Watcher sur `displayDays` pour recharger automatiquement lors de navigation
+   - Les événements sont rechargés quand on change de vue (mois/semaine/jour) ou de période
+
+**Impact attendu**
+- Réduction drastique du trafic réseau (ex: 30 événements au lieu de 10 000)
+- Chargement initial plus rapide
+- Moins de mémoire utilisée côté frontend
+- Meilleure scalabilité long terme
+
+**Backend à implémenter**
+Le backend doit maintenant :
+- Accepter les paramètres `start_day_id` et `end_day_id` en query params
+- Filtrer en SQL avec : `WHERE (start_day_id <= :end_day_id AND end_day_id >= :start_day_id)`
+- Retourner uniquement les événements qui intersectent avec l'intervalle
+
 ## 2026-02-02
 
 ### [2026-02-02 22:30] - FIX : Leak Redis - Vraie cause racine identifiée et corrigée ✅

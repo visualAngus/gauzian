@@ -1,6 +1,14 @@
 // useEvents.js - Gestion CRUD des événements avec persistance LocalStorage
 
 import { ref, computed, watch } from 'vue';
+// import de utils pour l'encryption 
+import {
+    decryptWithStoredPrivateKey,
+    encryptWithPublicKey,
+    generateDataKey,
+    encryptWithStoredPublicKey,
+    encryptSimpleDataWithDataKey
+} from '~/utils/crypto';
 
 const STORAGE_KEY = 'gauzian_agenda_events';
 
@@ -9,88 +17,102 @@ const events = ref([]);
 const nextId = ref(1);
 
 // Charger les événements depuis le LocalStorage au démarrage
-const loadEvents = () => {
-    // #ICIBACK - Appel API GET /api/events
-    // Remplacer localStorage par:
-    // const response = await fetch('/api/events', { credentials: 'include' })
-    // events.value = await response.json()
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            const data = JSON.parse(stored);
-            events.value = data.events || [];
-            nextId.value = data.nextId || 1;
-        } else {
-            // Événements de démonstration par défaut
-            events.value = [
-                {
-                    id: 1,
-                    title: "Meeting with Team",
-                    description: "Discuss Q1 goals and roadmap",
-                    dayId: 2,
-                    startHour: 10,
-                    endHour: 11,
-                    category: 'meeting',
-                    color: 'blue'
-                },
-                {
-                    id: 2,
-                    title: "Project Deadline",
-                    description: "Submit final deliverables",
-                    dayId: 2,
-                    startHour: 10,
-                    endHour: 15,
-                    category: 'deadline',
-                    color: 'orange'
-                },
-                {
-                    id: 3,
-                    title: "Lunch with Client",
-                    description: "Business lunch at downtown restaurant",
-                    dayId: 2,
-                    startHour: 12,
-                    endHour: 18,
-                    category: 'personal',
-                    color: 'purple'
-                },
-                {
-                    id: 4,
-                    title: "Webinar on Vue.js",
-                    description: "Advanced Vue 3 Composition API techniques",
-                    dayId: 2,
-                    startHour: 15,
-                    endHour: 17,
-                    category: 'learning',
-                    color: 'teal'
-                },
-                {
-                    id: 5,
-                    title: "Code Review Session",
-                    description: "Review PRs from the team",
-                    dayId: 2,
-                    startHour: 9,
-                    endHour: 11,
-                    category: 'project',
-                    color: 'green'
-                },
-                {
-                    id: 6,
-                    title: "Design Meeting",
-                    description: "Review new UI mockups",
-                    dayId: 3,
-                    startHour: 10,
-                    endHour: 12,
-                    category: 'meeting',
-                    color: 'blue'
-                }
-            ];
-            nextId.value = 7;
-        }
-    } catch (error) {
-        console.error('Erreur chargement événements:', error);
-        events.value = [];
-        nextId.value = 1;
+const loadEvents = async (startDayId = null, endDayId = null) => {
+    // #ICIBACK - Appel API GET /api/agenda/events?startDayId=XXX&endDayId=YYY
+    if (startDayId !== null && endDayId !== null) {
+        const response = await fetch(`/api/agenda/events?startDayId=${startDayId}&endDayId=${endDayId}`, {
+            credentials: 'include'
+        })
+        events.value = await response.json().then(data => data.data.events)
+        return
     }
+    // try {
+    //     const stored = localStorage.getItem(STORAGE_KEY);
+    //     if (stored) {
+    //         const data = JSON.parse(stored);
+    //         events.value = data.events || [];
+    //         nextId.value = data.nextId || 1;
+
+    //         // Filtrer localement si interval fourni (pour simulation)
+    //         if (startDayId !== null && endDayId !== null) {
+    //             events.value = events.value.filter(event => {
+    //                 const eventStart = event.startDayId || event.dayId;
+    //                 const eventEnd = event.endDayId || event.dayId;
+    //                 // Inclure si l'événement chevauche l'intervalle
+    //                 return eventStart <= endDayId && eventEnd >= startDayId;
+    //             });
+    //         }
+    //     } else {
+    //         // Événements de démonstration par défaut
+    //         events.value = [
+    //             {
+    //                 id: 1,
+    //                 title: "Meeting with Team",
+    //                 description: "Discuss Q1 goals and roadmap",
+    //                 dayId: 2,
+    //                 startHour: 10,
+    //                 endHour: 11,
+    //                 category: 'meeting',
+    //                 color: 'blue'
+    //             },
+    //             {
+    //                 id: 2,
+    //                 title: "Project Deadline",
+    //                 description: "Submit final deliverables",
+    //                 dayId: 2,
+    //                 startHour: 10,
+    //                 endHour: 15,
+    //                 category: 'deadline',
+    //                 color: 'orange'
+    //             },
+    //             {
+    //                 id: 3,
+    //                 title: "Lunch with Client",
+    //                 description: "Business lunch at downtown restaurant",
+    //                 dayId: 2,
+    //                 startHour: 12,
+    //                 endHour: 18,
+    //                 category: 'personal',
+    //                 color: 'purple'
+    //             },
+    //             {
+    //                 id: 4,
+    //                 title: "Webinar on Vue.js",
+    //                 description: "Advanced Vue 3 Composition API techniques",
+    //                 dayId: 2,
+    //                 startHour: 15,
+    //                 endHour: 17,
+    //                 category: 'learning',
+    //                 color: 'teal'
+    //             },
+    //             {
+    //                 id: 5,
+    //                 title: "Code Review Session",
+    //                 description: "Review PRs from the team",
+    //                 dayId: 2,
+    //                 startHour: 9,
+    //                 endHour: 11,
+    //                 category: 'project',
+    //                 color: 'green'
+    //             },
+    //             {
+    //                 id: 6,
+    //                 title: "Design Meeting",
+    //                 description: "Review new UI mockups",
+    //                 dayId: 3,
+    //                 startHour: 10,
+    //                 endHour: 12,
+    //                 category: 'meeting',
+    //                 color: 'blue'
+    //             }
+    //         ];
+    //         nextId.value = 7;
+    //     }
+    // } catch (error) {
+    //     console.error('Erreur chargement événements:', error);
+    //     events.value = [];
+    //     nextId.value = 1;
+    // }
 };
 
 // Sauvegarder les événements dans le LocalStorage
@@ -119,39 +141,46 @@ if (events.value.length === 0) {
 
 export const useEvents = () => {
     // ***** CREATE *****
-    const createEvent = (eventData) => {
-        // #ICIBACK - Appel API POST /api/events
-        // const response = await fetch('/api/events', {
-        //     method: 'POST',
-        //     credentials: 'include',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify(eventData)
-        // })
-        // const newEvent = await response.json()
-        // events.value.push(newEvent)
-        // return newEvent
+    const createEvent = async (eventData) => {
 
-        const newEvent = {
-            id: nextId.value++,
-            title: eventData.title || 'Nouvel événement',
-            description: eventData.description || '',
-            // Support multi-jours : startDayId et endDayId
-            startDayId: eventData.startDayId !== undefined ? eventData.startDayId : eventData.dayId,
-            endDayId: eventData.endDayId !== undefined ? eventData.endDayId : eventData.dayId,
-            // Garder dayId pour rétro-compatibilité
-            dayId: eventData.dayId || eventData.startDayId,
-            startHour: eventData.isAllDay ? 0 : eventData.startHour,
-            endHour: eventData.isAllDay ? 24 : eventData.endHour,
-            isAllDay: eventData.isAllDay || false,
-            isMultiDay: eventData.startDayId !== undefined && eventData.endDayId !== undefined && eventData.startDayId !== eventData.endDayId,
-            category: eventData.category || 'other',
-            color: eventData.color || 'blue',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+        // ici il faut encrypter les données sensibles avant envoi
+
+        // générer une clé de données pour l'événement
+        const dataKey = await generateDataKey();
+        // encrypter les champs sensibles avec la clé de données
+        const encryptedTitle = await encryptSimpleDataWithDataKey(eventData.title, dataKey);
+        const encryptedDescription = eventData.description ? await encryptSimpleDataWithDataKey(eventData.description, dataKey) : null;
+        const encryptedCategory = eventData.category ? await encryptSimpleDataWithDataKey(eventData.category, dataKey) : null;
+        const encryptedColor = eventData.color ? await encryptSimpleDataWithDataKey(eventData.color, dataKey) : null;
+        const encryptedEndDayId = eventData.endDayId ? await encryptSimpleDataWithDataKey(eventData.endDayId.toString(), dataKey) : null;
+        const encryptedStartDayId = eventData.startDayId ? await encryptSimpleDataWithDataKey(eventData.startDayId.toString(), dataKey) : null;
+        const encryptedStartHour = await encryptSimpleDataWithDataKey(eventData.startHour.toString(), dataKey);
+        const encryptedEndHour = await encryptSimpleDataWithDataKey(eventData.endHour.toString(), dataKey);
+        // encrypter la clé de données avec la clé publique de l'utilisateur
+        const encryptedDataKey = await encryptWithStoredPublicKey(dataKey);
+
+        // préparer les données à envoyer à l'API
+        const payload = {
+            ...eventData,
+            title: encryptedTitle,
+            description: encryptedDescription,
+            encryptedDataKey: encryptedDataKey,
+            category: encryptedCategory,
+            color: encryptedColor,
+            startDayId: encryptedStartDayId,
+            endDayId: encryptedEndDayId,
+            startHour: encryptedStartHour,
+            endHour: encryptedEndHour
         };
-
-        events.value.push(newEvent);
-        return newEvent;
+       const response = await fetch('/api/agenda/events', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        const newEvent = await response.json()
+        events.value.push(newEvent)
+        return newEvent
     };
 
     // ***** READ *****

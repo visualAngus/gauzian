@@ -538,11 +538,23 @@ const handleZoom = (e) => {
     }
 };
 
+// ***** MÉTHODE DE CHARGEMENT DES ÉVÉNEMENTS AVEC INTERVALLE *****
+const reloadEventsForCurrentView = async () => {
+    const dayIds = displayDays.value.map(day => day.dayId);
+    if (dayIds.length > 0) {
+        const startDayId = Math.min(...dayIds);
+        const endDayId = Math.max(...dayIds);
+        await loadEvents(startDayId, endDayId);
+    }
+};
+
 // ***** LIFECYCLE *****
 onMounted(() => {
-    // Charger les données
-    loadEvents();
+    // Charger les préférences d'abord (pour avoir la bonne vue)
     loadPreferences();
+
+    // Charger les données avec l'intervalle actuel
+    reloadEventsForCurrentView();
 
     // Activer la navigation clavier
     enableKeyboardNavigation();
@@ -555,6 +567,11 @@ onMounted(() => {
 watch(currentView, () => {
     savePreferences();
 });
+
+// Recharger les événements quand la période affichée change
+watch(displayDays, () => {
+    reloadEventsForCurrentView();
+}, { deep: true });
 </script>
 
 <style src="~/assets/css/agenda.css"></style>
