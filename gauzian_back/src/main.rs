@@ -56,7 +56,7 @@ async fn main() {
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(3000);
+        .unwrap_or(8080);
     let addr: SocketAddr = format!("{host}:{port}")
         .parse()
         .expect("Invalid HOST/PORT combination");

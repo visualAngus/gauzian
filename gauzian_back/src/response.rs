@@ -11,9 +11,11 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
+#[derive(Serialize)]
 pub struct ApiResponse<T> {
     data: T,
     token: Option<String>,
+    #[serde(skip)]
     status: StatusCode,
 }
 

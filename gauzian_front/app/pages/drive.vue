@@ -744,7 +744,8 @@ import Notification from "~/components/Notification.vue";
 import InfoItem from "~/components/InfoItem.vue";
 
 const vDropzone = dropzone;
-const API_URL = "https://gauzian.pupin.fr/api";
+// Configuration dynamique de l'API URL (Clever Cloud, K8s, local)
+const API_URL = useApiUrl();
 const router = useRouter();
 
 useHead({ title: "GZDRIVE | Drive" });
