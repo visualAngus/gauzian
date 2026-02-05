@@ -2,6 +2,37 @@
 
 ## 2026-02-05
 
+### [2026-02-05 17:00] - REFACTOR : Réorganisation structure k8s/ pour Kustomize
+
+**Problème**
+- Kustomize parse TOUS les fichiers .yaml du dossier k8s/
+- Fichiers .sh (scripts shell) causent erreur "apiVersion not set"
+- Fichiers .md (documentation) causent la même erreur
+- .kustomizeignore non supporté par version Kustomize du VPS
+
+**Solution : Déplacement fichiers non-manifests**
+1. **Scripts shell** : `k8s/*.sh` → `k8s/scripts/*.sh`
+2. **Documentation** : `k8s/*.md` → `docs/*.md`
+3. **Mise à jour scripts** : `K8S_DIR` pointe vers parent directory (`..`)
+
+**Modifications**
+- **update-max.sh** : `K8S_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"`
+- Structure finale :
+  ```
+  gauzian_back/
+  ├── docs/              # Documentation (*.md)
+  ├── k8s/               # Manifests Kubernetes (*.yaml uniquement)
+  │   └── scripts/       # Scripts de déploiement (*.sh)
+  └── src/               # Code Rust
+  ```
+
+**Impact**
+✅ Dossier k8s/ contient SEULEMENT des manifests YAML valides
+✅ Kustomize ne parse plus les scripts shell
+✅ Scripts accessibles via `k8s/scripts/update-max.sh`
+✅ Documentation séparée dans docs/
+✅ Erreur "apiVersion not set" résolue
+
 ### [2026-02-05 16:45] - FIX : Migration vers namespace gauzian-v2
 
 **Problème**
