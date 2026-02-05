@@ -2,6 +2,32 @@
 
 ## 2026-02-05
 
+### [2026-02-05 16:45] - FIX : Migration vers namespace gauzian-v2
+
+**Problème**
+- Namespace `gauzian` bloqué en état "Terminating" (21 jours)
+- Certificate Challenge cert-manager avec finalizers bloquants
+- Suppression forcée impossible malgré toutes les tentatives
+
+**Solution : Nouveau namespace**
+- Migration vers `gauzian-v2` au lieu de forcer la suppression
+- L'ancien namespace `gauzian` peut rester en Terminating (sera nettoyé plus tard)
+
+**Modifications**
+1. **kustomization.yaml** : `namespace: gauzian` → `namespace: gauzian-v2`
+2. **namespace.yaml** : `name: gauzian` → `name: gauzian-v2`
+3. **update-max.sh** : `NAMESPACE="gauzian"` → `NAMESPACE="gauzian-v2"`
+4. **force-clean.sh** : `NAMESPACE="gauzian"` → `NAMESPACE="gauzian-v2"`
+
+**Impact**
+✅ Kustomize remplace automatiquement le namespace dans TOUS les manifests (23 fichiers)
+✅ Déploiement propre sans être bloqué par l'ancien namespace
+✅ Les deux namespaces peuvent coexister temporairement
+✅ URLs restent identiques (ingress redirige vers gauzian-v2)
+✅ Ancien namespace peut être nettoyé manuellement plus tard
+
+**Note** : Kustomize avec `namespace: gauzian-v2` override automatiquement tous les `metadata.namespace` dans les ressources, donc pas besoin de modifier 23 fichiers manuellement !
+
 ### [2026-02-05 16:30] - FEATURE : Script force-clean.sh pour débloquer namespaces
 
 **Problème identifié**
