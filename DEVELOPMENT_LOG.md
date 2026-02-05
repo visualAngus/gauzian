@@ -2,6 +2,53 @@
 
 ## 2026-02-05
 
+### [2026-02-05 16:10] - FIX : Résolution problème routing Traefik avec namespace gauzian-v2
+
+**Problème**
+- Frontend inaccessible depuis l'extérieur ("no available server")
+- Backend API fonctionnel via https://gauzian.pupin.fr/api/health/ready
+- Frontend fonctionne depuis l'intérieur du cluster
+- Traefik logs : "Error configuring TLS: secret gauzian-v2/gauzian-tls-traefik does not exist"
+- HTTP redirige vers :8443 au lieu de :443
+
+**Cause racine**
+- `ingressroute.yaml` et `middleware.yaml` utilisaient encore `namespace: gauzian`
+- Kustomize n'overridait pas les namespaces hardcodés dans les ressources Traefik
+- Conflit entre Ingress standard (Kubernetes) et IngressRoute (Traefik CRD)
+
+**Solution**
+1. **Suppression Ingress standard** : Retiré `ingress.yaml` du `kustomization.yaml`
+2. **Correction namespaces** : Changé tous les `namespace: gauzian` en `namespace: gauzian-v2` dans :
+   - `ingressroute.yaml` (3 ressources : gauzian-https, gauzian-http, redirect-https)
+   - `middleware.yaml` (3 middlewares : strip-api-prefix, strip-s3-prefix, rate-limit)
+3. **Configuration centralisée** : Créé `k8s/config.env` documentant tous les paramètres (ports, namespace, domaines, images)
+
+**Modifications**
+- **kustomization.yaml** : Supprimé `- ingress.yaml` de la section resources
+- **ingressroute.yaml** : `namespace: gauzian` → `namespace: gauzian-v2` (replace_all)
+- **middleware.yaml** : `namespace: gauzian` → `namespace: gauzian-v2` (replace_all)
+- **config.env** (nouveau) : Documentation centralisée de TOUS les paramètres configurables
+
+**Tests de validation**
+```bash
+curl -I https://gauzian.pupin.fr              # HTTP/2 200 ✅
+curl -I https://gauzian.pupin.fr/api/health/ready  # HTTP/2 200 ✅
+```
+
+**Impact**
+✅ Frontend accessible depuis l'extérieur
+✅ Backend API fonctionnel
+✅ Traefik route correctement vers gauzian-v2 namespace
+✅ Un seul système de routing (IngressRoute uniquement)
+✅ Configuration centralisée pour modifications futures
+
+**Notes**
+- Le certificat TLS Let's Encrypt est généré automatiquement via `certResolver: letsencrypt`
+- Plus besoin de secret TLS manuel avec l'IngressRoute
+- L'ancien ingress.yaml peut être supprimé définitivement
+
+## 2026-02-05
+
 ### [2026-02-05 17:00] - REFACTOR : Réorganisation structure k8s/ pour Kustomize
 
 **Problème**
