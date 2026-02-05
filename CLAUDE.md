@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 See also:
 - `gauzian_back/CLAUDE.md` - Backend-specific guidance
 - `gauzian_front/CLAUDE.md` - Frontend-specific guidance
+- `DEPLOYMENT.md` - **Guide complet de déploiement (VPS K8s + Clever Cloud)**
 
 ## Project Overview
 
@@ -108,19 +109,42 @@ Key tables (see `gauzian_back/migrations/`):
 - Format de l'entrée : `[AAAA-MM-JJ HH:mm] - [Description concise de ce qui a été fait]`
 - Ne supprime jamais l'historique existant, ajoute simplement les nouvelles lignes au début (ou à la fin, selon ta préférence).
 
-## Environnement & Infrastructure
-- **Serveur :** VPS distant tournant sous Kubernetes (K8s).
-- **Accès SSH :** La commande `vps` est configurée dans le terminal (alias) pour se connecter au serveur.
-- **Workflow de Déploiement :**
-    1. Mise à jour des images localement : `./push_docker_hub.sh` (script local).
-    2. Déploiement sur le VPS : Utiliser SSH via `vps` pour exécuter le script : `/gauzian_back/k8s/update-max.sh`.
-    3. Si des fichiers ont été ajoutés, push les changements sur GitHub : `git add . && git commit -m "Update" && git push`. Modifie le message de commit selon le contexte.
-    4. Pull les changements sur le serveur : `ssh vps 'git pull origin main'`.
+## Environnements de Déploiement
+
+Le projet supporte deux environnements de production :
+- **VPS Kubernetes** (environnement principal) - Voir `DEPLOYMENT.md` section "Déploiement 1"
+- **Clever Cloud** (PaaS alternatif) - Voir `DEPLOYMENT.md` section "Déploiement 2"
+
+**⚠️ IMPORTANT :** Consulter `DEPLOYMENT.md` pour les procédures détaillées de chaque environnement.
+
+### Commandes Rapides
+
+**Déploiement VPS (Commande par défaut) :**
+```bash
+./push_docker_hub.sh && ssh vps 'bash ./gauzian_back/k8s/update-max.sh'
+```
+
+**Déploiement Clever Cloud :**
+```bash
+# Option 1 : Build distant (simple)
+git push clever main
+
+# Option 2 : Pre-build optimisé (recommandé pour le backend)
+./update-backend-image.sh && \
+git add Dockerfile.backend.prebuilt && \
+git commit -m "chore: Update backend image" && \
+git push clever main
+```
 
 ## Commandes de Déploiement (Skills)
-Désormais, quand je te demande de "Déployer en prod" ou "Update le VPS", tu dois :
+
+Quand je te demande de **"Déployer en prod"** ou **"Update le VPS"** (par défaut = VPS K8s) :
 1. Lancer le script local : `./push_docker_hub.sh`
-2. Te connecter au VPS et lancer le script de mise à jour distant en une seule commande : 
-   `ssh vps 'bash ./gauzian_back/k8s/update-max.sh'`
-3. Si des fichiers ont été ajoutés, push les changements sur GitHub et pull sur le serveur.
-4. Confirmer le succès du déploiement en vérifiant les pods si nécessaire : `ssh vps 'kubectl get pods'`
+2. Déployer sur le VPS : `ssh vps 'bash ./gauzian_back/k8s/update-max.sh'`
+3. Vérifier les pods : `ssh vps 'kubectl get pods -n gauzian'`
+4. Si nouveaux fichiers, commit et push vers GitHub
+
+Quand je te demande de **"Déployer sur Clever Cloud"** :
+1. Exécuter : `./update-backend-image.sh`
+2. Commit le Dockerfile généré : `git add Dockerfile.backend.prebuilt && git commit -m "chore: Update backend image"`
+3. Push : `git push clever main`

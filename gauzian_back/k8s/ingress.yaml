@@ -37,7 +37,7 @@ spec:
           service:
             name: backend
             port:
-              number: 3000
+              number: 8080
       # MinIO S3 API
       - path: /s3
         pathType: Prefix

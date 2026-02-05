@@ -1,5 +1,103 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-05
+
+### [2026-02-05 15:30] - AMÉLIORATION : Script update-max.sh applique tous les manifests K8s
+
+**Objectif**
+Automatiser le déploiement complet de l'infrastructure K8s (backend, frontend, reverse-proxy, monitoring)
+
+**Modifications**
+1. **update-max.sh** :
+   - Utilisation de `kubectl apply -k .` au lieu de fichiers individuels
+   - Application de TOUS les manifests via Kustomize (respect de l'ordre des dépendances)
+   - Détection automatique du répertoire du script
+   - Timeouts explicites (5min) pour les rollouts
+   - Affichage de l'état final des pods
+   - Gestion des erreurs avec `--ignore-not-found=true`
+   - Messages de progression détaillés
+
+2. **kustomization.yaml** :
+   - Organisation des ressources par catégories (namespace → secrets → PVC → deployments → ingress)
+   - Inclusion de `ingress.yaml` (décommenté)
+   - Inclusion du dossier `monitoring/` (Grafana, Prometheus ServiceMonitor)
+   - Commentaires explicatifs pour chaque section
+
+**Impact**
+✅ Un seul script déploie TOUTE l'infrastructure (base de données, cache, stockage, apps, routing, monitoring)
+✅ Ordre d'application garanti par Kustomize (namespace avant deployments, secrets avant pods, etc.)
+✅ Pas besoin de lancer manuellement des commandes séparées pour monitoring/ingress
+✅ Rollback facile avec `kubectl apply -k .` (idempotent)
+✅ Meilleure traçabilité avec affichage des pods en fin de déploiement
+
+### [2026-02-05 15:00] - FIX : Configuration complète variables d'environnement et correction port backend
+
+**Problème identifié**
+- Incohérence de port : Code Rust écoute sur 8080 par défaut, mais K8s configuré pour 3000
+- Variables d'environnement manquantes (S3_REGION, HOST, PORT, COOKIE_SECURE, AWS SDK aliases)
+- Aucune documentation centralisée des variables d'env
+
+**Modifications**
+1. **backend-deployment.yaml** :
+   - Port : 3000 → 8080 (containerPort + Service + health probes)
+   - Ajout de 15+ variables d'environnement avec organisation par catégories :
+     - Variables connexion BDD (DATABASE_URL, DB_USER, DB_PASSWORD, DB_NAME)
+     - Variables Redis (REDIS_URL)
+     - Variables S3/MinIO standard (S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET)
+     - Variables S3/MinIO AWS SDK (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION)
+     - Variables sécurité (JWT_SECRET, COOKIE_SECURE=true)
+     - Variables serveur (HOST=0.0.0.0, PORT=8080)
+     - Variables logging (RUST_LOG avec sqlx=warn)
+     - Variables performance (MAX_CONCURRENT_UPLOADS=30)
+
+2. **ingressroute.yaml** :
+   - Port backend : 3000 → 8080 (ligne 23)
+
+3. **ingress.yaml** :
+   - Port backend : 3000 → 8080 (ligne 40)
+
+4. **ENV_VARIABLES.md** (nouveau) :
+   - Documentation complète de toutes les variables d'environnement
+   - Variables obligatoires vs optionnelles avec valeurs par défaut
+   - Mapping variables AWS SDK (aliases)
+   - Matrice de configuration par environnement (Local/VPS/Clever Cloud)
+   - Procédures de modification des secrets
+   - Commandes de vérification
+   - Références au code source Rust
+
+**Impact**
+✅ Port cohérent sur toute la stack (8080 partout pour le backend)
+✅ Toutes les variables d'environnement explicitement définies
+✅ Support AWS SDK complet avec variables alias
+✅ COOKIE_SECURE=true en production (sécurité renforcée)
+✅ Documentation centralisée dans ENV_VARIABLES.md
+✅ Compatibilité maximale avec le code Rust (pas de variables manquantes)
+✅ Logs optimisés (sqlx=warn au lieu de debug)
+
+### [2026-02-05 14:30] - DOCUMENTATION : Guide de déploiement multi-environnement
+
+**Nouveaux fichiers**
+1. **DEPLOYMENT.md** (nouveau) :
+   - Guide complet de déploiement pour VPS Kubernetes et Clever Cloud
+   - Architecture détaillée des deux environnements
+   - Procédures pas-à-pas avec scripts
+   - Tableau comparatif VPS vs Clever Cloud
+   - Workflows recommandés et troubleshooting
+   - Checklist de déploiement
+
+**Modifications**
+2. **CLAUDE.md** :
+   - Ajout référence vers DEPLOYMENT.md
+   - Simplification section "Environnements de Déploiement"
+   - Commandes rapides pour les deux plateformes
+   - Instructions clarifiées pour les skills de déploiement
+
+**Impact**
+✅ Documentation unifiée pour gérer les deux environnements depuis le même repository
+✅ Procédures claires pour VPS (push_docker_hub.sh) et Clever Cloud (update-backend-image.sh)
+✅ Séparation des Dockerfiles : `gauzian_back/Dockerfile` (VPS) vs `Dockerfile.backend` (Clever)
+✅ Workflows optimisés pour chaque plateforme (K8s rolling update vs Git push PaaS)
+
 ## 2026-02-04
 
 ### [2026-02-04 21:00] - FIX : Augmentation retries S3 pour Cellar Clever Cloud
