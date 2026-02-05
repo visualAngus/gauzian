@@ -2,6 +2,32 @@
 
 ## 2026-02-05
 
+### [2026-02-05 16:15] - FEATURE : Option --clean pour nettoyage complet du namespace
+
+**Objectif**
+Permettre un redéploiement depuis zéro en supprimant complètement le namespace et toutes ses ressources
+
+**Modifications**
+1. **update-max.sh** :
+   - Ajout argument `--clean` pour mode nettoyage complet
+   - ÉTAPE 0 (nouvelle) : Suppression namespace + toutes ressources + données
+   - Vérification existence du namespace avant suppression
+   - Attente suppression complète avec boucle (évite race conditions)
+   - Nettoyage cache containerd après suppression namespace
+   - Affichage du mode dans le header (OUI/NON pour --clean)
+   - Messages d'avertissement explicites sur la perte de données
+
+**Comportements**
+- **Sans --clean** : Mise à jour normale (update des ressources existantes)
+- **Avec --clean** : Suppression complète → attente → redéploiement from scratch
+
+**Impact**
+✅ Permet de repartir sur une base propre en cas de problème
+✅ Supprime namespace → supprime automatiquement pods, services, deployments, PVC, secrets
+✅ Attente de suppression complète évite les erreurs "namespace still terminating"
+✅ ⚠️  Perte de TOUTES les données (PostgreSQL, Redis, MinIO) avec --clean
+✅ Idéal pour tests, debugging, ou après modifications lourdes des manifests
+
 ### [2026-02-05 16:00] - FIX : Résolution erreur Kustomize et amélioration script update-max.sh
 
 **Problème identifié**
