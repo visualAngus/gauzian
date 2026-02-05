@@ -9,9 +9,6 @@ spec:
   routes:
     - match: Host(`grafana.gauzian.pupin.fr`)
       kind: Rule
-      middlewares:
-        - name: security-headers
-          namespace: gauzian-v2
       services:
         - name: grafana
           port: 3000
@@ -29,9 +26,6 @@ spec:
   routes:
     - match: Host(`grafana.gauzian.pupin.fr`)
       kind: Rule
-      middlewares:
-        - name: redirect-https
-          namespace: gauzian-v2
       services:
         - name: grafana
           port: 3000
@@ -47,9 +41,6 @@ spec:
   routes:
     - match: Host(`prometheus.gauzian.pupin.fr`)
       kind: Rule
-      middlewares:
-        - name: security-headers
-          namespace: gauzian-v2
       services:
         - name: prometheus
           port: 9090
