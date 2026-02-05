@@ -21,10 +21,63 @@ spec:
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: rate-limit-50-per-1s
+  name: rate-limit-api
   namespace: gauzian-v2
 spec:
   rateLimit:
-    average: 50
+    average: 100      # 100 req/s pour API (login, file ops)
     period: 1s
-    burst: 10
+    burst: 50         # Burst de 50 pour uploads
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit-s3
+  namespace: gauzian-v2
+spec:
+  rateLimit:
+    average: 200      # 200 req/s pour S3 (uploads de chunks)
+    period: 1s
+    burst: 100
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: gauzian-v2
+spec:
+  headers:
+    # Security headers
+    browserXssFilter: true
+    contentTypeNosniff: true
+    frameDeny: true
+    sslRedirect: true
+    stsIncludeSubdomains: true
+    stsPreload: true
+    stsSeconds: 31536000
+    # Content Security Policy (ajuster selon vos besoins)
+    contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://gauzian.pupin.fr"
+    # Referrer Policy
+    referrerPolicy: "strict-origin-when-cross-origin"
+    # Permissions Policy
+    permissionsPolicy: "geolocation=(), microphone=(), camera=()"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: compress
+  namespace: gauzian-v2
+spec:
+  compress: {}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: inflight-limit
+  namespace: gauzian-v2
+spec:
+  inFlightReq:
+    amount: 100       # Max 100 connexions simultanées par IP
+    sourceCriterion:
+      ipStrategy:
+        depth: 1

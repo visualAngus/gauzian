@@ -3,7 +3,6 @@
 
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
-// use serde::{Serialize, Deserialize};
 use serde_json::json;
 use base64::Engine;
 
@@ -382,10 +381,7 @@ pub async fn get_full_path(
         .into_iter()
         .map(|row| {
             let metadata_str = bytes_to_text_or_b64(&row.encrypted_metadata);
-            let key_str = match row.encrypted_folder_key {
-                Some(k) => Some(bytes_to_text_or_b64(&k)),
-                None => None,
-            };
+            let key_str = row.encrypted_folder_key.as_ref().map(|k| bytes_to_text_or_b64(k));
 
             json!({
                 "folder_id": row.id,
@@ -415,7 +411,7 @@ pub async fn abort_file_upload(
     .fetch_all(&mut *tx)
     .await?;
 
-    if !access_users.iter().any(|u| *u == user_id) {
+    if !access_users.contains(&user_id) {
         return Err(sqlx::Error::RowNotFound);
     }
 
@@ -439,7 +435,7 @@ pub async fn abort_file_upload(
 
     for s3_key in s3_keys.iter() {
         storage_client.delete_line(s3_key).await.map_err(|e| {
-            sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
+            sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e))
         })?;
     }
 
@@ -1392,7 +1388,7 @@ pub async fn empty_corbeille(
 
         for s3_key in s3_keys.iter() {
             storage_client.delete_line(s3_key).await.map_err(|e| {
-                sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e).into())
+                sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e))
             })?;
         }
 

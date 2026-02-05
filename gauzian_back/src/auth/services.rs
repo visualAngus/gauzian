@@ -9,7 +9,6 @@ use axum::{
 };
 use redis::AsyncCommands;
 use uuid::Uuid;
-// use serde::Serialize;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use base64::{engine::general_purpose, Engine as _};
