@@ -7,7 +7,7 @@ data:
   dashboards.yaml: |
     apiVersion: 1
     providers:
-      - name: 'default'
+      - name: 'gauzian-backend'
         orgId: 1
         folder: 'Gauzian'
         type: file
@@ -16,3 +16,12 @@ data:
         allowUiUpdates: true
         options:
           path: /var/lib/grafana/dashboards
+      - name: 'gauzian-sysadmin'
+        orgId: 1
+        folder: 'Gauzian'
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards-sysadmin

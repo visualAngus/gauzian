@@ -42,6 +42,8 @@ spec:
           mountPath: /etc/grafana/provisioning/dashboards
         - name: dashboards
           mountPath: /var/lib/grafana/dashboards
+        - name: dashboards-sysadmin
+          mountPath: /var/lib/grafana/dashboards-sysadmin
         resources:
           requests:
             cpu: 100m
@@ -74,6 +76,9 @@ spec:
       - name: dashboards
         configMap:
           name: grafana-dashboards
+      - name: dashboards-sysadmin
+        configMap:
+          name: grafana-dashboard-sysadmin
 ---
 apiVersion: v1
 kind: Service
