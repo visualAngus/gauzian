@@ -2,6 +2,76 @@
 
 ## 2026-02-05
 
+### [2026-02-05 18:00] - MONITORING : Installation stack Prometheus + Grafana
+
+**Objectif**
+- Installer Prometheus pour collecter les métriques exposées par le backend Rust
+- Installer Grafana avec dashboards préconfigurés
+- Exposer via Traefik avec TLS
+
+**Fichiers créés**
+
+1. **Stack Monitoring (namespace `monitoring`)**
+   - `gauzian_back/k8s/monitoring-namespace.yaml` - Namespace dédié
+   - `gauzian_back/k8s/prometheus-config.yaml` - Config scraping (backend, postgres, redis, minio, traefik)
+   - `gauzian_back/k8s/prometheus-deployment.yaml` - Deployment + Service + PVC (10Gi) + RBAC
+   - `gauzian_back/k8s/grafana-deployment.yaml` - Deployment + Service + PVC (2Gi) + Secret credentials
+   - `gauzian_back/k8s/grafana-datasources.yaml` - Auto-config datasource Prometheus
+   - `gauzian_back/k8s/grafana-dashboards-provider.yaml` - Provisioning dashboards
+   - `gauzian_back/k8s/grafana-dashboard-gauzian.yaml` - Dashboard "Gauzian - Overview" (14 panels)
+   - `gauzian_back/k8s/grafana-ingress.yaml` - IngressRoute Traefik pour Grafana + Prometheus
+
+2. **Documentation**
+   - `MONITORING_SETUP.md` - Guide complet d'installation et utilisation
+
+3. **Scripts**
+   - `gauzian_back/k8s/deploy-monitoring.sh` - Script d'installation automatique
+
+**Métriques Backend disponibles**
+- Le backend Rust expose déjà **17 métriques Prometheus** sur `/metrics` :
+  - HTTP : requêtes totales, latence (p50/p95/p99), connexions actives
+  - Métier : uploads/downloads fichiers, bytes transférés, durée chunks, auth
+  - Infra : durée S3, opérations Redis, requêtes DB
+
+**Dashboard Grafana "Gauzian - Overview"**
+14 panneaux préconfigurés :
+1. Requêtes HTTP/s par méthode
+2. Connexions HTTP actives
+3. Taux de succès HTTP (avec seuils colorés)
+4. Latence p50/p95/p99 (ms)
+5. Uploads de fichiers (1h)
+6. Downloads de fichiers (1h)
+7. Bytes uploadés (total)
+8. Tentatives d'authentification
+9. Durée opérations S3 (p95, gauge)
+10. Top 10 endpoints par latence (table)
+11. Erreurs 4xx/5xx par seconde
+12. Durée upload chunks (p95)
+13. Opérations Redis
+14. Durée requêtes DB (p95)
+
+**Déploiement**
+```bash
+# Sur le VPS
+cd gauzian_back/k8s
+./deploy-monitoring.sh
+```
+
+**Accès**
+- Grafana : https://grafana.gauzian.pupin.fr (admin/ChangeMe123!)
+- Prometheus : https://prometheus.gauzian.pupin.fr
+
+**Stockage**
+- Prometheus : 10Gi (rétention 30 jours)
+- Grafana : 2Gi (dashboards + config)
+
+**Prochaines étapes optionnelles**
+- Ajouter exporters pour PostgreSQL, Redis, MinIO
+- Configurer alerting (email/slack/discord)
+- Installer CrowdSec (Phase 2 sécurité)
+
+---
+
 ### [2026-02-05 17:30] - SECURITY : Ajout middlewares de sécurité Traefik (Phase 1)
 
 **Objectif**
