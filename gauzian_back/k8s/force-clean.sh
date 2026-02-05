@@ -4,7 +4,7 @@
 
 set +e  # Continue même en cas d'erreur
 
-NAMESPACE="gauzian"
+NAMESPACE="gauzian-v2"
 
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║       NETTOYAGE FORCÉ DU NAMESPACE KUBERNETES                 ║"
