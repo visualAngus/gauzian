@@ -1,11 +1,20 @@
 #!/bin/bash
 # Script de déploiement complet de l'infrastructure GAUZIAN sur Kubernetes
-# Usage: sudo bash ./update-max.sh
+#
+# Usage:
+#   sudo bash ./update-max.sh           # Mise à jour normale
+#   sudo bash ./update-max.sh --clean   # Nettoyage complet + redéploiement
 
 set -e  # Arrêt immédiat en cas d'erreur
 
 NAMESPACE="gauzian"
 K8S_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLEAN_MODE=false
+
+# Vérifier les arguments
+if [[ "$1" == "--clean" ]]; then
+    CLEAN_MODE=true
+fi
 
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║         DÉPLOIEMENT COMPLET GAUZIAN - KUBERNETES              ║"
@@ -13,7 +22,58 @@ echo "╚═══════════════════════�
 echo ""
 echo "📂 Répertoire K8s : $K8S_DIR"
 echo "🎯 Namespace      : $NAMESPACE"
+echo "🧹 Mode nettoyage : $([ "$CLEAN_MODE" == "true" ] && echo "OUI (--clean)" || echo "NON")"
 echo ""
+
+# =====================================================================
+# ÉTAPE 0 : NETTOYAGE COMPLET (si --clean)
+# =====================================================================
+if [ "$CLEAN_MODE" == "true" ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🧹 ÉTAPE 0/5 : NETTOYAGE COMPLET DU NAMESPACE"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "⚠️  ATTENTION : Cette opération va SUPPRIMER COMPLÈTEMENT :"
+    echo "   • Le namespace '$NAMESPACE' et TOUTES ses ressources"
+    echo "   • Tous les pods, services, deployments, PVC"
+    echo "   • TOUTES LES DONNÉES (PostgreSQL, Redis, MinIO)"
+    echo ""
+
+    # Vérifier si le namespace existe
+    if kubectl get namespace $NAMESPACE &>/dev/null; then
+        echo "🔍 Namespace '$NAMESPACE' trouvé. Suppression en cours..."
+        echo ""
+
+        # Supprimer le namespace (supprime automatiquement tout ce qu'il contient)
+        kubectl delete namespace $NAMESPACE --timeout=5m
+
+        echo ""
+        echo "⏳ Attente de la suppression complète du namespace..."
+
+        # Attendre que le namespace soit complètement supprimé
+        while kubectl get namespace $NAMESPACE &>/dev/null; do
+            echo "   Namespace toujours en cours de suppression..."
+            sleep 3
+        done
+
+        echo "✅ Namespace '$NAMESPACE' complètement supprimé"
+    else
+        echo "ℹ️  Namespace '$NAMESPACE' n'existe pas (déjà supprimé ou jamais créé)"
+    fi
+
+    echo ""
+    echo "🧹 Nettoyage des images Docker inutilisées..."
+    if sudo k3s crictl rmi --prune 2>/dev/null; then
+        echo "✅ Cache containerd nettoyé"
+    else
+        echo "⚠️  Nettoyage crictl échoué (non-critique)"
+    fi
+
+    echo ""
+    echo "✅ Nettoyage complet terminé ! Redéploiement depuis zéro..."
+    echo ""
+    sleep 2
+fi
 
 # =====================================================================
 # ÉTAPE 1 : APPLICATION DE TOUS LES MANIFESTS
