@@ -2,6 +2,44 @@
 
 ## 2026-02-05
 
+### [2026-02-05 16:00] - FIX : Résolution erreur Kustomize et amélioration script update-max.sh
+
+**Problème identifié**
+- Erreur Kustomize : "apiVersion not set" lors de `kubectl apply -k .`
+- Cause : Fichiers non-manifests (.md, .service, prometheus-values.yaml) scannés par Kustomize
+- Script update-max.sh manquait de robustesse et de messages explicites
+
+**Modifications**
+1. **.kustomizeignore** (nouveau - répertoire principal) :
+   - Exclusion des fichiers documentation (*.md, README.md, ENV_VARIABLES.md)
+   - Exclusion des scripts shell (*.sh)
+   - Exclusion des fichiers systemd (*.service)
+   - Exclusion des Helm values (prometheus-values.yaml)
+
+2. **monitoring/.kustomizeignore** (nouveau) :
+   - Exclusion de prometheus-values.yaml (fichier Helm, pas K8s manifest)
+   - Exclusion des *.values.yaml
+
+3. **update-max.sh** (refonte complète) :
+   - 5 étapes clairement séparées avec bordures visuelles
+   - ÉTAPE 1 : Application manifests avec vérification kustomization.yaml
+   - ÉTAPE 2 : Forçage pull images Docker (suppression pods)
+   - ÉTAPE 3 : Nettoyage cache containerd
+   - ÉTAPE 4 : Attente rollout avec gestion d'erreurs et timeouts
+   - ÉTAPE 5 : Vérification finale (pods, services, ingress)
+   - Messages détaillés pour chaque étape
+   - Gestion d'erreurs robuste avec codes de retour
+   - Affichage des URLs de vérification en fin de déploiement
+   - Commandes de logs suggérées
+
+**Impact**
+✅ Kustomize ignore les fichiers non-manifests (plus d'erreur "apiVersion not set")
+✅ Script ultra-verbeux et informatif (progression claire)
+✅ Gestion d'erreurs robuste (exit si timeout ou erreur critique)
+✅ Déploiement en 5 étapes visuellement séparées
+✅ URLs et commandes de vérification affichées automatiquement
+✅ Déploie TOUT : namespace, secrets, PVC, deployments, services, ingress, monitoring
+
 ### [2026-02-05 15:30] - AMÉLIORATION : Script update-max.sh applique tous les manifests K8s
 
 **Objectif**

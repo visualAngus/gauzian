@@ -1,0 +1,16 @@
+# Fichiers à ignorer par Kustomize
+
+# Documentation
+*.md
+README.md
+ENV_VARIABLES.md
+
+# Fichiers systemd
+*.service
+
+# Scripts shell
+*.sh
+
+# Helm values (pas des manifests K8s)
+*/prometheus-values.yaml
+prometheus-values.yaml
