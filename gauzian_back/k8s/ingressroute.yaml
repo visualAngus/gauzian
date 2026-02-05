@@ -2,7 +2,7 @@ apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: gauzian-https
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   entryPoints:
     - websecure
@@ -42,7 +42,7 @@ apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: gauzian-http
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   entryPoints:
     - web
@@ -60,7 +60,7 @@ apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: redirect-https
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   redirectScheme:
     scheme: https

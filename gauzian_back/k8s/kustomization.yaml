@@ -26,7 +26,6 @@ resources:
   # Reverse proxy et routing
   - middleware.yaml
   - ingressroute.yaml
-  - ingress.yaml
 
   # Monitoring (Grafana, Prometheus ServiceMonitor)
   - monitoring/
