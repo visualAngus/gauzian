@@ -20,7 +20,7 @@ spec:
         - name: strip-api-prefix
       services:
         - name: backend
-          port: 3000
+          port: 8080
     # MinIO S3 API (avec strip /s3)
     - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/s3`)
       kind: Rule
