@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'gauzian-vps'
+        environment: 'production'
+
+    scrape_configs:
+      # Gauzian Backend (Rust/Axum)
+      - job_name: 'gauzian-backend'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - gauzian-v2
+        relabel_configs:
+          # Garder uniquement les endpoints du service backend
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: backend
+          # Utiliser le port metrics (8080)
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http
+          # Ajouter le nom du pod dans les labels
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          # Ajouter le namespace
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+        metrics_path: /metrics
+
+      # PostgreSQL (si exporter installé)
+      - job_name: 'postgres'
+        static_configs:
+          - targets: ['postgres:5432']
+            labels:
+              service: 'postgres'
+              namespace: 'gauzian-v2'
+
+      # Redis (si exporter installé)
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['redis:6379']
+            labels:
+              service: 'redis'
+              namespace: 'gauzian-v2'
+
+      # MinIO (si exporter activé)
+      - job_name: 'minio'
+        static_configs:
+          - targets: ['minio:9000']
+            labels:
+              service: 'minio'
+              namespace: 'gauzian-v2'
+        metrics_path: /minio/v2/metrics/cluster
+
+      # Prometheus lui-même
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Traefik metrics (si activé)
+      - job_name: 'traefik'
+        kubernetes_sd_configs:
+          - role: service
+            namespaces:
+              names:
+                - traefik
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: traefik
+          - source_labels: [__meta_kubernetes_service_port_name]
+            action: keep
+            regex: metrics
