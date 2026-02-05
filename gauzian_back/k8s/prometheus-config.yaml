@@ -67,6 +67,20 @@ data:
         static_configs:
           - targets: ['localhost:9090']
 
+      # Node Exporter (métriques système)
+      - job_name: 'node-exporter'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - monitoring
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            action: keep
+            regex: node-exporter
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
       # Traefik metrics (si activé)
       - job_name: 'traefik'
         kubernetes_sd_configs:

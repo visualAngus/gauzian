@@ -1,0 +1,773 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-sysadmin
+  namespace: monitoring
+data:
+  sysadmin-complete.json: |
+    {
+      "dashboard": {
+        "title": "🔥 Gauzian - SysAdmin Complete Dashboard",
+        "tags": ["gauzian", "sysadmin", "infrastructure", "complete"],
+        "timezone": "browser",
+        "schemaVersion": 39,
+        "version": 1,
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "CPU Usage",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+            "targets": [
+              {
+                "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "showThresholdLabels": false,
+              "showThresholdMarkers": true
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 70, "color": "yellow"},
+                    {"value": 85, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Memory Usage",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+            "targets": [
+              {
+                "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 75, "color": "yellow"},
+                    {"value": 90, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 3,
+            "title": "Disk Usage",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+            "targets": [
+              {
+                "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"rootfs\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"rootfs\"})",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 80, "color": "yellow"},
+                    {"value": 90, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "Network Traffic (RX/TX)",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+            "targets": [
+              {
+                "expr": "sum(rate(node_network_receive_bytes_total{device!=\"lo\"}[5m])) / 1024 / 1024",
+                "legendFormat": "↓ RX",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m])) / 1024 / 1024",
+                "legendFormat": "↑ TX",
+                "refId": "B"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "MBs"
+              }
+            }
+          },
+          {
+            "id": 5,
+            "title": "CPU Usage per Core",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+            "targets": [
+              {
+                "expr": "100 - (avg by (cpu) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                "legendFormat": "CPU {{cpu}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "percent", "label": "Usage", "min": 0, "max": 100},
+              {"format": "short"}
+            ],
+            "legend": {
+              "show": true,
+              "alignAsTable": true,
+              "avg": true,
+              "current": true,
+              "max": true
+            }
+          },
+          {
+            "id": 6,
+            "title": "Load Average",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+            "targets": [
+              {
+                "expr": "node_load1",
+                "legendFormat": "1m",
+                "refId": "A"
+              },
+              {
+                "expr": "node_load5",
+                "legendFormat": "5m",
+                "refId": "B"
+              },
+              {
+                "expr": "node_load15",
+                "legendFormat": "15m",
+                "refId": "C"
+              }
+            ],
+            "yaxes": [
+              {"format": "short", "label": "Load"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 7,
+            "title": "Memory Details",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+            "targets": [
+              {
+                "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+                "legendFormat": "Used",
+                "refId": "A"
+              },
+              {
+                "expr": "node_memory_Buffers_bytes",
+                "legendFormat": "Buffers",
+                "refId": "B"
+              },
+              {
+                "expr": "node_memory_Cached_bytes",
+                "legendFormat": "Cached",
+                "refId": "C"
+              },
+              {
+                "expr": "node_memory_MemFree_bytes",
+                "legendFormat": "Free",
+                "refId": "D"
+              }
+            ],
+            "yaxes": [
+              {"format": "bytes", "label": "Memory"},
+              {"format": "short"}
+            ],
+            "stack": true
+          },
+          {
+            "id": 8,
+            "title": "Swap Usage",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+            "targets": [
+              {
+                "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+                "legendFormat": "Used",
+                "refId": "A"
+              },
+              {
+                "expr": "node_memory_SwapFree_bytes",
+                "legendFormat": "Free",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "bytes", "label": "Swap"},
+              {"format": "short"}
+            ],
+            "stack": true
+          },
+          {
+            "id": 9,
+            "title": "Disk I/O",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+            "targets": [
+              {
+                "expr": "rate(node_disk_read_bytes_total[5m])",
+                "legendFormat": "Read {{device}}",
+                "refId": "A"
+              },
+              {
+                "expr": "rate(node_disk_written_bytes_total[5m])",
+                "legendFormat": "Write {{device}}",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "Bps", "label": "I/O"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 10,
+            "title": "Disk IOPS",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+            "targets": [
+              {
+                "expr": "rate(node_disk_reads_completed_total[5m])",
+                "legendFormat": "Reads {{device}}",
+                "refId": "A"
+              },
+              {
+                "expr": "rate(node_disk_writes_completed_total[5m])",
+                "legendFormat": "Writes {{device}}",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "iops", "label": "IOPS"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 11,
+            "title": "Filesystem Usage by Mountpoint",
+            "type": "table",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+            "targets": [
+              {
+                "expr": "100 - ((node_filesystem_avail_bytes{fstype!=\"tmpfs\",fstype!=\"rootfs\"} * 100) / node_filesystem_size_bytes)",
+                "format": "table",
+                "instant": true,
+                "refId": "A"
+              }
+            ],
+            "transformations": [
+              {
+                "id": "organize",
+                "options": {
+                  "excludeByName": {
+                    "Time": true,
+                    "__name__": true,
+                    "instance": true,
+                    "job": true
+                  },
+                  "renameByName": {
+                    "mountpoint": "Mountpoint",
+                    "fstype": "Filesystem",
+                    "Value": "Usage %"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": 12,
+            "title": "Network Traffic by Interface",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
+            "targets": [
+              {
+                "expr": "rate(node_network_receive_bytes_total{device!=\"lo\"}[5m])",
+                "legendFormat": "RX {{device}}",
+                "refId": "A"
+              },
+              {
+                "expr": "rate(node_network_transmit_bytes_total{device!=\"lo\"}[5m])",
+                "legendFormat": "TX {{device}}",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "Bps", "label": "Traffic"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 13,
+            "title": "Network Errors & Drops",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 38},
+            "targets": [
+              {
+                "expr": "rate(node_network_receive_errs_total[5m])",
+                "legendFormat": "RX Errors {{device}}",
+                "refId": "A"
+              },
+              {
+                "expr": "rate(node_network_transmit_errs_total[5m])",
+                "legendFormat": "TX Errors {{device}}",
+                "refId": "B"
+              },
+              {
+                "expr": "rate(node_network_receive_drop_total[5m])",
+                "legendFormat": "RX Drops {{device}}",
+                "refId": "C"
+              },
+              {
+                "expr": "rate(node_network_transmit_drop_total[5m])",
+                "legendFormat": "TX Drops {{device}}",
+                "refId": "D"
+              }
+            ],
+            "yaxes": [
+              {"format": "pps", "label": "Errors/Drops"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 14,
+            "title": "TCP Connections",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 38},
+            "targets": [
+              {
+                "expr": "node_netstat_Tcp_CurrEstab",
+                "legendFormat": "Established",
+                "refId": "A"
+              },
+              {
+                "expr": "node_netstat_Tcp_ActiveOpens",
+                "legendFormat": "Active Opens",
+                "refId": "B"
+              },
+              {
+                "expr": "node_netstat_Tcp_PassiveOpens",
+                "legendFormat": "Passive Opens",
+                "refId": "C"
+              }
+            ],
+            "yaxes": [
+              {"format": "short", "label": "Connections"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 15,
+            "title": "System Uptime",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 46},
+            "targets": [
+              {
+                "expr": "node_time_seconds - node_boot_time_seconds",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "mappings": [],
+                "color": {
+                  "mode": "thresholds"
+                }
+              }
+            }
+          },
+          {
+            "id": 16,
+            "title": "Context Switches",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 46},
+            "targets": [
+              {
+                "expr": "rate(node_context_switches_total[5m])",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            }
+          },
+          {
+            "id": 17,
+            "title": "Open File Descriptors",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 46},
+            "targets": [
+              {
+                "expr": "node_filefd_allocated",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short"
+              }
+            }
+          },
+          {
+            "id": 18,
+            "title": "Processes",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 46},
+            "targets": [
+              {
+                "expr": "node_procs_running",
+                "legendFormat": "Running",
+                "refId": "A"
+              },
+              {
+                "expr": "node_procs_blocked",
+                "legendFormat": "Blocked",
+                "refId": "B"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short"
+              }
+            }
+          },
+          {
+            "id": 19,
+            "title": "🐳 K8s Pods Running",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 50},
+            "targets": [
+              {
+                "expr": "count(kube_pod_status_phase{phase=\"Running\"})",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "colorMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "red"},
+                    {"value": 1, "color": "green"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 20,
+            "title": "🐳 K8s Pods Failed",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 50},
+            "targets": [
+              {
+                "expr": "count(kube_pod_status_phase{phase=\"Failed\"})",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "colorMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 1, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 21,
+            "title": "🚀 Backend - HTTP Requests/s",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 54},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total[5m])) by (method)",
+                "legendFormat": "{{method}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "reqps", "label": "Req/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 22,
+            "title": "🚀 Backend - HTTP Latency p95 (ms)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 54},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+                "legendFormat": "p95",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ms", "label": "Latency"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 23,
+            "title": "🚀 Backend - Success Rate",
+            "type": "gauge",
+            "gridPos": {"h": 6, "w": 6, "x": 0, "y": 62},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "red"},
+                    {"value": 95, "color": "yellow"},
+                    {"value": 99, "color": "green"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 24,
+            "title": "🚀 Backend - Active Connections",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 6, "x": 6, "y": 62},
+            "targets": [
+              {
+                "expr": "http_connections_active",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value"
+            }
+          },
+          {
+            "id": 25,
+            "title": "📁 File Uploads (Success/Failed)",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 6, "x": 12, "y": 62},
+            "targets": [
+              {
+                "expr": "sum(increase(file_uploads_total{status=\"success\"}[1h]))",
+                "legendFormat": "Success",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(increase(file_uploads_total{status=\"failed\"}[1h]))",
+                "legendFormat": "Failed",
+                "refId": "B"
+              }
+            ],
+            "options": {
+              "graphMode": "area"
+            }
+          },
+          {
+            "id": 26,
+            "title": "📁 Data Uploaded (Total)",
+            "type": "stat",
+            "gridPos": {"h": 6, "w": 6, "x": 18, "y": 62},
+            "targets": [
+              {
+                "expr": "sum(file_upload_bytes_total)",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "bytes"
+              }
+            }
+          },
+          {
+            "id": 27,
+            "title": "🔐 Auth Attempts (Success/Failed)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 68},
+            "targets": [
+              {
+                "expr": "sum(rate(auth_attempts_total[5m])) by (type, status)",
+                "legendFormat": "{{type}} - {{status}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Attempts/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 28,
+            "title": "💾 S3 Operation Latency (p95)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 68},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(s3_operation_duration_seconds_bucket[5m])) by (le, operation))",
+                "legendFormat": "{{operation}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "s", "label": "Latency"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 29,
+            "title": "🗄️ Redis Operations",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 76},
+            "targets": [
+              {
+                "expr": "sum(rate(redis_operations_total[5m])) by (operation, status)",
+                "legendFormat": "{{operation}} - {{status}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Ops/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 30,
+            "title": "🗄️ Database Query Latency (p95)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 76},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, query_type)) * 1000",
+                "legendFormat": "{{query_type}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ms", "label": "Latency"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 31,
+            "title": "🚨 HTTP Errors 4xx/5xx",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 84},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) by (status)",
+                "legendFormat": "4xx - {{status}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (status)",
+                "legendFormat": "5xx - {{status}}",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "reqps", "label": "Errors/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 32,
+            "title": "📊 Top 10 Slowest Endpoints",
+            "type": "table",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 84},
+            "targets": [
+              {
+                "expr": "topk(10, histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint, method)))",
+                "format": "table",
+                "instant": true,
+                "refId": "A"
+              }
+            ],
+            "transformations": [
+              {
+                "id": "organize",
+                "options": {
+                  "excludeByName": {
+                    "Time": true,
+                    "le": true,
+                    "__name__": true
+                  },
+                  "renameByName": {
+                    "endpoint": "Endpoint",
+                    "method": "Method",
+                    "Value": "P95 Latency (s)"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }

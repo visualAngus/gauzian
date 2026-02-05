@@ -2,6 +2,44 @@
 
 ## 2026-02-05
 
+### [2026-02-05 20:10] - MONITORING : Ajout Node Exporter + Dashboard SysAdmin complet
+
+**Ajouts**
+
+1. **Node Exporter DaemonSet**
+   - `gauzian_back/k8s/node-exporter-daemonset.yaml` - Collecte métriques système (CPU, RAM, disque, réseau)
+   - Déployé sur tous les nodes K8s
+   - Expose métriques sur port 9100
+
+2. **Dashboard SysAdmin Complet** (32 panels)
+   - `gauzian_back/k8s/grafana-dashboard-sysadmin.yaml` - Dashboard admin sys ultime
+   - Sections :
+     - Vue d'ensemble : CPU, RAM, disque, réseau (4 gauges)
+     - CPU détaillé : par core, load average
+     - Mémoire : usage, buffers, cache, swap
+     - Disque : I/O, IOPS, usage par mountpoint
+     - Réseau : trafic par interface, erreurs, drops, TCP
+     - Système : uptime, context switches, file descriptors, processes
+     - Kubernetes : pods running/failed
+     - Backend Gauzian : toutes les métriques existantes
+     - Infrastructure : S3, Redis, PostgreSQL
+
+3. **Scripts**
+   - `gauzian_back/k8s/deploy-monitoring-complete.sh` - Déploiement complet avec Node Exporter
+
+4. **Configuration Prometheus**
+   - Ajout scraping Node Exporter dans `prometheus-config.yaml`
+
+**Corrections**
+- Fix tag Prometheus : v2.56.0 → v3.5.1 (LTS)
+- Fix IngressRoute : suppression middlewares cross-namespace (causait 404)
+
+**Dashboards disponibles**
+1. "Gauzian - Overview" : Métriques backend uniquement (14 panels)
+2. "🔥 Gauzian - SysAdmin Complete Dashboard" : Vue complète admin sys (32 panels)
+
+---
+
 ### [2026-02-05 18:00] - MONITORING : Installation stack Prometheus + Grafana
 
 **Objectif**
