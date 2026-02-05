@@ -1,17 +1,13 @@
 use axum::extract::{Json, Path, Query, State};
 use axum::response::{IntoResponse, Response};
-// use chrono::Utc;
-use serde::{Deserialize};
+use serde::Deserialize;
 use tracing::{info, instrument};
 use uuid::Uuid;
-// redis transfer-tracking removed from this file
 
 use crate::{auth::Claims, response::ApiResponse, state::AppState};
 use super::{repo, services};
 use base64::Engine;
 use sqlx;
-
-// use axum::http::HeaderMap;
 
 use axum::body::{Body, Bytes};
 use axum::http::header;
@@ -940,14 +936,12 @@ pub async fn download_chunk_binary_handler(
             let download_duration = download_start.elapsed().as_secs_f64();
             crate::metrics::track_chunk_download_duration(download_duration, true);
 
-            let response = axum::response::Response::builder()
+            axum::response::Response::builder()
                 .header(header::CONTENT_TYPE, "application/octet-stream")
                 .header("x-chunk-index", metadata.index)
                 .header("x-chunk-iv", metadata.iv.unwrap_or_default())
                 .body(Body::from(data))
-                .unwrap();
-
-            response
+                .unwrap()
         }
         Err(e) => {
             let download_duration = download_start.elapsed().as_secs_f64();
@@ -1008,12 +1002,11 @@ pub async fn finalize_upload_handler(
             {
                 Ok(_) => {
                     crate::metrics::track_file_upload(false, 0);
-                    return ApiResponse::ok("File upload aborted successfully").into_response();
+                    ApiResponse::ok("File upload aborted successfully").into_response()
                 }
                 Err(e) => {
                     tracing::error!("Failed to abort file upload: {:?}", e);
-                    return ApiResponse::internal_error("Failed to abort file upload")
-                        .into_response();
+                    ApiResponse::internal_error("Failed to abort file upload").into_response()
                 }
             }
         }
@@ -1042,10 +1035,10 @@ pub async fn finalize_upload_handler(
             }
         }
         _ => {
-            return ApiResponse::bad_request(
+            ApiResponse::bad_request(
                 "Invalid etat value (expected 'aborted' or 'completed')",
             )
-            .into_response();
+            .into_response()
         }
     }
 }

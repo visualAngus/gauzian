@@ -10,6 +10,9 @@ spec:
     # MinIO Console (sous-domaine)
     - match: Host(`minio.gauzian.pupin.fr`)
       kind: Rule
+      middlewares:
+        - name: security-headers
+        - name: inflight-limit
       services:
         - name: minio
           port: 9001
@@ -17,7 +20,11 @@ spec:
     - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/api`)
       kind: Rule
       middlewares:
+        - name: rate-limit-api
+        - name: inflight-limit
+        - name: security-headers
         - name: strip-api-prefix
+        - name: compress
       services:
         - name: backend
           port: 8080
@@ -25,13 +32,19 @@ spec:
     - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/s3`)
       kind: Rule
       middlewares:
+        - name: rate-limit-s3
+        - name: security-headers
         - name: strip-s3-prefix
+        - name: compress
       services:
         - name: minio
           port: 9000
     # Frontend (catch-all)
     - match: Host(`gauzian.pupin.fr`)
       kind: Rule
+      middlewares:
+        - name: security-headers
+        - name: compress
       services:
         - name: front
           port: 8080

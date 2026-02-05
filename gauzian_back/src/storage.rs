@@ -116,7 +116,7 @@ impl StorageClient {
                 .metadata("index", &index)
                 .metadata("date-upload", &date_upload)
                 .metadata("data-hash", &metadata.data_hash)
-                .metadata("iv", &metadata.iv.clone().unwrap_or_default())
+                .metadata("iv", metadata.iv.as_deref().unwrap_or(""))
                 .send()
                 .await
             {

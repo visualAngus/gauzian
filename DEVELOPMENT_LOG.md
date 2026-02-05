@@ -2,6 +2,77 @@
 
 ## 2026-02-05
 
+### [2026-02-05 17:30] - SECURITY : Ajout middlewares de sécurité Traefik (Phase 1)
+
+**Objectif**
+- Ajouter des protections natives Traefik (rate-limit, security headers, compression)
+- Alternative gratuite/open-source à Cloudflare pour souveraineté européenne
+
+**Modifications effectuées**
+
+1. **`gauzian_back/k8s/ingress.yaml`**
+   - Correction namespace `gauzian` → `gauzian-v2`
+
+2. **`gauzian_back/k8s/middleware.yaml`**
+   - Remplacé `rate-limit-50-per-1s` par middlewares ciblés :
+     - `rate-limit-api` : 100 req/s, burst 50 (pour /api - login, file ops)
+     - `rate-limit-s3` : 200 req/s, burst 100 (pour /s3 - uploads chunks)
+   - **Ajouté `security-headers`** : HSTS, CSP, X-Frame-Options, XSS protection
+   - **Ajouté `compress`** : Compression gzip (bonus performance)
+   - **Ajouté `inflight-limit`** : Max 100 connexions simultanées par IP
+
+3. **`gauzian_back/k8s/ingressroute.yaml`**
+   - Application stratégique des middlewares :
+     - Route `/api` : rate-limit-api + inflight-limit + security-headers + compress
+     - Route `/s3` : rate-limit-s3 + security-headers + compress
+     - Route frontend `/` : security-headers + compress
+     - Console MinIO : security-headers + inflight-limit
+
+**Protections activées**
+- ✅ Anti-bruteforce (rate limiting différencié)
+- ✅ Anti-surcharge (inflight request limit)
+- ✅ Headers sécurité (XSS, Clickjacking, HSTS)
+- ✅ CSP restrictive
+- ✅ Compression (performance)
+
+**Prochaine étape**
+- Phase 2 : Installation CrowdSec (IPS collaboratif français 🇫🇷)
+
+---
+
+### [2026-02-05] - MAINTENANCE : Nettoyage du code backend Rust
+
+**Contexte**
+- Mode maintenance strict activé
+- Objectif : Nettoyer le code sans changer le comportement
+
+**Modifications effectuées (4 fichiers)**
+
+1. **`src/auth/services.rs`**
+   - Supprimé import commenté `// use serde::Serialize;`
+
+2. **`src/drive/handlers.rs`**
+   - Supprimé import commenté `// use chrono::Utc;`
+   - Supprimé commentaire obsolète `// redis transfer-tracking removed from this file`
+   - Supprimé import commenté `// use axum::http::HeaderMap;`
+   - Simplifié binding inutile (ligne 950)
+   - Supprimé 3 `return` inutiles en fin de bloc (lignes 1011, 1015, 1045)
+
+3. **`src/drive/repo.rs`**
+   - Supprimé import commenté `// use serde::{Serialize, Deserialize};`
+   - Optimisé `.iter().any()` → `.contains()` (ligne 418)
+   - Simplifié `match Some/None` → `.map()` (lignes 385-388)
+   - Supprimé 2 `.into()` inutiles sur `format!()` (lignes 438, 1391)
+
+4. **`src/storage.rs`**
+   - Optimisé `.clone().unwrap_or_default()` → `.as_deref().unwrap_or("")` (ligne 119)
+
+**Résultat**
+- Compilation ✅
+- Warnings Clippy : 13 → 4 (les 4 restants sont stylistiques/intentionnels)
+
+---
+
 ### [2026-02-05 16:10] - FIX : Résolution problème routing Traefik avec namespace gauzian-v2
 
 **Problème**
