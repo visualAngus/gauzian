@@ -1,0 +1,3 @@
+# Fichiers Helm à ignorer par Kustomize
+prometheus-values.yaml
+*.values.yaml
