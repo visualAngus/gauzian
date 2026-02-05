@@ -8,7 +8,7 @@
 set -e  # Arrêt immédiat en cas d'erreur
 
 NAMESPACE="gauzian-v2"
-K8S_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+K8S_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLEAN_MODE=false
 
 # Vérifier les arguments
