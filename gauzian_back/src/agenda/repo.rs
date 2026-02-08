@@ -133,7 +133,7 @@ pub async fn create_event(
             id,
             title,
             description,
-            day_id,
+            CAST(agenda_events.day_id AS BIGINT) as day_id,
             start_day_id,
             end_day_id,
             start_hour,
