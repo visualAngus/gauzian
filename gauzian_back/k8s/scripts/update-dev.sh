@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-NAMESPACE="gauzian"
+NAMESPACE="gauzian-v2"
 REGISTRY="angusvisual"
 TAG="dev"
 
