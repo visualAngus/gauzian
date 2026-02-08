@@ -2,6 +2,56 @@
 
 ## 2026-02-08
 
+### [2026-02-08 12:46] - ✅ RÉSOLUTION COMPLÈTE : Problème 503 reverse proxy Traefik
+
+**Problème résolu** : Erreur 503 "no available server" sur toutes les requêtes HTTPS
+- ❌ HTTPS retournait systématiquement 503
+- ✅ HTTP fonctionnait correctement (200)
+- ⚠️ Redirection HTTP→HTTPS utilisait un service backend (incorrect)
+
+**Cause racine identifiée** :
+1. **Conflit Ingress standard K8s vs IngressRoute CRD** : Le fichier `ingress.yaml` créait un Ingress standard qui entrait en conflit avec les IngressRoutes Traefik CRD
+2. **Priorité de routing** : L'Ingress standard prenait la priorité et routait vers `websecure-default-gauzian-ingress-gauzian-pupin-fr@kubernetes` (503)
+3. **Rate limit Let's Encrypt** : L'Ingress tentait d'obtenir un certificat Let's Encrypt (bloqué) et échouait
+4. **Redirection mal configurée** : La redirection HTTP→HTTPS utilisait `front:8080` au lieu du service interne Traefik
+
+**Actions correctrices** :
+1. ✅ **Corrigé `ingressroute.yaml`** (commit `cdc4f75`) :
+   - Redirection HTTP→HTTPS utilise maintenant `noop@internal` TraefikService
+   - Middleware `redirect-https` placé avant le service
+2. ✅ **Supprimé l'Ingress conflictuel** : `kubectl delete ingress gauzian-ingress -n default`
+3. ✅ **Désactivé `ingress.yaml`** : Renommé en `ingress.yaml.disabled` pour éviter les redéploiements
+
+**Diagnostic (5 agents en parallèle)** :
+- Agent 1 : Analyse complète config Traefik K8s (IngressRoute, Middleware, Services)
+- Agent 2 : Analyse DEVELOPMENT_LOG (historique problèmes rate limit)
+- Agent 3 : Plan de tests endpoints (HTTP/HTTPS, API, MinIO)
+- Agent 4 : Vue d'ensemble configs reverse proxy (Caddy dev, Traefik prod)
+- Agent 5 : Vérification status pods, logs Traefik, IngressRoutes
+
+**Résultats après correction** :
+- ✅ **HTTPS fonctionne** : `HTTP/2 200` avec certificat par défaut Traefik
+- ✅ **Frontend** : `https://gauzian.pupin.fr` → 200 OK
+- ✅ **API Backend** : `https://gauzian.pupin.fr/api/*` → routage OK (strip prefix fonctionne)
+- ✅ **MinIO S3** : `https://gauzian.pupin.fr/s3/*` → routage OK (strip prefix fonctionne)
+- ✅ **MinIO Console** : `https://minio.gauzian.pupin.fr` → 200 OK (`server: MinIO Console`)
+- ✅ **Redirection HTTP→HTTPS** : `308 Permanent Redirect` (au lieu de 301)
+- ✅ **Headers de sécurité** : CSP, HSTS (31536000s), X-Frame-Options, X-XSS-Protection, Permissions-Policy
+- ✅ **Tous les middlewares** : rate-limit, compress, strip-prefix, security-headers, inflight-limit
+
+**Architecture finale** :
+- **Reverse proxy** : Traefik dans namespace `kube-system` (pas `traefik-system`)
+- **Routing** : IngressRoute CRD uniquement (Ingress standard désactivé)
+- **Certificat** : `TRAEFIK DEFAULT CERT` (auto-signé, valide 1 an) en attendant fin du rate limit
+- **Rate limit Let's Encrypt** : Actif jusqu'au **2026-02-09 18:00 UTC**
+- **Après rate limit** : Ajouter `certResolver: letsencrypt` dans `tls` de `ingressroute.yaml`
+
+**Commit** : `cdc4f75` - "fix(k8s): Correct HTTP to HTTPS redirect - use noop@internal service"
+
+---
+
+## 2026-02-08
+
 ### [2026-02-08 23:30] - SESSION TROUBLESHOOTING : Réinstallation Traefik + Diagnostic approfondi 503
 
 **Contexte de départ**
