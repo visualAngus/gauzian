@@ -2,7 +2,178 @@
 
 ## 2026-02-08
 
-### [2026-02-08 09:40] - FIX SSL : Certificat Let's Encrypt obtenu avec succès
+### [2026-02-08 23:30] - SESSION TROUBLESHOOTING : Réinstallation Traefik + Diagnostic approfondi 503
+
+**Contexte de départ**
+- Certificat Let's Encrypt initialement obtenu (09:40) mais **perdu** pendant le troubleshooting
+- Site toujours inaccessible avec erreur 503 "no available server"
+- Décision : réinstallation complète de Traefik avec solution propre et pérenne
+
+**🔴 DEUX PROBLÈMES DISTINCTS IDENTIFIÉS**
+
+#### Problème 1 : Rate Limit Let's Encrypt (BLOQUÉ jusqu'au 2026-02-09 18:00 UTC)
+- Erreur : "too many certificates (5) already issued for this exact set of identifiers in the last 168h0m0s"
+- Cause : Perte du certificat initial (pas de stockage persistant) et multiples tentatives de réémission
+- **Impact** : Impossible d'obtenir un nouveau certificat valide avant le 9 février 18h UTC
+- **Workaround actuel** : Utilisation du certificat par défaut de Traefik
+
+#### Problème 2 : Routing HTTPS 503 avec IngressRoute CRD (NON RÉSOLU)
+- **Symptômes** :
+  - ✅ HTTP via IP fonctionne : `http://91.134.241.167` → 200 OK
+  - ❌ HTTPS via domaine échoue : `https://gauzian.pupin.fr` → 503 "no available server"
+  - ✅ Traefik peut contacter les services directement : `wget http://front.gauzian-v2:8080` → 200 OK
+  - ✅ Ingress Kubernetes standard fonctionne
+  - ❌ IngressRoute Traefik CRD ne fonctionne pas
+
+**Actions réalisées**
+
+1. **Réinstallation complète de Traefik via Helm**
+   ```bash
+   # Suppression ancien Traefik
+   kubectl delete namespace traefik-system
+   kubectl delete crd ingressroutes.traefik.io ingressroutetcps.traefik.io \
+     ingressrouteudps.traefik.io middlewares.traefik.io \
+     middlewaretcps.traefik.io serverstransports.traefik.io \
+     tlsoptions.traefik.io tlsstores.traefik.io traefikservices.traefik.io
+
+   # Réinstallation avec stockage persistant
+   helm repo add traefik https://traefik.github.io/charts
+   helm repo update
+   helm install traefik traefik/traefik --namespace traefik-system \
+     --create-namespace --values traefik-values.yaml
+   ```
+
+2. **Configuration Helm avec stockage persistant** (`traefik-values.yaml`)
+   ```yaml
+   persistence:
+     enabled: true
+     name: acme
+     size: 1Gi
+     path: /data
+     accessMode: ReadWriteOnce
+
+   certificatesResolvers:
+     letsencrypt:
+       acme:
+         email: admin@gauzian.pupin.fr
+         storage: /data/acme.json
+         httpChallenge:
+           entryPoint: web
+
+   logs:
+     access:
+       enabled: true
+   ```
+
+3. **Diagnostic approfondi du problème 503**
+
+   Tests effectués (tous retournent 503) :
+   - ❌ Suppression de tous les middlewares
+   - ❌ IngressRoute minimal (juste Host + service)
+   - ❌ Test avec Host header sur IP
+   - ❌ Suppression du certResolver
+   - ✅ NodePort direct fonctionne (accès pod via 30080)
+   - ✅ Ingress standard Kubernetes fonctionne
+
+   Vérifications infrastructure :
+   - ✅ Tous les pods Running (backend x2, frontend x2, traefik x1)
+   - ✅ Health checks OK : `/health/ready` → 200
+   - ✅ Services avec endpoints corrects
+   - ✅ EndpointSlices Ready
+   - ✅ Traefik RBAC permissions OK
+   - ✅ Pas de Network Policies bloquantes
+   - ✅ Traefik peut wget les services directement
+
+   **Hypothèse principale** : Problème spécifique au provider IngressRoute CRD dans Traefik 3.5.1
+
+4. **Modifications git**
+   - Commit 173489c : Suppression du certResolver de `ingressroute.yaml` (workaround rate limit)
+   - Fichier modifié : `gauzian_back/k8s/ingressroute.yaml`
+
+**État actuel du système**
+
+✅ **Ce qui fonctionne** :
+- Traefik installé avec stockage persistant pour les futurs certificats
+- HTTP via IP LoadBalancer : `http://91.134.241.167`
+- NodePort direct : `http://91.134.241.167:30080`
+- Ingress Kubernetes standard
+- Backend/Frontend pods opérationnels
+- Tous les healthchecks passent
+
+❌ **Ce qui ne fonctionne pas** :
+- HTTPS via domaine : `https://gauzian.pupin.fr` → 503
+- IngressRoute Traefik CRD (routing mystérieusement cassé)
+
+**📋 TODO pour demain (2026-02-09 après 18h UTC)**
+
+1. **Certificat Let's Encrypt** (après expiration rate limit)
+   - Le stockage persistant est maintenant configuré
+   - Remettre `certResolver: letsencrypt` dans `ingressroute.yaml`
+   - Vérifier que le certificat est obtenu et persiste dans le PVC
+
+2. **Résoudre le problème de routing 503**
+
+   Pistes à explorer :
+
+   a) **Comparer configs Ingress vs IngressRoute**
+      - L'Ingress standard fonctionne, analyser pourquoi
+      - Comparer les logs Traefik pour les deux types de routes
+
+   b) **Tester Traefik 3.2 LTS au lieu de 3.5.1**
+      - Possible régression dans la version 3.5.1
+      - Helm: `--set image.tag=v3.2.3`
+
+   c) **Vérifier les providers Traefik**
+      ```bash
+      kubectl logs -n traefik-system deployment/traefik | grep -i provider
+      kubectl logs -n traefik-system deployment/traefik | grep -i ingressroute
+      ```
+
+   d) **Analyser la configuration CRD**
+      - Vérifier que le CRD IngressRoute est bien chargé
+      - `kubectl get ingressroutes.traefik.io -n gauzian-v2 -o yaml`
+
+   e) **Alternative : Migration vers Ingress standard**
+      - Si IngressRoute reste bloqué, migrer vers Ingress Kubernetes standard
+      - Utiliser les annotations Traefik pour les middlewares
+      - Exemple testé fonctionnel disponible dans `/tmp/test-http.yaml`
+
+   f) **Cert-Manager pour gestion certificats**
+      - Installation de cert-manager pour remplacer l'ACME intégré Traefik
+      - Plus robuste et compatible avec Ingress standard
+
+   g) **Logs détaillés Traefik**
+      ```bash
+      kubectl logs -n traefik-system deployment/traefik --tail=200 | grep -i "503\|error\|gauzian"
+      ```
+
+3. **Tests à refaire après corrections**
+   ```bash
+   # Test HTTPS domaine
+   curl -v https://gauzian.pupin.fr
+
+   # Vérifier routing backend
+   curl -v https://gauzian.pupin.fr/api/health/ready
+
+   # Vérifier MinIO
+   curl -v https://gauzian.pupin.fr/s3/
+   ```
+
+**Fichiers de configuration créés sur le VPS**
+- `/tmp/traefik-values.yaml` - Config Helm Traefik avec persistence
+- `/tmp/test-http.yaml` - Ingress standard fonctionnel (fallback)
+- `/tmp/minimal-https.yaml` - IngressRoute minimal pour tests
+- `/tmp/ip-route.yaml` - IngressRoute avec IP service (test)
+
+**Resources Kubernetes créées**
+- Namespace : `traefik-system`
+- PVC : `traefik` (1Gi, Bound)
+- LoadBalancer : `91.134.241.167`
+- Service Traefik : `traefik:80,443`
+
+---
+
+### [2026-02-08 09:40] - FIX SSL : Certificat Let's Encrypt obtenu avec succès (PERDU ENSUITE)
 
 **Problème initial**
 - Site inaccessible avec erreur "no available server" (503)
@@ -26,6 +197,7 @@
    - ✅ Certificat Let's Encrypt valide obtenu (issuer: Let's Encrypt R13)
    - ✅ Valide jusqu'au 9 mai 2026 (renouvellement automatique)
    - ⚠️ Site toujours 503 - problème de routing Traefik à résoudre
+   - ⚠️ Certificat perdu ensuite (pas de stockage persistant configuré)
 
 **Fichiers modifiés**
 - `gauzian_back/k8s/ingressroute.yaml` - Exclusion ACME challenge de la redirection HTTPS
