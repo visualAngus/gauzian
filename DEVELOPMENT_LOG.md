@@ -1,5 +1,35 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-08
+
+### [2026-02-08 09:40] - FIX SSL : Certificat Let's Encrypt obtenu avec succès
+
+**Problème initial**
+- Site inaccessible avec erreur "no available server" (503)
+- Certificat SSL par défaut de Traefik au lieu de Let's Encrypt
+- Challenge ACME HTTP-01 échouait avec erreur 404
+
+**Actions réalisées**
+
+1. **Diagnostic infrastructure K8s**
+   - Namespace `gauzian` (ancien) en Terminating, migration vers `gauzian-v2`
+   - Suppression de l'Ingress standard orphelin qui causait des conflits
+   - Pods backend/frontend opérationnels (healthchecks OK)
+
+2. **Correction configuration Traefik**
+   - Modification `gauzian_back/k8s/ingressroute.yaml`
+   - Exclusion du chemin `/.well-known/acme-challenge/` de la redirection HTTPS
+   - Syntaxe : `!PathPrefix('/.well-known/acme-challenge/')` dans le match HTTP
+   - Permet à Traefik de gérer automatiquement les challenges Let's Encrypt
+
+3. **Résultat**
+   - ✅ Certificat Let's Encrypt valide obtenu (issuer: Let's Encrypt R13)
+   - ✅ Valide jusqu'au 9 mai 2026 (renouvellement automatique)
+   - ⚠️ Site toujours 503 - problème de routing Traefik à résoudre
+
+**Fichiers modifiés**
+- `gauzian_back/k8s/ingressroute.yaml` - Exclusion ACME challenge de la redirection HTTPS
+
 ## 2026-02-05
 
 ### [2026-02-05 20:10] - MONITORING : Ajout Node Exporter + Dashboard SysAdmin complet
