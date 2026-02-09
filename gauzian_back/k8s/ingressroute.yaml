@@ -48,7 +48,8 @@ spec:
       services:
         - name: front
           port: 8080
-  tls: {}
+  tls:
+    certResolver: letsencrypt
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
