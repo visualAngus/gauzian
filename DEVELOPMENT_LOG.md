@@ -3637,3 +3637,8 @@ Pour N dossiers, M fichiers, C contacts :
 - ~~PBKDF2 iterations 100k → 310k frontend~~ ✅ FAIT
 
 **Toutes les failles critiques et élevées ont été corrigées.**
+
+[2026-02-14 00:00] - fix(front): Render MiniMapagenda days via Vue state to avoid SSR document usage
+[2026-02-14 00:00] - fix(front): Normalize agenda events to avoid undefined start/end
+[2026-02-14 00:00] - fix(front): Guard agenda events against undefined entries
+[2026-02-14 00:00] - fix(front): Avoid v-if/v-for scope warning in agenda events
