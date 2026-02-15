@@ -48,15 +48,14 @@ metadata:
 spec:
   headers:
     # Security headers
-    browserXssFilter: true
     contentTypeNosniff: true
     frameDeny: true
     sslRedirect: true
     stsIncludeSubdomains: true
     stsPreload: true
     stsSeconds: 31536000
-    # Content Security Policy (ajuster selon vos besoins)
-    contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://gauzian.pupin.fr"
+    # Content Security Policy
+    contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://gauzian.pupin.fr; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     # Referrer Policy
     referrerPolicy: "strict-origin-when-cross-origin"
     # Permissions Policy

@@ -16,6 +16,12 @@ spec:
       services:
         - name: minio
           port: 9001
+    # Block /api/metrics from public access (must be before the /api catch-all)
+    - match: Host(`gauzian.pupin.fr`) && Path(`/api/metrics`)
+      kind: Rule
+      services:
+        - name: noop@internal
+          kind: TraefikService
     # API backend (avec strip /api)
     - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/api`)
       kind: Rule

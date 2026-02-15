@@ -89,7 +89,7 @@ impl<T: Serialize> IntoResponse for ApiResponse<T> {
                 .path("/")
                 .http_only(true)
                 .secure(secure)
-                .same_site(SameSite::Lax)
+                .same_site(SameSite::Strict)
                 .max_age(cookie::time::Duration::days(10))
                 .build();
 

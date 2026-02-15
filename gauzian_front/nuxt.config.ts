@@ -18,6 +18,8 @@ export default defineNuxtConfig({
     routeRules: {
       '/**': {
         headers: {
+          // HSTS
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
           // Anti-ClickJacking
           'X-Frame-Options': 'DENY',
           
@@ -27,8 +29,7 @@ export default defineNuxtConfig({
           // Prévention du MIME-sniffing
           'X-Content-Type-Options': 'nosniff',
           
-          // Protection XSS (pour les navigateurs anciens)
-          'X-XSS-Protection': '1; mode=block',
+          // X-XSS-Protection retiré (obsolète, CSP le remplace)
           
           // Politique de référent
           'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -39,7 +40,7 @@ export default defineNuxtConfig({
           // Content Security Policy
           'Content-Security-Policy': [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Nuxt nécessite unsafe-inline/eval en dev
+            "script-src 'self' 'unsafe-inline'", // unsafe-eval retiré (non nécessaire en production)
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' https://fonts.gstatic.com",
             "img-src 'self' data: https:",
