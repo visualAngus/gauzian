@@ -40,8 +40,7 @@ metadata:
   namespace: monitoring
 type: Opaque
 stringData:
-  # TODO(human): Générer un vrai htpasswd avec: htpasswd -nb admin <password>
-  users: "admin:$apr1$TODO$GenerateWithHtpasswd"
+  users: "admin:{SHA}8Y3P6n9lEeWEg0oA5eK7P3rB5cs="
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
