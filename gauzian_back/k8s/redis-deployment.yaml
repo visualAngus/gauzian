@@ -16,7 +16,13 @@ spec:
       containers:
       - name: redis
         image: redis:alpine
-        command: ["redis-server", "--appendonly", "yes"]
+        command: ["redis-server", "--appendonly", "yes", "--requirepass", "$(REDIS_PASSWORD)"]
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: REDIS_PASSWORD
         ports:
         - containerPort: 6379
         volumeMounts:

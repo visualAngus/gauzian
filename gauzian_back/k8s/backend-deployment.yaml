@@ -51,7 +51,12 @@ spec:
 
         # ===== VARIABLES REDIS =====
         - name: REDIS_URL
-          value: "redis://redis:6379"
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: REDIS_PASSWORD
 
         # ===== VARIABLES S3/MinIO (Format Standard) =====
         - name: S3_ENDPOINT

@@ -24,7 +24,6 @@ spec:
           - '--storage.tsdb.path=/prometheus'
           - '--storage.tsdb.retention.time=30d'
           - '--web.enable-lifecycle'
-          - '--web.enable-admin-api'
         ports:
         - containerPort: 9090
           name: http
