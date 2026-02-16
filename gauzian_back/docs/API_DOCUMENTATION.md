@@ -247,9 +247,13 @@ curl -X POST https://api.gauzian.com/login \
 ```json
 {
   "ok": true,
-  "data": "User registered successfully"
+  "data": "User created with ID: 550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+**Cookie Set** : `auth_token=<token>` (HttpOnly, Secure, 10 jours)
+
+**⭐ Auto-Login** : Depuis 2026-02-15, `/register` retourne automatiquement un JWT et set le cookie `auth_token`. L'utilisateur est connecté immédiatement après inscription (pas besoin d'appeler `/login`).
 
 **Errors** :
 - `400 Bad Request` - Validation error (email invalid, password too short)

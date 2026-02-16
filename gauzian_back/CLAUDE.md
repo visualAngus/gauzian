@@ -201,6 +201,13 @@ async fn protected_endpoint(
 - `access_level` : `owner`, `editor`, `viewer`
 - Vérification dans handlers : `check_file_access(&state.db, file_id, user_id).await?`
 
+**Endpoints Auth** :
+- `POST /auth/register` - Crée un utilisateur **ET retourne un JWT** (auto-login après inscription)
+- `POST /auth/login` - Authentifie et retourne un JWT
+- `POST /auth/logout` - Révoque le JWT (blacklist Redis)
+- `GET /auth/info` - Récupère les infos de l'utilisateur connecté (protégé)
+- `GET /auth/autologin` - Vérifie la validité du token (protégé)
+
 ---
 
 ### 3. File Upload (Chunked + E2EE)

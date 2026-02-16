@@ -37,15 +37,35 @@ pub async fn user_has_folder_access(
 pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<(i64, i64, i64), sqlx::Error> {
     let (used_space, file_count, folder_count) = sqlx::query_as::<_, (i64, i64, i64)>(
         "
-        select
-            COALESCE(SUM(f.size),0)::BIGINT as used_space,
-            COUNT(f.id)::BIGINT as file_count,
-            COUNT(fa.id)::BIGINT as folder_count
-        from users u
-        left join folder_access fa on fa.user_id = u.id
-        left join file_access fa2 on fa2.user_id = u.id
-        left join files f on f.id = fa2.file_id
-        where u.id = $1 and fa2.access_level = 'owner' and fa.access_level = 'owner'
+        WITH file_stats AS (
+            SELECT 
+                u.id as user_id,
+                COALESCE(SUM(f.size), 0) as used_space,
+                COUNT(f.id) as file_count
+            FROM users u
+            JOIN file_access fa2 ON fa2.user_id = u.id
+            JOIN files f ON f.id = fa2.file_id
+            WHERE u.id = $1 
+            AND fa2.access_level = 'owner'
+            GROUP BY u.id
+        ),
+        folder_stats AS (
+            SELECT 
+                u.id as user_id,
+                COUNT(fa.id) as folder_count
+            FROM users u
+            JOIN folder_access fa ON fa.user_id = u.id
+            WHERE u.id = $1 
+            AND fa.access_level = 'owner'
+            GROUP BY u.id
+        )
+        SELECT 
+            COALESCE(fs.used_space, 0)::BIGINT as used_space,
+            COALESCE(fs.file_count, 0)::BIGINT as file_count,
+            COALESCE(fld.folder_count, 0)::BIGINT as folder_count
+        FROM (SELECT $1::uuid as id) u
+        LEFT JOIN file_stats fs ON fs.user_id = u.id
+        LEFT JOIN folder_stats fld ON fld.user_id = u.id;
         ",
     )
     .bind(user_id)
