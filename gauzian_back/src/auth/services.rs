@@ -107,12 +107,14 @@ fn revoked_key(jti: &str) -> String {
 async fn is_token_blacklisted(manager: &mut redis::aio::ConnectionManager, jti: &str) -> Result<bool, AuthError> {
     let exists: bool = manager.exists(revoked_key(jti)).await.map_err(|e| {
         tracing::error!("Redis query failed (fail-closed): {}", e);
+        crate::metrics::track_redis_operation("get", false);
         AuthError(
             StatusCode::SERVICE_UNAVAILABLE,
             "Authentication service temporarily unavailable".into(),
         )
     })?;
 
+    crate::metrics::track_redis_operation("get", true);
     Ok(exists)
 }
 
@@ -122,8 +124,11 @@ pub async fn blacklist_token(
     jti: &str,
     ttl_seconds: usize,
 ) -> Result<(), redis::RedisError> {
-    manager.set_ex(revoked_key(jti), "revoked", ttl_seconds as u64)
-        .await
+    let result = manager.set_ex(revoked_key(jti), "revoked", ttl_seconds as u64)
+        .await;
+
+    crate::metrics::track_redis_operation("set", result.is_ok());
+    result
 }
 
 // ========== Extracteur Axum pour Claims ==========

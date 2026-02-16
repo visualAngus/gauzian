@@ -28,9 +28,18 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let state = AppState::from_env(db_pool).await;
-    
-    
+    let state = AppState::from_env(db_pool.clone()).await;
+
+    // Lancer le background task pour collecter les métriques du pool DB
+    let db_pool_metrics = db_pool.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            gauzian_back::metrics::update_db_pool_metrics(&db_pool_metrics);
+        }
+    });
+
     // Initialiser le bucket S3 au démarrage (avec timeout plus long)
     match tokio::time::timeout(
         std::time::Duration::from_secs(30),

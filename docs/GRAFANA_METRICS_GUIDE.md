@@ -293,8 +293,65 @@ increase(auth_attempts_total{type="register", status="success"}[24h])
 
 ### 🗄️ Database (PostgreSQL)
 
-#### `db_queries_total` (Counter)
+#### `db_pool_connections_active` (Gauge)
+**Description**: Nombre de connexions DB actuellement actives (en cours d'utilisation).
+
+**Unité Grafana**: `short` (nombre entier)
+
+**Thresholds** (utilisation du pool en %):
+- 🟢 Vert : < 70% du max (normal)
+- 🟠 Orange : 70-90% du max (charge élevée)
+- 🔴 Rouge : > 90% du max (saturation - scale up ou optimiser queries)
+
+**Requêtes PromQL**:
+```promql
+# Connexions actives
+db_pool_connections_active
+
+# Utilisation du pool (%)
+(db_pool_connections_active / db_pool_connections_max) * 100
+
+# Alerte : pool saturé
+(db_pool_connections_active / db_pool_connections_max) * 100 > 90
+```
+
+---
+
+#### `db_pool_connections_idle` (Gauge)
+**Description**: Nombre de connexions DB idle (disponibles dans le pool).
+
+**Unité Grafana**: `short` (nombre entier)
+
+**Requêtes PromQL**:
+```promql
+# Connexions idle
+db_pool_connections_idle
+
+# Ratio idle/total
+db_pool_connections_idle / db_pool_connections_max
+```
+
+---
+
+#### `db_pool_connections_max` (Gauge)
+**Description**: Nombre maximum de connexions configurées dans le pool.
+
+**Unité Grafana**: `short` (nombre entier)
+
+**Requêtes PromQL**:
+```promql
+# Max connexions (constant)
+db_pool_connections_max
+```
+
+---
+
+#### `db_queries_total` (Counter) - ⚠️ Non Implémenté
 **Description**: Nombre total de requêtes DB.
+
+**Status**: ❌ **Non implémenté** (trop invasif - nécessite wrapper 100+ queries)
+
+**Alternative**: Utiliser les métriques pool ci-dessus ou postgres_exporter
 
 **Unité Grafana**: `short` (nombre) ou `qps` (queries per second avec rate())
 
@@ -324,8 +381,12 @@ rate(db_queries_total{query_type="select"}[5m]) / rate(db_queries_total{query_ty
 
 ---
 
-#### `db_query_duration_seconds` (Histogram)
+#### `db_query_duration_seconds` (Histogram) - ⚠️ Non Implémenté
 **Description**: Durée des requêtes DB.
+
+**Status**: ❌ **Non implémenté** (trop invasif - nécessite wrapper 100+ queries)
+
+**Alternative**: Utiliser `pg_stat_statements` PostgreSQL ou postgres_exporter
 
 **Unité Grafana**: `s` (seconds) ou `ms` (milliseconds)
 
@@ -916,6 +977,23 @@ http_connections_active
 ---
 
 ### Panel Type: **Gauge**
+
+#### DB Pool Usage (%)
+
+```promql
+(db_pool_connections_active / db_pool_connections_max) * 100
+```
+
+**Config**:
+- Visualization: Gauge
+- Unit: `percent` (0-100)
+- Min: 0, Max: 100
+- **Thresholds**:
+  - Base: Vert (0-70%)
+  - 70: Orange (70-90%)
+  - 90: Rouge (> 90%)
+
+---
 
 #### CPU Usage (%)
 

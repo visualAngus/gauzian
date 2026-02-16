@@ -49,17 +49,26 @@ pub async fn login_handler(
     // 1. Récupérer l'utilisateur depuis la DB
     let user = repo::get_user_by_email(&state.db_pool, &payload.email)
         .await
-        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()))?;
+        .map_err(|_| {
+            crate::metrics::track_auth_attempt("login", false);
+            (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string())
+        })?;
 
     // 2. Vérifier le mot de passe
     let salt = user.auth_salt.as_deref().unwrap_or("");
     if !services::verify_password(&payload.password, &user.password_hash, salt) {
+        crate::metrics::track_auth_attempt("login", false);
         return Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()));
     }
 
     // 3. Créer un JWT
     let token = services::create_jwt(user.id, "user", state.jwt_secret.as_bytes())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e)))?;
+        .map_err(|e| {
+            crate::metrics::track_auth_attempt("login", false);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e))
+        })?;
+
+    crate::metrics::track_auth_attempt("login", true);
 
     Ok(ApiResponse::ok(LoginResponse {
         token: token.clone(),
@@ -75,7 +84,10 @@ pub async fn register_handler(
 ) -> Result<ApiResponse<String>, (StatusCode, String)> {
     // 1. Hash le mot de passe avec Argon2
     let password_hash = services::hash_password(&payload.password)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Hashing error: {}", e)))?;
+        .map_err(|e| {
+            crate::metrics::track_auth_attempt("register", false);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Hashing error: {}", e))
+        })?;
 
     // 2. Générer un salt (pour compatibilité legacy)
     let auth_salt = Some(services::generate_salt());
@@ -96,11 +108,19 @@ pub async fn register_handler(
 
     let user_id = repo::create_user(&state.db_pool, new_user)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+        .map_err(|e| {
+            crate::metrics::track_auth_attempt("register", false);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e))
+        })?;
 
     // creation du jwt pour le nouvel utilisateur (auto-login après inscription)
     let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e)))?;
+        .map_err(|e| {
+            crate::metrics::track_auth_attempt("register", false);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e))
+        })?;
+
+    crate::metrics::track_auth_attempt("register", true);
 
     Ok(ApiResponse::ok(format!("User created with ID: {}", user_id)).with_token(token))
 }
