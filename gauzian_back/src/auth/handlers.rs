@@ -98,7 +98,11 @@ pub async fn register_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
 
-    Ok(ApiResponse::ok(format!("User created with ID: {}", user_id)))
+    // creation du jwt pour le nouvel utilisateur (auto-login après inscription)
+    let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e)))?;
+
+    Ok(ApiResponse::ok(format!("User created with ID: {}", user_id)).with_token(token))
 }
 
 /// POST /logout - Révoque le token JWT
