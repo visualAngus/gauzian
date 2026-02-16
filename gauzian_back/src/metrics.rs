@@ -107,6 +107,20 @@ lazy_static! {
         &["query_type"]
     )
     .unwrap();
+
+    // ==================== Métriques DB Pool ====================
+
+    /// Nombre de connexions actives dans le pool
+    pub static ref DB_POOL_CONNECTIONS_ACTIVE: IntGauge =
+        register_int_gauge!("db_pool_connections_active", "Number of active DB connections in the pool").unwrap();
+
+    /// Nombre de connexions idle dans le pool
+    pub static ref DB_POOL_CONNECTIONS_IDLE: IntGauge =
+        register_int_gauge!("db_pool_connections_idle", "Number of idle DB connections in the pool").unwrap();
+
+    /// Nombre maximum de connexions dans le pool
+    pub static ref DB_POOL_CONNECTIONS_MAX: IntGauge =
+        register_int_gauge!("db_pool_connections_max", "Maximum number of DB connections in the pool").unwrap();
 }
 
 // ==================== Middleware de Tracking HTTP ====================
@@ -253,4 +267,16 @@ pub fn track_db_query(query_type: &str, duration_secs: f64, success: bool) {
     DB_QUERY_DURATION_SECONDS
         .with_label_values(&[query_type])
         .observe(duration_secs);
+}
+
+/// Met à jour les métriques du pool de connexions DB
+pub fn update_db_pool_metrics(pool: &sqlx::PgPool) {
+    // SQLx expose ces stats via pool.size() et pool.num_idle()
+    let size = pool.size() as i64; // Connexions actuellement ouvertes
+    let idle = pool.num_idle() as i64; // Connexions idle (disponibles)
+    let max = pool.options().get_max_connections() as i64; // Max configuré
+
+    DB_POOL_CONNECTIONS_ACTIVE.set(size - idle); // Actives = Total - Idle
+    DB_POOL_CONNECTIONS_IDLE.set(idle);
+    DB_POOL_CONNECTIONS_MAX.set(max);
 }

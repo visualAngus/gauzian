@@ -86,6 +86,7 @@ impl StorageClient {
         index: String,
         iv: String,
     ) -> Result<StorageMetadata, StorageError> {
+        let start_time = std::time::Instant::now();
         const MAX_RETRIES: u32 = 5;  // Augmenté pour Cellar Clever Cloud
         const RETRY_DELAY_MS: u64 = 1000;  // 1s au lieu de 500ms
 
@@ -121,6 +122,9 @@ impl StorageClient {
                 .await
             {
                 Ok(_) => {
+                    let duration = start_time.elapsed().as_secs_f64();
+                    crate::metrics::track_s3_operation("put", duration);
+
                     if attempt > 1 {
                         tracing::info!(
                             "S3 upload succeeded after {} attempts: s3_id={}, index={}",
@@ -150,6 +154,9 @@ impl StorageClient {
             }
         }
 
+        let duration = start_time.elapsed().as_secs_f64();
+        crate::metrics::track_s3_operation("put", duration);
+
         Err(StorageError::S3Error(format!(
             "Failed to upload after {} retries: {}",
             MAX_RETRIES,
@@ -165,6 +172,7 @@ impl StorageClient {
         &self,
         s3_id: &str,
     ) -> Result<(Bytes, StorageMetadata), StorageError> {
+        let start_time = std::time::Instant::now();
         const MAX_RETRIES: u32 = 5;  // Augmenté pour Cellar Clever Cloud
         const RETRY_DELAY_MS: u64 = 1000;  // 1s au lieu de 500ms
 
@@ -193,6 +201,8 @@ impl StorageClient {
                         let err_str = e.to_string();
                         // Ne pas retry si le fichier n'existe pas
                         if err_str.contains("NoSuchKey") {
+                            let duration = start_time.elapsed().as_secs_f64();
+                            crate::metrics::track_s3_operation("get", duration);
                             return Err(StorageError::NotFound);
                         }
 
@@ -213,6 +223,8 @@ impl StorageClient {
         };
 
         let resp = resp.ok_or_else(|| {
+            let duration = start_time.elapsed().as_secs_f64();
+            crate::metrics::track_s3_operation("get", duration);
             StorageError::S3Error(format!(
                 "Failed to download after {} retries: {}",
                 MAX_RETRIES,
@@ -270,6 +282,9 @@ impl StorageClient {
             bytes.len()
         );
 
+        let duration = start_time.elapsed().as_secs_f64();
+        crate::metrics::track_s3_operation("get", duration);
+
         Ok((bytes, metadata))
     }
 
@@ -277,13 +292,20 @@ impl StorageClient {
     ///
     /// Supprime les données et ses métadonnées du stockage
     pub async fn delete_line(&self, s3_id: &str) -> Result<(), StorageError> {
-        self.client
+        let start_time = std::time::Instant::now();
+
+        let result = self.client
             .delete_object()
             .bucket(&self.bucket)
             .key(s3_id)
             .send()
             .await
-            .map_err(|e| StorageError::S3Error(format!("Failed to delete: {}", e)))?;
+            .map_err(|e| StorageError::S3Error(format!("Failed to delete: {}", e)));
+
+        let duration = start_time.elapsed().as_secs_f64();
+        crate::metrics::track_s3_operation("delete", duration);
+
+        result?;
 
         tracing::info!("Data deleted from S3: s3_id={}", s3_id);
 
