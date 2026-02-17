@@ -66,7 +66,12 @@ pub fn create_jwt(
 /// Décode et valide un JWT
 pub fn decode_jwt(token: &str, secret: &[u8]) -> Result<Claims, jsonwebtoken::errors::Error> {
     let key = DecodingKey::from_secret(secret);
-    let validation = Validation::new(Algorithm::HS256);
+
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    validation.leeway = 0;
+    validation.algorithms = vec![Algorithm::HS256];
+
     let token_data = decode::<Claims>(token, &key, &validation)?;
     Ok(token_data.claims)
 }
@@ -129,6 +134,60 @@ pub async fn blacklist_token(
 
     crate::metrics::track_redis_operation("set", result.is_ok());
     result
+}
+
+// ========== Rate Limiting (Anti-Brute-Force) ==========
+
+const MAX_LOGIN_ATTEMPTS: u32 = 5;
+const RATE_LIMIT_WINDOW_SECONDS: u64 = 15 * 60; // 15 minutes
+
+fn rate_limit_key(email: &str) -> String {
+    format!("ratelimit:login:{}", email)
+}
+
+/// Vérifie si un email est rate-limité (trop de tentatives échouées)
+pub async fn is_rate_limited(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<bool, redis::RedisError> {
+    let key = rate_limit_key(email);
+    let attempts: Option<u32> = manager.get(&key).await?;
+
+    crate::metrics::track_redis_operation("get", true);
+    Ok(attempts.unwrap_or(0) >= MAX_LOGIN_ATTEMPTS)
+}
+
+/// Incrémente le compteur d'échecs de login (après une tentative échouée)
+pub async fn increment_failed_login(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<(), redis::RedisError> {
+    let key = rate_limit_key(email);
+
+    // Incrémente ou initialise à 1
+    manager.incr::<&str, u32, u32>(&key, 1).await?;
+
+    // Définir l'expiration uniquement sur la première tentative
+    let ttl: i64 = manager.ttl(&key).await?;
+    if ttl == -1 {
+        // Pas de TTL défini → première tentative
+        manager.expire::<&str, i32>(&key, RATE_LIMIT_WINDOW_SECONDS as i64).await?;
+    }
+
+    crate::metrics::track_redis_operation("incr", true);
+    Ok(())
+}
+
+/// Reset le compteur d'échecs (après un login réussi)
+pub async fn reset_failed_login(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<(), redis::RedisError> {
+    let key = rate_limit_key(email);
+    let _: () = manager.del(&key).await?;
+
+    crate::metrics::track_redis_operation("del", true);
+    Ok(())
 }
 
 // ========== Extracteur Axum pour Claims ==========
