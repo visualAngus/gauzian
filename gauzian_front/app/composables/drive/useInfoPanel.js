@@ -1,6 +1,8 @@
 import { ref, computed, watch } from "vue";
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 
 export function useInfoPanel({ API_URL, selectedItemsMap, formatBytes, addNotification, clearSelection, renameItem, downloadFile, deleteItem, shareItem }) {
+    const { fetchWithAuth } = useFetchWithAuth();
     const infoPanelVisible = ref(false);
     const infoItem = ref(null);
 
@@ -28,7 +30,7 @@ export function useInfoPanel({ API_URL, selectedItemsMap, formatBytes, addNotifi
             : `${API_URL}/drive/file/${id}/InfoItem`;
 
         try {
-            const res = await fetch(endpoint, { credentials: "include" });
+            const res = await fetchWithAuth(endpoint, { method: "GET" });
             if (!res.ok) throw new Error("Failed to fetch shared users");
             const data = await res.json();
             const list = data.shared_users || data.sharedPersons || data.shared || data;
@@ -94,12 +96,8 @@ export function useInfoPanel({ API_URL, selectedItemsMap, formatBytes, addNotifi
         console.log("Revoking access for user:", sharedUser, "on item:", itemId);
 
         // Trouver l'élément DOM correspondant
-        const req = fetch(`${API_URL}/drive/revoke-access`, {
+        const req = fetchWithAuth('/drive/revoke-access', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 item_type: selectedItemsMap.value.get(itemId)?.type || "file",
                 item_id: itemId,

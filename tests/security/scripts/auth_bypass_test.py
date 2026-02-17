@@ -91,6 +91,11 @@ class GauzianAuthTester:
         url = f"{self.base_url}/api/info"
         headers = {"Authorization": f"Bearer {token}"}
 
+        # DEBUG: Show cookies
+        cookies = self.session.cookies.get_dict()
+        if cookies:
+            print(f"[DEBUG] Session has cookies: {list(cookies.keys())}")
+
         try:
             response = self.session.get(url, headers=headers, timeout=10)
             return response.status_code, response.text
@@ -128,8 +133,19 @@ class GauzianAuthTester:
             # Keep original signature (invalid)
             tampered_token = f"{header}.{payload_tampered}.{signature}"
 
+            # DEBUG: Verify tokens are different
+            print(f"\n[DEBUG] Original token:  {token[:60]}...")
+            print(f"[DEBUG] Tampered token:  {tampered_token[:60]}...")
+            print(f"[DEBUG] Tokens are {'DIFFERENT' if token != tampered_token else 'SAME'}")
+            print(f"[DEBUG] Original payload length: {len(payload)}")
+            print(f"[DEBUG] Tampered payload length: {len(payload_tampered)}\n")
+
             # Test with tampered token
             status, response = self.test_protected_endpoint(tampered_token)
+
+            # DEBUG: Show response details
+            print(f"[DEBUG] Response status: {status}")
+            print(f"[DEBUG] Response preview: {response[:150]}\n")
 
             if status == 401:
                 print_result("Signature Tampering", True, "Server rejected tampered token (401 Unauthorized)")

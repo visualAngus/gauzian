@@ -1,7 +1,8 @@
 // useEvents.js - Gestion CRUD des événements avec persistance LocalStorage
 
 import { ref, computed, watch } from 'vue';
-// import de utils pour l'encryption 
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
+// import de utils pour l'encryption
 import {
     decryptWithStoredPrivateKey,
     encryptWithPublicKey,
@@ -20,8 +21,9 @@ const nextId = ref(1);
 const loadEvents = async (startDayId = null, endDayId = null) => {
     // #ICIBACK - Appel API GET /api/agenda/events?startDayId=XXX&endDayId=YYY
     if (startDayId !== null && endDayId !== null) {
-        const response = await fetch(`/api/agenda/events?startDayId=${startDayId}&endDayId=${endDayId}`, {
-            credentials: 'include'
+        const { fetchWithAuth } = useFetchWithAuth();
+        const response = await fetchWithAuth(`/api/agenda/events?startDayId=${startDayId}&endDayId=${endDayId}`, {
+            method: 'GET'
         })
         events.value = await response.json().then(data => data.data.events)
         return
@@ -172,10 +174,9 @@ export const useEvents = () => {
             startHour: encryptedStartHour,
             endHour: encryptedEndHour
         };
-       const response = await fetch('/api/agenda/events', {
+       const { fetchWithAuth } = useFetchWithAuth();
+       const response = await fetchWithAuth('/api/agenda/events', {
             method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         })
         const newEvent = await response.json()

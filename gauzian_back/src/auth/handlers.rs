@@ -24,7 +24,21 @@ pub struct LoginRequest {
 pub struct LoginResponse {
     pub token: String,
     pub user_id: String,
-    // Ajouter d'autres champs selon tes besoins
+    // Champs crypto nécessaires pour déchiffrer la clé privée côté client
+    pub encrypted_private_key: String,
+    pub private_key_salt: String,
+    pub iv: String,
+    pub public_key: String,
+}
+
+#[derive(Serialize)]
+pub struct RegisterResponse {
+    pub token: String,
+    pub user_id: String,
+    pub encrypted_private_key: String,
+    pub private_key_salt: String,
+    pub iv: String,
+    pub public_key: String,
 }
 
 #[derive(Deserialize)]
@@ -93,15 +107,19 @@ pub async fn login_handler(
     Ok(ApiResponse::ok(LoginResponse {
         token: token.clone(),
         user_id: user.id.to_string(),
-    })
-    .with_token(token)) // 10 jours
+        // Champs crypto pour permettre au frontend de déchiffrer la clé privée
+        encrypted_private_key: user.encrypted_private_key,
+        private_key_salt: user.private_key_salt,
+        iv: user.iv,
+        public_key: user.public_key,
+    }))
 }
 
 /// POST /register - Crée un nouvel utilisateur
 pub async fn register_handler(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
-) -> Result<ApiResponse<String>, (StatusCode, String)> {
+) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
     // 1. Hash le mot de passe avec Argon2
     let password_hash = services::hash_password(&payload.password)
         .map_err(|e| {
@@ -112,7 +130,13 @@ pub async fn register_handler(
     // 2. Générer un salt (pour compatibilité legacy)
     let auth_salt = Some(services::generate_salt());
 
-    // 3. Créer l'utilisateur en DB
+    // 3. Stocker les champs crypto pour la réponse (avant move)
+    let encrypted_private_key = payload.encrypted_private_key.clone();
+    let private_key_salt = payload.private_key_salt.clone();
+    let iv = payload.iv.clone();
+    let public_key = payload.public_key.clone();
+
+    // 4. Créer l'utilisateur en DB
     let new_user = repo::NewUser {
         username: payload.username,
         password_hash,
@@ -133,7 +157,7 @@ pub async fn register_handler(
             (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e))
         })?;
 
-    // creation du jwt pour le nouvel utilisateur (auto-login après inscription)
+    // 5. Créer JWT pour auto-login après inscription
     let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
         .map_err(|e| {
             crate::metrics::track_auth_attempt("register", false);
@@ -142,7 +166,14 @@ pub async fn register_handler(
 
     crate::metrics::track_auth_attempt("register", true);
 
-    Ok(ApiResponse::ok(format!("User created with ID: {}", user_id)).with_token(token))
+    Ok(ApiResponse::ok(RegisterResponse {
+        token: token.clone(),
+        user_id: user_id.to_string(),
+        encrypted_private_key,
+        private_key_salt,
+        iv,
+        public_key,
+    }))
 }
 
 /// POST /logout - Révoque le token JWT

@@ -751,8 +751,8 @@ const router = useRouter();
 useHead({ title: "GZDRIVE | Drive" });
 definePageMeta({ headerTitle: "GZDRIVE" });
 
-// 1. Authentification
-const { etat, autologin } = useAuth(API_URL);
+// 1. Authentification (géré par middleware auth.global.js)
+// const { isAuthenticated } = useAuth(); // Disponible si nécessaire
 
 const { notifications, addNotification, removeNotification } =
   useNotification();
@@ -1035,13 +1035,10 @@ const openPropertiesFromContext = () => {
 // Initialisation
 const activeSection = ref("my_drive"); // Simple ref UI locale
 
-// Démarrage
-autologin(() => {
-  // Callback succès login : on charge les données
-  get_all_info();
-});
-
 onMounted(async () => {
+  // Charger les données (auth garantie par middleware)
+  get_all_info();
+
   // Initialisation Tree
   await loadTreeNode(folderTree.value);
   await expandTreeToCurrentPath();
