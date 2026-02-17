@@ -46,6 +46,16 @@ pub async fn login_handler(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<ApiResponse<LoginResponse>, (StatusCode, String)> {
+
+    let mut redis = state.redis_manager.clone();
+    if services::is_rate_limited(&mut redis, &payload.email).await.map_err(|e| {
+        tracing::error!("Redis error during rate limit check: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+    })? {
+        crate::metrics::track_auth_attempt("login", false);
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Too many failed login attempts. Please try again later.".to_string()));
+    }
+
     // 1. Récupérer l'utilisateur depuis la DB
     let user = repo::get_user_by_email(&state.db_pool, &payload.email)
         .await
@@ -57,9 +67,19 @@ pub async fn login_handler(
     // 2. Vérifier le mot de passe
     let salt = user.auth_salt.as_deref().unwrap_or("");
     if !services::verify_password(&payload.password, &user.password_hash, salt) {
+        services::increment_failed_login(&mut redis, &payload.email).await.map_err(|e| {
+            tracing::error!("Redis error during incrementing failed login: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+        })?;
+
         crate::metrics::track_auth_attempt("login", false);
         return Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()));
     }
+
+    services::reset_failed_login(&mut redis, &payload.email).await.map_err(|e| {
+        tracing::error!("Redis error during resetting failed login: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+    })?;
 
     // 3. Créer un JWT
     let token = services::create_jwt(user.id, "user", state.jwt_secret.as_bytes())
