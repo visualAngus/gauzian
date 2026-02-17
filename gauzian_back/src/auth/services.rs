@@ -78,29 +78,14 @@ pub fn decode_jwt(token: &str, secret: &[u8]) -> Result<Claims, jsonwebtoken::er
 
 // ========== Token Extraction & Blacklist ==========
 
+/// Extrait le JWT depuis le header Authorization: Bearer <token>
 fn extract_token_from_headers(parts: &Parts) -> Option<String> {
-    // 1. Cherche dans les cookies
-    if let Some(cookie_val) = parts.headers.get(axum::http::header::COOKIE) {
-        if let Ok(s) = cookie_val.to_str() {
-            for pair in s.split(';') {
-                let pair = pair.trim();
-                if let Some(t) = pair.strip_prefix("auth_token=") {
-                    return Some(t.to_string());
-                }
-            }
-        }
-    }
-
-    // 2. Cherche dans Authorization: Bearer
-    if let Some(h) = parts.headers.get(AUTHORIZATION) {
-        if let Ok(s) = h.to_str() {
-            if let Some(t) = s.strip_prefix("Bearer ") {
-                return Some(t.to_string());
-            }
-        }
-    }
-
-    None
+    parts
+        .headers
+        .get(AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|t| t.to_string())
 }
 
 fn revoked_key(jti: &str) -> String {

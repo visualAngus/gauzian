@@ -327,6 +327,34 @@ export async function getUserPrivateKeyFromIndexedDb(
   return record.key;
 }
 
+/**
+ * Efface toutes les clés crypto de l'IndexedDB
+ * Utilisé au logout pour sécurité
+ */
+export async function clearAllKeys(config: KeyStoreConfig = DEFAULT_KEYSTORE): Promise<void> {
+  assertClient();
+  const db = await openDB(config);
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([config.storeName], "readwrite");
+    const store = tx.objectStore(config.storeName);
+
+    // Supprimer toutes les clés
+    const clearRequest = store.clear();
+
+    clearRequest.onsuccess = () => {
+      console.log('All crypto keys cleared from IndexedDB');
+      resolve();
+    };
+
+    clearRequest.onerror = () => {
+      reject(new Error("Error clearing IndexedDB"));
+    };
+
+    tx.onerror = () => reject(new Error("IndexedDB transaction failed"));
+  });
+}
+
 export async function encryptWithStoredPublicKey(
   data: string,
   config: KeyStoreConfig = DEFAULT_KEYSTORE

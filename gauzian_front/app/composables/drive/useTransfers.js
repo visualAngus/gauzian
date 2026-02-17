@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import JSZip from "jszip";
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 
 import {
     decryptWithStoredPrivateKey,
@@ -14,6 +15,7 @@ import { useAutoShare } from './useAutoShare';
 
 
 export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypted_items, addNotification } = {}) {
+    const { fetchWithAuth } = useFetchWithAuth();
     let fileIdCounter = 0;
 
     // Configuration retry
@@ -155,9 +157,8 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             downloadProgressMap.value[downloadId] = 0;
 
             // Récupérer les infos du fichier depuis l'API
-            const fileInfoRes = await fetch(`${API_URL}/drive/file/${item.file_id}`, {
+            const fileInfoRes = await fetchWithAuth(`/drive/file/${item.file_id}`, {
                 method: "GET",
-                credentials: "include",
                 signal: abortController.signal,
             });
 
@@ -204,11 +205,10 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
                         // Télécharger le chunk avec retry automatique
                         const chunkData = await withRetry(async () => {
-                            const chunkRes = await fetch(
-                                `${API_URL}/drive/download_chunk_binary/${chunk.s3_key}`,
+                            const chunkRes = await fetchWithAuth(
+                                `/drive/download_chunk_binary/${chunk.s3_key}`,
                                 {
                                     method: "GET",
-                                    credentials: "include",
                                     signal: abortController.signal,
                                 },
                             );
@@ -450,12 +450,8 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         startUploads();
 
         //   POST
-        const res = await fetch(`${API_URL}/drive/abort_upload`, {
+        const res = await fetchWithAuth('/drive/abort_upload', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 file_id: file_id,
             }),
@@ -493,11 +489,10 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             downloadProgressMap.value[downloadId] = 0;
 
             // Récupérer la structure complète du dossier
-            const contentsRes = await fetch(
-                `${API_URL}/drive/folder_contents/${folderId}`,
+            const contentsRes = await fetchWithAuth(
+                `/drive/folder_contents/${folderId}`,
                 {
                     method: "GET",
-                    credentials: "include",
                     signal: abortController.signal,
                 },
             );
@@ -554,11 +549,10 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
                             // Download chunk avec retry automatique
                             const chunkData = await withRetry(async () => {
-                                const chunkRes = await fetch(
-                                    `${API_URL}/drive/download_chunk_binary/${chunk.s3_key}`,
+                                const chunkRes = await fetchWithAuth(
+                                    `/drive/download_chunk_binary/${chunk.s3_key}`,
                                     {
                                         method: "GET",
-                                        credentials: "include",
                                         signal: abortController.signal,
                                     },
                                 );
@@ -712,12 +706,8 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             dataKey,
         );
 
-        const res = await fetch(`${API_URL}/drive/initialize_file`, {
+        const res = await fetchWithAuth('/drive/initialize_file', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 encrypted_metadata: encryptedMetadata,
                 encrypted_file_key: encryptedFileKey,
@@ -778,11 +768,10 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             // Upload avec retry automatique
             await withRetry(async () => {
-                const res = await fetch(
-                    `${API_URL}/drive/upload_chunk_binary?${params.toString()}`,
+                const res = await fetchWithAuth(
+                    `/drive/upload_chunk_binary?${params.toString()}`,
                     {
                     method: "POST",
-                    credentials: "include",
                     headers: {
                         "Content-Type": "application/octet-stream",
                     },
@@ -859,22 +848,20 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             console.log(`Finished uploading file: ${file.name}`);
 
-            const req = await fetch(
-                `${API_URL}/drive/finalize_upload/${file_id}/${etat}`,
+            const req = await fetchWithAuth(
+                `/drive/finalize_upload/${file_id}/${etat}`,
                 {
                     method: "POST",
-                    credentials: "include",
                 },
             );
             if (!req.ok) {
                 throw new Error("Failed to finalize file upload");
             }
         } catch (error) {
-            const req = await fetch(
-                `${API_URL}/drive/finalize_upload/${file_id}/aborted`,
+            const req = await fetchWithAuth(
+                `/drive/finalize_upload/${file_id}/aborted`,
                 {
                     method: "POST",
-                    credentials: "include",
                 },
             );
             if (!req.ok) {
