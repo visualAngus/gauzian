@@ -261,11 +261,10 @@ function testGetFolderContents(token, folderId) {
 // Test rename folder
 function testRenameFolder(token, folderId) {
     const payload = JSON.stringify({
-        folder_id: folderId,
-        new_encrypted_metadata: 'mock_new_encrypted_metadata_' + randomString(32),
+        encrypted_metadata: 'mock_new_encrypted_metadata_' + randomString(32),
     });
 
-    const res = http.post(`${BASE_URL}/drive/rename_folder`, payload, {
+    const res = http.patch(`${BASE_URL}/drive/folders/${folderId}`, payload, {
         headers: getAuthHeaders(token),
     });
 
@@ -278,11 +277,7 @@ function testRenameFolder(token, folderId) {
 
 // Test delete folder
 function testDeleteFolder(token, folderId) {
-    const payload = JSON.stringify({
-        folder_id: folderId,
-    });
-
-    const res = http.post(`${BASE_URL}/drive/delete_folder`, payload, {
+    const res = http.del(`${BASE_URL}/drive/folders/${folderId}`, null, {
         headers: getAuthHeaders(token),
     });
 
