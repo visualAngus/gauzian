@@ -546,6 +546,7 @@ pub async fn get_file_folder_handler(
     Path(parent_id): Path<String>,
 ) -> Response {
     let is_corbeille = parent_id.eq_ignore_ascii_case("corbeille");
+    let is_shared_with_me = parent_id.eq_ignore_ascii_case("shared-with-me");
 
     if is_corbeille {
         let files_and_folders = match repo::get_corbeille_contents(&state.db_pool, claims.id).await
@@ -582,6 +583,35 @@ pub async fn get_file_folder_handler(
                 "file_count": corbeille_info["deleted_files_count"],
                 "folder_count": corbeille_info["deleted_folders_count"],
             },
+            "drive_info": {
+                "used_space": drive_info.0,
+                "file_count": drive_info.1,
+                "folder_count": drive_info.2,
+            },
+            "full_path": [],
+        }))
+        .into_response();
+    }
+    else if is_shared_with_me {
+        let files_and_folders = match repo::get_shared_with_me_contents(&state.db_pool, claims.id).await {
+            Ok(list) => list,
+            Err(e) => {
+                tracing::error!("Failed to retrieve shared with me contents: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve shared with me contents")
+                    .into_response();
+            }
+        };
+
+        let drive_info = match repo::get_drive_info(&state.db_pool, claims.id).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::error!("Failed to retrieve drive info: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+            }
+        };
+
+        return ApiResponse::ok(serde_json::json!({
+            "files_and_folders": files_and_folders,
             "drive_info": {
                 "used_space": drive_info.0,
                 "file_count": drive_info.1,
@@ -1914,6 +1944,52 @@ pub async fn list_files_handler(
         Err(e) => {
             tracing::error!("Failed to list files: {:?}", e);
             ApiResponse::internal_error("Failed to list files").into_response()
+        }
+    }
+}
+
+/// Accepter un fichier partagé (le marque comme accepté → apparaît dans le drive principal)
+pub async fn accept_shared_file_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => return ApiResponse::bad_request("Invalid file_id").into_response(),
+    };
+
+    match repo::accept_shared_file(&state.db_pool, claims.id, file_id).await {
+        Ok(_) => ApiResponse::ok("File accepted").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or not shared with you").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to accept shared file: {:?}", e);
+            ApiResponse::internal_error("Failed to accept shared file").into_response()
+        }
+    }
+}
+
+/// Accepter un dossier partagé (l'ancre à la racine + propage aux enfants)
+pub async fn accept_shared_folder_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = match Uuid::parse_str(&folder_id) {
+        Ok(id) => id,
+        Err(_) => return ApiResponse::bad_request("Invalid folder_id").into_response(),
+    };
+
+    match repo::accept_shared_folder(&state.db_pool, claims.id, folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder accepted").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or not shared with you").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to accept shared folder: {:?}", e);
+            ApiResponse::internal_error("Failed to accept shared folder").into_response()
         }
     }
 }

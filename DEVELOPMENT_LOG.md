@@ -1,5 +1,32 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-19
+
+### [2026-02-19] - feat(drive): Système d'acceptation des partages (is_accepted)
+
+**Migration DB** : `20260219_add_is_accepted.sql`
+- `file_access` : colonne `is_accepted BOOLEAN NOT NULL DEFAULT FALSE`
+- `folder_access` : colonnes `is_accepted` et `is_root_anchor`
+- `is_root_anchor = TRUE` : dossier partagé ancré à la racine du destinataire
+- Owners migrés → `is_accepted = TRUE` (backward compat)
+- Non-owners existants → `is_accepted = FALSE` (breaking change délibéré, doivent re-accepter)
+
+**Backend (repo.rs)** :
+- `get_files_and_folders_list()` : filtre `is_accepted = true` + support `is_root_anchor` pour le listing root
+- `get_shared_with_me_contents()` : réécriture complète, retourne les items `is_accepted = false`
+- `share_folder_batch()`, `share_folder_with_contact()`, `share_file_with_contact()` : `is_accepted = false` à la création
+- `initialize_file_in_db()`, `create_folder_in_db()` : `is_accepted = true` pour l'owner
+- `propagate_file_access()`, `propagate_folder_access()` : `is_accepted = true` (auto-share dans dossier déjà accepté)
+- Nouvelles fonctions : `accept_shared_file()`, `accept_shared_folder()` (avec propagation récursive)
+
+**Backend (handlers.rs + routes.rs)** :
+- Handlers : `accept_shared_file_handler`, `accept_shared_folder_handler`
+- Routes : `POST /drive/files/{id}/accept`, `POST /drive/folders/{id}/accept`
+
+**Frontend (useFileActions.js)** :
+- `click_on_item()` : remplace `TransferItemToMyDrive` par `acceptSharedItem`
+- `acceptSharedItem()` : TODO(human) - appels aux nouvelles routes d'acceptation
+
 ## 2026-02-18
 
 ### [2026-02-18 14:30] - ✅ MIGRATION COMPLÈTE VERS ENDPOINTS RESTful

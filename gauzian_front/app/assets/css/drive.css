@@ -88,12 +88,6 @@ main {
 
 @media (max-width: 768px) {
   .div_left_section {
-    display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .div_left_section.sidebar-open {
     display: flex;
     position: fixed;
     left: 0;
@@ -107,6 +101,13 @@ main {
     padding-left: 15px;
     padding-right: 15px;
     padding-top: 15px;
+
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .div_left_section.sidebar-open {
+    transform: translateX(0);
   }
 }
 
@@ -349,7 +350,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  padding: 8px 8px 8px 0px;
   transition: all 0.2s ease;
   color: var(--color-neutral-900);
 }
@@ -359,20 +360,9 @@ main {
 }
 
 .hamburger-menu svg {
-  width: 24px;
-  height: 24px;
+  width: 25px;
+  height: 25px;
   fill: var(--color-neutral-900);
-}
-
-@media (max-width: 480px) {
-  .hamburger-menu {
-    padding: 6px 6px 6px 0px;
-  }
-
-  .hamburger-menu svg {
-    width: 25px;
-    height: 25px;
-  }
 }
 
 /* Sidebar overlay for mobile */
@@ -385,7 +375,7 @@ main {
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 998;
-  animation: fadeIn 0.2s ease-in;
+  /* animation: fadeIn 0.2s ease-in; */
 }
 
 @media (max-width: 768px) {
@@ -402,6 +392,16 @@ main {
   to {
     opacity: 1;
   }
+}
+
+:global(.fade-enter-active),
+:global(.fade-leave-active) {
+  transition: opacity 0.8s ease;
+}
+
+:global(.fade-enter-from),
+:global(.fade-leave-to) {
+  opacity: 0;
 }
 
 /* Transitions pour les fichiers */
