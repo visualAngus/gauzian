@@ -2,6 +2,12 @@
 set -e
 
 NAMESPACE="gauzian-v2"
+REGISTRY="angusvisual"
+TAG="latest"
+
+echo "📥 Téléchargement des nouvelles images Docker Hub..."
+docker pull "$REGISTRY/gauzian-backend:$TAG"
+docker pull "$REGISTRY/gauzian-frontend:$TAG"
 
 echo "🚀 Déploiement CI/CD - Redémarrage des pods..."
 
