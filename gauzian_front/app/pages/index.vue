@@ -1,58 +1,50 @@
 <template>
-  <div class="page">
-		
-	</div>
-    <main>
-      <button @click="autologin">Auto-login</button>
-	  <button @click="navigate('/drive')">Go to Drive</button>
-	  <button @click="navigate('/info')">Go to Info</button>
-
-    </main>
-</template> 
+  <div class="loading">
+    <p>Chargement...</p>
+  </div>
+</template>
 
 <script setup>
-import { ref, onMounted } from "vue";
-const navigate = navigateTo;
+import { onMounted } from 'vue';
+
 definePageMeta({
-	headerTitle: 'GZHOME'
-})
+	headerTitle: 'GAUZIAN'
+});
+
+// Vérifier session et rediriger
+onMounted(async () => {
+  const { isAuthenticated, validateSession } = useAuth();
+
+  // Si déjà authentifié (état existant), aller directement sur /drive
+  if (isAuthenticated.value) {
+    return navigateTo('/drive');
+  }
+
+  // Sinon, tenter de restaurer la session depuis localStorage
+  const restored = await validateSession();
+
+  if (restored) {
+    // Session restaurée avec succès → /drive
+    navigateTo('/drive');
+  } else {
+    // Pas de session valide → /login
+    navigateTo('/login');
+  }
+});
+
 useHead({
-	title: "GZDRIVE | Drive",
-	link: [
-		{ rel: "preconnect", href: "https://fonts.googleapis.com" },
-		{ rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" },
-		{
-			rel: "stylesheet",
-			href:
-				"https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap",
-		},
-	],
+	title: "GAUZIAN | Chargement..."
 });
 </script>
 
-<style>
-body {
-	background-color: white;
+<style scoped>
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  color: #666;
 }
-
-* {
-	margin: 0;
-	padding: 0;
-	box-sizing: border-box;
-	user-select: none;
-}
-
-button {
-    padding: 10px 15px;
-	background-color: var(--color-neutral-900);
-	color: white;
-	border: none;
-	border-radius: 4px;
-	font-size: 14px;
-	font-family: "Montserrat", sans-serif;
-	font-weight: 600;
-	cursor: pointer;
-	margin-top: 5px;
-}
-
 </style>

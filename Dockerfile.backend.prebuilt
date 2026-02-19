@@ -1,0 +1,10 @@
+# Force pull de la dernière image à chaque build
+ARG CACHEBUST=1
+FROM angusvisual/gauzian-backend:latest
+
+ENV HOST=0.0.0.0
+ENV PORT=8080
+
+EXPOSE 8080
+
+CMD ["./server"]

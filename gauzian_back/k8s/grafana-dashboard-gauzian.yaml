@@ -1,0 +1,323 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  gauzian-overview.json: |
+    {
+      "dashboard": {
+        "title": "Gauzian - Overview",
+        "tags": ["gauzian", "backend", "overview"],
+        "timezone": "browser",
+        "schemaVersion": 16,
+        "version": 1,
+        "refresh": "10s",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Requêtes HTTP par Seconde",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total[5m])) by (method)",
+                "legendFormat": "{{method}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "reqps", "label": "Req/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Connexions HTTP Actives",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+            "targets": [
+              {
+                "expr": "http_connections_active",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value"
+            }
+          },
+          {
+            "id": 3,
+            "title": "Taux de Succès HTTP",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "unit": "percent",
+              "colorMode": "value",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"value": 0, "color": "red"},
+                  {"value": 95, "color": "yellow"},
+                  {"value": 99, "color": "green"}
+                ]
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "Latence p50/p95/p99 (ms)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+                "legendFormat": "p50",
+                "refId": "A"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+                "legendFormat": "p95",
+                "refId": "B"
+              },
+              {
+                "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+                "legendFormat": "p99",
+                "refId": "C"
+              }
+            ],
+            "yaxes": [
+              {"format": "ms", "label": "Latence"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Uploads de Fichiers",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+            "targets": [
+              {
+                "expr": "sum(increase(file_uploads_total{status=\"success\"}[1h]))",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "none",
+                "displayName": "Uploads (1h)"
+              }
+            }
+          },
+          {
+            "id": 6,
+            "title": "Downloads de Fichiers",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
+            "targets": [
+              {
+                "expr": "sum(increase(file_downloads_total{status=\"success\"}[1h]))",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "none",
+                "displayName": "Downloads (1h)"
+              }
+            }
+          },
+          {
+            "id": 7,
+            "title": "Bytes Uploadés (Total)",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+            "targets": [
+              {
+                "expr": "sum(file_upload_bytes_total)",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "graphMode": "none",
+              "colorMode": "value"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "bytes"
+              }
+            }
+          },
+          {
+            "id": 8,
+            "title": "Tentatives d'Authentification",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+            "targets": [
+              {
+                "expr": "sum(rate(auth_attempts_total[5m])) by (type, status)",
+                "legendFormat": "{{type}} - {{status}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "reqps", "label": "Tentatives/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 9,
+            "title": "Durée Opérations S3 (p95)",
+            "type": "gauge",
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(s3_operation_duration_seconds_bucket[5m])) by (le, operation))",
+                "legendFormat": "{{operation}}",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "showThresholdLabels": false,
+              "showThresholdMarkers": true
+            },
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 1, "color": "yellow"},
+                    {"value": 3, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 10,
+            "title": "Top 10 Endpoints (par latence p95)",
+            "type": "table",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+            "targets": [
+              {
+                "expr": "topk(10, histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint, method)))",
+                "format": "table",
+                "instant": true,
+                "refId": "A"
+              }
+            ],
+            "transformations": [
+              {
+                "id": "organize",
+                "options": {
+                  "excludeByName": {
+                    "Time": true,
+                    "le": true
+                  },
+                  "indexByName": {
+                    "endpoint": 0,
+                    "method": 1,
+                    "Value": 2
+                  },
+                  "renameByName": {
+                    "endpoint": "Endpoint",
+                    "method": "Method",
+                    "Value": "P95 Latency (s)"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "title": "Erreurs HTTP 4xx/5xx par Seconde",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) by (status)",
+                "legendFormat": "4xx - {{status}}",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (status)",
+                "legendFormat": "5xx - {{status}}",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "reqps", "label": "Erreurs/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 12,
+            "title": "Durée Upload Chunks (p95)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(chunk_upload_duration_seconds_bucket[5m])) by (le, status))",
+                "legendFormat": "{{status}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "s", "label": "Durée"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 13,
+            "title": "Opérations Redis",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+            "targets": [
+              {
+                "expr": "sum(rate(redis_operations_total[5m])) by (operation, status)",
+                "legendFormat": "{{operation}} - {{status}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Ops/s"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 14,
+            "title": "Durée Requêtes DB (p95)",
+            "type": "graph",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, query_type)) * 1000",
+                "legendFormat": "{{query_type}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ms", "label": "Latence"},
+              {"format": "short"}
+            ]
+          }
+        ]
+      }
+    }

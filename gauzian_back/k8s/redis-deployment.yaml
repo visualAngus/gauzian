@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   replicas: 1
   selector:
@@ -16,7 +16,13 @@ spec:
       containers:
       - name: redis
         image: redis:alpine
-        command: ["redis-server", "--appendonly", "yes"]
+        command: ["redis-server", "--appendonly", "yes", "--requirepass", "$(REDIS_PASSWORD)"]
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: REDIS_PASSWORD
         ports:
         - containerPort: 6379
         volumeMounts:
@@ -31,7 +37,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   selector:
     app: redis

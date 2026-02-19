@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 import {
     decryptWithStoredPrivateKey,
     encryptWithPublicKey,
@@ -32,6 +33,7 @@ export function useFileActions({
 } = {}) {
 
     const router = useRouter();
+    const { fetchWithAuth } = useFetchWithAuth();
 
     // Local counter for generating unique file IDs when queuing uploads
     let fileIdCounter = 0;
@@ -95,24 +97,16 @@ export function useFileActions({
 
             try {
                 if (itemType === "file") {
-                    const res = await fetch(`${API_URL}/drive/restore_file`, {
+                    const res = await fetchWithAuth('/drive/restore_file', {
                         method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify({ file_id: itemId }),
                     });
                     if (!res.ok) {
                         throw new Error(`Failed to restore file ${itemId}`);
                     }
                 } else if (itemType === "folder") {
-                    const res = await fetch(`${API_URL}/drive/restore_folder`, {
+                    const res = await fetchWithAuth('/drive/restore_folder', {
                         method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify({ folder_id: itemId }),
                     });
                     if (!res.ok) {
@@ -138,24 +132,16 @@ export function useFileActions({
             // Se sont les donnés direct du serveur
             try {
                 if (item.type === "file") {
-                    const res = await fetch(`${API_URL}/drive/restore_file`, {
+                    const res = await fetchWithAuth('/drive/restore_file', {
                         method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify({ file_id: item.file_id }),
                     });
                     if (!res.ok) {
                         throw new Error(`Failed to restore file ${item.file_id}`);
                     }
                 } else if (item.type === "folder") {
-                    const res = await fetch(`${API_URL}/drive/restore_folder`, {
+                    const res = await fetchWithAuth('/drive/restore_folder', {
                         method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify({ folder_id: item.folder_id }),
                     });
                     if (!res.ok) {
@@ -192,12 +178,8 @@ export function useFileActions({
             stringifiedMetadata,
             dataKey,
         );
-        const res = await fetch(`${API_URL}/drive/create_folder`, {
+        const res = await fetchWithAuth('/drive/create_folder', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 encrypted_metadata: encryptedMetadata,
                 encrypted_folder_key: encryptedFolderKey,
@@ -412,12 +394,8 @@ export function useFileActions({
             return;
         }
 
-        const res = await fetch(`${API_URL}/drive/empty_trash`, {
+        const res = await fetchWithAuth('/drive/empty_trash', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
         });
 
         if (!res.ok) {
@@ -572,12 +550,8 @@ export function useFileActions({
                         dataKey,
                     );
 
-                    const res = await fetch(`${API_URL}/drive/create_folder`, {
+                    const res = await fetchWithAuth('/drive/create_folder', {
                         method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
                         body: JSON.stringify({
                             encrypted_metadata: encryptedMetadata,
                             encrypted_folder_key: encryptedFolderKey,
@@ -647,35 +621,21 @@ export function useFileActions({
         }
 
         try {
-            // Supprimer tous les items
+            // Supprimer tous les items (RESTful endpoints)
             const deletePromises = itemsToDelete.map(async (itemToDelete) => {
                 const id = itemToDelete.file_id || itemToDelete.folder_id;
                 const type = itemToDelete.type;
 
-                if (type === "file") {
-                    const res = await fetch(`${API_URL}/drive/delete_file`, {
-                        method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ file_id: id }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to delete file ${id}`);
-                    }
-                } else if (type === "folder") {
-                    const res = await fetch(`${API_URL}/drive/delete_folder`, {
-                        method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ folder_id: id }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to delete folder ${id}`);
-                    }
+                const endpoint = type === "file"
+                    ? `/drive/files/${id}`
+                    : `/drive/folders/${id}`;
+
+                const res = await fetchWithAuth(endpoint, {
+                    method: "DELETE",
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Failed to delete ${type} ${id}`);
                 }
             });
 
@@ -787,19 +747,14 @@ export function useFileActions({
 
                 const endpoint =
                     itemType === "file"
-                        ? `${API_URL}/drive/rename_file`
-                        : `${API_URL}/drive/rename_folder`;
-                const body =
-                    itemType === "file"
-                        ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
-                        : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
-                const res = await fetch(endpoint, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(body),
+                        ? `/drive/files/${itemId}`
+                        : `/drive/folders/${itemId}`;
+
+                const res = await fetchWithAuth(endpoint, {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        new_encrypted_metadata: encryptedMetadata,
+                    }),
                 });
                 if (!res.ok) {
                     throw new Error("Failed to rename item");
@@ -863,26 +818,19 @@ export function useFileActions({
 
         const endpoint =
             itemType === "file"
-                ? `${API_URL}/drive/move_file`
-                : `${API_URL}/drive/move_folder`;
+                ? `/drive/files/${itemId}/move`
+                : `/drive/folders/${itemId}/move`;
 
-        const body =
-            itemType === "file"
-                ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-                : { folder_id: itemId, new_parent_folder_id: targetFolderId };
-
-        const res = await fetch(endpoint, {
-            method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body),
+        const res = await fetchWithAuth(endpoint, {
+            method: "PATCH",
+            body: JSON.stringify({
+                target_folder_id: targetFolderId,
+            }),
         });
 
         if (!res.ok) {
             throw new Error(`Failed to move ${itemType} ${itemId}`);
-        }else {
+        } else {
             addNotification({
                 title: "Élément déplacé",
                 message: `L'élément a été déplacé avec succès.`,
@@ -920,9 +868,8 @@ export function useFileActions({
      * Récupère récursivement tous les sous-dossiers ET fichiers d'un dossier en une seule requête
      */
     const getFolderContentsRecursive = async (folderId) => {
-        const res = await fetch(`${API_URL}/drive/folder_contents/${folderId}`, {
+        const res = await fetchWithAuth(`/drive/folder_contents/${folderId}`, {
             method: "GET",
-            credentials: "include",
         });
 
         if (!res.ok) {
@@ -949,9 +896,8 @@ export function useFileActions({
         const contactsList = [];
         for (const contact of contacts) {
             try {
-                const res = await fetch(`${API_URL}/contacts/get_public_key/${encodeURIComponent(contact.email)}`, {
+                const res = await fetchWithAuth(`/contacts/get_public_key/${encodeURIComponent(contact.email)}`, {
                     method: "GET",
-                    credentials: "include",
                 });
 
                 if (!res.ok) {
@@ -961,7 +907,7 @@ export function useFileActions({
 
                 const resData = await res.json();
                 contactsList.push({
-                    contact_id: resData.id,
+                    contact_id: resData.user_id, // Fix: l'API retourne user_id, pas id
                     contact_email: contact.email,
                     public_key: resData.public_key,
                 });
@@ -982,18 +928,15 @@ export function useFileActions({
             // Déchiffrer la clé du fichier
             const fileDataKey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
 
-            // Partager avec chaque contact
+            // Partager avec chaque contact (RESTful endpoint)
             const sharePromises = contactsList.map(async (contact) => {
                 const encryptedFileKey = await encryptWithPublicKey(contact.public_key, fileDataKey);
 
-                const res = await fetch(`${API_URL}/drive/share_file`, {
+                const res = await fetchWithAuth(`/drive/files/${itemId}/share`, {
                     method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        file_id: itemId,
-                        contact_id: contact.contact_id,
-                        encrypted_item_key: encryptedFileKey,
+                        recipient_user_id: contact.contact_id,
+                        encrypted_file_key: encryptedFileKey,
                         access_level: accessLevel,
                     }),
                 });
@@ -1068,10 +1011,8 @@ export function useFileActions({
                     }
 
                     // Envoyer le batch
-                    const res = await fetch(`${API_URL}/drive/share_folder_batch`, {
+                    const res = await fetchWithAuth('/drive/share_folder_batch', {
                         method: "POST",
-                        credentials: "include",
-                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             folder_id: itemId,
                             contact_id: contact.contact_id,

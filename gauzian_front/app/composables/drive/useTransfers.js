@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import JSZip from "jszip";
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 
 import {
     decryptWithStoredPrivateKey,
@@ -14,6 +15,7 @@ import { useAutoShare } from './useAutoShare';
 
 
 export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypted_items, addNotification } = {}) {
+    const { fetchWithAuth } = useFetchWithAuth();
     let fileIdCounter = 0;
 
     // Configuration retry
@@ -155,9 +157,8 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             downloadProgressMap.value[downloadId] = 0;
 
             // Récupérer les infos du fichier depuis l'API
-            const fileInfoRes = await fetch(`${API_URL}/drive/file/${item.file_id}`, {
+            const fileInfoRes = await fetchWithAuth(`/drive/file/${item.file_id}`, {
                 method: "GET",
-                credentials: "include",
                 signal: abortController.signal,
             });
 
@@ -204,11 +205,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
                         // Télécharger le chunk avec retry automatique
                         const chunkData = await withRetry(async () => {
-                            const chunkRes = await fetch(
-                                `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
+                            const encodedS3Key = encodeURIComponent(chunk.s3_key);
+                            const chunkRes = await fetchWithAuth(
+                                `/drive/download_chunk_binary/${encodedS3Key}`,
                                 {
                                     method: "GET",
-                                    credentials: "include",
                                     signal: abortController.signal,
                                 },
                             );
@@ -224,11 +225,19 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                                 delete transferErrors.value[downloadId];
                             }
 
-                            return await chunkRes.json();
+                            const iv = chunkRes.headers.get("x-chunk-iv");
+                            if (!iv) {
+                                const error = new Error(`Missing IV for chunk ${i}`);
+                                error.status = 500;
+                                throw error;
+                            }
+
+                            const data = await chunkRes.arrayBuffer();
+                            return { data, iv };
                         }, { transferId: downloadId, chunkIndex: i });
 
                         // Déchiffrer le chunk
-                        const decryptedChunk = await decryptDataWithDataKey(
+                        const decryptedChunk = await decryptDataWithDataKeyRaw(
                             chunkData.data,
                             chunkData.iv,
                             dataKey,
@@ -442,12 +451,8 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         startUploads();
 
         //   POST
-        const res = await fetch(`${API_URL}/drive/abort_upload`, {
+        const res = await fetchWithAuth('/drive/abort_upload', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 file_id: file_id,
             }),
@@ -485,11 +490,10 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             downloadProgressMap.value[downloadId] = 0;
 
             // Récupérer la structure complète du dossier
-            const contentsRes = await fetch(
-                `${API_URL}/drive/folder_contents/${folderId}`,
+            const contentsRes = await fetchWithAuth(
+                `/drive/folder_contents/${folderId}`,
                 {
                     method: "GET",
-                    credentials: "include",
                     signal: abortController.signal,
                 },
             );
@@ -546,11 +550,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
                             // Download chunk avec retry automatique
                             const chunkData = await withRetry(async () => {
-                                const chunkRes = await fetch(
-                                    `${API_URL}/drive/download_chunk/${chunk.s3_key}`,
+                                const encodedS3Key = encodeURIComponent(chunk.s3_key);
+                                const chunkRes = await fetchWithAuth(
+                                    `/drive/download_chunk_binary/${encodedS3Key}`,
                                     {
                                         method: "GET",
-                                        credentials: "include",
                                         signal: abortController.signal,
                                     },
                                 );
@@ -568,9 +572,19 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                                     delete transferErrors.value[downloadId];
                                 }
 
-                                return await chunkRes.json();
+                                const iv = chunkRes.headers.get("x-chunk-iv");
+                                if (!iv) {
+                                    const error = new Error(
+                                        `Missing IV for file ${metadata.filename}`,
+                                    );
+                                    error.status = 500;
+                                    throw error;
+                                }
+
+                                const data = await chunkRes.arrayBuffer();
+                                return { data, iv };
                             }, { transferId: downloadId, chunkIndex: i });
-                            const decryptedChunk = await decryptDataWithDataKey(
+                            const decryptedChunk = await decryptDataWithDataKeyRaw(
                                 chunkData.data,
                                 chunkData.iv,
                                 dataKey,
@@ -694,12 +708,8 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             dataKey,
         );
 
-        const res = await fetch(`${API_URL}/drive/initialize_file`, {
+        const res = await fetchWithAuth('/drive/initialize_file', {
             method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify({
                 encrypted_metadata: encryptedMetadata,
                 encrypted_file_key: encryptedFileKey,
@@ -751,23 +761,19 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             const chunk = file.slice(start, end);
 
-            const { cipherText, iv } = await encryptDataWithDataKey(chunk, dataKey);
-            const body = {
-                file_id: file_id,
-                index: index,
-                chunk_data: cipherText,
-                iv: iv,
-            };
+            const { cipherBytes, iv } = await encryptDataWithDataKeyRaw(chunk, dataKey);
+            const formData = new FormData();
+            formData.append("chunk", new Blob([cipherBytes], { type: "application/octet-stream" }), `chunk_${index}`);
+            formData.append("chunk_index", index.toString());
+            formData.append("iv", iv);
 
             // Upload avec retry automatique
             await withRetry(async () => {
-                const res = await fetch(`${API_URL}/drive/upload_chunk`, {
+                const res = await fetchWithAuth(
+                    `/drive/files/${file_id}/upload-chunk`,
+                    {
                     method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(body),
+                    body: formData,
                     signal: abortController.signal,
                 });
 
@@ -840,22 +846,20 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
             console.log(`Finished uploading file: ${file.name}`);
 
-            const req = await fetch(
-                `${API_URL}/drive/finalize_upload/${file_id}/${etat}`,
+            const req = await fetchWithAuth(
+                `/drive/finalize_upload/${file_id}/${etat}`,
                 {
                     method: "POST",
-                    credentials: "include",
                 },
             );
             if (!req.ok) {
                 throw new Error("Failed to finalize file upload");
             }
         } catch (error) {
-            const req = await fetch(
-                `${API_URL}/drive/finalize_upload/${file_id}/aborted`,
+            const req = await fetchWithAuth(
+                `/drive/finalize_upload/${file_id}/aborted`,
                 {
                     method: "POST",
-                    credentials: "include",
                 },
             );
             if (!req.ok) {

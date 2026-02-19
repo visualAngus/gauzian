@@ -2,7 +2,7 @@ apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: gauzian-https
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   entryPoints:
     - websecure
@@ -10,28 +10,47 @@ spec:
     # MinIO Console (sous-domaine)
     - match: Host(`minio.gauzian.pupin.fr`)
       kind: Rule
+      middlewares:
+        - name: security-headers
+        - name: inflight-limit
       services:
         - name: minio
           port: 9001
+    # Block /api/metrics from public access (must be before the /api catch-all)
+    - match: Host(`gauzian.pupin.fr`) && Path(`/api/metrics`)
+      kind: Rule
+      services:
+        - name: noop@internal
+          kind: TraefikService
     # API backend (avec strip /api)
     - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/api`)
       kind: Rule
       middlewares:
+        - name: rate-limit-api
+        - name: inflight-limit
+        - name: security-headers
         - name: strip-api-prefix
+        - name: compress
       services:
         - name: backend
-          port: 3000
+          port: 8080
     # MinIO S3 API (avec strip /s3)
     - match: Host(`gauzian.pupin.fr`) && PathPrefix(`/s3`)
       kind: Rule
       middlewares:
+        - name: rate-limit-s3
+        - name: security-headers
         - name: strip-s3-prefix
+        - name: compress
       services:
         - name: minio
           port: 9000
     # Frontend (catch-all)
     - match: Host(`gauzian.pupin.fr`)
       kind: Rule
+      middlewares:
+        - name: security-headers
+        - name: compress
       services:
         - name: front
           port: 8080
@@ -42,25 +61,25 @@ apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: gauzian-http
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   entryPoints:
     - web
   routes:
-    # Redirect HTTP to HTTPS
-    - match: Host(`gauzian.pupin.fr`) || Host(`minio.gauzian.pupin.fr`)
+    # Redirect HTTP to HTTPS (but exclude ACME challenges - Traefik handles them internally)
+    - match: (Host(`gauzian.pupin.fr`) || Host(`minio.gauzian.pupin.fr`)) && !PathPrefix(`/.well-known/acme-challenge/`)
       kind: Rule
-      services:
-        - name: front
-          port: 8080
       middlewares:
         - name: redirect-https
+      services:
+        - name: noop@internal
+          kind: TraefikService
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: redirect-https
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   redirectScheme:
     scheme: https

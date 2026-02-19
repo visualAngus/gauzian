@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   accessModes:
     - ReadWriteOnce

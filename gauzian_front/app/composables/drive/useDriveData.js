@@ -1,8 +1,10 @@
 import { ref, watch } from 'vue';
 import { nextTick } from 'vue';
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 import { decryptWithStoredPrivateKey, decryptSimpleDataWithDataKey } from '~/utils/crypto';
 
 export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotification) {
+    const { fetchWithAuth } = useFetchWithAuth();
     const activeFolderId = ref("root");
     const liste_decrypted_items = ref([]);
     const displayedDriveItems = ref([]);
@@ -104,9 +106,8 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
         node.isLoading = true;
 
         try {
-            const res = await fetch(`${API_URL}/drive/get_folder/${node.folder_id}`, {
+            const res = await fetchWithAuth(`/drive/get_folder/${node.folder_id}`, {
                 method: "GET",
-                credentials: "include",
             });
 
             if (!res.ok) {
@@ -217,11 +218,10 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
 
     const loadPath = async ({ outIn = false } = {}) => {
         // dans l'url ?folder_id=xxx
-        const res = await fetch(
-            `${API_URL}/drive/get_file_folder/${activeFolderId.value}`,
+        const res = await fetchWithAuth(
+            `/drive/get_file_folder/${activeFolderId.value}`,
             {
                 method: "GET",
-                credentials: "include",
             },
         );
         if (!res.ok) {
@@ -399,11 +399,10 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
 
         activeFolderId.value = id_parent_folder;
 
-        const res = await fetch(
-            `${API_URL}/drive/get_all_drive_info/${id_parent_folder}`,
+        const res = await fetchWithAuth(
+            `/drive/get_all_drive_info/${id_parent_folder}`,
             {
                 method: "GET",
-                credentials: "include",
             },
         );
         if (!res.ok) {

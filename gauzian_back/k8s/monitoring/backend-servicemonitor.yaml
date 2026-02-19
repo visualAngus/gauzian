@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-monolith
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  namespaceSelector:
+    matchNames:
+      - gauzian
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s        # Scrape toutes les 5s (aligné avec Grafana refresh)
+      scrapeTimeout: 4s   # Doit être < interval (timeout si backend répond lentement)
