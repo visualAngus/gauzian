@@ -11,11 +11,11 @@ Ces variables **doivent** être définies, sinon l'application crashera au déma
 | Variable | Description | Exemple | Défini dans |
 |----------|-------------|---------|-------------|
 | `DATABASE_URL` | URL de connexion PostgreSQL | `postgres://admin:pass@db:5432/gauzian` | `secrets.yaml` |
-| `JWT_SECRET` | Clé secrète pour signer les JWT | `c3ab8ff13720e8ad...` | `secrets.yaml` |
+| `JWT_SECRET` | Clé secrète pour signer les JWT | `<CHANGE_ME>` | `secrets.yaml` |
 | `REDIS_URL` | URL de connexion Redis | `redis://redis:6379` | `backend-deployment.yaml` |
 | `S3_ENDPOINT` | URL du serveur S3/MinIO | `http://minio:9000` | `backend-deployment.yaml` |
 | `S3_ACCESS_KEY` | Access Key S3 | `minioadmin` | `secrets.yaml` |
-| `S3_SECRET_KEY` | Secret Key S3 | `ght56YhbnNN4034` | `secrets.yaml` |
+| `S3_SECRET_KEY` | Secret Key S3 | `<CHANGE_ME>` | `secrets.yaml` |
 
 ---
 
@@ -61,13 +61,13 @@ metadata:
 type: Opaque
 stringData:
   DB_USER: "admin"
-  DB_PASSWORD: "qdgvhbj4034"
+  DB_PASSWORD: "<CHANGE_ME>"
   DB_NAME: "gauzian"
-  DATABASE_URL: "postgres://admin:qdgvhbj4034@db:5432/gauzian"
+  DATABASE_URL: "postgres://admin:<CHANGE_ME>@db:5432/gauzian"
   MINIO_ROOT_USER: "minioadmin"
-  MINIO_ROOT_PASSWORD: "ght56YhbnNN4034"
+  MINIO_ROOT_PASSWORD: "<CHANGE_ME>"
   S3_BUCKET: "gauzian"
-  JWT_SECRET: "c3ab8ff13720e8afgfd695047dd39462b3c8974e592c2fa383d4a3960714caef0c4f2"
+  JWT_SECRET: "<CHANGE_ME>"
 ```
 
 ### 2. **Backend Deployment** (`backend-deployment.yaml`)
