@@ -220,11 +220,10 @@ function getFolderContents(token, folderId) {
 // Rename folder
 function renameFolder(token, folderId) {
     const payload = JSON.stringify({
-        folder_id: folderId,
-        new_encrypted_metadata: 'mock_renamed_metadata_' + randomString(32),
+        encrypted_metadata: 'mock_renamed_metadata_' + randomString(32),
     });
 
-    const res = http.post(`${BASE_URL}/drive/rename_folder`, payload, {
+    const res = http.patch(`${BASE_URL}/drive/folders/${folderId}`, payload, {
         headers: getAuthHeaders(token),
     });
     check(res, { 'rename folder OK': (r) => r.status === 200 });
@@ -233,11 +232,7 @@ function renameFolder(token, folderId) {
 
 // Delete folder
 function deleteFolder(token, folderId) {
-    const payload = JSON.stringify({
-        folder_id: folderId,
-    });
-
-    const res = http.post(`${BASE_URL}/drive/delete_folder`, payload, {
+    const res = http.del(`${BASE_URL}/drive/folders/${folderId}`, null, {
         headers: getAuthHeaders(token),
     });
     check(res, { 'delete folder OK': (r) => r.status === 200 });
