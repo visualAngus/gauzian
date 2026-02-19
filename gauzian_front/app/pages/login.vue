@@ -145,6 +145,7 @@ definePageMeta({
 })
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
+import { useAuth } from '~/composables/useAuth';
 
 import {
 	decryptPrivateKeyPemWithPassword,
@@ -156,7 +157,10 @@ import {
 
 } from "~/utils/crypto";
 
-const API_URL = "https://gauzian.pupin.fr/api";
+// Configuration dynamique de l'API URL (Clever Cloud, K8s, local)
+const API_URL = useApiUrl();
+
+const { login, register, isAuthenticated } = useAuth();
 
 const etat = ref("login");
 const loading = ref(false);
@@ -221,27 +225,13 @@ const handleLogin = async () => {
 
   loading.value = true;
   try {
-		const res = await fetch(`${API_URL}/login`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			credentials: "include",
-			body: JSON.stringify(loginForm.value),
-		});
-		const data = await res.json();
-		if (!res.ok) throw new Error(data.error || "Login failed");
-
-		if (data.encrypted_private_key && data.private_key_salt && data.iv && data.public_key) {
-			const privateKeyPem = await decryptPrivateKeyPemWithPassword({
-				encrypted_private_key: data.encrypted_private_key,
-				private_key_salt: data.private_key_salt,
-				iv: data.iv,
-				password: loginForm.value.password,
-			});
-			await saveUserKeysToIndexedDb(privateKeyPem, data.public_key);
-		}
-
+		await login(loginForm.value.email, loginForm.value.password);
+		// useAuth gère le storage token + clés IndexedDB
 		console.log("Login OK");
-        window.location.href = "/";
+		// Navigation SPA (pas de rechargement complet)
+		await navigateTo('/drive');
+  } catch (error) {
+    alert(error.message || "Login failed");
   } finally {
     loading.value = false;
   }
@@ -261,75 +251,32 @@ const handleRegister = async () => {
 
   loading.value = true;
   try {
-		const { publicKey, privateKey } = await generateRsaKeyPairPem();
-
-		const recovery_key_data = await generateRecordKey(privateKey);
-
-		await saveUserKeysToIndexedDb(privateKey, publicKey);
-
-		const cryptoPayload = await encryptPrivateKeyPemWithPassword(
-			privateKey,
+		const recoveryKey = await register(
+			registerForm.value.username,
+			registerForm.value.email,
 			registerForm.value.password
 		);
 
-		const res = await fetch(`${API_URL}/register`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			credentials: "include",
-			body: JSON.stringify({
-				username: registerForm.value.username,
-				email: registerForm.value.email,
-				password: registerForm.value.password,
-				public_key: publicKey,
-				encrypted_private_key: cryptoPayload.encrypted_private_key,
-				private_key_salt: cryptoPayload.private_key_salt,
-				iv: cryptoPayload.iv,
-				encrypted_record_key: recovery_key_data.encrypted_private_key_reco,
-			}),
-		});
-		const data = await res.json();
-		if (!res.ok) throw new Error(data.error || "Register failed");
-
-		// télécharger la clé de récupération
+		// Télécharger la clé de récupération
 		const element = document.createElement("a");
-		const file = new Blob([recovery_key_data.recovery_key], { type: "text/plain" });
+		const file = new Blob([recoveryKey], { type: "text/plain" });
 		element.href = URL.createObjectURL(file);
 		element.download = "gauzian_recovery_key.txt";
-		document.body.appendChild(element); // Required for this to work in FireFox
+		document.body.appendChild(element);
 		element.click();
 		document.body.removeChild(element);
 
-        // redirect to /
-        console.log("Register OK");
-        window.location.href = "/";
+		// Redirect to drive
+		console.log("Register OK");
+		await navigateTo('/drive');
+  } catch (error) {
+    alert(error.message || "Register failed");
   } finally {
     loading.value = false;
   }
 };
 
-const autologin = async () => {
-    console.log("Attempting auto-login...");
-    try {
-        const res = await fetch(`${API_URL}/autologin`, {
-            method: "GET",
-            credentials: "include",
-        });
-        if (res.ok) {
-
-            let is_ok = await getKeyStatus();
-            if (!is_ok) {
-                console.warn("Keys not found or invalid in IndexedDB during auto-login.");
-                return;
-            }
-            // redirect to /
-            window.location.href = "/";
-        }
-    } catch (error) {
-        console.error("Auto-login failed:", error);
-    }
-};
-
-autologin();
+// SUPPRIMÉ - autologin() est maintenant géré par le middleware auth.global.js
 
 useHead({
 	title: "GZAuth | Login",

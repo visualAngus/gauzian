@@ -3,20 +3,18 @@
  * dans les dossiers partagés (propagation des permissions)
  */
 import { encryptWithPublicKey } from '~/utils/crypto'
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 
 export function useAutoShare(API_URL) {
+  const { fetchWithAuth } = useFetchWithAuth();
 
   /**
    * Recupere la liste des utilisateurs ayant acces a un dossier parent
    */
   const getFolderSharedUsers = async (folderId) => {
     try {
-      const response = await fetch(`${API_URL}/drive/folder/${folderId}/shared_users`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await fetchWithAuth(`/drive/folder/${folderId}/shared_users`, {
+        method: 'GET'
       })
 
       if (!response.ok) {
@@ -67,12 +65,8 @@ export function useAutoShare(API_URL) {
         return { success: true, propagated: false }
       }
 
-      const response = await fetch(`${API_URL}/drive/propagate_file_access`, {
+      const response = await fetchWithAuth('/drive/propagate_file_access', {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           file_id: fileId,
           user_keys: userKeys
@@ -130,12 +124,8 @@ export function useAutoShare(API_URL) {
         return { success: true, propagated: false }
       }
 
-      const response = await fetch(`${API_URL}/drive/propagate_folder_access`, {
+      const response = await fetchWithAuth('/drive/propagate_folder_access', {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           folder_id: folderId,
           user_keys: userKeys

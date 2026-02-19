@@ -1,0 +1,1652 @@
+use axum::extract::{Json, Path, State};
+use axum::response::{IntoResponse, Response};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use tracing::{info, instrument};
+use uuid::Uuid;
+// redis transfer-tracking removed from this file
+
+use crate::{auth, drive, jwt, response::ApiResponse, state::AppState};
+use base64::Engine;
+use sqlx;
+
+use axum::http::HeaderMap;
+
+use axum::body::Body;
+use axum::http::header;
+use futures::stream::StreamExt;
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub message: String,
+    pub user_id: Uuid,
+    pub encrypted_private_key: String,
+    pub private_key_salt: String,
+    pub iv: String,
+    pub public_key: String,
+}
+#[derive(Serialize)]
+pub struct RegisterResponse {
+    pub message: String,
+    pub user_id: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    pub username: String,
+    pub password: String,
+    pub encrypted_private_key: String,
+    pub public_key: String,
+    pub email: String,
+    pub private_key_salt: String,
+    pub iv: String,
+    pub encrypted_record_key: String,
+}
+
+#[derive(Deserialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+pub async fn login_handler(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> Response {
+    let user = match auth::get_user_by_email(&state.db_pool, &req.email).await {
+        Ok(user) => user,
+        Err(_) => {
+            tracing::warn!("Email not found: {}", req.email);
+            crate::metrics::track_auth_attempt("login", false);
+            return ApiResponse::unauthorized("Invalid email or password").into_response();
+        }
+    };
+
+    match auth::verify_password(
+        &req.password,
+        &user.password_hash,
+        &user.auth_salt.unwrap_or_default(),
+    ) {
+        true => {
+            let token = jwt::create_jwt(user.id, "user", state.jwt_secret.as_bytes()).unwrap();
+            info!(%user.id, "Login successful, setting cookie");
+            crate::metrics::track_auth_attempt("login", true);
+            return ApiResponse::ok(LoginResponse {
+                message: "Login successful".to_string(),
+                user_id: user.id,
+                encrypted_private_key: user.encrypted_private_key,
+                private_key_salt: user.private_key_salt,
+                iv: user.iv,
+                public_key: user.public_key,
+            })
+            .with_token(token)
+            .into_response();
+        }
+        false => {
+            tracing::warn!("Login failed for email: {}", req.email);
+            crate::metrics::track_auth_attempt("login", false);
+            return ApiResponse::unauthorized("Invalid email or password").into_response();
+        }
+    }
+}
+
+pub async fn register_handler(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterRequest>,
+) -> Response {
+    // Hash avec Argon2 (le salt est inclus dans le hash PHC)
+    let password_hash = match auth::hash_password(&req.password) {
+        Ok(hash) => hash,
+        Err(e) => {
+            tracing::error!("Failed to hash password: {:?}", e);
+            return ApiResponse::internal_error("Failed to process registration").into_response();
+        }
+    };
+
+    let new_user = auth::NewUser {
+        username: req.username,
+        password_hash: password_hash,
+        encrypted_private_key: req.encrypted_private_key,
+        public_key: req.public_key,
+        email: req.email,
+        encrypted_settings: None,
+        private_key_salt: req.private_key_salt,
+        auth_salt: None, // Argon2 inclut le salt dans le hash
+        iv: req.iv,
+        encrypted_record_key: req.encrypted_record_key,
+    };
+
+    let user_id = match auth::create_user(&state.db_pool, new_user).await {
+        Ok(id) => id,
+        Err(e) => {
+            if let sqlx::Error::Database(db_err) = &e {
+                if db_err.message().contains("duplicate") || db_err.message().contains("unique") {
+                    tracing::warn!("Duplicate user attempted");
+                    return ApiResponse::conflict("Username or email already exists")
+                        .into_response();
+                }
+            }
+            tracing::error!("Database error: {:?}", e);
+            return ApiResponse::internal_error("Failed to create user").into_response();
+        }
+    };
+
+    let token = jwt::create_jwt(user_id, "user", state.jwt_secret.as_bytes()).unwrap();
+
+    info!(%user_id, "Registration successful, setting cookie");
+    ApiResponse::ok(RegisterResponse {
+        message: "Registration successful".to_string(),
+        user_id,
+    })
+    .with_token(token)
+    .into_response()
+}
+#[instrument]
+pub async fn protected_handler(claims: jwt::Claims) -> ApiResponse<String> {
+    info!(user_id = %claims.id, "Access granted via cookie");
+
+    ApiResponse::ok(format!(
+        "Bienvenue {} ! Tu es authentifié via Cookie.",
+        claims.id
+    ))
+}
+
+pub async fn auto_login_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> Response {
+    info!(user_id = %claims.id, "Access granted via Authorization header");
+
+
+    // verifier dans la base de données que l'utilisateur existe toujours
+    match auth::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(_) => {}
+        Err(_) => {
+            tracing::warn!("User ID from token not found in database: {}", claims.id);
+            // Répondre avec un token vide pour supprimer le token côté client
+            return ApiResponse::unauthorized("Invalid token: user not found")
+                .with_token("".to_string())
+                .into_response();
+        }
+    };
+    
+    // générer un nouveau token
+    let token = jwt::create_jwt(claims.id, &claims.role, state.jwt_secret.as_bytes()).unwrap();
+
+    ApiResponse::ok(format!(
+        "Bienvenue {} ! Tu es authentifié via Authorization header.",
+        claims.id
+    ))
+    .with_token(token)
+    .into_response()
+}
+
+pub async fn logout_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> ApiResponse<String> {
+    let now = Utc::now().timestamp() as usize;
+    let ttl_seconds = claims.exp.saturating_sub(now);
+
+    if ttl_seconds > 0 {
+        if let Err(e) = auth::blacklist_token(&state.redis_client, &claims.jti, ttl_seconds).await {
+            tracing::warn!("Failed to blacklist token in Redis: {e}");
+        }
+    }
+
+    ApiResponse::ok("Logged out".to_string())
+}
+
+pub async fn info_handler(State(state): State<AppState>, claims: jwt::Claims) -> Response {
+    match auth::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(user_info) => ApiResponse::ok(user_info).into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            tracing::warn!(user_id = %claims.id, "User info not found");
+            ApiResponse::not_found("User not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve user info: {:?}", e);
+            ApiResponse::internal_error("Failed to retrieve user info").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct InitializeFileRequest {
+    size: i64,
+    encrypted_metadata: String,
+    mime_type: String,
+    folder_id: String,
+    encrypted_file_key: String,
+}
+
+pub async fn initialize_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    _headers: HeaderMap,
+    Json(body): Json<InitializeFileRequest>,
+) -> Response {
+    let folder_id = {
+        let s = body.folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid parent_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    let file_id = match drive::initialize_file_in_db(
+        &state.db_pool,
+        claims.id,
+        body.size,
+        &body.encrypted_metadata,
+        &body.mime_type,
+        folder_id,
+        &body.encrypted_file_key,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(sqlx::Error::RowNotFound) => {
+            return ApiResponse::not_found("Folder not found").into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to initialize file in DB: {:?}", e);
+            return ApiResponse::internal_error("Failed to initialize file").into_response();
+        }
+    };
+    ApiResponse::ok(serde_json::json!({ "file_id": file_id })).into_response()
+}
+
+pub async fn get_account_and_drive_info_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(parent_id): Path<String>,
+) -> Response {
+    let is_corbeille = parent_id.eq_ignore_ascii_case("corbeille");
+
+    if is_corbeille {
+        let corbeille_info = match drive::get_corbeille_info(&state.db_pool, claims.id).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::error!("Failed to retrieve corbeille info: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve corbeille info")
+                    .into_response();
+            }
+        };
+
+        let files_and_folders = match drive::get_corbeille_contents(&state.db_pool, claims.id).await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                tracing::error!("Failed to retrieve corbeille contents: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve corbeille contents")
+                    .into_response();
+            }
+        };
+
+        let drive_info = match drive::get_drive_info(&state.db_pool, claims.id).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::error!("Failed to retrieve drive info: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+            }
+        };
+
+        return ApiResponse::ok(serde_json::json!({
+            "corbeille_info": {
+                "used_space": corbeille_info["total_deleted_size"],
+                "file_count": corbeille_info["deleted_files_count"],
+                "folder_count": corbeille_info["deleted_folders_count"],
+            },
+            "files_and_folders": files_and_folders,
+            "drive_info": {
+                "used_space": drive_info.0,
+                "file_count": drive_info.1,
+                "folder_count": drive_info.2,
+            },
+            "full_path": [],
+
+        }))
+        .into_response();
+    }
+
+    let parent_id = {
+        let s = parent_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid parent_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    tracing::info!("Requested parent folder ID: {:?}", parent_id);
+
+    // user info
+    let user_info = match auth::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(user) => user,
+        Err(e) => {
+            tracing::error!("Failed to retrieve user info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve user info").into_response();
+        }
+    };
+
+    let drive_info = match drive::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+        }
+    };
+
+    let files_folder_liste =
+        drive::get_files_and_folders_list(&state.db_pool, claims.id, parent_id).await;
+    let files_and_folders = match files_folder_liste {
+        Ok(list) => list,
+        Err(e) => {
+            tracing::error!("Failed to retrieve files and folders list: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve files and folders list")
+                .into_response();
+        }
+    };
+
+    let full_path = match drive::get_full_path(&state.db_pool, claims.id, parent_id).await {
+        Ok(path) => {
+            tracing::info!("Full path retrieved: {:?}", path);
+            path
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve full path: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve full path").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "user_info": {
+            "id": user_info.id,
+            "username": user_info.username,
+            "email": user_info.email,
+        },
+        "drive_info": {
+            "used_space": drive_info.0,
+            "file_count": drive_info.1,
+            "folder_count": drive_info.2,
+        },
+        "files_and_folders": files_and_folders,
+        "full_path": full_path,
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+pub struct UploadChunkRequest {
+    file_id: Uuid,
+    index: i32,
+    chunk_data: String, // base64 encoded
+    iv: String,
+}
+pub async fn upload_chunk_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<UploadChunkRequest>,
+) -> Response {
+    // Vérifier que l'utilisateur a le droit d'uploader sur ce fichier
+    let has_access = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
+    )
+    .bind(body.file_id)
+    .bind(claims.id)
+    .fetch_one(&state.db_pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check file access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("File not found or access denied").into_response();
+    }
+
+    let chunk_data = match base64::engine::general_purpose::STANDARD.decode(&body.chunk_data) {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("Failed to decode chunk data: {:?}", e);
+            return ApiResponse::bad_request("Invalid chunk data").into_response();
+        }
+    };
+
+    let storage_client = &state.storage_client;
+
+    // Mesurer la durée d'upload du chunk vers S3
+    let upload_start = std::time::Instant::now();
+    let meta_data_s3 = match storage_client
+        .upload_line(&chunk_data, body.index.to_string(), body.iv.clone())
+        .await
+    {
+        Ok(meta) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, true);
+            meta
+        }
+        Err(e) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, false);
+            tracing::error!("Failed to upload chunk to storage: {:?}", e);
+            return ApiResponse::internal_error("Failed to upload chunk").into_response();
+        }
+    };
+
+    let s3_record_id = match drive::save_chunk_metadata(
+        &state.db_pool,
+        body.file_id,
+        body.index,
+        &meta_data_s3.s3_id,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to insert S3 key into database: {:?}", e);
+            return ApiResponse::internal_error("Failed to record chunk metadata").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "s3_record_id": s3_record_id,
+        "s3_id": meta_data_s3.s3_id,
+        "index": meta_data_s3.index,
+        "date_upload": meta_data_s3.date_upload,
+        "data_hash": meta_data_s3.data_hash,
+    }))
+    .into_response()
+}
+
+// Finalize endpoints removed: transfer lifecycle now handled differently
+
+#[derive(Deserialize)]
+pub struct CreateFolderRequest {
+    encrypted_metadata: String,
+    parent_folder_id: String,
+    encrypted_folder_key: String,
+}
+pub async fn create_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<CreateFolderRequest>,
+) -> Response {
+    let parent_folder_id = {
+        let s = body.parent_folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request(
+                        "Invalid parent_folder_id (expected UUID or 'null')",
+                    )
+                    .into_response();
+                }
+            }
+        }
+    };
+
+    let folder_id = match drive::create_folder_in_db(
+        &state.db_pool,
+        claims.id,
+        &body.encrypted_metadata,
+        parent_folder_id,
+        &body.encrypted_folder_key,
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to create folder in DB: {:?}", e);
+            return ApiResponse::internal_error("Failed to create folder").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({ "folder_id": folder_id })).into_response()
+}
+
+pub async fn get_file_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(parent_id): Path<String>,
+) -> Response {
+    let is_corbeille = parent_id.eq_ignore_ascii_case("corbeille");
+
+    if is_corbeille {
+        let files_and_folders = match drive::get_corbeille_contents(&state.db_pool, claims.id).await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                tracing::error!("Failed to retrieve corbeille contents: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve corbeille contents")
+                    .into_response();
+            }
+        };
+
+        let drive_info = match drive::get_drive_info(&state.db_pool, claims.id).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::error!("Failed to retrieve drive info: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+            }
+        };
+
+        let corbeille_info = match drive::get_corbeille_info(&state.db_pool, claims.id).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::error!("Failed to retrieve corbeille info: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve corbeille info")
+                    .into_response();
+            }
+        };
+
+        return ApiResponse::ok(serde_json::json!({
+            "files_and_folders": files_and_folders,
+            "corbeille_info": {
+                "used_space": corbeille_info["total_deleted_size"],
+                "file_count": corbeille_info["deleted_files_count"],
+                "folder_count": corbeille_info["deleted_folders_count"],
+            },
+            "drive_info": {
+                "used_space": drive_info.0,
+                "file_count": drive_info.1,
+                "folder_count": drive_info.2,
+            },
+            "full_path": [],
+        }))
+        .into_response();
+    }
+    let parent_id = {
+        let s = parent_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid parent_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+
+    tracing::info!("Requested parent folder ID: {:?}", parent_id);
+
+    let files_folder_liste =
+        drive::get_files_and_folders_list(&state.db_pool, claims.id, parent_id).await;
+    let files_and_folders = match files_folder_liste {
+        Ok(list) => list,
+        Err(e) => {
+            tracing::error!("Failed to retrieve files and folders list: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve files and folders list")
+                .into_response();
+        }
+    };
+
+    // full path
+    let full_path = match drive::get_full_path(&state.db_pool, claims.id, parent_id).await {
+        Ok(path) => {
+            tracing::info!("Full path retrieved: {:?}", path);
+            path
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve full path: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve full path").into_response();
+        }
+    };
+
+    let drive_info = match drive::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "files_and_folders": files_and_folders,
+        "full_path": full_path,
+        "drive_info": {
+            "used_space": drive_info.0,
+            "file_count": drive_info.1,
+            "folder_count": drive_info.2,
+        },
+    }))
+    .into_response()
+}
+
+pub async fn get_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = {
+        let s = folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid folder_id (expected UUID or 'null')")
+                        .into_response();
+                }
+            }
+        }
+    };
+    let folder_contents =
+        match drive::get_folder_contents(&state.db_pool, claims.id, folder_id).await {
+            Ok(list) => list,
+            Err(e) => {
+                tracing::error!("Failed to retrieve folder contents: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve folder contents")
+                    .into_response();
+            }
+        };
+
+    ApiResponse::ok(serde_json::json!({
+        "folder_contents": folder_contents
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+pub struct AbortUploadRequest {
+    file_id: Uuid,
+}
+pub async fn abort_upload_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<AbortUploadRequest>,
+) -> Response {
+    // transfer-tracking removed: no Redis decrement here
+
+    match drive::abort_file_upload(
+        &state.db_pool,
+        &state.storage_client,
+        claims.id,
+        body.file_id,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Upload aborted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to abort upload: {:?}", e);
+            ApiResponse::internal_error("Failed to abort upload").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DeleteFileRequest {
+    file_id: Uuid,
+}
+pub async fn delete_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<DeleteFileRequest>,
+) -> Response {
+    // transfer-tracking removed: deletions no longer blocked by Redis
+    match drive::delete_file(&state.db_pool, claims.id, body.file_id).await {
+        Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to delete file: {:?}", e);
+            ApiResponse::internal_error("Failed to delete file").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DeleteFolderRequest {
+    folder_id: Uuid,
+}
+pub async fn delete_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<DeleteFolderRequest>,
+) -> Response {
+    // transfer-tracking removed: deletions no longer blocked by Redis
+    match drive::delete_folder(&state.db_pool, claims.id, body.folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder deleted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to delete folder: {:?}", e);
+            ApiResponse::internal_error("Failed to delete folder").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RenameFileRequest {
+    file_id: Uuid,
+    new_encrypted_metadata: String,
+}
+pub async fn rename_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<RenameFileRequest>,
+) -> Response {
+    match drive::rename_file(
+        &state.db_pool,
+        claims.id,
+        body.file_id,
+        &body.new_encrypted_metadata,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("File renamed successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to rename file: {:?}", e);
+            ApiResponse::internal_error("Failed to rename file").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RenameFolderRequest {
+    folder_id: Uuid,
+    new_encrypted_metadata: String,
+}
+pub async fn rename_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<RenameFolderRequest>,
+) -> Response {
+    // Validate folder_id is a valid UUID (prevents injection attempts)
+    if body.folder_id.is_nil() {
+        return ApiResponse::bad_request("Invalid folder_id").into_response();
+    }
+
+    // Validate encrypted_metadata is not empty
+    if body.new_encrypted_metadata.trim().is_empty() {
+        return ApiResponse::bad_request("Encrypted metadata cannot be empty").into_response();
+    }
+
+    match drive::rename_folder(
+        &state.db_pool,
+        claims.id,
+        body.folder_id,
+        &body.new_encrypted_metadata,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder renamed successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to rename folder: {:?}", e);
+            ApiResponse::internal_error("Failed to rename folder").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MoveFileRequest {
+    file_id: Uuid,
+    new_parent_folder_id: String,
+}
+pub async fn move_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<MoveFileRequest>,
+) -> Response {
+    let new_parent_folder_id = {
+        let s = body.new_parent_folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request(
+                        "Invalid new_parent_folder_id (expected UUID or 'null')",
+                    )
+                    .into_response();
+                }
+            }
+        }
+    };
+
+    match drive::move_file(
+        &state.db_pool,
+        claims.id,
+        body.file_id,
+        new_parent_folder_id,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("File moved successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or target folder not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to move file: {:?}", e);
+            ApiResponse::internal_error("Failed to move file").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MoveFolderRequest {
+    folder_id: Uuid,
+    new_parent_folder_id: String,
+}
+pub async fn move_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<MoveFolderRequest>,
+) -> Response {
+    let new_parent_folder_id = {
+        let s = body.new_parent_folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request(
+                        "Invalid new_parent_folder_id (expected UUID or 'null')",
+                    )
+                    .into_response();
+                }
+            }
+        }
+    };
+
+    match drive::move_folder(
+        &state.db_pool,
+        claims.id,
+        body.folder_id,
+        new_parent_folder_id,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder moved successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or target folder not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to move folder: {:?}", e);
+            ApiResponse::internal_error("Failed to move folder").into_response()
+        }
+    }
+}
+
+pub async fn get_file_info_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    match drive::get_file_info(&state.db_pool, claims.id, file_id).await {
+        Ok(file_info) => ApiResponse::ok(file_info).into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get file info: {:?}", e);
+            ApiResponse::internal_error("Failed to get file info").into_response()
+        }
+    }
+}
+
+pub async fn download_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    // Récupérer les informations du fichier
+    let file_info = match drive::get_file_info(&state.db_pool, claims.id, file_id).await {
+        Ok(info) => info,
+        Err(sqlx::Error::RowNotFound) => {
+            crate::metrics::track_file_download(false);
+            return ApiResponse::not_found("File not found or access denied").into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to get file info: {:?}", e);
+            crate::metrics::track_file_download(false);
+            return ApiResponse::internal_error("Failed to get file info").into_response();
+        }
+    };
+
+    let chunks = match file_info.get("chunks").and_then(|c| c.as_array()) {
+        Some(c) => c.clone(),
+        None => {
+            return ApiResponse::internal_error("Invalid file structure").into_response();
+        }
+    };
+
+    // Track successful download (file exists and chunks are valid)
+    crate::metrics::track_file_download(true);
+    // Créer un stream qui télécharge et envoie chaque chunk
+    let stream = futures::stream::iter(chunks)
+        .then(move |chunk_info| {
+            let storage = state.storage_client.clone();
+            async move {
+                let s3_key = chunk_info.get("s3_key")?.as_str()?;
+
+                match storage.download_line(s3_key).await {
+                    Ok((vec, _metadata)) => Some(Ok::<_, std::io::Error>(vec)),
+                    Err(e) => {
+                        tracing::error!("Failed to download chunk {}: {:?}", s3_key, e);
+                        None
+                    }
+                }
+            }
+        })
+        .filter_map(|x| async move { x })
+        .map(|result| {
+            result.map(|vec| {
+                use bytes::Bytes;
+                Bytes::from(vec)
+            })
+        });
+
+    let body = Body::from_stream(stream);
+
+    let filename = file_info
+        .get("encrypted_metadata")
+        .and_then(|m| m.as_str())
+        .unwrap_or("download");
+
+    axum::response::Response::builder()
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename),
+        )
+        .body(body)
+        .unwrap()
+}
+
+pub async fn download_chunk_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(s3_key): Path<String>,
+) -> Response {
+    // Vérifier que l'utilisateur a accès au fichier associé à ce chunk
+    let has_access = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(
+            SELECT 1 FROM s3_keys sk
+            JOIN file_access fa ON fa.file_id = sk.file_id
+            WHERE sk.s3_key = $1 AND fa.user_id = $2
+        )"
+    )
+    .bind(&s3_key)
+    .bind(claims.id)
+    .fetch_one(&state.db_pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check chunk access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("Chunk not found or access denied").into_response();
+    }
+
+    // Mesurer la durée de download du chunk depuis S3
+    let download_start = std::time::Instant::now();
+    match state.storage_client.download_line(&s3_key).await {
+        Ok((data, metadata)) => {
+            let download_duration = download_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_download_duration(download_duration, true);
+            ApiResponse::ok(serde_json::json!({
+                "data": base64::engine::general_purpose::STANDARD.encode(&data),
+                "iv": metadata.iv,
+                "index": metadata.index,
+            }))
+            .into_response()
+        }
+        Err(e) => {
+            let download_duration = download_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_download_duration(download_duration, false);
+            tracing::error!("Failed to download chunk: {:?}", e);
+            ApiResponse::internal_error("Failed to download chunk").into_response()
+        }
+    }
+}
+
+pub async fn get_folder_contents_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = {
+        let s = folder_id.trim();
+        if s.is_empty() || s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("root") {
+            None
+        } else {
+            match Uuid::parse_str(s) {
+                Ok(id) if id.is_nil() => None,
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return ApiResponse::bad_request("Invalid folder_id").into_response();
+                }
+            }
+        }
+    };
+
+    match drive::get_folder_contents_recursive(&state.db_pool, claims.id, folder_id).await {
+        Ok(contents) => ApiResponse::ok(serde_json::json!({
+            "folder_id": folder_id,
+            "contents": contents,
+        }))
+        .into_response(),
+        Err(e) => {
+            tracing::error!("Failed to get folder contents: {:?}", e);
+            ApiResponse::internal_error("Failed to get folder contents").into_response()
+        }
+    }
+}
+
+pub async fn finalize_upload_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path((file_id, etat)): Path<(String, String)>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    match etat.as_str() {
+        "aborted" => {
+            // If upload was aborted, clean up
+            match drive::abort_file_upload(
+                &state.db_pool,
+                &state.storage_client,
+                claims.id,
+                file_id,
+            )
+            .await
+            {
+                Ok(_) => {
+                    crate::metrics::track_file_upload(false, 0);
+                    return ApiResponse::ok("File upload aborted successfully").into_response();
+                }
+                Err(e) => {
+                    tracing::error!("Failed to abort file upload: {:?}", e);
+                    return ApiResponse::internal_error("Failed to abort file upload")
+                        .into_response();
+                }
+            }
+        }
+        "completed" => {
+            // proceed to finalize
+            match drive::finalize_file_upload(&state.db_pool, claims.id, file_id).await {
+                Ok(_) => {
+                    // Récupérer la taille du fichier pour les métriques
+                    let file_size: i64 = sqlx::query_scalar("SELECT size FROM files WHERE id = $1")
+                        .bind(file_id)
+                        .fetch_one(&state.db_pool)
+                        .await
+                        .unwrap_or(0);
+
+                    crate::metrics::track_file_upload(true, file_size as u64);
+                    ApiResponse::ok("File upload finalized successfully").into_response()
+                }
+                Err(sqlx::Error::RowNotFound) => {
+                    ApiResponse::not_found("File not found or access denied").into_response()
+                }
+                Err(e) => {
+                    tracing::error!("Failed to finalize file upload: {:?}", e);
+                    crate::metrics::track_file_upload(false, 0);
+                    ApiResponse::internal_error("Failed to finalize file upload").into_response()
+                }
+            }
+        }
+        _ => {
+            return ApiResponse::bad_request(
+                "Invalid etat value (expected 'aborted' or 'completed')",
+            )
+            .into_response();
+        }
+    }
+}
+
+
+#[derive(Deserialize)]
+pub struct RestoreFileRequest {
+    pub file_id: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct RestoreFolderRequest {
+    pub folder_id: Uuid,
+}
+
+pub async fn restore_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(req): Json<RestoreFileRequest>,
+) -> Response {
+    match drive::restore_file_from_corbeille(&state.db_pool, claims.id, req.file_id).await {
+        Ok(_) => ApiResponse::ok("File restored successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found in corbeille").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to restore file: {:?}", e);
+            ApiResponse::internal_error("Failed to restore file").into_response()
+        }
+    }
+}
+
+pub async fn restore_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(req): Json<RestoreFolderRequest>,
+) -> Response {
+    match drive::restore_folder_from_corbeille(&state.db_pool, claims.id, req.folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder restored successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found in corbeille").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to restore folder: {:?}", e);
+            ApiResponse::internal_error("Failed to restore folder").into_response()
+        }
+    }
+}
+
+pub async fn empty_trash_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+) -> Response {
+    match drive::empty_corbeille(&state.db_pool, &state.storage_client, claims.id).await {
+        Ok(_) => ApiResponse::ok("Corbeille emptied successfully").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to empty corbeille: {:?}", e);
+            ApiResponse::internal_error("Failed to empty corbeille").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ShareFolderRequest {
+    pub folder_id: Uuid,
+    pub contact_id: Uuid,
+    pub encrypted_item_key: String,
+    pub access_level: String,
+}
+
+#[derive(Deserialize)]
+pub struct ShareFileRequest {
+    pub file_id: Uuid,
+    pub contact_id: Uuid,
+    pub encrypted_item_key: String,
+    pub access_level: String,
+}
+
+#[derive(Deserialize)]
+pub struct FolderKeyBatch {
+    pub folder_id: Uuid,
+    pub encrypted_folder_key: String,
+}
+
+#[derive(Deserialize)]
+pub struct FileKeyBatch {
+    pub file_id: Uuid,
+    pub encrypted_file_key: String,
+}
+
+#[derive(Deserialize)]
+pub struct ShareFolderBatchRequest {
+    pub folder_id: Uuid,
+    pub contact_id: Uuid,
+    pub access_level: String,
+    pub folder_keys: Vec<FolderKeyBatch>,  // Toutes les clés des sous-dossiers rechiffrées
+    pub file_keys: Vec<FileKeyBatch>,      // Toutes les clés des fichiers rechiffrées
+}
+
+pub async fn share_folder_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<ShareFolderRequest>,
+) -> Response {
+    match drive::share_folder_with_contact(
+        &state.db_pool,
+        claims.id,
+        body.folder_id,
+        body.contact_id,
+        &body.encrypted_item_key,
+        &body.access_level,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share folder: {:?}", e);
+            ApiResponse::internal_error("Failed to share folder").into_response()
+        }
+    }
+}
+
+pub async fn share_file_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<ShareFileRequest>,
+) -> Response {
+    match drive::share_file_with_contact(
+        &state.db_pool,
+        claims.id,
+        body.file_id,
+        body.contact_id,
+        &body.encrypted_item_key,
+        &body.access_level,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("File shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share file: {:?}", e);
+            ApiResponse::internal_error("Failed to share file").into_response()
+        }
+    }
+}
+
+pub async fn share_folder_batch_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<ShareFolderBatchRequest>,
+) -> Response {
+    // Convertir les vecs en format attendu par drive::share_folder_batch
+    let folder_keys: Vec<(Uuid, String)> = body.folder_keys
+        .into_iter()
+        .map(|fk| (fk.folder_id, fk.encrypted_folder_key))
+        .collect();
+
+    let file_keys: Vec<(Uuid, String)> = body.file_keys
+        .into_iter()
+        .map(|fk| (fk.file_id, fk.encrypted_file_key))
+        .collect();
+
+    match drive::share_folder_batch(
+        &state.db_pool,
+        claims.id,
+        body.folder_id,
+        body.contact_id,
+        &body.access_level,
+        folder_keys,
+        file_keys,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder and contents shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share folder batch: {:?}", e);
+            ApiResponse::internal_error("Failed to share folder").into_response()
+        }
+    }
+}
+
+
+pub async fn get_public_key_handler_by_email(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(email): Path<String>,
+) -> Response {
+    let user_info = match auth::get_user_by_email(&state.db_pool, &email).await {
+        Ok(user) => user,
+        Err(sqlx::Error::RowNotFound) => {
+            return ApiResponse::not_found("User not found").into_response();
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve user info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve user info").into_response();
+        }
+    };
+    ApiResponse::ok(serde_json::json!({
+        "id": user_info.id,
+        "username": user_info.username,
+        "public_key": user_info.public_key,
+    })).into_response()
+}
+
+/// Récupère la liste des utilisateurs ayant accès à un dossier (pour le partage dynamique)
+pub async fn get_folder_shared_users_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = match Uuid::parse_str(&folder_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid folder_id").into_response();
+        }
+    };
+
+    match drive::get_folder_shared_users(&state.db_pool, claims.id, folder_id).await {
+        Ok(users) => {
+            // Récupérer les clés publiques pour chaque utilisateur
+            let mut users_with_keys = Vec::new();
+            for (user_id, access_level) in users {
+                if let Ok(user_info) = auth::get_user_by_id(&state.db_pool, user_id).await {
+                    users_with_keys.push(serde_json::json!({
+                        "user_id": user_id,
+                        "access_level": access_level,
+                        "public_key": user_info.public_key,
+                        "username": user_info.username,
+                    }));
+                }
+            }
+            ApiResponse::ok(serde_json::json!({
+                "shared_users": users_with_keys
+            })).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get folder shared users: {:?}", e);
+            ApiResponse::internal_error("Failed to get folder shared users").into_response()
+        }
+    }
+}
+
+/// Récupère les informations de partage d'un fichier (pour le panneau InfoItem)
+pub async fn get_file_info_item_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid file_id").into_response();
+        }
+    };
+
+    match drive::get_file_shared_users(&state.db_pool, claims.id, file_id).await {
+        Ok(users) => {
+            let mut shared_users_list: Vec<serde_json::Value> = Vec::new();
+
+            for (user_id, access_level) in users {
+                if let Ok(user_info) = auth::get_user_by_id(&state.db_pool, user_id).await {
+                    // construire la liste enrichie ici
+                    shared_users_list.push(serde_json::json!({
+                        "user_id": user_id,
+                        "permission": access_level,
+                        "public_key": user_info.public_key,
+                        "username": user_info.username,
+                    }) );
+                }
+            }
+            
+
+            ApiResponse::ok(serde_json::json!({
+                "shared_users": shared_users_list
+            })).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get file shared users: {:?}", e);
+            ApiResponse::internal_error("Failed to get file shared users").into_response()
+        }
+    }
+}
+
+/// Récupère les informations de partage d'un dossier (pour le panneau InfoItem)
+pub async fn get_folder_info_item_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = match Uuid::parse_str(&folder_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid folder_id").into_response();
+        }
+    };
+
+    match drive::get_folder_shared_users(&state.db_pool, claims.id, folder_id).await {
+        Ok(users) => {
+            let mut shared_users_list: Vec<serde_json::Value> = Vec::new();
+
+            for (user_id, access_level) in users {
+                if let Ok(user_info) = auth::get_user_by_id(&state.db_pool, user_id).await {
+                    // construire la liste enrichie ici
+                    shared_users_list.push(serde_json::json!({
+                        "user_id": user_id,
+                        "permission": access_level,
+                        "public_key": user_info.public_key,
+                        "username": user_info.username,
+                    }) );
+                }
+            }
+            ApiResponse::ok(serde_json::json!({
+                "shared_users": shared_users_list
+            })).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to get folder shared users: {:?}", e);
+            ApiResponse::internal_error("Failed to get folder shared users").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PropagateFileAccessRequest {
+    pub file_id: Uuid,
+    pub user_keys: Vec<UserKey>,
+}
+
+#[derive(Deserialize)]
+pub struct UserKey {
+    pub user_id: Uuid,
+    pub encrypted_key: String,
+    pub access_level: String,
+}
+
+/// Propage les permissions d'un fichier nouvellement créé
+pub async fn propagate_file_access_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<PropagateFileAccessRequest>,
+) -> Response {
+    let user_keys: Vec<(Uuid, String, String)> = body.user_keys
+        .into_iter()
+        .map(|uk| (uk.user_id, uk.encrypted_key, uk.access_level))
+        .collect();
+
+    match drive::propagate_file_access(&state.db_pool, claims.id, body.file_id, user_keys).await {
+        Ok(_) => ApiResponse::ok("File access propagated successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to propagate file access: {:?}", e);
+            ApiResponse::internal_error("Failed to propagate file access").into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PropagateFolderAccessRequest {
+    pub folder_id: Uuid,
+    pub user_keys: Vec<UserKey>,
+}
+
+/// Propage les permissions d'un dossier nouvellement créé
+pub async fn propagate_folder_access_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<PropagateFolderAccessRequest>,
+) -> Response {
+    let user_keys: Vec<(Uuid, String, String)> = body.user_keys
+        .into_iter()
+        .map(|uk| (uk.user_id, uk.encrypted_key, uk.access_level))
+        .collect();
+
+    match drive::propagate_folder_access(&state.db_pool, claims.id, body.folder_id, user_keys).await {
+        Ok(_) => ApiResponse::ok("Folder access propagated successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to propagate folder access: {:?}", e);
+            ApiResponse::internal_error("Failed to propagate folder access").into_response()
+        }
+    }
+}
+
+/// Health check endpoint for Kubernetes readiness probe
+/// Tests connectivity to PostgreSQL, Redis, and MinIO
+#[instrument(skip(state))]
+pub async fn health_check_handler(State(state): State<AppState>) -> Response {
+    use std::time::Duration;
+
+    // Test PostgreSQL
+    let db_ok = tokio::time::timeout(
+        Duration::from_secs(5),
+        sqlx::query("SELECT 1").fetch_one(&state.db_pool)
+    )
+    .await
+    .is_ok();
+
+    // Test Redis
+    let redis_ok = tokio::time::timeout(
+        Duration::from_secs(5),
+        async {
+            use redis::AsyncCommands;
+            let mut con = state.redis_client.get_multiplexed_async_connection().await?;
+            con.ping::<()>().await
+        }
+    )
+    .await
+    .is_ok();
+
+    // Test MinIO/S3
+    let s3_ok = tokio::time::timeout(
+        Duration::from_secs(5),
+        state.storage_client.health_check()
+    )
+    .await
+    .is_ok();
+
+    if db_ok && redis_ok && s3_ok {
+        (axum::http::StatusCode::OK, "Ready").into_response()
+    } else {
+        info!("Health check failed - DB: {}, Redis: {}, S3: {}", db_ok, redis_ok, s3_ok);
+        (axum::http::StatusCode::SERVICE_UNAVAILABLE, "Not ready").into_response()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RevokeAccessRequest {
+    item_type: String,
+    item_id: String,
+    contact_id: String,
+}
+
+pub async fn revoke_access_handler(
+    State(state): State<AppState>,
+    claims: jwt::Claims,
+    Json(body): Json<RevokeAccessRequest>,
+) -> Response {
+    let item_uuid = match Uuid::parse_str(&body.item_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid item_id").into_response();
+        }
+    };
+    let contact_uuid = match Uuid::parse_str(&body.contact_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiResponse::bad_request("Invalid contact_id").into_response();
+        }
+    };
+
+    let result = match body.item_type.as_str() {
+        "file" => drive::revoke_file_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await,
+        "folder" => drive::revoke_folder_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await,
+        _ => {
+            return ApiResponse::bad_request("Invalid item_type (expected 'file' or 'folder')").into_response();
+        }
+    };
+
+    match result {
+        Ok(_) => ApiResponse::ok("Access revoked successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Item or contact not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to revoke access: {:?}", e);
+            ApiResponse::internal_error("Failed to revoke access").into_response()
+        }
+    }
+}

@@ -78,6 +78,9 @@
 <script setup>
 import { ref } from "vue";
 import { useHead } from "#imports"; // Nécessaire si tu es sous Nuxt, sinon à retirer
+import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
+import { useAuth } from '~/composables/useAuth';
+
 definePageMeta({
     headerTitle: 'GZINFO'
 })
@@ -92,7 +95,10 @@ import {
 
 } from "~/utils/crypto";
 
-const API_URL = "https://gauzian.pupin.fr/api";
+// Configuration dynamique de l'API URL (Clever Cloud, K8s, local)
+const API_URL = useApiUrl();
+const { fetchWithAuth } = useFetchWithAuth();
+const { validateSession } = useAuth();
 
 const etat = ref("login");
 const loading = ref(false);
@@ -112,30 +118,7 @@ const encrypted_private_key_reco = ref("");
 const recovery_key = ref("");
 
 
-const autologin = async () => {
-    console.log("Attempting auto-login...");
-    try {
-        const res = await fetch(`${API_URL}/autologin`, {
-            method: "GET",
-            credentials: "include",
-        });
-        if (res.ok) {
-
-            let is_ok = await getKeyStatus();
-            if (!is_ok) {
-                console.warn("Keys not found or invalid in IndexedDB during auto-login.");
-                window.location.href = "/login";
-            }
-            // redirect to /
-        }else {
-            console.log("No valid session found for auto-login.");
-            window.location.href = "/login";
-        }
-    } catch (error) {
-        console.error("Auto-login failed:", error);
-        window.location.href = "/login";
-    }
-};
+// Session vérifiée par middleware auth.global.js (plus besoin de checkSession)
 
 const encryptSecret = async () => {
     if (!secretInput.value) {
@@ -166,9 +149,8 @@ const decryptSecret = async () => {
 const get_info = async () => {
     console.log("Fetching info...");
     try {
-        const res = await fetch(`${API_URL}/info`, {
+        const res = await fetchWithAuth('/info', {
             method: "GET",
-            credentials: "include",
         });
         if (res.ok) {
             const data = await res.json();
@@ -211,8 +193,6 @@ const decryptrecoverykey = async (encrypted_private_key_reco, recovery_key) => {
 };
     
 
-
-autologin();
 
 useHead({
 	title: "GZINFO | Info",

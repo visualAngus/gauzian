@@ -1,20 +1,31 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: gauzian
+namespace: gauzian-v2
 
 resources:
+  # Namespace et secrets (en premier)
   - namespace.yaml
   - secrets.yaml
+
+  # Persistent Volume Claims
   - postgres-pvc.yaml
-  - postgres-deployment.yaml
   - redis-pvc.yaml
-  - redis-deployment.yaml
   - minio-pvc.yaml
+
+  # Deployments base de données et services
+  - postgres-deployment.yaml
+  - redis-deployment.yaml
   - minio-deployment.yaml
+
+  # Deployments applications
   - backend-deployment.yaml
   - backend-hpa.yaml
   - front-deployment.yaml
+
+  # Reverse proxy et routing
   - middleware.yaml
   - ingressroute.yaml
-  # - ingress.yaml  # Remplacé par IngressRoute
+
+  # Monitoring (Grafana, Prometheus ServiceMonitor)
+  - monitoring/

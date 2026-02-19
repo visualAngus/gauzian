@@ -35,8 +35,8 @@ RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/
 # Copie du binaire compilé
 COPY --from=builder /app/target/release/gauzian_back ./server
 
-# Exposition du port
-EXPOSE 3000
+# Exposition du port (Clever Cloud par défaut)
+EXPOSE 8080
 
 # Lancement
 CMD ["./server"]

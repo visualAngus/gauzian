@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: gauzian
+  namespace: gauzian-v2
 spec:
   replicas: 2
   selector:
@@ -18,15 +18,16 @@ spec:
         image: angusvisual/gauzian-backend:dev
         imagePullPolicy: Always
         ports:
-        - containerPort: 3000
+        - containerPort: 8080  # Port corrigé (était 3000)
         resources:
           requests:
             cpu: 100m         # 0.1 CPU cores (raisonnable pour Rust)
-            memory: 256Mi     # 256 MB de RAM
+            memory: 512Mi     # 512 MB de RAM (augmenté pour uploads concurrents)
           limits:
-            cpu: 300m         # Maximum 0.3 CPU cores
-            memory: 512Mi     # Maximum 512 MB de RAM
+            cpu: 500m         # Maximum 0.5 CPU cores
+            memory: 1Gi       # Maximum 1 GB de RAM (pour gérer les pics d'upload)
         env:
+        # ===== VARIABLES DE CONNEXION BASE DE DONNÉES =====
         - name: DB_USER
           valueFrom:
             secretKeyRef:
@@ -47,10 +48,21 @@ spec:
             secretKeyRef:
               name: gauzian-secrets
               key: DATABASE_URL
+
+        # ===== VARIABLES REDIS =====
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: REDIS_PASSWORD
         - name: REDIS_URL
-          value: "redis://redis:6379"
+          value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+
+        # ===== VARIABLES S3/MinIO (Format Standard) =====
         - name: S3_ENDPOINT
           value: "http://minio:9000"
+        - name: S3_REGION
+          value: "us-east-1"
         - name: S3_ACCESS_KEY
           valueFrom:
             secretKeyRef:
@@ -66,18 +78,49 @@ spec:
             secretKeyRef:
               name: gauzian-secrets
               key: S3_BUCKET
+
+        # ===== VARIABLES S3/MinIO (Format AWS SDK) =====
+        # Alias pour compatibilité avec AWS SDK
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: MINIO_ROOT_USER
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: MINIO_ROOT_PASSWORD
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+
+        # ===== VARIABLES SÉCURITÉ =====
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: gauzian-secrets
               key: JWT_SECRET
+        - name: COOKIE_SECURE
+          value: "true"  # Force HTTPS pour les cookies en production
+
+        # ===== VARIABLES SERVEUR =====
+        - name: HOST
+          value: "0.0.0.0"
+        - name: PORT
+          value: "8080"
+
+        # ===== VARIABLES DE LOGGING =====
         - name: RUST_LOG
-          value: "gauzian_back=info,tower_http=info"
+          value: "gauzian_back=info,tower_http=info,sqlx=warn"
+
+        # ===== VARIABLES DE PERFORMANCE =====
+        - name: MAX_CONCURRENT_UPLOADS
+          value: "30"  # Limite à 30 uploads concurrents (adapté pour 512MB RAM)
         # Startup Probe: Give the app time to initialize all connections
         startupProbe:
           httpGet:
             path: /health/ready
-            port: 3000
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 2
           timeoutSeconds: 5
@@ -86,7 +129,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /health/ready
-            port: 3000
+            port: 8080
           initialDelaySeconds: 2
           periodSeconds: 5
           timeoutSeconds: 3
@@ -95,7 +138,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /health/ready
-            port: 3000
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 3
@@ -105,11 +148,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: gauzian
+  namespace: gauzian-v2
+  labels:
+    app: backend
 spec:
   selector:
     app: backend
   ports:
-  - port: 3000
-    targetPort: 3000
+  - name: http
+    port: 8080
+    targetPort: 8080
   type: ClusterIP
