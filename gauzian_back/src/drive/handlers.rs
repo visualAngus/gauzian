@@ -546,7 +546,8 @@ pub async fn get_file_folder_handler(
     Path(parent_id): Path<String>,
 ) -> Response {
     let is_corbeille = parent_id.eq_ignore_ascii_case("corbeille");
-    let is_shared_with_me = parent_id.eq_ignore_ascii_case("shared-with-me");
+    let is_shared_with_me = parent_id.eq_ignore_ascii_case("shared-with-me")
+        || parent_id.eq_ignore_ascii_case("shared_with_me");
 
     if is_corbeille {
         let files_and_folders = match repo::get_corbeille_contents(&state.db_pool, claims.id).await
