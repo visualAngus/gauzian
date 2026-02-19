@@ -11,7 +11,7 @@ spec:
       app: backend
   namespaceSelector:
     matchNames:
-      - gauzian
+      - gauzian-v2
   endpoints:
     - port: http
       path: /metrics
