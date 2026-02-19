@@ -24,13 +24,74 @@ pub async fn user_has_folder_access(
     folder_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     let has_access = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+        "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = FALSE)",
     )
     .bind(folder_id)
     .bind(user_id)
     .fetch_one(pool)
     .await?;
     Ok(has_access)
+}
+
+/// Vérifier si un utilisateur est owner d'un fichier
+pub async fn user_is_file_owner(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')",
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(is_owner)
+}
+
+/// Vérifier si un utilisateur a accès à un chunk S3
+pub async fn user_has_chunk_access(
+    pool: &PgPool,
+    user_id: Uuid,
+    s3_key: &str,
+) -> Result<bool, sqlx::Error> {
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM s3_keys sk
+            JOIN file_access fa ON fa.file_id = sk.file_id
+            WHERE sk.s3_key = $1
+              AND fa.user_id = $2
+        )
+        "#,
+    )
+    .bind(s3_key)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(has_access)
+}
+
+/// Récupérer la taille d'un fichier
+pub async fn get_file_size(
+    pool: &PgPool,
+    file_id: Uuid,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT size FROM files WHERE id = $1")
+        .bind(file_id)
+        .fetch_one(pool)
+        .await
+}
+
+/// Vérifier la connectivité PostgreSQL
+pub async fn health_check_db(pool: &PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT 1")
+        .fetch_one(pool)
+        .await
+        .map(|_| ())
 }
 
 /// Récupérer les informations du drive (espace utilisé, nombre de fichiers et dossiers)
@@ -1980,4 +2041,66 @@ pub async fn revoke_folder_access(
 
     tx.commit().await?;
     Ok(())
+}
+
+/// Récupérer tous les fichiers accessibles par un utilisateur (tous dossiers confondus)
+pub async fn get_files_list(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<serde_json::Value, sqlx::Error> {
+    #[derive(Debug, sqlx::FromRow)]
+    struct FileRow {
+        file_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        file_size: i64,
+        mime_type: String,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+        encrypted_file_key: Vec<u8>,
+        access_level: String,
+        folder_id: Option<Uuid>,
+    }
+
+    let files: Vec<FileRow> = sqlx::query_as::<_, FileRow>(
+        r#"
+        SELECT
+            f.id as file_id,
+            f.encrypted_metadata,
+            f.size as file_size,
+            f.mime_type,
+            f.created_at::text as created_at,
+            f.updated_at::text as updated_at,
+            fa.encrypted_file_key,
+            fa.access_level,
+            fa.folder_id
+        FROM file_access fa
+        JOIN files f ON f.id = fa.file_id
+        WHERE fa.user_id = $1
+            AND fa.is_deleted = false
+            AND f.is_fully_uploaded = true
+        ORDER BY f.created_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(serde_json::json!(
+        files.iter().map(|row| {
+            serde_json::json!({
+                "id": row.file_id,
+                "file_id": row.file_id,
+                "encrypted_metadata": bytes_to_text_or_b64(&row.encrypted_metadata),
+                "size": row.file_size,
+                "file_size": row.file_size,
+                "mime_type": row.mime_type,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "encrypted_file_key": bytes_to_text_or_b64(&row.encrypted_file_key),
+                "access_level": row.access_level,
+                "folder_id": row.folder_id,
+                "type": "file",
+            })
+        }).collect::<Vec<_>>()
+    ))
 }
