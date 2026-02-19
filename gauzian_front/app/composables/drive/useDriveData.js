@@ -271,7 +271,79 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
             }
 
             await applyDriveItemsForDisplay(decryptedItems, { outIn });
-        } else {
+        } else if (activeFolderId.value === "shared_with_me") {
+            const resData = await res.json();
+            const files_and_folders = resData.files_and_folders;
+            const drive_info = resData.drive_info;
+            usedSpace.value = drive_info.used_space;
+            const items = [
+                ...(files_and_folders?.folders ?? []),
+                ...(files_and_folders?.files ?? []),
+            ];
+            const decryptedItems = [];
+            full_path.value = [
+                {
+                    folder_id: "shared_with_me",
+                    metadata: { folder_name: "Partagés avec moi" },
+                },
+            ];
+            for (const item of items) {
+                if (item.type === "file") {
+                    try {
+                        item.parent_folder_id = null;
+                        const encryptedMetadata = item.encrypted_metadata;
+                        const decryptkey = await decryptWithStoredPrivateKey(
+                            item.encrypted_file_key,
+                        );
+                        const metadataStr = await decryptSimpleDataWithDataKey(
+                            encryptedMetadata,
+                            decryptkey,
+                        );
+                        const metadata = JSON.parse(metadataStr);
+                        // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
+                        metadata.encrypted_data_key = item.encrypted_file_key;
+                        decryptedItems.push({
+                            ...item,
+                            metadata: metadata,
+                        });
+                    } catch (err) {
+                        console.error(
+                            "Failed to decrypt metadata for file:",
+                            item.file_id,
+                            err,
+                        );
+                    }
+                } else if (item.type === "folder") {
+                    try {
+                        item.parent_folder_id = null;
+                        const encryptedMetadata = item.encrypted_metadata;
+                        const decryptkey = await decryptWithStoredPrivateKey(
+                            item.encrypted_folder_key,
+                        );
+                        const metadataStr = await decryptSimpleDataWithDataKey(
+                            encryptedMetadata,
+                            decryptkey,
+                        );
+                        const metadata = JSON.parse(metadataStr);
+                        metadata.encrypted_data_key = item.encrypted_folder_key;
+                        decryptedItems.push({
+                            ...item,
+                            metadata: metadata,
+                        });
+                    } catch (err) {
+                        console.error(
+                            "Failed to decrypt metadata for folder:",
+                            item.folder_id,
+                            err,
+                        );
+                    }
+                }
+            }
+
+            await applyDriveItemsForDisplay(decryptedItems, { outIn });
+        }
+
+        else {
             const resData = await res.json();
             const files_and_folders = resData.files_and_folders;
             const fullPathData = resData.full_path;
