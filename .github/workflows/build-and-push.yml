@@ -65,7 +65,5 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            kubectl rollout restart deployment/backend -n gauzian-v2
-            kubectl rollout restart deployment/frontend -n gauzian-v2
-            kubectl rollout status deployment/backend -n gauzian-v2 --timeout=120s
-            kubectl rollout status deployment/frontend -n gauzian-v2 --timeout=120s
+            cd /home/debian/gauzian && git pull origin main
+            bash /home/debian/gauzian/gauzian_back/k8s/scripts/ci-deploy.sh
