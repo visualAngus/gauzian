@@ -159,21 +159,19 @@ class GauzianIDORTester:
 
     def try_delete_file(self, user: User, file_id: str) -> Tuple[int, str]:
         """Try to delete a file (returns status code and response)"""
-        url = f"{self.base_url}/api/drive/delete_file"
-        payload = {"file_id": file_id}
+        url = f"{self.base_url}/api/drive/files/{file_id}"
         headers = {"Authorization": f"Bearer {user.token}"}
 
         try:
-            response = self.session.post(url, json=payload, headers=headers, timeout=10)
+            response = self.session.delete(url, headers=headers, timeout=10)
             return response.status_code, response.text
         except Exception as e:
             return 0, str(e)
 
     def share_file(self, owner: User, file_id: str, recipient_email: str, access_level: str = "viewer") -> bool:
         """Share a file with another user"""
-        url = f"{self.base_url}/api/drive/share_file"
+        url = f"{self.base_url}/api/drive/files/{file_id}/share"
         payload = {
-            "file_id": file_id,
             "target_user_email": recipient_email,
             "access_level": access_level,
             "encrypted_file_key": "test_encrypted_key_for_recipient"
