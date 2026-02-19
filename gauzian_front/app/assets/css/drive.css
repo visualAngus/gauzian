@@ -1,11 +1,10 @@
-
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation; 
+  touch-action: manipulation;
 }
 
 body {
@@ -146,8 +145,8 @@ main {
   }
 }
 
-#create-folder-button,
-#import-files-button {
+#import-files-button,
+#shared-with-me-button {
   margin-bottom: 10px;
   padding: 10px 15px;
   background-color: var(--color-neutral-900);
@@ -169,53 +168,111 @@ main {
   margin-top: 0px;
 }
 
+#create-folder-button {
+  margin-bottom: 10px;
+
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+
+  background-color: var(--color-white);
+
+  gap: 0.5rem;
+  padding: 1rem 1.2rem;
+  color: var(--color-text);
+
+  border: none;
+  border-radius: 15px;
+
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  width: 100%;
+  font-weight: 500;
+
+
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 @media (max-width: 1024px) {
-  #create-folder-button,
-  #import-files-button {
+
+  #import-files-button,
+  #shared-with-me-button {
     font-size: 12px;
     padding: 8px 12px;
     margin-bottom: 15px;
   }
 
+
+  #create-folder-button {
+    font-size: 14px;
+    margin-bottom: 15px;
+  }
+
   #create-folder-button svg,
-  #import-files-button svg {
+  #import-files-button svg,
+  #shared-with-me-button svg {
     width: 14px;
     height: 14px;
   }
 }
 
 @media (max-width: 768px) {
-  #create-folder-button,
-  #import-files-button {
+
+  #import-files-button,
+  #shared-with-me-button {
     font-size: 14px;
     padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  #create-folder-button {
+    font-size: 14px;
     margin-bottom: 12px;
   }
 }
 
 @media (max-width: 480px) {
-  #create-folder-button,
-  #import-files-button {
+
+  #import-files-button,
+  #shared-with-me-button {
     font-size: 14px;
     padding: 6px 10px;
     margin-bottom: 10px;
   }
+  #create-folder-button {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
 }
 
-#create-folder-button:hover,
-#import-files-button:hover {
+#import-files-button:hover,
+#shared-with-me-button:hover {
   background-color: var(--color-neutral-700);
 }
 
-#create-folder-button svg,
-#import-files-button svg {
+#create-folder-button:hover {
+  background-color: var(--color-surface-soft);
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+#import-files-button svg,
+#shared-with-me-button svg {
   width: 16px;
   height: 16px;
   fill: white;
 }
 
+
+#create-folder-button svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--color-text);
+}
+
 #create-folder-button:disabled,
-#import-files-button:disabled {
+#import-files-button:disabled,
+#shared-with-me-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -903,7 +960,7 @@ main {
   justify-content: flex-start;
   gap: 8px;
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   transition: all 0.3s ease;
 }
 
@@ -1346,19 +1403,15 @@ main {
 }
 
 .upload-progress {
-  background: linear-gradient(
-    90deg,
-    var(--color-accent) 0%,
-    var(--color-accent) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--color-accent) 0%,
+      var(--color-accent) 100%);
 }
 
 .download-progress {
-  background: linear-gradient(
-    90deg,
-    var(--color-accent) 0%,
-    var(--color-accent) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--color-accent) 0%,
+      var(--color-accent) 100%);
 }
 
 .progress-text {
@@ -1492,11 +1545,12 @@ main {
   transform: translateY(0);
 }
 
-.panel_ouvert{
+.panel_ouvert {
   width: calc(100% - 350px);
 }
-@media  screen and (max-width: 768px) {
-  .panel_ouvert{
+
+@media screen and (max-width: 768px) {
+  .panel_ouvert {
     width: 100%;
   }
 }
