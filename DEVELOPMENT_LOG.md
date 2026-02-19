@@ -1,5 +1,84 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-18
+
+### [2026-02-18 14:30] - ✅ MIGRATION COMPLÈTE VERS ENDPOINTS RESTful
+
+**Contexte** : Migration des endpoints legacy (RPC-style) vers des endpoints RESTful pour améliorer la maintenabilité et suivre les standards REST.
+
+**Endpoints migrés (Legacy → RESTful)** :
+
+| Opération | Legacy (POST) | RESTful | Méthode |
+|-----------|--------------|---------|---------|
+| Supprimer fichier | `/drive/delete_file` | `/drive/files/{id}` | DELETE |
+| Supprimer dossier | `/drive/delete_folder` | `/drive/folders/{id}` | DELETE |
+| Renommer fichier | `/drive/rename_file` | `/drive/files/{id}` | PATCH |
+| Renommer dossier | `/drive/rename_folder` | `/drive/folders/{id}` | PATCH |
+| Déplacer fichier | `/drive/move_file` | `/drive/files/{id}/move` | PATCH |
+| Déplacer dossier | `/drive/move_folder` | `/drive/folders/{id}/move` | PATCH |
+| Partager fichier | `/drive/share_file` | `/drive/files/{id}/share` | POST |
+
+**Modifications backend (Rust)** :
+- ✅ Ajout de 4 nouveaux handlers RESTful dans `gauzian_back/src/drive/handlers.rs` :
+  - `rename_file_restful_handler` (PATCH /files/{id})
+  - `rename_folder_restful_handler` (PATCH /folders/{id})
+  - `move_file_restful_handler` (PATCH /files/{id}/move)
+  - `move_folder_restful_handler` (PATCH /folders/{id}/move)
+- ✅ Ajout des routes PATCH dans `gauzian_back/src/drive/routes.rs` (ordre critique : routes spécifiques AVANT routes génériques)
+- ✅ Import du verbe `patch` dans Axum
+- ✅ Compilation validée (`cargo check` → succès en 2.2s)
+
+**Modifications frontend (Vue 3 / Nuxt)** :
+- ✅ Migration de `gauzian_front/app/composables/drive/useFileActions.js` :
+  - `deleteItem()` : POST → DELETE (lignes 623-648)
+  - `renameItem()` : POST → PATCH (lignes 754-765)
+  - `moveItem()` : POST → PATCH /move (lignes 822-849)
+  - `shareItemServer()` : POST `/drive/share_file` → POST `/drive/files/{id}/share` (ligne 945)
+- ✅ Changements de paramètres :
+  - `contact_id` → `recipient_user_id`
+  - `encrypted_item_key` → `encrypted_file_key`
+  - `new_parent_folder_id` → `target_folder_id`
+- ✅ Pas d'autres références aux endpoints legacy dans le frontend (vérification grep)
+
+**Résultats** :
+- ✅ **Code plus maintenable** : Respect des standards REST (DELETE pour suppression, PATCH pour modification)
+- ✅ **API plus prévisible** : Les verbes HTTP reflètent l'intention (GET=lecture, DELETE=suppression, PATCH=modification)
+- ✅ **Meilleur caching HTTP** : Les méthodes GET sont idempotentes et cachables
+- ✅ **Sécurité E2EE préservée** : Toute la logique crypto client-side reste intacte
+
+**✅ Routes legacy supprimées** :
+Les 8 routes POST legacy ont été définitivement supprimées du backend :
+- ❌ `/drive/delete_file` → Remplacée par `DELETE /drive/files/{id}`
+- ❌ `/drive/delete_folder` → Remplacée par `DELETE /drive/folders/{id}`
+- ❌ `/drive/rename_file` → Remplacée par `PATCH /drive/files/{id}`
+- ❌ `/drive/rename_folder` → Remplacée par `PATCH /drive/folders/{id}`
+- ❌ `/drive/move_file` → Remplacée par `PATCH /drive/files/{id}/move`
+- ❌ `/drive/move_folder` → Remplacée par `PATCH /drive/folders/{id}/move`
+- ❌ `/drive/share_file` → Remplacée par `POST /drive/files/{id}/share`
+- ❌ `/drive/share_folder` → Remplacée par `POST /drive/folders/{id}/share`
+
+**Endpoints conservés** (pas de version RESTful) :
+- ✅ `/initialize_file`, `/finalize_upload`, `/abort_upload` (workflow upload chunked spécifique)
+- ✅ `/restore_file`, `/restore_folder` (restauration depuis corbeille, pas encore migré)
+- ✅ `/share_folder_batch` (partage récursif batch, endpoint spécifique)
+- ✅ `/propagate_file_access`, `/propagate_folder_access` (propagation permissions, endpoints spécifiques)
+
+**Prochaines étapes** :
+1. ⏳ Validation manuelle (upload → rename → move → delete → share)
+2. ⏳ Tests E2E automatisés (Playwright)
+3. ⏳ Déploiement VPS K8s pour validation production
+
+**Fichiers modifiés** :
+- Backend :
+  - `gauzian_back/src/drive/handlers.rs` (+100 lignes)
+  - `gauzian_back/src/drive/routes.rs` (+8 lignes, modification ordre)
+- Frontend :
+  - `gauzian_front/app/composables/drive/useFileActions.js` (~50 lignes modifiées)
+
+**Note technique** : Axum matche les routes dans l'ordre de déclaration. Les routes spécifiques (`/files/{id}/move`) doivent être déclarées **avant** les routes génériques (`/files/{id}`) pour éviter les conflits de matching.
+
+---
+
 ## 2026-02-17
 
 ### [2026-02-17 09:59] - ✅ CRÉATION SUITE COMPLÈTE DE TESTS DE SÉCURITÉ (Penetration Testing)
@@ -3799,3 +3878,10 @@ Pour N dossiers, M fichiers, C contacts :
 [2026-02-14 00:00] - fix(front): Normalize agenda events to avoid undefined start/end
 [2026-02-14 00:00] - fix(front): Guard agenda events against undefined entries
 [2026-02-14 00:00] - fix(front): Avoid v-if/v-for scope warning in agenda events
+[2026-02-18 15:05] - fix(drive): Centralisation des checks SQL d'accès fichier dans repo.rs + ajout endpoint REST multipart /drive/files/{file_id}/upload-chunk + hardening IDOR sur GET /drive/folders/{id}
+[2026-02-18 15:15] - refactor(drive): Suppression des requêtes SQL directes dans handlers.rs (chunk access, file size, health check DB) au profit de fonctions dédiées dans repo.rs
+[2026-02-18 15:25] - refactor(front): Migration upload chunks frontend vers endpoint REST multipart POST /drive/files/{file_id}/upload-chunk (abandon de /drive/upload_chunk_binary côté client)
+[2026-02-18 15:35] - fix(front): Encodage URL des s3_key pour /drive/download_chunk_binary/{s3_key} afin d'éviter les 404 quand la clé contient des caractères spéciaux (/,+,=)
+[2026-02-18 15:45] - fix(drive): Correction régression "Failed to verify access" sur upload-chunk REST (query owner compatible schéma DB sans filtre is_deleted)
+[2026-02-18 16:20] - fix(drive): Correction SQL malformed dans repo::user_has_chunk_access (erreur Postgres 42601 near "file_access") provoquant 500 sur download_chunk_binary
+[2026-02-18 16:35] - fix(drive): Compatibilité legacy /drive/get_folder/root (traitement spécial de "root" dans get_folder_handler au lieu de parse UUID)
