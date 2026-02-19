@@ -205,8 +205,9 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
                         // Télécharger le chunk avec retry automatique
                         const chunkData = await withRetry(async () => {
+                            const encodedS3Key = encodeURIComponent(chunk.s3_key);
                             const chunkRes = await fetchWithAuth(
-                                `/drive/download_chunk_binary/${chunk.s3_key}`,
+                                `/drive/download_chunk_binary/${encodedS3Key}`,
                                 {
                                     method: "GET",
                                     signal: abortController.signal,
@@ -549,8 +550,9 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
                             // Download chunk avec retry automatique
                             const chunkData = await withRetry(async () => {
+                                const encodedS3Key = encodeURIComponent(chunk.s3_key);
                                 const chunkRes = await fetchWithAuth(
-                                    `/drive/download_chunk_binary/${chunk.s3_key}`,
+                                    `/drive/download_chunk_binary/${encodedS3Key}`,
                                     {
                                         method: "GET",
                                         signal: abortController.signal,
@@ -760,22 +762,18 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             const chunk = file.slice(start, end);
 
             const { cipherBytes, iv } = await encryptDataWithDataKeyRaw(chunk, dataKey);
-            const params = new URLSearchParams({
-                file_id: file_id,
-                index: index.toString(),
-                iv: iv,
-            });
+            const formData = new FormData();
+            formData.append("chunk", new Blob([cipherBytes], { type: "application/octet-stream" }), `chunk_${index}`);
+            formData.append("chunk_index", index.toString());
+            formData.append("iv", iv);
 
             // Upload avec retry automatique
             await withRetry(async () => {
                 const res = await fetchWithAuth(
-                    `/drive/upload_chunk_binary?${params.toString()}`,
+                    `/drive/files/${file_id}/upload-chunk`,
                     {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/octet-stream",
-                    },
-                    body: cipherBytes,
+                    body: formData,
                     signal: abortController.signal,
                 });
 
