@@ -64,6 +64,4 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /home/debian/gauzian && git pull origin main
-            bash /home/debian/gauzian/gauzian_back/k8s/scripts/ci-deploy.sh
+          script: bash /home/debian/gauzian/gauzian_back/k8s/scripts/ci-deploy.sh
