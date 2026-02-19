@@ -16,7 +16,7 @@ spec:
       containers:
       - name: redis
         image: redis:alpine
-        command: ["redis-server", "--appendonly", "yes", "--requirepass", "$(REDIS_PASSWORD)"]
+        command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$REDIS_PASSWORD\""]
         env:
         - name: REDIS_PASSWORD
           valueFrom:
