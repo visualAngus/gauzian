@@ -2247,7 +2247,19 @@ pub async fn accept_shared_file(
     let rows_affected = sqlx::query(
         "
         UPDATE file_access
-        SET is_accepted = TRUE, updated_at = NOW()
+        SET is_accepted = TRUE,
+            updated_at = NOW(),
+            -- Si le dossier parent n'est pas accessible à cet utilisateur, placer le fichier à la racine
+            folder_id = CASE
+                WHEN folder_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM folder_access fa
+                    WHERE fa.folder_id = file_access.folder_id
+                      AND fa.user_id = $2
+                      AND fa.is_accepted = TRUE
+                      AND fa.is_deleted = FALSE
+                ) THEN folder_id
+                ELSE NULL
+            END
         WHERE file_id = $1
           AND user_id = $2
           AND is_deleted = FALSE
