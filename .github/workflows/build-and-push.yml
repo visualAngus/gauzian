@@ -26,7 +26,7 @@ jobs:
           context: .
           file: ./Dockerfile.backend.optimized
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-backend:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-backend:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -50,7 +50,7 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-frontend:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-frontend:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
