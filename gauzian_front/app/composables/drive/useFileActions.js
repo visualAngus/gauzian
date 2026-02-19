@@ -71,6 +71,10 @@ export function useFileActions({
             restoreItem(item);
             return;
         }
+        if (activeFolderId.value === "shared_with_me") {
+            acceptSharedItem(item);
+            return;
+        }
 
         if (item.type === "folder") {
             // naviguer dans le dossier
@@ -83,6 +87,51 @@ export function useFileActions({
             } else {
                 console.warn("downloadFile not provided to useFileActions");
             }
+        }
+    };
+
+    const acceptSharedItem = async (item) => {
+        // Gérer les deux formats : objet JS direct ou élément HTML avec data-attributes
+        const itemType = item.type ?? item.dataset?.itemType;
+        const itemId = item.file_id ?? item.folder_id ?? item.dataset?.itemId;
+
+        if (!itemId || !itemType) {
+            console.error("Invalid item for accepting shared item");
+            addNotification({
+                title: "Erreur",
+                message: "Impossible d'accepter l'élément partagé.",
+                duration: 5000,
+            });
+            return;
+        }
+
+        try {
+            const endpoint = itemType === "file"
+                ? `/drive/files/${itemId}/accept`
+                : `/drive/folders/${itemId}/accept`;
+
+            const res = await fetchWithAuth(endpoint, { method: "POST" });
+            if (!res.ok) {
+                throw new Error(`Failed to accept shared ${itemType} ${itemId}`);
+            }
+
+            addNotification({
+                title: "Partage accepté",
+                message: `L'élément a été ajouté à votre drive.`,
+                duration: 5000,
+            });
+
+            // Naviguer vers la racine pour voir l'élément nouvellement accepté
+            activeFolderId.value = "root";
+            router.push("/drive?folder_id=root");
+            await loadPath();
+        } catch (error) {
+            console.error("Error accepting shared item:", error);
+            addNotification({
+                title: "Erreur",
+                message: "Impossible d'accepter l'élément partagé.",
+                duration: 5000,
+            });
         }
     };
 
@@ -507,6 +556,13 @@ export function useFileActions({
     const goToTrash = () => {
         router.push(`/drive?folder_id=corbeille`);
         activeFolderId.value = "corbeille";
+
+        loadPath({ outIn: true });
+    };
+
+    const goToSharedWithMe = () => {
+        router.push(`/drive?folder_id=shared_with_me`);
+        activeFolderId.value = "shared_with_me";
 
         loadPath({ outIn: true });
     };
@@ -1069,6 +1125,7 @@ export function useFileActions({
         deleteItem,
         renameItem,
         shareItem,
+        goToSharedWithMe,
         shareItemTarget,
         isSharing,
         isDragging,

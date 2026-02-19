@@ -3,6 +3,8 @@
  * Vérifie la session utilisateur avant chaque navigation
  */
 export default defineNuxtRouteMiddleware(async (to, from) => {
+    // Désactiver en développement local
+  if (import.meta.dev) return;
   // Uniquement côté client (pas SSR)
   if (import.meta.server) return;
 

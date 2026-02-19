@@ -187,10 +187,11 @@ pub async fn get_files_and_folders_list(
         join folders f on f.id = fa.folder_id
                 where fa.user_id = $1
                     and (
-                        ($2::uuid is null and f.parent_folder_id is null)
+                        ($2::uuid is null and (f.parent_folder_id is null or fa.is_root_anchor = true))
                         or f.parent_folder_id = $2::uuid
                     )
                     and fa.is_deleted is false
+                    and fa.is_accepted = true
         "#,
     )
     .bind(user_id)
@@ -219,6 +220,7 @@ pub async fn get_files_and_folders_list(
                         or fa2.folder_id = $2::uuid
                     )
                     and fa2.is_deleted is false
+                    and fa2.is_accepted = true
                     and f.is_fully_uploaded = true
         "#,
     )
@@ -316,8 +318,8 @@ pub async fn initialize_file_in_db(
     let file_access_id = Uuid::new_v4();
     sqlx::query(
         "
-        INSERT INTO file_access (id, file_id, user_id, folder_id, access_level, created_at, encrypted_file_key)
-        VALUES ($1, $2, $3, $4, 'owner', NOW(), $5)
+        INSERT INTO file_access (id, file_id, user_id, folder_id, access_level, created_at, encrypted_file_key, is_accepted)
+        VALUES ($1, $2, $3, $4, 'owner', NOW(), $5, TRUE)
         ",
     )
     .bind(file_access_id)
@@ -383,8 +385,8 @@ pub async fn create_folder_in_db(
     let folder_access_id = Uuid::new_v4();
     sqlx::query(
         "
-        INSERT INTO folder_access (id, folder_id, user_id, access_level, created_at, encrypted_folder_key)
-        VALUES ($1, $2, $3, 'owner', NOW(), $4)
+        INSERT INTO folder_access (id, folder_id, user_id, access_level, created_at, encrypted_folder_key, is_accepted, is_root_anchor)
+        VALUES ($1, $2, $3, 'owner', NOW(), $4, TRUE, TRUE)
         "
     )
     .bind(folder_access_id)
@@ -1552,13 +1554,15 @@ pub async fn share_folder_batch(
     for (fid, encrypted_key) in folder_keys {
         sqlx::query(
             "
-            INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE)
+            INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted, is_accepted, is_root_anchor)
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE, FALSE, FALSE)
             ON CONFLICT (folder_id, user_id) DO UPDATE
             SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
                 access_level = EXCLUDED.access_level,
                 updated_at = NOW(),
-                is_deleted = FALSE
+                is_deleted = FALSE,
+                is_accepted = FALSE,
+                is_root_anchor = FALSE
             ",
         )
         .bind(Uuid::new_v4())
@@ -1586,13 +1590,14 @@ pub async fn share_folder_batch(
         if let Some(folder_id_val) = folder_id_for_file {
             sqlx::query(
                 "
-                INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE)
+                INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted, is_accepted)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE, FALSE)
                 ON CONFLICT (file_id, user_id) DO UPDATE
                 SET encrypted_file_key = EXCLUDED.encrypted_file_key,
                     access_level = EXCLUDED.access_level,
                     updated_at = NOW(),
-                    is_deleted = FALSE
+                    is_deleted = FALSE,
+                    is_accepted = FALSE
                 ",
             )
             .bind(Uuid::new_v4())
@@ -1657,13 +1662,15 @@ pub async fn share_folder_with_contact(
 
     sqlx::query(
         "
-        INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
-        VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE)
+        INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted, is_accepted, is_root_anchor)
+        VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE, FALSE, FALSE)
         ON CONFLICT (folder_id, user_id) DO UPDATE
         SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
             access_level = EXCLUDED.access_level,
             updated_at = NOW(),
-            is_deleted = FALSE
+            is_deleted = FALSE,
+            is_accepted = FALSE,
+            is_root_anchor = FALSE
         ",
     )
     .bind(Uuid::new_v4())
@@ -1725,13 +1732,14 @@ pub async fn share_file_with_contact(
 
     sqlx::query(
         "
-        INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
-        VALUES ($1, $2, $3, NULL, $4, $5, NOW(), NOW(), FALSE)
+        INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted, is_accepted)
+        VALUES ($1, $2, $3, NULL, $4, $5, NOW(), NOW(), FALSE, FALSE)
         ON CONFLICT (file_id, user_id) DO UPDATE
         SET encrypted_file_key = EXCLUDED.encrypted_file_key,
             access_level = EXCLUDED.access_level,
             updated_at = NOW(),
-            is_deleted = FALSE
+            is_deleted = FALSE,
+            is_accepted = FALSE
         ",
     )
     .bind(Uuid::new_v4())
@@ -1862,13 +1870,14 @@ pub async fn propagate_file_access(
 
         sqlx::query(
             "
-            INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE)
+            INSERT INTO file_access (id, file_id, user_id, folder_id, encrypted_file_key, access_level, created_at, updated_at, is_deleted, is_accepted)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), FALSE, TRUE)
             ON CONFLICT (file_id, user_id) DO UPDATE
             SET encrypted_file_key = EXCLUDED.encrypted_file_key,
                 access_level = EXCLUDED.access_level,
                 updated_at = NOW(),
-                is_deleted = FALSE
+                is_deleted = FALSE,
+                is_accepted = TRUE
             "
         )
         .bind(Uuid::new_v4())
@@ -1916,13 +1925,14 @@ pub async fn propagate_folder_access(
 
         sqlx::query(
             "
-            INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted)
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE)
+            INSERT INTO folder_access (id, folder_id, user_id, encrypted_folder_key, access_level, created_at, updated_at, is_deleted, is_accepted, is_root_anchor)
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), FALSE, TRUE, FALSE)
             ON CONFLICT (folder_id, user_id) DO UPDATE
             SET encrypted_folder_key = EXCLUDED.encrypted_folder_key,
                 access_level = EXCLUDED.access_level,
                 updated_at = NOW(),
-                is_deleted = FALSE
+                is_deleted = FALSE,
+                is_accepted = TRUE
             "
         )
         .bind(Uuid::new_v4())
@@ -2103,4 +2113,230 @@ pub async fn get_files_list(
             })
         }).collect::<Vec<_>>()
     ))
+}
+
+
+/// Récupérer les éléments partagés avec l'utilisateur qui n'ont pas encore été acceptés
+pub async fn get_shared_with_me_contents(
+    db_pool: &PgPool,
+    user_id: Uuid,
+) -> Result<serde_json::Value, sqlx::Error> {
+    #[derive(Debug, sqlx::FromRow)]
+    struct SharedFolderRow {
+        folder_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        encrypted_folder_key: Vec<u8>,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+        is_root: bool,
+        parent_folder_id: Option<Uuid>,
+        file_type: String,
+        folder_size: Option<i64>,
+    }
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct SharedFileRow {
+        folder_id: Option<Uuid>,
+        file_id: Uuid,
+        encrypted_metadata: Vec<u8>,
+        file_size: i64,
+        mime_type: String,
+        created_at: Option<String>,
+        updated_at: Option<String>,
+        access_level: String,
+        encrypted_file_key: Vec<u8>,
+        file_type: String,
+    }
+
+    // Dossiers en attente d'acceptation : uniquement les racines des arbres partagés
+    // (ceux dont le parent n'est pas lui-même accessible à cet utilisateur)
+    let folders: Vec<SharedFolderRow> = sqlx::query_as::<_, SharedFolderRow>(
+        r#"
+        SELECT
+            f.id as folder_id,
+            f.encrypted_metadata,
+            fa.encrypted_folder_key,
+            f.created_at::text as created_at,
+            f.updated_at::text as updated_at,
+            f.is_root,
+            f.parent_folder_id,
+            'folder'::text as file_type,
+            0::BIGINT as folder_size
+        FROM folder_access fa
+        JOIN folders f ON f.id = fa.folder_id
+        WHERE fa.user_id = $1
+            AND fa.is_accepted = FALSE
+            AND fa.is_deleted = FALSE
+            AND fa.access_level != 'owner'
+            AND NOT EXISTS (
+                SELECT 1 FROM folder_access fa2
+                WHERE fa2.folder_id = f.parent_folder_id
+                  AND fa2.user_id = $1
+                  AND fa2.is_deleted = FALSE
+            )
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(db_pool)
+    .await?;
+
+    // Fichiers en attente d'acceptation (partagés directement, sans dossier parent partagé)
+    let files: Vec<SharedFileRow> = sqlx::query_as::<_, SharedFileRow>(
+        r#"
+        SELECT
+            fa.folder_id,
+            fa.file_id,
+            f.encrypted_metadata,
+            f.size as file_size,
+            f.mime_type,
+            f.created_at::text as created_at,
+            f.updated_at::text as updated_at,
+            fa.access_level,
+            fa.encrypted_file_key,
+            'file'::text as file_type
+        FROM file_access fa
+        JOIN files f ON f.id = fa.file_id
+        WHERE fa.user_id = $1
+            AND fa.is_accepted = FALSE
+            AND fa.is_deleted = FALSE
+            AND fa.access_level != 'owner'
+            AND f.is_fully_uploaded = TRUE
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(db_pool)
+    .await?;
+
+    Ok(serde_json::json!({
+        "folders": folders.iter().map(|row| {
+            serde_json::json!({
+                "folder_id": row.folder_id,
+                "encrypted_metadata": bytes_to_text_or_b64(&row.encrypted_metadata),
+                "parent_folder_id": row.parent_folder_id,
+                "encrypted_folder_key": bytes_to_text_or_b64(&row.encrypted_folder_key),
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "is_root": row.is_root,
+                "type": row.file_type,
+                "folder_size": row.folder_size,
+            })
+        }).collect::<Vec<_>>(),
+        "files": files.iter().map(|row| {
+            serde_json::json!({
+                "folder_id": row.folder_id,
+                "file_id": row.file_id,
+                "encrypted_metadata": bytes_to_text_or_b64(&row.encrypted_metadata),
+                "file_size": row.file_size,
+                "mime_type": row.mime_type,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "access_level": row.access_level,
+                "encrypted_file_key": bytes_to_text_or_b64(&row.encrypted_file_key),
+                "type": row.file_type,
+            })
+        }).collect::<Vec<_>>(),
+    }))
+}
+
+/// Accepter un fichier partagé (l'ancre à la racine du drive de l'utilisateur)
+pub async fn accept_shared_file(
+    pool: &PgPool,
+    user_id: Uuid,
+    file_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let rows_affected = sqlx::query(
+        "
+        UPDATE file_access
+        SET is_accepted = TRUE, updated_at = NOW()
+        WHERE file_id = $1
+          AND user_id = $2
+          AND is_deleted = FALSE
+          AND access_level != 'owner'
+        "
+    )
+    .bind(file_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+    Ok(())
+}
+
+/// Accepter un dossier partagé : l'ancre à la racine + propage aux enfants récursivement
+pub async fn accept_shared_folder(
+    pool: &PgPool,
+    user_id: Uuid,
+    folder_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    // 1. Marquer le dossier racine comme accepté et ancré
+    let rows_affected = sqlx::query(
+        "
+        UPDATE folder_access
+        SET is_accepted = TRUE, is_root_anchor = TRUE, updated_at = NOW()
+        WHERE folder_id = $1
+          AND user_id = $2
+          AND is_deleted = FALSE
+          AND access_level != 'owner'
+        "
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
+
+    // 2. Accepter récursivement tous les sous-dossiers partagés
+    sqlx::query(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id FROM folders WHERE parent_folder_id = $1
+            UNION ALL
+            SELECT f.id FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        UPDATE folder_access
+        SET is_accepted = TRUE, updated_at = NOW()
+        WHERE folder_id IN (SELECT id FROM folder_tree)
+          AND user_id = $2
+          AND is_deleted = FALSE
+        "
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // 3. Accepter tous les fichiers dans l'arbre de dossiers
+    sqlx::query(
+        "
+        WITH RECURSIVE folder_tree AS (
+            SELECT id FROM folders WHERE id = $1
+            UNION ALL
+            SELECT f.id FROM folders f
+            JOIN folder_tree ft ON f.parent_folder_id = ft.id
+        )
+        UPDATE file_access
+        SET is_accepted = TRUE, updated_at = NOW()
+        WHERE user_id = $2
+          AND folder_id IN (SELECT id FROM folder_tree)
+          AND is_deleted = FALSE
+        "
+    )
+    .bind(folder_id)
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
 }
