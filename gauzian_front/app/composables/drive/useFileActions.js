@@ -621,27 +621,21 @@ export function useFileActions({
         }
 
         try {
-            // Supprimer tous les items
+            // Supprimer tous les items (RESTful endpoints)
             const deletePromises = itemsToDelete.map(async (itemToDelete) => {
                 const id = itemToDelete.file_id || itemToDelete.folder_id;
                 const type = itemToDelete.type;
 
-                if (type === "file") {
-                    const res = await fetchWithAuth('/drive/delete_file', {
-                        method: "POST",
-                        body: JSON.stringify({ file_id: id }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to delete file ${id}`);
-                    }
-                } else if (type === "folder") {
-                    const res = await fetchWithAuth('/drive/delete_folder', {
-                        method: "POST",
-                        body: JSON.stringify({ folder_id: id }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to delete folder ${id}`);
-                    }
+                const endpoint = type === "file"
+                    ? `/drive/files/${id}`
+                    : `/drive/folders/${id}`;
+
+                const res = await fetchWithAuth(endpoint, {
+                    method: "DELETE",
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Failed to delete ${type} ${id}`);
                 }
             });
 
@@ -753,15 +747,14 @@ export function useFileActions({
 
                 const endpoint =
                     itemType === "file"
-                        ? `${API_URL}/drive/rename_file`
-                        : `${API_URL}/drive/rename_folder`;
-                const body =
-                    itemType === "file"
-                        ? { file_id: itemId, new_encrypted_metadata: encryptedMetadata }
-                        : { folder_id: itemId, new_encrypted_metadata: encryptedMetadata };
+                        ? `/drive/files/${itemId}`
+                        : `/drive/folders/${itemId}`;
+
                 const res = await fetchWithAuth(endpoint, {
-                    method: "POST",
-                    body: JSON.stringify(body),
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        new_encrypted_metadata: encryptedMetadata,
+                    }),
                 });
                 if (!res.ok) {
                     throw new Error("Failed to rename item");
@@ -825,22 +818,19 @@ export function useFileActions({
 
         const endpoint =
             itemType === "file"
-                ? `${API_URL}/drive/move_file`
-                : `${API_URL}/drive/move_folder`;
-
-        const body =
-            itemType === "file"
-                ? { file_id: itemId, new_parent_folder_id: targetFolderId }
-                : { folder_id: itemId, new_parent_folder_id: targetFolderId };
+                ? `/drive/files/${itemId}/move`
+                : `/drive/folders/${itemId}/move`;
 
         const res = await fetchWithAuth(endpoint, {
-            method: "POST",
-            body: JSON.stringify(body),
+            method: "PATCH",
+            body: JSON.stringify({
+                target_folder_id: targetFolderId,
+            }),
         });
 
         if (!res.ok) {
             throw new Error(`Failed to move ${itemType} ${itemId}`);
-        }else {
+        } else {
             addNotification({
                 title: "Élément déplacé",
                 message: `L'élément a été déplacé avec succès.`,
@@ -917,7 +907,7 @@ export function useFileActions({
 
                 const resData = await res.json();
                 contactsList.push({
-                    contact_id: resData.id,
+                    contact_id: resData.user_id, // Fix: l'API retourne user_id, pas id
                     contact_email: contact.email,
                     public_key: resData.public_key,
                 });
@@ -938,16 +928,15 @@ export function useFileActions({
             // Déchiffrer la clé du fichier
             const fileDataKey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
 
-            // Partager avec chaque contact
+            // Partager avec chaque contact (RESTful endpoint)
             const sharePromises = contactsList.map(async (contact) => {
                 const encryptedFileKey = await encryptWithPublicKey(contact.public_key, fileDataKey);
 
-                const res = await fetchWithAuth('/drive/share_file', {
+                const res = await fetchWithAuth(`/drive/files/${itemId}/share`, {
                     method: "POST",
                     body: JSON.stringify({
-                        file_id: itemId,
-                        contact_id: contact.contact_id,
-                        encrypted_item_key: encryptedFileKey,
+                        recipient_user_id: contact.contact_id,
+                        encrypted_file_key: encryptedFileKey,
                         access_level: accessLevel,
                     }),
                 });
