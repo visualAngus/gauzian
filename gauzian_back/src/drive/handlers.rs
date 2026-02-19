@@ -1,4 +1,4 @@
-use axum::extract::{Json, Path, Query, State};
+use axum::extract::{Json, Multipart, Path, Query, State};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use tracing::{info, instrument};
@@ -220,14 +220,7 @@ pub async fn upload_chunk_handler(
     };
 
     // Vérifier que l'utilisateur a le droit d'uploader sur ce fichier
-    let has_access = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
-    )
-    .bind(body.file_id)
-    .bind(claims.id)
-    .fetch_one(&state.db_pool)
-    .await
-    {
+    let has_access = match repo::user_is_file_owner(&state.db_pool, claims.id, body.file_id).await {
         Ok(exists) => exists,
         Err(e) => {
             tracing::error!("Failed to check file access: {:?}", e);
@@ -309,14 +302,7 @@ pub async fn upload_chunk_binary_handler(
     };
 
     // Vérifier que l'utilisateur a le droit d'uploader sur ce fichier
-    let has_access = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM file_access WHERE file_id = $1 AND user_id = $2 AND access_level = 'owner')"
-    )
-    .bind(query.file_id)
-    .bind(claims.id)
-    .fetch_one(&state.db_pool)
-    .await
-    {
+    let has_access = match repo::user_is_file_owner(&state.db_pool, claims.id, query.file_id).await {
         Ok(exists) => exists,
         Err(e) => {
             tracing::error!("Failed to check file access: {:?}", e);
@@ -361,6 +347,143 @@ pub async fn upload_chunk_binary_handler(
     )
     .await
     {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to insert S3 key into database: {:?}", e);
+            return ApiResponse::internal_error("Failed to record chunk metadata").into_response();
+        }
+    };
+
+    ApiResponse::ok(serde_json::json!({
+        "s3_record_id": s3_record_id,
+        "s3_id": meta_data_s3.s3_id,
+        "index": meta_data_s3.index,
+        "date_upload": meta_data_s3.date_upload,
+        "data_hash": meta_data_s3.data_hash,
+    }))
+    .into_response()
+}
+
+pub async fn upload_chunk_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    let _permit = match state.upload_semaphore.try_acquire() {
+        Ok(permit) => permit,
+        Err(_) => {
+            tracing::warn!("Upload rejected: too many concurrent uploads");
+            return ApiResponse::bad_request("Server busy, please retry").into_response();
+        }
+    };
+
+    let has_access = match repo::user_is_file_owner(&state.db_pool, claims.id, file_id).await {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check file access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("File not found or access denied").into_response();
+    }
+
+    let mut chunk_bytes: Option<Bytes> = None;
+    let mut chunk_index: Option<i32> = None;
+    let mut iv: Option<String> = None;
+
+    loop {
+        let next_field = match multipart.next_field().await {
+            Ok(field) => field,
+            Err(e) => {
+                tracing::error!("Failed to parse multipart field: {:?}", e);
+                return ApiResponse::bad_request("Invalid multipart payload").into_response();
+            }
+        };
+
+        let Some(field) = next_field else {
+            break;
+        };
+
+        let field_name = field.name().unwrap_or_default().to_string();
+        match field_name.as_str() {
+            "chunk" => {
+                let data = match field.bytes().await {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        tracing::error!("Failed to read chunk bytes: {:?}", e);
+                        return ApiResponse::bad_request("Invalid chunk data").into_response();
+                    }
+                };
+
+                if data.is_empty() {
+                    return ApiResponse::bad_request("Empty chunk body").into_response();
+                }
+
+                chunk_bytes = Some(data);
+            }
+            "chunk_index" | "index" => {
+                let value = match field.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::error!("Failed to read chunk index: {:?}", e);
+                        return ApiResponse::bad_request("Invalid chunk index").into_response();
+                    }
+                };
+
+                let parsed_index = match value.parse::<i32>() {
+                    Ok(index) => index,
+                    Err(_) => return ApiResponse::bad_request("Invalid chunk index").into_response(),
+                };
+
+                chunk_index = Some(parsed_index);
+            }
+            "iv" => {
+                let value = match field.text().await {
+                    Ok(text) => text,
+                    Err(e) => {
+                        tracing::error!("Failed to read chunk iv: {:?}", e);
+                        return ApiResponse::bad_request("Invalid IV").into_response();
+                    }
+                };
+                iv = Some(value);
+            }
+            _ => {}
+        }
+    }
+
+    let Some(body) = chunk_bytes else {
+        return ApiResponse::bad_request("Missing chunk file").into_response();
+    };
+    let Some(index) = chunk_index else {
+        return ApiResponse::bad_request("Missing chunk index").into_response();
+    };
+    let Some(iv) = iv else {
+        return ApiResponse::bad_request("Missing IV").into_response();
+    };
+
+    let upload_start = std::time::Instant::now();
+    let meta_data_s3 = match state
+        .storage_client
+        .upload_line(body, index.to_string(), iv)
+        .await
+    {
+        Ok(meta) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, true);
+            meta
+        }
+        Err(e) => {
+            let upload_duration = upload_start.elapsed().as_secs_f64();
+            crate::metrics::track_chunk_upload_duration(upload_duration, false);
+            tracing::error!("Failed to upload chunk to storage: {:?}", e);
+            return ApiResponse::internal_error("Failed to upload chunk").into_response();
+        }
+    };
+
+    let s3_record_id = match repo::save_chunk_metadata(&state.db_pool, file_id, index, &meta_data_s3.s3_id).await {
         Ok(id) => id,
         Err(e) => {
             tracing::error!("Failed to insert S3 key into database: {:?}", e);
@@ -525,14 +648,51 @@ pub async fn get_folder_handler(
     claims: Claims,
     Path(folder_id): Path<String>,
 ) -> Response {
-    let folder_id = match services::parse_uuid_or_error(&folder_id) {
+    if folder_id.eq_ignore_ascii_case("root") {
+        let folder_contents =
+            match repo::get_folder_contents(&state.db_pool, claims.id, None).await {
+                Ok(list) => list,
+                Err(e) => {
+                    tracing::error!("Failed to retrieve root folder contents: {:?}", e);
+                    return ApiResponse::internal_error("Failed to retrieve folder contents")
+                        .into_response();
+                }
+            };
+
+        return ApiResponse::ok(serde_json::json!({
+            "folder_contents": folder_contents
+        }))
+        .into_response();
+    }
+
+    let folder_id_opt = match services::parse_uuid_or_error(&folder_id) {
         Ok(id) => id,
         Err(err) => {
             return ApiResponse::bad_request(err).into_response();
         }
     };
+
+    let folder_id = match folder_id_opt {
+        Some(id) => id,
+        None => {
+            return ApiResponse::bad_request("Invalid folder_id").into_response();
+        }
+    };
+
+    let has_access = match repo::user_has_folder_access(&state.db_pool, claims.id, folder_id).await {
+        Ok(access) => access,
+        Err(e) => {
+            tracing::error!("Failed to check folder access: {:?}", e);
+            return ApiResponse::internal_error("Failed to verify folder access").into_response();
+        }
+    };
+
+    if !has_access {
+        return ApiResponse::not_found("Folder not found or access denied").into_response();
+    }
+
     let folder_contents =
-        match repo::get_folder_contents(&state.db_pool, claims.id, folder_id).await {
+        match repo::get_folder_contents(&state.db_pool, claims.id, Some(folder_id)).await {
             Ok(list) => list,
             Err(e) => {
                 tracing::error!("Failed to retrieve folder contents: {:?}", e);
@@ -855,18 +1015,7 @@ pub async fn download_chunk_handler(
     Path(s3_key): Path<String>,
 ) -> Response {
     // Vérifier que l'utilisateur a accès au fichier associé à ce chunk
-    let has_access = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(
-            SELECT 1 FROM s3_keys sk
-            JOIN file_access fa ON fa.file_id = sk.file_id
-            WHERE sk.s3_key = $1 AND fa.user_id = $2
-        )"
-    )
-    .bind(&s3_key)
-    .bind(claims.id)
-    .fetch_one(&state.db_pool)
-    .await
-    {
+    let has_access = match repo::user_has_chunk_access(&state.db_pool, claims.id, &s3_key).await {
         Ok(exists) => exists,
         Err(e) => {
             tracing::error!("Failed to check chunk access: {:?}", e);
@@ -906,18 +1055,7 @@ pub async fn download_chunk_binary_handler(
     Path(s3_key): Path<String>,
 ) -> Response {
     // Vérifier que l'utilisateur a accès au fichier associé à ce chunk
-    let has_access = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(
-            SELECT 1 FROM s3_keys sk
-            JOIN file_access fa ON fa.file_id = sk.file_id
-            WHERE sk.s3_key = $1 AND fa.user_id = $2
-        )"
-    )
-    .bind(&s3_key)
-    .bind(claims.id)
-    .fetch_one(&state.db_pool)
-    .await
-    {
+    let has_access = match repo::user_has_chunk_access(&state.db_pool, claims.id, &s3_key).await {
         Ok(exists) => exists,
         Err(e) => {
             tracing::error!("Failed to check chunk access: {:?}", e);
@@ -1015,9 +1153,7 @@ pub async fn finalize_upload_handler(
             match repo::finalize_file_upload(&state.db_pool, claims.id, file_id).await {
                 Ok(_) => {
                     // Récupérer la taille du fichier pour les métriques
-                    let file_size: i64 = sqlx::query_scalar("SELECT size FROM files WHERE id = $1")
-                        .bind(file_id)
-                        .fetch_one(&state.db_pool)
+                    let file_size = repo::get_file_size(&state.db_pool, file_id)
                         .await
                         .unwrap_or(0);
 
@@ -1461,7 +1597,7 @@ pub async fn health_check_handler(State(state): State<AppState>) -> Response {
     // Test PostgreSQL
     let db_ok = tokio::time::timeout(
         Duration::from_secs(5),
-        sqlx::query("SELECT 1").fetch_one(&state.db_pool)
+        repo::health_check_db(&state.db_pool)
     )
     .await
     .is_ok();
@@ -1535,6 +1671,249 @@ pub async fn revoke_access_handler(
         Err(e) => {
             tracing::error!("Failed to revoke access: {:?}", e);
             ApiResponse::internal_error("Failed to revoke access").into_response()
+        }
+    }
+}
+
+// ========== RESTful Handlers (aliases pour API publique/tests) ==========
+
+/// DELETE /files/{file_id} - Version RESTful de delete_file
+pub async fn delete_file_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<Uuid>,
+) -> Response {
+    match repo::delete_file(&state.db_pool, claims.id, file_id).await {
+        Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to delete file: {:?}", e);
+            ApiResponse::internal_error("Failed to delete file").into_response()
+        }
+    }
+}
+
+/// DELETE /folders/{folder_id} - Version RESTful de delete_folder
+pub async fn delete_folder_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(folder_id): Path<Uuid>,
+) -> Response {
+    match repo::delete_folder(&state.db_pool, claims.id, folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder deleted successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to delete folder: {:?}", e);
+            ApiResponse::internal_error("Failed to delete folder").into_response()
+        }
+    }
+}
+
+/// POST /files/{file_id}/share - Version RESTful de share_file
+#[derive(Deserialize)]
+pub struct ShareFileRestfulRequest {
+    pub recipient_user_id: Uuid,
+    pub encrypted_file_key: String,
+    pub access_level: String,
+}
+
+pub async fn share_file_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<Uuid>,
+    Json(body): Json<ShareFileRestfulRequest>,
+) -> Response {
+    match repo::share_file_with_contact(
+        &state.db_pool,
+        claims.id,
+        file_id,
+        body.recipient_user_id,
+        &body.encrypted_file_key,
+        &body.access_level,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("File shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share file: {:?}", e);
+            ApiResponse::internal_error("Failed to share file").into_response()
+        }
+    }
+}
+
+/// POST /folders/{folder_id}/share - Version RESTful de share_folder
+#[derive(Deserialize)]
+pub struct ShareFolderRestfulRequest {
+    pub recipient_user_id: Uuid,
+    pub encrypted_folder_key: String,
+    pub access_level: String,
+}
+
+pub async fn share_folder_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(folder_id): Path<Uuid>,
+    Json(body): Json<ShareFolderRestfulRequest>,
+) -> Response {
+    match repo::share_folder_with_contact(
+        &state.db_pool,
+        claims.id,
+        folder_id,
+        body.recipient_user_id,
+        &body.encrypted_folder_key,
+        &body.access_level,
+    )
+    .await
+    {
+        Ok(_) => ApiResponse::ok("Folder shared successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or contact not found").into_response()
+        }
+        Err(sqlx::Error::Protocol(msg)) => {
+            ApiResponse::bad_request(&msg).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to share folder: {:?}", e);
+            ApiResponse::internal_error("Failed to share folder").into_response()
+        }
+    }
+}
+
+/// DELETE /files/{file_id}/share/{user_id} - Révoquer accès fichier (RESTful)
+pub async fn revoke_file_access_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path((file_id, user_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    match repo::revoke_file_access(&state.db_pool, claims.id, file_id, user_id).await {
+        Ok(_) => ApiResponse::ok("File access revoked successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or user not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to revoke file access: {:?}", e);
+            ApiResponse::internal_error("Failed to revoke file access").into_response()
+        }
+    }
+}
+
+/// DELETE /folders/{folder_id}/share/{user_id} - Révoquer accès dossier (RESTful)
+pub async fn revoke_folder_access_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path((folder_id, user_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    match repo::revoke_folder_access(&state.db_pool, claims.id, folder_id, user_id).await {
+        Ok(_) => ApiResponse::ok("Folder access revoked successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or user not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to revoke folder access: {:?}", e);
+            ApiResponse::internal_error("Failed to revoke folder access").into_response()
+        }
+    }
+}
+
+// ========== PATCH Handlers for Rename ==========
+
+#[derive(Deserialize)]
+pub struct RenameItemRequest {
+    pub new_encrypted_metadata: String,
+}
+
+/// PATCH /files/{file_id} - Renommer fichier
+pub async fn rename_file_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<Uuid>,
+    Json(body): Json<RenameItemRequest>,
+) -> Response {
+    match repo::rename_file(&state.db_pool, claims.id, file_id, &body.new_encrypted_metadata).await {
+        Ok(_) => ApiResponse::ok("File renamed successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found or access denied").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to rename file {}: {:?}", file_id, e);
+            ApiResponse::internal_error("Failed to rename file").into_response()
+        }
+    }
+}
+
+/// PATCH /folders/{folder_id} - Renommer dossier
+pub async fn rename_folder_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(folder_id): Path<Uuid>,
+    Json(body): Json<RenameItemRequest>,
+) -> Response {
+    match repo::rename_folder(&state.db_pool, claims.id, folder_id, &body.new_encrypted_metadata).await {
+        Ok(_) => ApiResponse::ok("Folder renamed successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder not found or access denied").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to rename folder {}: {:?}", folder_id, e);
+            ApiResponse::internal_error("Failed to rename folder").into_response()
+        }
+    }
+}
+
+// ========== PATCH Handlers for Move ==========
+
+#[derive(Deserialize)]
+pub struct MoveItemRequest {
+    pub target_folder_id: Option<Uuid>,
+}
+
+/// PATCH /files/{file_id}/move - Déplacer fichier
+pub async fn move_file_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<Uuid>,
+    Json(body): Json<MoveItemRequest>,
+) -> Response {
+    match repo::move_file(&state.db_pool, claims.id, file_id, body.target_folder_id).await {
+        Ok(_) => ApiResponse::ok("File moved successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File or target folder not found").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to move file {}: {:?}", file_id, e);
+            ApiResponse::internal_error("Failed to move file").into_response()
+        }
+    }
+}
+
+/// PATCH /folders/{folder_id}/move - Déplacer dossier
+pub async fn move_folder_restful_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(folder_id): Path<Uuid>,
+    Json(body): Json<MoveItemRequest>,
+) -> Response {
+    match repo::move_folder(&state.db_pool, claims.id, folder_id, body.target_folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder moved successfully").into_response(),
+        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder or target folder not found").into_response(),
+        Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to move folder {}: {:?}", folder_id, e);
+            ApiResponse::internal_error("Failed to move folder").into_response()
+        }
+    }
+}
+
+/// GET /files - Liste tous les fichiers accessibles par l'utilisateur
+pub async fn list_files_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+) -> Response {
+    match repo::get_files_list(&state.db_pool, claims.id).await {
+        Ok(files) => ApiResponse::ok(files).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to list files: {:?}", e);
+            ApiResponse::internal_error("Failed to list files").into_response()
         }
     }
 }
