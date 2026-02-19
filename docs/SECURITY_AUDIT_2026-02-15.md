@@ -292,7 +292,7 @@ metadata:
   namespace: monitoring
 type: Opaque
 stringData:
-  users: "admin:{SHA}8Y3P6n9lEeWEg0oA5eK7P3rB5cs="  # admin:GauzianProm2026!
+  users: "<REDACTED>"
 
 ---
 # Middleware BasicAuth
@@ -314,14 +314,14 @@ middlewares:
 
 **Credentials**:
 - Username: `admin`
-- Password: `GauzianProm2026!` (généré via htpasswd SHA-1)
+- Password: `<REDACTED>` (généré via htpasswd SHA-1)
 
 **Vérification**:
 ```bash
 curl https://prometheus.gauzian.pupin.fr
 # Expected: 401 Unauthorized
 
-curl -u admin:GauzianProm2026! https://prometheus.gauzian.pupin.fr
+curl -u admin:<REDACTED> https://prometheus.gauzian.pupin.fr
 # Expected: 200 OK
 ```
 
@@ -425,7 +425,7 @@ Fichier: `gauzian_back/k8s/backend-deployment.yaml`
 kubectl exec -it -n gauzian-v2 <pod> -- redis-cli -h redis ping
 # Expected: (error) NOAUTH Authentication required
 
-kubectl exec -it -n gauzian-v2 <pod> -- redis-cli -h redis -a K9frtS5zVqLMSWlgJ5pMZ3nSB_XGAZTj ping
+kubectl exec -it -n gauzian-v2 <pod> -- redis-cli -h redis -a <REDACTED> ping
 # Expected: PONG
 ```
 
@@ -616,12 +616,12 @@ PROMETHEUS_PASSWORD = "GauzianProm2026!"
 
 | Secret | Ancienne Valeur | Nouvelle Valeur | Longueur |
 |--------|-----------------|-----------------|----------|
-| `DB_PASSWORD` | `yourpassword` | `T4g1IXkjvBdOXpY24um25_RbRzDmCqFz` | 32 chars |
-| `MINIO_ROOT_PASSWORD` | `minioadmin` | `8OJdeAE9FakBFa6SQf1UiuIdKNJcMQyw` | 32 chars |
-| `JWT_SECRET` | `your-secret-key` | `bcf6028cd9c57cbac64b6b8c767b7ba457e500963a56853687241f281a31603b` | 64 hex (256-bit) |
-| `REDIS_PASSWORD` | *(aucun)* | `K9frtS5zVqLMSWlgJ5pMZ3nSB_XGAZTj` | 32 chars |
-| `GRAFANA_PASSWORD` | `admin` | `u5mPaR8fG-x3QTnvYJcwZKL7S2HjW9Ae` | 32 chars |
-| `PROMETHEUS_PASSWORD` | *(aucun)* | `GauzianProm2026!` | 16 chars |
+| `DB_PASSWORD` | `yourpassword` | `<REDACTED>` | 32 chars |
+| `MINIO_ROOT_PASSWORD` | `minioadmin` | `<REDACTED>` | 32 chars |
+| `JWT_SECRET` | `your-secret-key` | `<REDACTED>` | 64 hex (256-bit) |
+| `REDIS_PASSWORD` | *(aucun)* | `<REDACTED>` | 32 chars |
+| `GRAFANA_PASSWORD` | `admin` | `<REDACTED>` | 32 chars |
+| `PROMETHEUS_PASSWORD` | *(aucun)* | `<REDACTED>` | 16 chars |
 
 ### Fichiers Mis à Jour
 
@@ -643,7 +643,7 @@ kubectl rollout restart deployment/minio -n gauzian-v2
 
 # 3. Mise à jour password PostgreSQL interne
 kubectl exec -it -n gauzian-v2 postgres-<pod> -- psql -U admin -d gauzian_db
-ALTER USER admin PASSWORD 'T4g1IXkjvBdOXpY24um25_RbRzDmCqFz';
+ALTER USER admin PASSWORD '<REDACTED>';
 \q
 
 # 4. Vérification connexions
@@ -858,8 +858,8 @@ curl https://gauzian.pupin.fr/health/ready
 
 - **Repository** : GitHub (privé)
 - **Production** : https://gauzian.pupin.fr
-- **Grafana** : https://grafana.gauzian.pupin.fr (admin / u5mPaR8fG-x3QTnvYJcwZKL7S2HjW9Ae)
-- **Prometheus** : https://prometheus.gauzian.pupin.fr (admin / GauzianProm2026!)
+- **Grafana** : https://grafana.gauzian.pupin.fr (admin / <REDACTED>)
+- **Prometheus** : https://prometheus.gauzian.pupin.fr (admin / <REDACTED>)
 - **MinIO Console** : https://minio.gauzian.pupin.fr
 
 ---
