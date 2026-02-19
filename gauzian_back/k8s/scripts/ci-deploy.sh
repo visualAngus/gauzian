@@ -3,7 +3,7 @@ set -e
 
 NAMESPACE="gauzian-v2"
 REGISTRY="angusvisual"
-TAG="latest"
+TAG="dev"
 
 echo "📥 Téléchargement des nouvelles images Docker Hub..."
 docker pull "$REGISTRY/gauzian-backend:$TAG"
