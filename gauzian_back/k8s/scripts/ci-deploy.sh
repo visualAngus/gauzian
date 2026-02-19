@@ -5,7 +5,7 @@ NAMESPACE="gauzian-v2"
 REGISTRY="angusvisual"
 TAG="dev"
 
-echo "📥 Téléchargement des nouvelles images Docker Hub..."
+echo "📥 Téléchargement des nouvelles images Docker Hub... V2"
 docker pull "$REGISTRY/gauzian-backend:$TAG"
 docker pull "$REGISTRY/gauzian-frontend:$TAG"
 
