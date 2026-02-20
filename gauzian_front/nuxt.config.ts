@@ -1,5 +1,18 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  // Proxy dev : redirige /api vers le backend de prod pour éviter CORS en local
+  vite: {
+    server: {
+      proxy: {
+        '/api': {
+          target: 'https://gauzian.pupin.fr',
+          changeOrigin: true,
+          cookieDomainRewrite: { 'gauzian.pupin.fr': 'localhost' },
+        }
+      }
+    }
+  },
+
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   css: ['~/assets/css/theme.css'],

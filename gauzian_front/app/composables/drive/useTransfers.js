@@ -366,6 +366,9 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
     const cancelAllTransfers = () => {
         if (confirm("Voulez-vous vraiment annuler tous les transferts en cours ?")) {
+            // Vider la file d'attente EN PREMIER : abort_upload appelle startUploads(),
+            // sans ça il redémarrerait immédiatement les fichiers en attente
+            listToUpload.value = [];
             [...listUploadInProgress.value].forEach((file) =>
                 abort_upload(file._uploadId),
             );
@@ -425,9 +428,18 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         const fileIndex = listUploadInProgress.value.findIndex(
             (f) => f._uploadId === file_id,
         );
+        const fileName = fileIndex !== -1 ? listUploadInProgress.value[fileIndex].name : null;
         if (fileIndex !== -1) {
             listUploadInProgress.value.splice(fileIndex, 1);
             console.log(`Removed file from upload queue`);
+        }
+
+        if (fileName) {
+            addNotification({
+                title: "Upload annulé",
+                message: `L'upload de "${fileName}" a été annulé.`,
+                duration: 5000,
+            });
         }
 
         // Aussi retirer de la liste d'attente
@@ -818,15 +830,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                 try {
                     await uploadChunkByIndex(index);
                 } catch (err) {
-                    // Si l'erreur est une annulation, on arrête le worker
                     if (err.name === "AbortError") {
-                        console.log(`Upload annulé pour le fichier ${file.name}`);
-                        addNotification({
-                            title: "Upload annulé",
-                            message: `L'upload de "${file.name}" a été annulé.`,
-                            duration: 5000,
-                        });
-                        return; // Sortir du worker
+                        // Vider la queue partagée pour que les autres workers s'arrêtent aussi
+                        // La notification est gérée une seule fois par abort_upload
+                        queue.length = 0;
+                        return;
                     }
                     console.error(`Echec chunk ${index}`, err);
                 }
