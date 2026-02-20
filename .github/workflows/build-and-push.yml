@@ -50,7 +50,7 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-frontend:dev
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-front:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
