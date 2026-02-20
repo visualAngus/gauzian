@@ -1994,3 +1994,48 @@ pub async fn accept_shared_folder_handler(
         }
     }
 }
+
+pub async fn reject_shared_file_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(file_id): Path<String>,
+) -> Response {
+    let file_id = match Uuid::parse_str(&file_id) {
+        Ok(id) => id,
+        Err(_) => return ApiResponse::bad_request("Invalid file_id").into_response(),
+    };
+
+    // refuser l'accès au fichier partagé (revient au meme que de suppprimer le fichier du drive de l'utilisateur)
+    match repo::reject_shared_file(&state.db_pool, claims.id, file_id).await {
+        Ok(_) => ApiResponse::ok("File rejected").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or not shared with you").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to reject shared file: {:?}", e);
+            ApiResponse::internal_error("Failed to reject shared file").into_response()
+        }
+    }
+}
+
+pub async fn reject_shared_folder_handler(
+    State(state): State<AppState>,
+    claims: Claims,
+    Path(folder_id): Path<String>,
+) -> Response {
+    let folder_id = match Uuid::parse_str(&folder_id) {
+        Ok(id) => id,
+        Err(_) => return ApiResponse::bad_request("Invalid folder_id").into_response(),
+    };
+
+    match repo::reject_shared_folder(&state.db_pool, claims.id, folder_id).await {
+        Ok(_) => ApiResponse::ok("Folder rejected").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or not shared with you").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to reject shared folder: {:?}", e);
+            ApiResponse::internal_error("Failed to reject shared folder").into_response()
+        }
+    }
+}
