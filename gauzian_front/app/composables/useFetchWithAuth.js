@@ -54,6 +54,10 @@ export const useFetchWithAuth = () => {
     try {
       response = await fetch(url, fetchOptions);
     } catch (error) {
+      // Propager l'AbortError tel quel pour que withRetry/workers puissent détecter l'annulation
+      if (error.name === 'AbortError') {
+        throw error;
+      }
       // Erreur réseau (backend down, CORS, timeout, etc.)
       console.error('Network error:', error);
       throw new Error('Cannot connect to server');
