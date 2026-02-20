@@ -1,5 +1,18 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-20
+
+### [2026-02-20] - fix(front): Proxy dev Vite pour éviter CORS en développement local
+- Ajout `vite.server.proxy` dans `nuxt.config.ts` : `/api` → `https://gauzian.pupin.fr` avec `cookieDomainRewrite`
+- Création `gauzian_front/.env` (gitignored) avec `NUXT_PUBLIC_API_URL=/api`
+- Aucun impact production : `vite.server` est ignoré lors du build
+
+### [2026-02-20] - fix(drive): Annulation des uploads (3 bugs corrigés)
+- `cancelAllTransfers` : vider `listToUpload` avant d'annuler pour éviter que `startUploads()` ne redémarre les fichiers en attente
+- Worker `uploadFile` : `queue.length = 0` à la place de la notification par worker → stoppe les 3 workers simultanément sans notifications en double
+- `abort_upload` : notification déplacée ici (une seule par fichier, avec nom récupéré avant suppression)
+- `useFetchWithAuth` : propagation de l'`AbortError` sans l'envelopper → `withRetry` stoppe immédiatement au lieu de lancer 3 retries avec délais et fausses notifs d'erreur
+
 ## 2026-02-19
 
 ### [2026-02-19] - feat(drive): Système d'acceptation des partages (is_accepted)
@@ -3912,3 +3925,7 @@ Pour N dossiers, M fichiers, C contacts :
 [2026-02-18 15:45] - fix(drive): Correction régression "Failed to verify access" sur upload-chunk REST (query owner compatible schéma DB sans filtre is_deleted)
 [2026-02-18 16:20] - fix(drive): Correction SQL malformed dans repo::user_has_chunk_access (erreur Postgres 42601 near "file_access") provoquant 500 sur download_chunk_binary
 [2026-02-18 16:35] - fix(drive): Compatibilité legacy /drive/get_folder/root (traitement spécial de "root" dans get_folder_handler au lieu de parse UUID)
+
+[2026-02-20 11:51] - feat(drive): Refonte UI FileItem — boutons accept/reject circulaires outlined (spring animation), border beam sur items pending, liseré bleu sur items shared_with_me, boutons restore/delete corbeille
+[2026-02-20 11:51] - feat(drive): Fix boutons fantômes navigation — displayFolderId synchronisé après changement de displayedDriveItems (derived state with intentional lag)
+[2026-02-20 11:51] - feat(drive): Loading.vue — écran minimaliste Google avec barres equalizer + barre indéterminée Material

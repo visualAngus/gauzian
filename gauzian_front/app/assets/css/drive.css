@@ -840,7 +840,6 @@ main {
   width: 100%;
   max-height: 80%;
   margin-bottom: 20px;
-  height: auto;
   overflow-y: auto;
   padding: 10px;
   padding-left: 2px;
@@ -958,6 +957,7 @@ main {
   flex-direction: row;
   align-items: flex-start;
   justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
   margin-bottom: 10px;
@@ -983,9 +983,9 @@ main {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  width: calc(50% - 8px);
   padding: 12px 14px;
   background-color: #f3f3f3;
   color: var(--color-neutral-900);
@@ -996,6 +996,9 @@ main {
   cursor: pointer;
   transition: all 0.2s ease;
   border: 1px solid transparent;
+}
+.div-autre-menu a:nth-child(3n) {
+  width: 100%;
 }
 
 @media (max-width: 1024px) {
