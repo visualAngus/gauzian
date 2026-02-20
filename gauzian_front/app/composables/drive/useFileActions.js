@@ -68,11 +68,11 @@ export function useFileActions({
 
         // Si on est en corbeille, restaurer l'item au lieu de l'ouvrir/télécharger
         if (activeFolderId.value === "corbeille") {
-            restoreItem(item);
+            // restoreItem(item);
             return;
         }
         if (activeFolderId.value === "shared_with_me") {
-            acceptSharedItem(item);
+            // acceptSharedItem(item);
             return;
         }
 
@@ -120,16 +120,48 @@ export function useFileActions({
                 message: `L'élément a été ajouté à votre drive.`,
                 duration: 5000,
             });
-
-            // Naviguer vers la racine pour voir l'élément nouvellement accepté
-            activeFolderId.value = "root";
-            router.push("/drive?folder_id=root");
             await loadPath();
         } catch (error) {
             console.error("Error accepting shared item:", error);
             addNotification({
                 title: "Erreur",
                 message: "Impossible d'accepter l'élément partagé.",
+                duration: 5000,
+            });
+        }
+    };
+
+    const rejectSharedItem = async (item) => {
+        const itemType = item.type ?? item.dataset?.itemType;
+        const itemId = item.file_id ?? item.folder_id ?? item.dataset?.itemId;
+        if (!itemId || !itemType) {
+            console.error("Invalid item for rejecting shared item");
+            addNotification({   
+                title: "Erreur",
+                message: "Impossible de rejeter l'élément partagé.",
+                duration: 5000,
+            });
+            return;
+        }
+        try {
+            const endpoint = itemType === "file"
+                ? `/drive/files/${itemId}/reject`
+                : `/drive/folders/${itemId}/reject`;
+            const res = await fetchWithAuth(endpoint, { method: "POST" });
+            if (!res.ok) {
+                throw new Error(`Failed to reject shared ${itemType} ${itemId}`);
+            }
+            addNotification({
+                title: "Partage rejeté",
+                message: `L'élément a été rejeté et ne sera pas ajouté à votre drive.`,
+                duration: 5000,
+            });
+            await loadPath();
+        } catch (error) {
+            console.error("Error rejecting shared item:", error);
+            addNotification({
+                title: "Erreur",
+                message: "Impossible de rejeter l'élément partagé.",
                 duration: 5000,
             });
         }
@@ -1136,5 +1168,7 @@ export function useFileActions({
         rightClickPanel,
         rightClikedItem,
         shareItemServer,
+        acceptSharedItem,
+        rejectSharedItem,
     };
 }
