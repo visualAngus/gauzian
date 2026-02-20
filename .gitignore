@@ -7,3 +7,5 @@ sqlmap_reports/
 # IDEs
 .idea/
 .vscode/
+# Artefacts frontend (node_modules, build artifacts)
+gauzian_front/
