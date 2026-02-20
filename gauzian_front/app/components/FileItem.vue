@@ -5,12 +5,17 @@
       pending: status === 'pending',
       uploading: status === 'uploading',
     }"
-
     :data-item-type="item.type"
     :data-item-id="item.file_id || item.folder_id"
     :data-folder-name="item.metadata?.folder_name || 'Dossier'"
     :data-item-metadata="JSON.stringify(item.metadata || {})"
-    :data-item-size="item.size || item.folder_size || item.metadata?.file_size || item.metadata?.folder_size || 0"
+    :data-item-size="
+      item.size ||
+      item.folder_size ||
+      item.metadata?.file_size ||
+      item.metadata?.folder_size ||
+      0
+    "
     @click="handleDoubleTap(item, $event)"
     @contextmenu.prevent="$emit('contextmenu', item, $event)"
     @mousedown="startDrag"
@@ -36,7 +41,10 @@
     </span>
 
     <div class="file-info">
-      <span class="filename">
+      <span
+        class="filename"
+        :class="{ short: currentFolderId === 'shared_with_me' }"
+      >
         {{ displayName }}
       </span>
 
@@ -60,13 +68,55 @@
       </svg>
     </span>
 
-    <span class="menu-dots" v-else @click="$emit('dotclick', item, $event)">
+    <span
+      class="menu-dots"
+      v-if="currentFolderId !== 'shared_with_me' && currentFolderId !== 'corbeille'"
+      @click="$emit('dotclick', item, $event)"
+    >
       <svg viewBox="0 0 24 24">
         <circle cx="12" cy="5" r="1.5" />
         <circle cx="12" cy="12" r="1.5" />
         <circle cx="12" cy="19" r="1.5" />
       </svg>
     </span>
+    <div class="accepted-rejected" v-if="currentFolderId === 'shared_with_me'">
+      <button class="accepted-rejected__accepted"
+        @click="$emit('accept', item)"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"></path>
+        </svg>
+      </button>
+      <button class="accepted-rejected__rejected"
+        @click="$emit('reject', item)"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path
+            d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"
+          ></path>
+        </svg>
+      </button>
+    </div>
+    <div class="trash-actions" v-if="currentFolderId === 'corbeille'">
+      <button class="trash-actions__restore" @click.stop="$emit('restore', item)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M5.463 4.433A9.961 9.961 0 0 1 12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12h2a8 8 0 1 0 2.46-5.772L10 9H2V1l3.463 3.433z"/>
+        </svg>
+      </button>
+      <button class="trash-actions__delete" @click.stop="$emit('delete-permanent', item)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"/>
+        </svg>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -87,9 +137,24 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  currentFolderId: {
+    type: String,
+    default: null,
+  },
 });
 
-const emit = defineEmits(["click", "select", "move-start","moving","move-end","dotclick"]);
+const emit = defineEmits([
+  "click",
+  "select",
+  "move-start",
+  "moving",
+  "move-end",
+  "dotclick",
+  "accept",
+  "reject",
+  "restore",
+  "delete-permanent",
+]);
 
 const DRAG_THRESHOLD = 5; // pixels avant d'activer le drag
 let dragStartPos = null;
@@ -100,13 +165,13 @@ let tapTimeout = null; // Pour gérer le délai du single tap
 const handleDoubleTap = (item, event) => {
   event.preventDefault();
 
-  const isTouchEvent = event.type.startsWith('touch');
+  const isTouchEvent = event.type.startsWith("touch");
   const currentTime = new Date().getTime();
   const tapLength = currentTime - lastTap;
 
   if (isTouchEvent) {
     // Sur tactile, un simple tap ouvre le dossier
-    emit('click', item, event);
+    emit("click", item, event);
     lastTap = 0;
   } else if (tapLength < 300 && tapLength > 0) {
     // Sur souris, double-click pour ouvrir
@@ -114,59 +179,72 @@ const handleDoubleTap = (item, event) => {
       clearTimeout(tapTimeout);
       tapTimeout = null;
     }
-    emit('click', item, event);
+    emit("click", item, event);
     lastTap = 0;
   } else {
     tapTimeout = setTimeout(() => {
-      emit('select', { item, event });
+      emit("select", { item, event });
       tapTimeout = null;
     }, 300);
   }
-  
+
   lastTap = currentTime;
 };
 
 const startDrag = (mouseDownEvent) => {
   dragStartPos = { x: mouseDownEvent.clientX, y: mouseDownEvent.clientY };
   isDragStarted = false;
-  
+
   const onMouseMove = (e) => {
     // Vérifier si on a bougé au-delà du seuil
     if (!isDragStarted && dragStartPos) {
       const distance = Math.sqrt(
-        Math.pow(e.clientX - dragStartPos.x, 2) + 
-        Math.pow(e.clientY - dragStartPos.y, 2)
+        Math.pow(e.clientX - dragStartPos.x, 2) +
+          Math.pow(e.clientY - dragStartPos.y, 2),
       );
-      
+
       // Si on a bougé assez, émettre move-start
       if (distance > DRAG_THRESHOLD) {
         isDragStarted = true;
-        emit("move-start", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+        emit("move-start", {
+          item: props.item,
+          x: e.clientX,
+          y: e.clientY,
+          originalEvent: e,
+        });
       }
     }
-    
+
     // Si le drag est actif, émettre moving
     if (isDragStarted) {
-      emit("moving", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+      emit("moving", {
+        item: props.item,
+        x: e.clientX,
+        y: e.clientY,
+        originalEvent: e,
+      });
     }
   };
-  
+
   const onMouseUp = (e) => {
     // Émettre move-end seulement si le drag avait vraiment commencé
     if (isDragStarted) {
-      emit("move-end", { item: props.item, x: e.clientX, y: e.clientY, originalEvent: e });
+      emit("move-end", {
+        item: props.item,
+        x: e.clientX,
+        y: e.clientY,
+        originalEvent: e,
+      });
     }
     window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("mouseup", onMouseUp);
     dragStartPos = null;
     isDragStarted = false;
   };
-  
+
   window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mouseup", onMouseUp);
 };
-
-
 
 const displayName = computed(() => {
   // console.log("Item metadata:", props.item);
@@ -179,8 +257,6 @@ const displayName = computed(() => {
     "Sans nom"
   );
 });
-
-
 </script>
 
 <style scoped>
@@ -214,7 +290,7 @@ const displayName = computed(() => {
 
 .item.uploading {
   background-color: var(--color-primary-soft);
-  border: 1px solid var(--color-primary)33;
+  border: 1px solid var(--color-primary) 33;
 }
 
 @keyframes shimmer {
@@ -277,6 +353,9 @@ const displayName = computed(() => {
   text-overflow: ellipsis;
   padding: 2px;
 }
+.filename.short {
+  max-width: 70%;
+}
 /* lorsque le nom est édité */
 .filename[contenteditable="true"] {
   border: 1px solid var(--color-primary);
@@ -284,7 +363,6 @@ const displayName = computed(() => {
   background-color: var(--color-primary-soft);
   outline: none;
 }
-
 
 .inline-progress {
   width: 100%;
@@ -337,5 +415,151 @@ const displayName = computed(() => {
 
 .menu-dots:hover {
   background-color: rgba(0, 0, 0, 0.08);
+}
+
+@keyframes border-beam {
+  0%        { left: -50%; opacity: 0; }
+  10%       { opacity: 1; }
+  60%       { opacity: 1; }
+  70%, 100% { left: 150%; opacity: 0; }
+}
+
+@keyframes notif-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(76, 142, 175, 0.55); }
+  70%  { box-shadow: 0 0 0 5px rgba(76, 142, 175, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(76, 142, 175, 0); }
+}
+
+/* Border beam pour les items en attente (pending) */
+.item.pending::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -50%;
+  width: 50%;
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-primary, #4c8eaf) 50%,
+    transparent 100%
+  );
+  animation: border-beam 2.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Liseré + tint pour les items en attente d'action */
+.item:has(.accepted-rejected) {
+  background: linear-gradient(
+    180deg,
+    rgba(76, 142, 175, 0.06) 0%,
+    transparent 50%
+  ), #eff3f8;
+  box-shadow: inset 0 1.5px 0 rgba(76, 142, 175, 0.35);
+}
+
+.accepted-rejected {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.accepted-rejected__accepted,
+.accepted-rejected__rejected {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid currentColor;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.accepted-rejected__accepted svg,
+.accepted-rejected__rejected svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.accepted-rejected__accepted {
+  color: #22c55e;
+}
+
+.accepted-rejected__accepted:hover {
+  background: #22c55e;
+  color: white;
+  border-color: #22c55e;
+  transform: scale(1.12);
+}
+
+.accepted-rejected__rejected {
+  color: #94a3b8;
+  border-color: #94a3b8;
+}
+
+.accepted-rejected__rejected:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  transform: scale(1.08);
+}
+
+.trash-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.trash-actions__restore,
+.trash-actions__delete {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid currentColor;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.trash-actions__restore svg,
+.trash-actions__delete svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.trash-actions__restore {
+  color: var(--color-primary, #4c8eaf);
+}
+
+.trash-actions__restore:hover {
+  background: var(--color-primary, #4c8eaf);
+  color: white;
+  border-color: var(--color-primary, #4c8eaf);
+  transform: scale(1.12);
+}
+
+.trash-actions__delete {
+  color: #94a3b8;
+  border-color: #94a3b8;
+}
+
+.trash-actions__delete:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  transform: scale(1.08);
 }
 </style>
