@@ -22,3 +22,9 @@ logs
 .env
 .env.*
 !.env.example
+
+# Artefacts mono-repo (autres branches)
+gauzian_back/
+k8s/
+sqlmap_reports/
+tests/
