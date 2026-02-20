@@ -2,6 +2,17 @@
 
 ## 2026-02-20
 
+### [2026-02-20] - chore: Restructuration mono-repo en branches orphelines
+
+- Créé `archive/before-restructure` : snapshot complet de l'état avant restructuration (SHA f13a044)
+- Créé branche orpheline `back` : backend Rust/Axum à la racine (72 fichiers, sans historique commun avec main)
+- Créé branche orpheline `front` : frontend Nuxt 4 à la racine (64 fichiers, sans historique commun avec main)
+- Restructuré `main` : supprimé gauzian_back/ et gauzian_front/, déplacé gauzian_back/k8s/ → k8s/, supprimé Dockerfiles mono-repo obsolètes
+- Mis à jour `.github/workflows/build-and-push.yml` : jobs déclenchés sélectivement (back→backend build, front→frontend build, main→deploy)
+- ⚠️ Le chemin `ci-deploy.sh` sur le VPS doit être mis à jour manuellement : `/home/debian/gauzian/gauzian_back/k8s/scripts/` → `/home/debian/gauzian/k8s/scripts/`
+
+
+
 ### [2026-02-20] - fix(front): Proxy dev Vite pour éviter CORS en développement local
 - Ajout `vite.server.proxy` dans `nuxt.config.ts` : `/api` → `https://gauzian.pupin.fr` avec `cookieDomainRewrite`
 - Création `gauzian_front/.env` (gitignored) avec `NUXT_PUBLIC_API_URL=/api`
