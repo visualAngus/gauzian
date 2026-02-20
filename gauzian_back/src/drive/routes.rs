@@ -40,6 +40,7 @@ pub fn drive_routes() -> Router<AppState> {
         .route("/files/{file_id}/share", post(handlers::share_file_restful_handler))  // POST /files/{id}/share
         .route("/files/{file_id}/share/{user_id}", axum::routing::delete(handlers::revoke_file_access_handler))  // DELETE /files/{id}/share/{user_id}
         .route("/files/{file_id}/accept", post(handlers::accept_shared_file_handler))  // POST /files/{id}/accept
+        .route("/files/{file_id}/reject", post(handlers::reject_shared_file_handler))  // POST /files/{id}/reject        
         .route("/files/{file_id}", get(handlers::get_file_info_handler))      // GET /files/{id}
         .route("/files/{file_id}", axum::routing::delete(handlers::delete_file_restful_handler))  // DELETE /files/{id}
         .route("/files/{file_id}", patch(handlers::rename_file_restful_handler))  // PATCH /files/{id} (rename)
@@ -60,6 +61,7 @@ pub fn drive_routes() -> Router<AppState> {
         .route("/folders/{folder_id}/share", post(handlers::share_folder_restful_handler))  // POST /folders/{id}/share
         .route("/folders/{folder_id}/share/{user_id}", axum::routing::delete(handlers::revoke_folder_access_handler))  // DELETE /folders/{id}/share/{user_id}
         .route("/folders/{folder_id}/accept", post(handlers::accept_shared_folder_handler))  // POST /folders/{id}/accept
+        .route("/folders/{folder_id}/reject", post(handlers::reject_shared_folder_handler))  // POST /folders/{id}/reject        
         .route("/folders/{folder_id}", get(handlers::get_folder_handler))  // GET /folders/{id}
         .route("/folders/{folder_id}", axum::routing::delete(handlers::delete_folder_restful_handler))  // DELETE /folders/{id}
         .route("/folders/{folder_id}", patch(handlers::rename_folder_restful_handler))  // PATCH /folders/{id} (rename)
