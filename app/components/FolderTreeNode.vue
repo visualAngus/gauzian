@@ -1,0 +1,52 @@
+<template>
+  <div v-if="node" class="folder-three" :data-folder-id="node.folder_id" >
+    <div class="div-name-bnt" :class="{ 'is-active-folder': activeId === node.folder_id }">
+      <button class="tree-toggle" @click.stop="$emit('toggle', node)" 
+        :disabled="node.isLoading || ((node.children?.length ?? 0) === 0 && node.isLoaded)"
+      >
+        <span v-if="node.isLoading">⋯</span>
+        <span v-else-if="(node.children?.length ?? 0) > 0 || !node.isLoaded">
+          {{ node.isExpanded ? '▾' : '▸' }}
+        </span>
+        <span v-else>&nbsp;</span>
+      </button>
+      <a
+        class="three-folder-name tree-item"
+        :class="{ 'select-folder-three': activeId === node.folder_id }"
+        :data-item-type="'folder'"
+        :data-item-id="node.folder_id"
+        :data-folder-name="node.metadata?.folder_name || 'Dossier sans nom'"
+        @click.prevent="$emit('select', node)"
+        @contextmenu.prevent="$emit('context-menu', { node, event: $event })"
+      >
+        {{ node.metadata?.folder_name || "Dossier sans nom" }}
+      </a>
+    </div>
+    <div class="div-enfants" v-show="node.isExpanded">
+      <FolderTreeNode
+        v-for="child in node.children?.filter(c => c)"
+        :key="child.folder_id"
+        :node="child"
+        :active-id="activeId"
+        @select="$emit('select', $event)"
+        @toggle="$emit('toggle', $event)"
+        @context-menu="$emit('context-menu', $event)"
+      />
+    </div>
+  </div>
+</template>
+
+<script setup>
+defineProps({
+  node: {
+    type: Object,
+    required: true,
+  },
+  activeId: {
+    type: String,
+    required: true,
+  },
+});
+
+defineEmits(['select', 'toggle', 'context-menu']);
+</script>
