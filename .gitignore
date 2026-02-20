@@ -9,3 +9,4 @@ sqlmap_reports/
 .vscode/
 # Artefacts frontend (node_modules, build artifacts)
 gauzian_front/
+.nuxt/
