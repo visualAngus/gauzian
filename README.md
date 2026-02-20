@@ -3,241 +3,144 @@
 [![Rust](https://img.shields.io/badge/Backend-Rust-orange?logo=rust)](https://www.rust-lang.org/)
 [![Nuxt](https://img.shields.io/badge/Frontend-Nuxt%204-00DC82?logo=nuxt.js)](https://nuxt.com/)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?logo=postgresql)](https://www.postgresql.org/)
+[![K8s](https://img.shields.io/badge/Infra-Kubernetes-326CE5?logo=kubernetes)](https://kubernetes.io/)
 [![License](https://img.shields.io/badge/License-Proprietary-red)]()
-[![Status](https://img.shields.io/badge/Status-Active%20Development-green)]()
+[![Status](https://img.shields.io/badge/Status-Production%20Beta-green)]()
+
+> **GAUZIAN** — La souveraineté numérique n'est pas un slogan, c'est quelque chose que l'on construit, ligne par ligne.
+
+---
 
 ## 🎯 Vision
 
-GAUZIAN est une initiative long-terme visant à construire une **suite applicative cloud européenne**, pensée d'abord pour les **particuliers** et les **petites entreprises**.
-
-Le cœur de GAUZIAN est un **stockage chiffré de bout en bout (E2EE)** : le serveur ne voit jamais les contenus en clair (**zero-knowledge**). L'architecture évolue actuellement d'un **monolithe Rust** vers une **architecture microservices** pour une scalabilité et une maintenabilité optimales.
+GAUZIAN est une **suite applicative cloud européenne** zero-knowledge.  
+Le serveur ne voit **jamais** les données en clair — tout le chiffrement se fait côté client.
 
 **Modèle économique** : Freemium (3 Go gratuits) + offres payantes.
 
 ---
 
-## 🔐 Principes Fondamentaux
+## 🔗 Essayer Gauzian
 
-### Souveraineté & Hébergement
-- 🇫🇷 **Hébergement exclusif en France** avec conformité RGPD stricte
-- 🛡️ **Sécurité "by design"** : chaque composant est pensé pour la protection des données
-- 📜 **Gouvernance alignée UE/France** : respect total de la législation européenne
+### [gauzian.pupin.fr](https://gauzian.pupin.fr)
 
-### Confidentialité Zero-Knowledge
-- 🚫 **Zéro tracking** : aucune revente de données, aucun profilage publicitaire
-- 🔒 **E2EE côté client** : chiffrement/déchiffrement exclusivement par le client (RSA-4096 + AES-256-GCM)
-- 👁️ **Zero-knowledge serveur** : le serveur ne voit que des données chiffrées, jamais le contenu en clair
-- 🔑 **Clés non-extractables** : stockage sécurisé dans IndexedDB avec CryptoKey API
-
----
-
-## 🚀 Produits & Services
-
-### ✅ GAUZIAN ID — Identité & Sessions
-Socle d'authentification robuste avec JWT + Redis pour la révocation de tokens.
-- Argon2id pour le hachage des mots de passe
-- Protection anti-bruteforce et rate limiting
-- Gestion des sessions avec isolation par contexte
-
-### ✅ GZ DRIVE — Stockage E2EE (En Production)
-Moteur de stockage haute performance avec upload/download par chunks.
-
-**Fonctionnalités actuelles :**
-- ✅ Chiffrement E2EE : le serveur ne peut pas lire les fichiers
-- ✅ Streaming optimisé : gestion de fichiers volumineux sans explosion mémoire
-- ✅ Partage sécurisé : mécanisme de rechiffrement par destinataire avec propagation automatique
-- ✅ Corbeille avec soft-delete
-- ✅ Gestion des permissions granulaires (owner/editor/viewer)
-- ✅ Architecture par chunks avec S3/MinIO backend
-- ✅ Retry automatique avec backoff exponentiel
-
-**Performances :**
-- Upload/download avec retry automatique (3 tentatives)
-- Health checks Kubernetes pour zero-downtime deployments
-- Optimisation bande passante : endpoint minimal pour partage (réduction 80-95%)
-
-### 🔜 GZ AGENDA — Organisation & Productivité (À venir)
-**Prochain service en développement** : calendrier intelligent E2EE pour la gestion du temps et des rendez-vous.
-
-**Fonctionnalités prévues :**
-- 📅 Calendrier personnel chiffré de bout en bout
-- 🤝 Partage d'événements avec rechiffrement par destinataire
-- 🔔 Rappels et notifications
-- 🔗 Intégration native avec GZ DRIVE pour les pièces jointes
-- 🌐 Support CalDAV pour synchronisation avec clients tiers
-
-### ⏸️ GZ MAIL — Messagerie Sécurisée (Mis en pause)
-Service de mail chiffré (SMTP/IMAP) actuellement en pause pour concentrer les efforts sur le stockage et l'agenda.
-
----
-
-## 🏗️ Architecture
-
-### Transition vers les Microservices
-
-**Architecture actuelle (Monolithe Rust)** :
-```
-┌─────────────────────────────────────┐
-│     Axum Backend (Rust)             │
-│  ┌──────────┬──────────┬─────────┐  │
-│  │   Auth   │  Drive   │  Contacts│ │
-│  └──────────┴──────────┴─────────┘  │
-│         PostgreSQL + Redis           │
-└─────────────────────────────────────┘
-```
-
-**Architecture cible (Microservices)** :
-```
-┌──────────────────────────────────────────────┐
-│          API Gateway (Traefik)               │
-└────┬─────────┬──────────┬──────────┬────────┘
-     │         │          │          │
-┌────▼────┐ ┌─▼──────┐ ┌─▼──────┐ ┌─▼────────┐
-│ Auth    │ │ Drive  │ │ Agenda │ │ Contacts │
-│ Service │ │ Service│ │ Service│ │ Service  │
-└────┬────┘ └─┬──────┘ └─┬──────┘ └─┬────────┘
-     │        │           │           │
-     └────────┴───────────┴───────────┘
-              Shared PostgreSQL
-              Shared Redis
-```
-
-**Avantages de la transition :**
-- 🔄 **Scalabilité indépendante** : chaque service peut scaler selon ses besoins
-- 🛠️ **Déploiement isolé** : mise à jour d'un service sans affecter les autres
-- 🧪 **Tests simplifiés** : isolation des responsabilités
-- 🚀 **Développement parallèle** : équipes indépendantes par service
-- 🔒 **Sécurité renforcée** : isolation des données par service
-
-### Stack Technique
-
-**Backend :**
-- 🦀 **Rust** (Edition 2021) avec Axum framework
-- 🔐 **SQLx** pour des requêtes SQL vérifiées à la compilation
-- 🗄️ **PostgreSQL** pour les métadonnées chiffrées
-- ⚡ **Redis** pour la révocation de tokens et le cache
-- 📦 **MinIO/S3** pour le stockage des chunks chiffrés
-
-**Frontend :**
-- ⚡ **Nuxt 4** (Vue 3) avec TypeScript
-- 🔐 **Web Crypto API** pour le chiffrement client-side
-- 💾 **IndexedDB** pour le stockage sécurisé des clés
-
-**Infrastructure :**
-- 🐳 **Docker** + **Kubernetes** (déploiement production)
-- 🔄 **Traefik** comme reverse proxy avec Let's Encrypt automatique
-- 📊 **Prometheus** + **Grafana** (monitoring prévu)
-
-### Cryptographie
-
-- **Échange de clés** : RSA-4096 (OAEP padding)
-- **Chiffrement fichiers/métadonnées** : AES-256-GCM (nonce unique par opération)
-- **Dérivation de clés** : PBKDF2 avec 310,000 itérations (OWASP 2024)
-- **Hachage mots de passe** : Argon2id (PHC format)
-- **Stockage clés** : CryptoKey API avec clés non-extractables
-
----
-
-## 🛡️ Sécurité & Anti-abus
-
-### Mesures Implémentées
-
-- ✅ **IDOR Protection** : vérification d'ownership sur tous les endpoints sensibles
-- ✅ **Rate Limiting** : protection contre bruteforce et spam
-- ✅ **Token Revocation** : blacklist Redis pour invalidation instantanée
-- ✅ **Fail-Closed** : en cas d'erreur Redis, authentification refusée (pas de bypass)
-- ✅ **SQL Injection** : requêtes paramétrées via SQLx (compile-time checking)
-- ✅ **Secure Cookies** : flags `Secure`, `HttpOnly`, `SameSite=Strict`
-- ✅ **Health Checks** : probes Kubernetes pour zero-downtime deployments
-- ✅ **Audit Logging** : tous les accès sensibles sont tracés
-
-### Tests de Sécurité
-
-Des tests de sécurité exhaustifs (SQLMap, k6 load testing) ont été réalisés et passés avec **succès** sur l'ensemble des endpoints de l'API. Les résultats démontrent la robustesse de l'architecture face aux attaques courantes (injection SQL, IDOR, bruteforce).
-
----
-
-## 📊 Statut du Projet
-
-### Phase Actuelle : **Production Beta**
-
-**Disponible maintenant :**
-- ✅ GZ DRIVE avec partage E2EE et gestion des permissions
-- ✅ Infrastructure Kubernetes avec health checks
-- ✅ Tests de sécurité automatisés
-
-**En cours de développement :**
-- 🔄 Transition vers architecture microservices
-- 🔄 GZ AGENDA (calendrier E2EE)
-- 🔄 Interface de gestion des partages (révocation d'accès)
-
-**Roadmap 2026 :**
-- Q1 : Finalisation microservices + lancement GZ AGENDA beta
-- Q2 : Système de notifications E2EE
-- Q3 : Application mobile (React Native)
-- Q4 : Version 1.0 stable + offres payantes
-
----
-
-## 🌐 Essayer Gauzian
-
-Une **instance de démonstration** est disponible en ligne pour tester le service :
-
-### 🔗 [gauzian.pupin.fr](https://gauzian.pupin.fr)
-
-**Fonctionnalités disponibles :**
-- ✅ Création de compte (chiffrement E2EE automatique)
+- ✅ Création de compte avec chiffrement E2EE automatique
 - ✅ Upload/download de fichiers chiffrés
-- ✅ Partage sécurisé avec d'autres utilisateurs
+- ✅ Partage sécurisé avec rechiffrement par destinataire
 - ✅ Gestion des permissions (owner/editor/viewer)
-- ✅ Interface moderne et responsive
 
-**⚠️ Notes importantes :**
-- 🧪 **Instance Beta** : service en développement actif
-- 🔒 **Vos données sont chiffrées** : le serveur ne peut pas lire vos fichiers (zero-knowledge)
-- 💾 **Limite actuelle** : 3 Go par compte (freemium)
-- 🇫🇷 **Hébergement** : VPS en France avec certificat SSL Let's Encrypt
+> Instance Beta — vos fichiers sont chiffrés, le serveur ne peut pas les lire.
 
-N'hésitez pas à créer un compte et à tester les fonctionnalités de partage E2EE ! 🚀
+---
+
+## 📦 Produits
+
+| Service | Statut | Description |
+|---------|--------|-------------|
+| **GZ ID** | ✅ Production | Authentification JWT + Redis, Argon2id |
+| **GZ DRIVE** | ✅ Production | Stockage E2EE, partage, corbeille |
+| **GZ AGENDA** | 🔄 En cours | Calendrier chiffré, partage d'événements |
+| **GZ MAIL** | ⏸️ En pause | Messagerie sécurisée SMTP/IMAP |
+
+---
+
+## 🏗️ Structure du Repository
+
+Ce repo est organisé en **3 branches indépendantes** (orphelines) :
+
+| Branche | Rôle | CI/CD |
+|---------|------|-------|
+| [`back`](../../tree/back) | Code Rust/Axum (API backend) | Build Docker + Deploy VPS |
+| [`front`](../../tree/front) | Code Nuxt 4 / Vue 3 (frontend) | Build Docker + Deploy VPS |
+| [`main`](../../tree/main) | Orchestration K8s, scripts, docs | Deploy VPS |
+| `archive/before-restructure` | Snapshot mono-repo initial | — |
+
+```
+main/
+├── k8s/                    # Manifests Kubernetes (28 fichiers)
+├── .github/workflows/      # CI/CD (build + deploy automatiques)
+├── docs/                   # Documentation sécurité, partage E2EE
+├── tests/                  # SQLMap, k6 load tests
+├── push_docker_hub.sh
+└── DEPLOYMENT.md
+```
+
+---
+
+## 🔐 Sécurité Zero-Knowledge
+
+### Algorithmes
+
+| Usage | Algorithme |
+|-------|-----------|
+| Échange de clés | RSA-4096 (OAEP, SHA-256) |
+| Chiffrement fichiers | AES-256-GCM |
+| Dérivation mot de passe | PBKDF2 (310 000 itérations) |
+| Hachage mots de passe | Argon2id |
+| Stockage clés client | IndexedDB (`extractable: false`) |
+
+### Garanties
+
+- Le serveur ne voit que des **blobs chiffrés**
+- Les clés privées ne quittent **jamais** le navigateur en clair
+- Partage E2EE par **rechiffrement asymétrique** (pas de partage de clé maître)
+- Clés non-exportables via JavaScript (Web Crypto API)
+
+### Mesures Anti-abus
+
+- ✅ Rate limiting (100 req/s API, 50 req/s S3)
+- ✅ IDOR protection sur tous les endpoints sensibles
+- ✅ Token revocation (blacklist Redis, fail-closed)
+- ✅ SQL injection : requêtes paramétrées SQLx (compile-time)
+- ✅ Secure cookies (`HttpOnly`, `SameSite=Strict`)
+- ✅ CodeQL : analyse Rust + JS/TS automatique sur chaque push
+
+---
+
+## 🚀 Stack Technique
+
+**Backend** (`back`) : Rust (Axum) · SQLx · PostgreSQL 17 · Redis 7 · MinIO S3
+
+**Frontend** (`front`) : Nuxt 4 · Vue 3 · TypeScript · Web Crypto API
+
+**Infrastructure** (`main`) : Kubernetes (K3s) · Traefik · Prometheus · Grafana · Docker Hub
+
+---
+
+## 📊 Infrastructure K8s
+
+**Voir [`k8s/README.md`](k8s/README.md) pour détails (800 lignes).**
+
+| URL | Service |
+|-----|---------|
+| [gauzian.pupin.fr](https://gauzian.pupin.fr) | Frontend |
+| [gauzian.pupin.fr/api](https://gauzian.pupin.fr/api) | Backend API |
+| [grafana.gauzian.pupin.fr](https://grafana.gauzian.pupin.fr) | Monitoring |
+| [minio.gauzian.pupin.fr](https://minio.gauzian.pupin.fr) | MinIO Console |
+
+Auto-scaling HPA : 2 → 10 replicas (CPU > 50% / RAM > 70%)
 
 ---
 
 ## 📚 Documentation
 
-### Documentation Principale
-- **[README.md](README.md)** : Ce fichier - Présentation générale
-- **[CLAUDE.md](CLAUDE.md)** : Guide pour Claude Code (structure projet)
-- **[DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)** : Journal de développement détaillé
-
-### Documentation Technique
-- **[docs/](docs/)** : Documentation technique complète
-  - Sécurité et tests (SECURITY_TESTING.md)
-  - Implémentation du partage E2EE
-  - Guides techniques détaillés
-
-### Tests
-- **[tests/](tests/)** : Scripts de test automatisés
-  - Tests de sécurité (SQLMap)
-  - Tests de performance (k6)
-  - Voir [tests/README.md](tests/README.md) pour utilisation
-
-### Modules
-- **Backend** : [gauzian_back/CLAUDE.md](gauzian_back/CLAUDE.md)
-- **Backend K8s** : [gauzian_back/k8s/README.md](gauzian_back/k8s/README.md)
-- **Frontend** : [gauzian_front/CLAUDE.md](gauzian_front/CLAUDE.md)
+- [`k8s/README.md`](k8s/README.md) — Infrastructure Kubernetes (800 lignes)
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — Guide déploiement complet
+- [`docs/SECURITY_TESTING.md`](docs/SECURITY_TESTING.md) — Tests SQLMap, Nikto
+- [`CLAUDE.md`](CLAUDE.md) — Guide Claude Code (branches, CI/CD)
+- [`DEVELOPMENT_LOG.md`](DEVELOPMENT_LOG.md) — Journal de bord
 
 ---
 
-## 🤝 Contribution
+## 📜 Roadmap 2026
 
-Le projet est actuellement en développement privé. Les contributions seront ouvertes lors de la version 1.0.
+- **Q1** : GZ AGENDA beta + finalisation CI/CD
+- **Q2** : Notifications E2EE + révocation d'accès UI
+- **Q3** : Application mobile
+- **Q4** : Version 1.0 stable + offres payantes
 
 ---
 
 ## 📜 Licence
 
 Propriétaire © 2026 GAUZIAN. Tous droits réservés.
-
----
-
-> **GAUZIAN** — La souveraineté numérique n'est pas un slogan, c'est quelque chose que l'on construit, ligne par ligne.
