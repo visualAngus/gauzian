@@ -3,3 +3,9 @@ target/
 .env.*
 kompose
 k8s/secrets.yaml
+
+# Artefacts mono-repo (autres branches)
+gauzian_front/
+node_modules/
+sqlmap_reports/
+tests/
