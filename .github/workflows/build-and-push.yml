@@ -29,3 +29,15 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-backend:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: bash /home/debian/gauzian/k8s/scripts/ci-deploy.sh
