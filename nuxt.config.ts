@@ -1,17 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  // Proxy dev : redirige /api vers le backend de prod pour éviter CORS en local
-  vite: {
-    server: {
-      proxy: {
-        '/api': {
-          target: 'https://gauzian.pupin.fr',
-          changeOrigin: true,
-          cookieDomainRewrite: { 'gauzian.pupin.fr': 'localhost' },
-        }
-      }
-    }
-  },
 
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
@@ -22,13 +10,14 @@ export default defineNuxtConfig({
     public: {
       // La variable NUXT_PUBLIC_API_URL sera automatiquement mappée ici
       // Valeur par défaut pour le développement local
-      apiUrl: 'https://gauzian.pupin.fr/api'
+      apiUrl: '/api'  // dev default — surchargé par NUXT_PUBLIC_API_URL en production
     }
   },
 
-  // Configuration de sécurité
   nitro: {
     routeRules: {
+      // Proxy dev : redirige /api/* vers le backend de prod (évite CORS en local)
+      '/api/**': { proxy: 'https://gauzian.pupin.fr/api/**' },
       '/**': {
         headers: {
           // HSTS

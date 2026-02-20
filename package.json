@@ -10,12 +10,15 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "nuxt": "^4.2.2",
+    "jszip": "^3.10.1",
+    "nuxt": "^4.3.1",
     "vue": "^3.5.26",
-    "vue-router": "^4.6.4",
-    "jszip": "^3.10.1"
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "minimatch": "^10.2.2"
   }
 }
