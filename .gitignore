@@ -10,4 +10,3 @@ sqlmap_reports/
 # Artefacts frontend (node_modules, build artifacts)
 gauzian_front/
 .nuxt/
-.output/
