@@ -51,7 +51,7 @@ jobs:
       - name: Install Hurl
         run: |
           curl -fSL https://github.com/Orange-OpenSource/hurl/releases/download/4.3.0/hurl_4.3.0_amd64.deb -o hurl.deb
-          sudo dpkg -i hurl.deb
+          sudo apt-get install -y ./hurl.deb
           rm hurl.deb
           hurl --version
 
@@ -84,10 +84,4 @@ jobs:
             --username-a "${{ secrets.TEST_USERNAME_A }}" \
             --username-b "${{ secrets.TEST_USERNAME_B }}"
 
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-security-test-reports
-          path: tests/reports/
-          retention-days: 30
+
