@@ -10,32 +10,32 @@ Content-Type: application/json
 }
 HTTP 200
 [Captures]
-token_a: cookie "auth_token"
+token_a: jsonpath "$.token"
 
 # Test 2: Verify token works before logout
 GET {{base_url}}/autologin
-Cookie: auth_token={{token_a}}
+Authorization: Bearer {{token_a}}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 3: Logout with valid token - Should succeed with 200
 POST {{base_url}}/logout
-Cookie: auth_token={{token_a}}
+Authorization: Bearer {{token_a}}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 4: Try to use the same token after logout - Should fail with 401 (token blacklisted)
 GET {{base_url}}/autologin
-Cookie: auth_token={{token_a}}
+Authorization: Bearer {{token_a}}
 HTTP 401
 [Asserts]
 status == 401
 
 # Test 5: Try to logout again with the same (now blacklisted) token - Should fail with 401
 POST {{base_url}}/logout
-Cookie: auth_token={{token_a}}
+Authorization: Bearer {{token_a}}
 HTTP 401
 [Asserts]
 status == 401
@@ -49,23 +49,23 @@ Content-Type: application/json
 }
 HTTP 200
 [Captures]
-fresh_token: cookie "auth_token"
+fresh_token: jsonpath "$.token"
 
 # Test 7: Verify fresh token works
 GET {{base_url}}/autologin
-Cookie: auth_token={{fresh_token}}
+Authorization: Bearer {{fresh_token}}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 8: Logout with the fresh token
 POST {{base_url}}/logout
-Cookie: auth_token={{fresh_token}}
+Authorization: Bearer {{fresh_token}}
 HTTP 200
 
 # Test 9: Verify fresh token is now blacklisted
 GET {{base_url}}/autologin
-Cookie: auth_token={{fresh_token}}
+Authorization: Bearer {{fresh_token}}
 HTTP 401
 
 # Test 10: Logout without any token - Should fail with 401
