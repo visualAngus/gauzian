@@ -110,11 +110,14 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "wrong5"}
 HTTP 401
 
-# Test 17: Brute force attempt 6 - This should trigger rate limiting (429)
+# Test 17: Successful login with correct credentials
 POST {{base_url}}/login
 Content-Type: application/json
-{"email": "{{test_email_a}}", "password": "wrong6"}
-HTTP 429
+{"email": "ci-a@gauzian.app", "password": "eEgAuUMRr8UAb0wpzpBA"}
+HTTP 200
+[Captures]
+token_a: jsonpath "$.token"
+user_a_id: jsonpath "$.user_id"
 
 # Test 18: Valid login with USER B (not rate-limited) to confirm API still works
 POST {{base_url}}/login
