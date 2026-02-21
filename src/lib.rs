@@ -9,3 +9,6 @@ pub mod storage;   // Client S3/MinIO
 pub mod auth;      // Authentification, gestion des utilisateurs
 pub mod drive;     // Gestion des fichiers, dossiers, permissions, upload/download
 pub mod agenda;    // Gestion des événements d'agenda
+
+#[cfg(test)]
+mod tests;

@@ -98,8 +98,12 @@ pub async fn login_handler(
     // 3. Créer un JWT
     let token = services::create_jwt(user.id, "user", state.jwt_secret.as_bytes())
         .map_err(|e| {
+            tracing::error!("Failed to create JWT during login: {}", e);
             crate::metrics::track_auth_attempt("login", false);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
         })?;
 
     crate::metrics::track_auth_attempt("login", true);
@@ -123,8 +127,12 @@ pub async fn register_handler(
     // 1. Hash le mot de passe avec Argon2
     let password_hash = services::hash_password(&payload.password)
         .map_err(|e| {
+            tracing::error!("Failed to hash password during register: {}", e);
             crate::metrics::track_auth_attempt("register", false);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Hashing error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
         })?;
 
     // 2. Générer un salt (pour compatibilité legacy)
@@ -153,15 +161,23 @@ pub async fn register_handler(
     let user_id = repo::create_user(&state.db_pool, new_user)
         .await
         .map_err(|e| {
+            tracing::error!("Failed to create user: {}", e);
             crate::metrics::track_auth_attempt("register", false);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
         })?;
 
     // 5. Créer JWT pour auto-login après inscription
     let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
         .map_err(|e| {
+            tracing::error!("Failed to create JWT during register: {}", e);
             crate::metrics::track_auth_attempt("register", false);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("JWT error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
         })?;
 
     crate::metrics::track_auth_attempt("register", true);
@@ -185,7 +201,13 @@ pub async fn logout_handler(
     let mut redis_conn = state.redis_manager.clone();
     services::blacklist_token(&mut redis_conn, &claims.jti, 10 * 24 * 3600)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis error: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Failed to blacklist JWT: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
+        })?;
 
     Ok(ApiResponse::ok("Logged out successfully".to_string()))
 }
@@ -216,7 +238,13 @@ pub async fn info_handler(
 ) -> Result<ApiResponse<repo::UserInfo>, (StatusCode, String)> {
     let user_info = repo::get_user_by_id(&state.db_pool, claims.id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Failed to fetch user info: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
 
     Ok(ApiResponse::ok(user_info))
 }

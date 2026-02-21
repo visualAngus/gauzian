@@ -63,7 +63,10 @@ pub async fn get_events_handler(
     .await
     .map_err(|e| {
         tracing::error!("Database error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
     })?;
     
     Ok(Json(ApiResponse::ok(EventResponse { events })))
@@ -108,7 +111,10 @@ pub async fn create_event_handler(
     .await
     .map_err(|e| {
         tracing::error!("Database error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
     })?;
 
 
@@ -121,7 +127,10 @@ pub async fn create_event_handler(
     .await
     .map_err(|e| {
         tracing::error!("Database error: {}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
     })?;
 
     Ok(Json(ApiResponse::ok(EventResponse { events: vec![new_event] })))

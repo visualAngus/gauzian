@@ -127,7 +127,7 @@ const MAX_LOGIN_ATTEMPTS: u32 = 5;
 const RATE_LIMIT_WINDOW_SECONDS: u64 = 15 * 60; // 15 minutes
 
 fn rate_limit_key(email: &str) -> String {
-    format!("ratelimit:login:{}", email)
+    format!("ratelimit:login:{}", email.trim().to_ascii_lowercase())
 }
 
 /// Vérifie si un email est rate-limité (trop de tentatives échouées)
