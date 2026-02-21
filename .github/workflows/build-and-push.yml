@@ -82,8 +82,7 @@ jobs:
             --email-b "${{ secrets.TEST_USER_EMAIL_B }}" \
             --password "${{ secrets.TEST_USER_PASSWORD }}" \
             --username-a "${{ secrets.TEST_USERNAME_A }}" \
-            --username-b "${{ secrets.TEST_USERNAME_B }}" \
-            --report-html
+            --username-b "${{ secrets.TEST_USERNAME_B }}"
 
       - name: Upload test reports
         if: always()

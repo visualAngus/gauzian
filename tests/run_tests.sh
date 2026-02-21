@@ -126,23 +126,12 @@ run_test() {
     
     echo -e "${YELLOW}Running: ${test_name}${NC}"
     
-    if [ "$REPORT_HTML" = true ]; then
-        local report_file="${REPORTS_DIR}/${test_name}.html"
-        if hurl --test "${HURL_VARS[@]}" --report-html "${report_file}" "${test_file}"; then
-            echo -e "  ${GREEN}✓ PASSED${NC}"
-            return 0
-        else
-            echo -e "  ${RED}✗ FAILED${NC}"
-            return 1
-        fi
+    if hurl --test "${HURL_VARS[@]}" "${test_file}"; then
+        echo -e "  ${GREEN}✓ PASSED${NC}"
+        return 0
     else
-        if hurl --test "${HURL_VARS[@]}" "${test_file}"; then
-            echo -e "  ${GREEN}✓ PASSED${NC}"
-            return 0
-        else
-            echo -e "  ${RED}✗ FAILED${NC}"
-            return 1
-        fi
+        echo -e "  ${RED}✗ FAILED${NC}"
+        return 1
     fi
 }
 
