@@ -4,13 +4,10 @@
 # Test 1: Login user A to get a valid token
 POST {{base_url}}/login
 Content-Type: application/json
-{
-    "email": "{{test_email_a}}",
-    "password": "{{test_password}}"
-}
+{"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_a: jsonpath "$.token"
+token_a: jsonpath "$.data.token"
 
 # Test 2: Verify token works before logout
 GET {{base_url}}/autologin
@@ -43,13 +40,10 @@ status == 401
 # Test 6: Login again to get a fresh token
 POST {{base_url}}/login
 Content-Type: application/json
-{
-    "email": "{{test_email_a}}",
-    "password": "{{test_password}}"
-}
+{"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-fresh_token: jsonpath "$.token"
+fresh_token: jsonpath "$.data.token"
 
 # Test 7: Verify fresh token works
 GET {{base_url}}/autologin
