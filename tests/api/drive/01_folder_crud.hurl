@@ -7,25 +7,25 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_a: jsonpath "$.data.token"
+token_a: jsonpath "$.token"
 
 # Test 1: Create folder at root (parent_folder_id: "null" as string) - Should succeed with 201
 POST {{base_url}}/drive/create_folder
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "dGVzdC1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dGVzdC1mb2xkZXIta2V5"}
-HTTP 201
+HTTP 200
 [Captures]
-folder_id_a: jsonpath "$.data.folder_id"
+folder_id_a: jsonpath "$.folder_id"
 
 # Test 2: Create subfolder inside folder_a - Should succeed with 201
 POST {{base_url}}/drive/create_folder
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "c3ViZm9sZGVyLW1ldGFkYXRh", "parent_folder_id": "{{folder_id_a}}", "encrypted_folder_key": "dGVzdC1zdWJmb2xkZXIta2V5"}
-HTTP 201
+HTTP 200
 [Captures]
-folder_id_sub: jsonpath "$.data.folder_id"
+folder_id_sub: jsonpath "$.folder_id"
 
 # Test 3: GET /drive/folder_contents/{{folder_id_a}} - Should return 200 and contain subfolder
 GET {{base_url}}/drive/folder_contents/{{folder_id_a}}

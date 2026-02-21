@@ -7,7 +7,7 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_a: jsonpath "$.data.token"
+token_a: jsonpath "$.token"
 
 # Test 2: Verify token works before logout
 GET {{base_url}}/autologin
@@ -43,7 +43,7 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-fresh_token: jsonpath "$.data.token"
+fresh_token: jsonpath "$.token"
 
 # Test 7: Verify fresh token works
 GET {{base_url}}/autologin

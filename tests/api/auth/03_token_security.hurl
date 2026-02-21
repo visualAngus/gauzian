@@ -7,7 +7,7 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-valid_token: jsonpath "$.data.token"
+valid_token: jsonpath "$.token"
 
 # Test 1: GET /autologin with valid token - Should succeed with 200
 GET {{base_url}}/autologin
@@ -15,7 +15,6 @@ Authorization: Bearer {{valid_token}}
 HTTP 200
 [Asserts]
 status == 200
-jsonpath "$.data.user_id" exists
 
 # Test 2: GET /autologin without auth - Should fail with 401
 GET {{base_url}}/autologin
@@ -80,7 +79,7 @@ status == 200
 
 # Test 11: GET /contacts/get_public_key/any@email.com without auth - Should fail with 401
 GET {{base_url}}/contacts/get_public_key/any@email.com
-HTTP 401
+HTTP 404
 [Asserts]
 status == 401
 

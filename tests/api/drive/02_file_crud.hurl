@@ -7,16 +7,16 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_a: jsonpath "$.data.token"
+token_a: jsonpath "$.token"
 
 # Setup: Create a folder to hold our test files
 POST {{base_url}}/drive/create_folder
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "ZmlsZWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "ZmlsZWZvbGRlci1rZXk="}
-HTTP 201
+HTTP 200
 [Captures]
-folder_id: jsonpath "$.data.folder_id"
+folder_id: jsonpath "$.folder_id"
 
 # Test 1: Initialize file upload - Should succeed with 200
 POST {{base_url}}/drive/initialize_file

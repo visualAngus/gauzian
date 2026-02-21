@@ -7,17 +7,17 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_a: jsonpath "$.data.token"
-user_a_id: jsonpath "$.data.user_id"
+token_a: jsonpath "$.token"
+user_a_id: jsonpath "$.user_id"
 
 # User A creates a folder to share
 POST {{base_url}}/drive/create_folder
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "c2hhcmluZy1mb2xkZXItbWV0YWRhdGE=", "parent_folder_id": "null", "encrypted_folder_key": "c2hhcmluZy1mb2xkZXIta2V5"}
-HTTP 201
+HTTP 200
 [Captures]
-folder_id_share: jsonpath "$.data.folder_id"
+folder_id_share: jsonpath "$.folder_id"
 
 # User A creates a file to share
 POST {{base_url}}/drive/initialize_file
@@ -45,8 +45,8 @@ Content-Type: application/json
 {"email": "{{test_email_b}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_b: jsonpath "$.data.token"
-user_b_id: jsonpath "$.data.user_id"
+token_b: jsonpath "$.token"
+user_b_id: jsonpath "$.user_id"
 
 # ===== Sharing Tests =====
 

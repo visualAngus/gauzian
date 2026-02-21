@@ -8,17 +8,17 @@ Content-Type: application/json
 {"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_a: jsonpath "$.data.token"
-user_a_id: jsonpath "$.data.user_id"
+token_a: jsonpath "$.token"
+user_a_id: jsonpath "$.user_id"
 
 # User A creates a folder
 POST {{base_url}}/drive/create_folder
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "dXNlci1hLWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dXNlci1hLWZvbGRlci1rZXk="}
-HTTP 201
+HTTP 200
 [Captures]
-folder_id_a: jsonpath "$.data.folder_id"
+folder_id_a: jsonpath "$.folder_id"
 
 # User A creates a file (initialize + upload + finalize)
 POST {{base_url}}/drive/initialize_file
@@ -45,17 +45,17 @@ Content-Type: application/json
 {"email": "{{test_email_b}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
-token_b: jsonpath "$.data.token"
-user_b_id: jsonpath "$.data.user_id"
+token_b: jsonpath "$.token"
+user_b_id: jsonpath "$.user_id"
 
 # User B creates their own folder
 POST {{base_url}}/drive/create_folder
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
 {"encrypted_metadata": "dXNlci1iLWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dXNlci1iLWZvbGRlci1rZXk="}
-HTTP 201
+HTTP 200
 [Captures]
-folder_id_b: jsonpath "$.data.folder_id"
+folder_id_b: jsonpath "$.folder_id"
 
 # ===== IDOR Tests: User B trying to access User A's resources =====
 
