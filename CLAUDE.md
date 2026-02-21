@@ -113,4 +113,14 @@ fix(auth): Correct JWT expiration
 docs(api): Update endpoint documentation [skip ci]
 ```
 
-**Dernière mise à jour** : 2026-02-20
+---
+
+## Règles Git — À RESPECTER ABSOLUMENT
+
+- **Ne jamais merger une PR / branche dans `back` sans validation explicite du propriétaire.**
+- **Ne jamais pusher directement sur `back` un changement non demandé.**
+- Toujours créer une branche feature (`feat/...`, `fix/...`) et ouvrir une PR.
+- La PR est **revue et mergée par le propriétaire uniquement**. Claude ne merge jamais.
+- En cas de doute : demander avant d'agir.
+
+**Dernière mise à jour** : 2026-02-21
