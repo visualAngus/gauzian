@@ -2,8 +2,8 @@
 
 Documentation complète de l'API REST du backend GAUZIAN (Rust / Axum).
 
-**Version** : 1.0
-**Base URL** : `https://api.gauzian.com`
+**Version** : 1.1
+**Base URL** : `https://gauzian.pupin.fr/api`
 **Format** : JSON
 **Authentification** : JWT (Cookie `auth_token` ou Header `Authorization: Bearer <token>`)
 
@@ -18,10 +18,11 @@ Documentation complète de l'API REST du backend GAUZIAN (Rust / Axum).
 5. [Module Drive - Files](#module-drive---files)
 6. [Module Drive - Folders](#module-drive---folders)
 7. [Module Drive - Access](#module-drive---access)
-8. [Module Agenda](#module-agenda)
-9. [Schémas de Données](#schémas-de-données)
-10. [Codes d'Erreur](#codes-derreur)
-11. [Exemples d'Utilisation](#exemples-dutilisation)
+8. [Module Drive - Global](#module-drive---global)
+9. [Module Agenda](#module-agenda)
+10. [Schémas de Données](#schémas-de-données)
+11. [Codes d'Erreur](#codes-derreur)
+12. [Exemples d'Utilisation](#exemples-dutilisation)
 
 ---
 
@@ -32,7 +33,7 @@ L'API GAUZIAN est une API REST **zero-knowledge, end-to-end encrypted (E2EE)**. 
 ### Caractéristiques
 
 - **E2EE** : Toutes les données sensibles sont chiffrées côté client
-- **Chunked Upload** : Support de fichiers volumineux (chunks de 2MB)
+- **Chunked Upload** : Support de fichiers volumineux (chunks de 2MB, format binaire multipart)
 - **Soft Delete** : Les fichiers/dossiers sont marqués `is_deleted = true` (pas supprimés immédiatement)
 - **Permission System** : Ownership (`owner`, `editor`, `viewer`) avec partage E2EE
 - **JWT Authentication** : Tokens valides 10 jours, révoqués au logout
@@ -76,7 +77,7 @@ Authorization: Bearer <jwt_token>
 **Endpoint** : `POST /login`
 
 ```bash
-curl -X POST https://api.gauzian.com/login \
+curl -X POST https://gauzian.pupin.fr/api/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -108,7 +109,7 @@ Au logout, le token est ajouté à une **blacklist Redis** (TTL = durée restant
 
 ### GET `/`
 
-**Description** : Health check pour Clever Cloud.
+**Description** : Health check.
 
 **Authentification** : ❌ Non requise
 
@@ -149,7 +150,7 @@ gauzian_requests_total{method="GET",status="200"} 1234
 
 # HELP gauzian_request_duration_seconds Request duration histogram
 # TYPE gauzian_request_duration_seconds histogram
-gauzian_request_duration_seconds_bucket{method="POST",endpoint="/files/initialize",le="0.1"} 456
+gauzian_request_duration_seconds_bucket{method="POST",endpoint="/drive/initialize_file",le="0.1"} 456
 ...
 ```
 
@@ -203,7 +204,7 @@ gauzian_request_duration_seconds_bucket{method="POST",endpoint="/files/initializ
 **Exemple curl** :
 
 ```bash
-curl -X POST https://api.gauzian.com/login \
+curl -X POST https://gauzian.pupin.fr/api/login \
   -H "Content-Type: application/json" \
   -c cookies.txt \
   -d '{
@@ -253,29 +254,12 @@ curl -X POST https://api.gauzian.com/login \
 
 **Cookie Set** : `auth_token=<token>` (HttpOnly, Secure, 10 jours)
 
-**⭐ Auto-Login** : Depuis 2026-02-15, `/register` retourne automatiquement un JWT et set le cookie `auth_token`. L'utilisateur est connecté immédiatement après inscription (pas besoin d'appeler `/login`).
+**⭐ Auto-Login** : `/register` retourne automatiquement un JWT et set le cookie `auth_token`. L'utilisateur est connecté immédiatement après inscription (pas besoin d'appeler `/login`).
 
 **Errors** :
 - `400 Bad Request` - Validation error (email invalid, password too short)
 - `409 Conflict` - Email already exists
 - `500 Internal Server Error` - Database error
-
-**Exemple curl** :
-
-```bash
-curl -X POST https://api.gauzian.com/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "username": "john_doe",
-    "password": "password123",
-    "encrypted_private_key": "U2FsdGVkX1...",
-    "public_key": "-----BEGIN PUBLIC KEY-----\n...",
-    "private_key_salt": "abc123",
-    "iv": "def456",
-    "encrypted_record_key": "ghi789"
-  }'
-```
 
 ---
 
@@ -297,13 +281,6 @@ curl -X POST https://api.gauzian.com/register \
 ```
 
 **Effet** : Le JWT est ajouté à Redis avec TTL = durée restante du token.
-
-**Exemple curl** :
-
-```bash
-curl -X POST https://api.gauzian.com/logout \
-  -b cookies.txt
-```
 
 ---
 
@@ -333,30 +310,6 @@ curl -X POST https://api.gauzian.com/logout \
 
 **Errors** :
 - `401 Unauthorized` - Token invalide ou révoqué
-
-**Exemple curl** :
-
-```bash
-curl -X GET https://api.gauzian.com/autologin \
-  -b cookies.txt
-```
-
----
-
-### GET `/protected`
-
-**Description** : Endpoint de test pour vérifier l'authentification.
-
-**Authentification** : ✅ Requise
-
-**Response** : `200 OK`
-
-```json
-{
-  "ok": true,
-  "data": "Bienvenue 550e8400-e29b-41d4-a716-446655440000 ! Tu es authentifié via Cookie."
-}
-```
 
 ---
 
@@ -412,14 +365,7 @@ curl -X GET https://api.gauzian.com/autologin \
 **Errors** :
 - `404 Not Found` - Utilisateur introuvable
 
-**Exemple curl** :
-
-```bash
-curl -X GET https://api.gauzian.com/contacts/get_public_key/recipient@example.com \
-  -b cookies.txt
-```
-
-**Usage** : Utilisé par le frontend pour récupérer la clé publique du destinataire lors d'un partage de fichier.
+**Usage** : Utilisé par le frontend pour récupérer la clé publique du destinataire lors d'un partage de fichier/dossier.
 
 ---
 
@@ -466,52 +412,35 @@ curl -X GET https://api.gauzian.com/contacts/get_public_key/recipient@example.co
 - `404 Not Found` - Dossier introuvable
 - `500 Internal Server Error` - Database error
 
-**Workflow** :
+**Workflow Upload** :
 
 ```
 1. Client génère fileKey (AES-256)
 2. Client chiffre filename avec recordKey → encrypted_metadata
 3. Client chiffre fileKey avec recordKey → encrypted_file_key
-4. POST /drive/initialize_file
-5. Serveur crée file record (is_fully_uploaded = false)
-6. Serveur retourne file_id
-7. Client upload chunks avec POST /drive/upload_chunk
-8. Client finalise avec POST /drive/finalize_upload/{file_id}/success
-```
-
-**Exemple curl** :
-
-```bash
-curl -X POST https://api.gauzian.com/drive/initialize_file \
-  -b cookies.txt \
-  -H "Content-Type: application/json" \
-  -d '{
-    "size": 10485760,
-    "encrypted_metadata": "abc123:def456",
-    "mime_type": "application/pdf",
-    "folder_id": "770e8400-e29b-41d4-a716-446655440002",
-    "encrypted_file_key": "ghi789"
-  }'
+4. POST /drive/initialize_file → retourne file_id
+5. Client upload chunks : POST /drive/files/{file_id}/upload-chunk
+6. Client finalise : POST /drive/finalize_upload/{file_id}/success
 ```
 
 ---
 
-### POST `/drive/upload_chunk`
+### POST `/drive/files/{file_id}/upload-chunk`
 
-**Description** : Upload un chunk chiffré (format JSON base64).
+**Description** : Upload un chunk chiffré (format binaire multipart).
 
 **Authentification** : ✅ Requise
 
-**Request Body** :
+**Path Parameters** :
+- `file_id` (UUID) - ID du fichier
 
-```json
-{
-  "file_id": "880e8400-e29b-41d4-a716-446655440003",
-  "chunk_index": 0,
-  "total_chunks": 10,
-  "encrypted_chunk": "<base64_encrypted_data>",
-  "iv": "<base64_iv>"
-}
+**Request Body** : `multipart/form-data`
+
+```
+chunk_index: 0
+total_chunks: 10
+chunk: <binary encrypted data>
+iv: <base64_iv>
 ```
 
 **Response** : `200 OK`
@@ -523,48 +452,23 @@ curl -X POST https://api.gauzian.com/drive/initialize_file \
 }
 ```
 
-**Limite** : 2 MB par chunk (DefaultBodyLimit)
+**Limite** : 6 MB par chunk (DefaultBodyLimit)
 
 **Errors** :
-- `400 Bad Request` - file_id invalide ou chunk trop gros
+- `400 Bad Request` - chunk_index invalide ou chunk trop gros
 - `404 Not Found` - Fichier introuvable
 - `500 Internal Server Error` - S3 error
-
----
-
-### POST `/drive/upload_chunk_binary`
-
-**Description** : Upload un chunk chiffré (format binaire multipart).
-
-**Authentification** : ✅ Requise
-
-**Request Body** : `multipart/form-data`
-
-```
-file_id: 880e8400-e29b-41d4-a716-446655440003
-chunk_index: 0
-total_chunks: 10
-chunk: <binary encrypted data>
-iv: <base64_iv>
-```
-
-**Response** : `200 OK`
-
-**Limite** : 2 MB par chunk
 
 **Exemple curl** :
 
 ```bash
-curl -X POST https://api.gauzian.com/drive/upload_chunk_binary \
+curl -X POST https://gauzian.pupin.fr/api/drive/files/880e8400-e29b-41d4-a716-446655440003/upload-chunk \
   -b cookies.txt \
-  -F "file_id=880e8400-e29b-41d4-a716-446655440003" \
   -F "chunk_index=0" \
   -F "total_chunks=10" \
   -F "chunk=@chunk_0.enc" \
   -F "iv=abc123=="
 ```
-
-**Performance** : Plus rapide que `/upload_chunk` (pas de base64 overhead).
 
 ---
 
@@ -590,13 +494,6 @@ curl -X POST https://api.gauzian.com/drive/upload_chunk_binary \
 **Effet** :
 - `etat = "success"` → `UPDATE files SET is_fully_uploaded = true`
 - `etat = "failure"` → Soft delete du fichier + suppression des chunks S3
-
-**Exemple curl** :
-
-```bash
-curl -X POST https://api.gauzian.com/drive/finalize_upload/880e8400-e29b-41d4-a716-446655440003/success \
-  -b cookies.txt
-```
 
 ---
 
@@ -655,80 +552,6 @@ curl -X POST https://api.gauzian.com/drive/finalize_upload/880e8400-e29b-41d4-a7
 
 ---
 
-### GET `/drive/download/{file_id}`
-
-**Description** : Retourne la liste des `s3_key` pour download des chunks.
-
-**Authentification** : ✅ Requise
-
-**Path Parameters** :
-- `file_id` (UUID)
-
-**Response** : `200 OK`
-
-```json
-{
-  "ok": true,
-  "data": {
-    "file_id": "880e8400-e29b-41d4-a716-446655440003",
-    "encrypted_metadata": "iv:ciphertext_base64",
-    "encrypted_file_key": "encrypted_aes_key_base64",
-    "s3_keys": [
-      "chunks/880e8400-e29b-41d4-a716-446655440003/0",
-      "chunks/880e8400-e29b-41d4-a716-446655440003/1",
-      "chunks/880e8400-e29b-41d4-a716-446655440003/2"
-    ]
-  }
-}
-```
-
-**Workflow** :
-
-```
-1. Client appelle GET /drive/download/{file_id}
-2. Serveur retourne s3_keys[]
-3. Client déchiffre encrypted_file_key avec recordKey → fileKey
-4. Pour chaque s3_key, client appelle GET /drive/download_chunk/{s3_key}
-5. Client déchiffre chunk avec fileKey
-6. Client reconstruit le fichier complet
-```
-
----
-
-### GET `/drive/download_chunk/{s3_key}`
-
-**Description** : Download un chunk chiffré (format JSON base64).
-
-**Authentification** : ✅ Requise
-
-**Path Parameters** :
-- `s3_key` (string) - Clé S3 du chunk (URL-encoded)
-
-**Response** : `200 OK`
-
-```json
-{
-  "ok": true,
-  "data": {
-    "encrypted_chunk": "<base64_encrypted_data>",
-    "iv": "<base64_iv>"
-  }
-}
-```
-
-**Errors** :
-- `403 Forbidden` - Pas de permission
-- `404 Not Found` - Chunk introuvable dans S3
-
-**Exemple curl** :
-
-```bash
-curl -X GET "https://api.gauzian.com/drive/download_chunk/chunks%2F880e8400%2F0" \
-  -b cookies.txt
-```
-
----
-
 ### GET `/drive/download_chunk_binary/{s3_key}`
 
 **Description** : Download un chunk chiffré (format binaire).
@@ -747,31 +570,84 @@ Content-Length: 2097152
 <binary encrypted chunk data>
 ```
 
-**Performance** : Plus rapide que `/download_chunk` (pas de base64 overhead).
+**Workflow Download** :
+
+```
+1. GET /drive/file/{file_id} → récupérer encrypted_file_key + s3_keys
+2. Pour chaque s3_key : GET /drive/download_chunk_binary/{s3_key}
+3. Client déchiffre encrypted_file_key avec recordKey → fileKey
+4. Client déchiffre chaque chunk avec fileKey + IV
+5. Client reconstruit le fichier complet
+```
 
 **Exemple curl** :
 
 ```bash
-curl -X GET "https://api.gauzian.com/drive/download_chunk_binary/chunks%2F880e8400%2F0" \
+curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F880e8400%2F0" \
   -b cookies.txt \
   -o chunk_0.enc
 ```
 
 ---
 
-### POST `/drive/delete_file`
+### PATCH `/drive/files/{file_id}`
 
-**Description** : Soft delete d'un fichier (marque `is_deleted = true`).
+**Description** : Renomme un fichier (update `encrypted_metadata`).
 
 **Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
 
 **Request Body** :
 
 ```json
 {
-  "file_id": "880e8400-e29b-41d4-a716-446655440003"
+  "encrypted_metadata": "new_iv:new_ciphertext_base64"
 }
 ```
+
+**Response** : `200 OK`
+
+**Errors** :
+- `403 Forbidden` - Pas de permission (seul `owner` et `editor` peuvent renommer)
+- `404 Not Found` - Fichier introuvable
+
+---
+
+### PATCH `/drive/files/{file_id}/move`
+
+**Description** : Déplace un fichier vers un autre dossier.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Request Body** :
+
+```json
+{
+  "new_folder_id": "990e8400-e29b-41d4-a716-446655440004",
+  "encrypted_file_key": "new_encrypted_file_key_base64"
+}
+```
+
+**Response** : `200 OK`
+
+**Errors** :
+- `403 Forbidden` - Pas de permission sur le fichier ou le dossier de destination
+
+---
+
+### DELETE `/drive/files/{file_id}`
+
+**Description** : Soft delete d'un fichier (marque `is_deleted = true`).
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
 
 **Response** : `200 OK`
 
@@ -785,50 +661,6 @@ curl -X GET "https://api.gauzian.com/drive/download_chunk_binary/chunks%2F880e84
 **Effet** : `UPDATE files SET is_deleted = true, updated_at = NOW()`
 
 **Note** : Les chunks S3 ne sont **pas** supprimés immédiatement (optimisation pour restore).
-
----
-
-### POST `/drive/rename_file`
-
-**Description** : Renomme un fichier (update `encrypted_metadata`).
-
-**Authentification** : ✅ Requise
-
-**Request Body** :
-
-```json
-{
-  "file_id": "880e8400-e29b-41d4-a716-446655440003",
-  "encrypted_metadata": "new_iv:new_ciphertext_base64"
-}
-```
-
-**Response** : `200 OK`
-
-**Errors** :
-- `403 Forbidden` - Pas de permission (seul `owner` et `editor` peuvent renommer)
-
----
-
-### POST `/drive/move_file`
-
-**Description** : Déplace un fichier vers un autre dossier.
-
-**Authentification** : ✅ Requise
-
-**Request Body** :
-
-```json
-{
-  "file_id": "880e8400-e29b-41d4-a716-446655440003",
-  "new_folder_id": "990e8400-e29b-41d4-a716-446655440004"
-}
-```
-
-**Response** : `200 OK`
-
-**Errors** :
-- `403 Forbidden` - Pas de permission sur le fichier ou le dossier de destination
 
 ---
 
@@ -850,17 +682,19 @@ curl -X GET "https://api.gauzian.com/drive/download_chunk_binary/chunks%2F880e84
 
 ---
 
-### POST `/drive/share_file`
+### POST `/drive/files/{file_id}/share`
 
 **Description** : Partage un fichier avec un utilisateur (E2EE).
 
 **Authentification** : ✅ Requise
 
+**Path Parameters** :
+- `file_id` (UUID)
+
 **Request Body** :
 
 ```json
 {
-  "file_id": "880e8400-e29b-41d4-a716-446655440003",
   "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
   "encrypted_file_key": "<file_key_wrapped_with_recipient_rsa_public_key>",
   "access_level": "viewer"
@@ -876,33 +710,45 @@ curl -X GET "https://api.gauzian.com/drive/download_chunk_binary/chunks%2F880e84
 **Workflow E2EE** :
 
 ```
-1. Client récupère la clé publique du destinataire (GET /contacts/get_public_key/{email})
+1. GET /contacts/get_public_key/{email} → clé publique du destinataire
 2. Client déchiffre file_key avec sa record_key
 3. Client chiffre file_key avec la clé publique RSA du destinataire (RSA-OAEP)
-4. Client envoie encrypted_file_key au serveur (POST /drive/share_file)
+4. POST /drive/files/{file_id}/share
 5. Serveur crée un file_access record
-6. Destinataire pourra déchiffrer file_key avec sa clé privée RSA
+6. Destinataire déchiffre file_key avec sa clé privée RSA
 ```
 
-**Exemple curl** :
+---
 
-```bash
-curl -X POST https://api.gauzian.com/drive/share_file \
-  -b cookies.txt \
-  -H "Content-Type: application/json" \
-  -d '{
-    "file_id": "880e8400-e29b-41d4-a716-446655440003",
-    "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
-    "encrypted_file_key": "wrapped_key_base64",
-    "access_level": "viewer"
-  }'
-```
+### POST `/drive/files/{file_id}/accept`
+
+**Description** : Accepte un partage de fichier reçu.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Response** : `200 OK`
+
+---
+
+### POST `/drive/files/{file_id}/reject`
+
+**Description** : Rejette un partage de fichier reçu.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Response** : `200 OK`
 
 ---
 
 ### GET `/drive/file/{file_id}/InfoItem`
 
-**Description** : Récupère les métadonnées complètes d'un fichier (incluant permissions).
+**Description** : Récupère les métadonnées complètes d'un fichier (incluant permissions et liste de partage).
 
 **Authentification** : ✅ Requise
 
@@ -1035,56 +881,43 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 
 ---
 
-### POST `/drive/delete_folder`
-
-**Description** : Soft delete d'un dossier (et récursivement tous ses enfants).
-
-**Authentification** : ✅ Requise
-
-**Request Body** :
-
-```json
-{
-  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005"
-}
-```
-
-**Response** : `200 OK`
-
-**Effet** : Marque `is_deleted = true` pour le dossier ET tous ses fichiers/sous-dossiers (récursif).
-
----
-
-### POST `/drive/rename_folder`
+### PATCH `/drive/folders/{folder_id}`
 
 **Description** : Renomme un dossier.
 
 **Authentification** : ✅ Requise
 
+**Path Parameters** :
+- `folder_id` (UUID)
+
 **Request Body** :
 
 ```json
 {
-  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
   "encrypted_metadata": "new_iv:new_ciphertext_base64"
 }
 ```
 
 **Response** : `200 OK`
 
+**Errors** :
+- `403 Forbidden` - Pas de permission (seul `owner` et `editor` peuvent renommer)
+
 ---
 
-### POST `/drive/move_folder`
+### PATCH `/drive/folders/{folder_id}/move`
 
-**Description** : Déplace un dossier vers un autre dossier parent.
+**Description** : Déplace un dossier vers un nouveau dossier parent.
 
 **Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
 
 **Request Body** :
 
 ```json
 {
-  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
   "new_parent_folder_id": "cc0e8400-e29b-41d4-a716-446655440007"
 }
 ```
@@ -1092,6 +925,21 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 **Response** : `200 OK`
 
 **Validation** : Empêche les déplacements circulaires (dossier ne peut pas être son propre parent).
+
+---
+
+### DELETE `/drive/folders/{folder_id}`
+
+**Description** : Soft delete d'un dossier (et récursivement tous ses enfants).
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
+
+**Response** : `200 OK`
+
+**Effet** : Marque `is_deleted = true` pour le dossier ET tous ses fichiers/sous-dossiers (récursif).
 
 ---
 
@@ -1110,29 +958,6 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 ```
 
 **Response** : `200 OK`
-
----
-
-### POST `/drive/share_folder`
-
-**Description** : Partage un dossier avec un utilisateur (E2EE).
-
-**Authentification** : ✅ Requise
-
-**Request Body** :
-
-```json
-{
-  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
-  "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
-  "encrypted_folder_key": "<folder_key_wrapped_with_recipient_rsa>",
-  "access_level": "editor"
-}
-```
-
-**Response** : `200 OK`
-
-**Note** : Partage uniquement le dossier (pas les fichiers à l'intérieur). Utiliser `/drive/share_folder_batch` pour partager récursivement.
 
 ---
 
@@ -1165,11 +990,38 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 **Workflow** :
 
 ```
-1. Client récupère récursivement tous les fichiers du dossier
-2. Client chiffre folder_key et chaque file_key avec la clé publique RSA du destinataire
-3. Client envoie le tout au serveur (POST /drive/share_folder_batch)
-4. Serveur crée folder_access + file_access pour chaque fichier
+1. GET /contacts/get_public_key/{email} → clé publique du destinataire
+2. Client récupère récursivement tous les fichiers du dossier
+3. Client chiffre folder_key et chaque file_key avec la clé publique RSA du destinataire
+4. POST /drive/share_folder_batch
+5. Serveur crée folder_access + file_access pour chaque fichier
 ```
+
+---
+
+### POST `/drive/folders/{folder_id}/accept`
+
+**Description** : Accepte un partage de dossier reçu.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
+
+**Response** : `200 OK`
+
+---
+
+### POST `/drive/folders/{folder_id}/reject`
+
+**Description** : Rejette un partage de dossier reçu.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
+
+**Response** : `200 OK`
 
 ---
 
@@ -1201,7 +1053,7 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 
 ### GET `/drive/folder/{folder_id}/InfoItem`
 
-**Description** : Récupère les métadonnées complètes d'un dossier (incluant permissions).
+**Description** : Récupère les métadonnées complètes d'un dossier (incluant permissions et liste de partage).
 
 **Authentification** : ✅ Requise
 
@@ -1238,7 +1090,7 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 
 ### POST `/drive/propagate_file_access`
 
-**Description** : Propage les permissions d'un fichier à un utilisateur (après partage).
+**Description** : Propage les permissions d'un fichier à un utilisateur (après partage de dossier parent).
 
 **Authentification** : ✅ Requise
 
@@ -1248,19 +1100,18 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 {
   "file_id": "880e8400-e29b-41d4-a716-446655440003",
   "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
+  "encrypted_file_key": "encrypted_file_key_base64",
   "access_level": "viewer"
 }
 ```
 
 **Response** : `200 OK`
 
-**Note** : Utilisé en interne par `/drive/share_file`.
-
 ---
 
 ### POST `/drive/propagate_folder_access`
 
-**Description** : Propage les permissions d'un dossier à un utilisateur (après partage).
+**Description** : Propage les permissions d'un dossier à un utilisateur (après partage de dossier parent).
 
 **Authentification** : ✅ Requise
 
@@ -1270,6 +1121,7 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 {
   "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
   "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
+  "encrypted_folder_key": "encrypted_folder_key_base64",
   "access_level": "editor"
 }
 ```
@@ -1284,7 +1136,7 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 
 **Authentification** : ✅ Requise
 
-**Request Body** :
+**Request Body (fichier)** :
 
 ```json
 {
@@ -1293,7 +1145,7 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 }
 ```
 
-**Ou pour un dossier** :
+**Request Body (dossier)** :
 
 ```json
 {
@@ -1312,12 +1164,12 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 
 ### GET `/drive/get_all_drive_info/{parent_id}`
 
-**Description** : Récupère les informations complètes du drive (files, folders, quota).
+**Description** : Récupère les informations complètes du drive (fichiers, dossiers, quota). Endpoint principal utilisé au chargement de la page drive.
 
 **Authentification** : ✅ Requise
 
 **Path Parameters** :
-- `parent_id` (string) - UUID du dossier parent ou `"corbeille"` pour la corbeille
+- `parent_id` (string) - UUID du dossier parent, `"root"`, `"corbeille"`, ou `"shared_with_me"`
 
 **Response** : `200 OK`
 
@@ -1344,20 +1196,18 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 }
 ```
 
-**Usage** : Endpoint principal pour charger le drive dans le frontend.
-
 ---
 
 ### GET `/drive/get_file_folder/{parent_id}`
 
-**Description** : Liste les fichiers et dossiers d'un parent_id (alias de `/folder_contents`).
+**Description** : Liste les fichiers et dossiers d'un dossier. Supporte les vues virtuelles `root`, `corbeille`, `shared_with_me`.
 
 **Authentification** : ✅ Requise
 
 **Path Parameters** :
-- `parent_id` (UUID)
+- `parent_id` (string) - UUID du dossier, `"root"`, `"corbeille"`, ou `"shared_with_me"`
 
-**Response** : `200 OK` (même format que `/folder_contents/{folder_id}`)
+**Response** : `200 OK` (même format que `/drive/folder_contents/{folder_id}`)
 
 ---
 
@@ -1395,13 +1245,13 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 
 ### GET `/agenda/events`
 
-**Description** : Liste les événements d'agenda de l'utilisateur.
+**Description** : Liste les événements d'agenda de l'utilisateur pour une plage de jours.
 
 **Authentification** : ✅ Requise
 
 **Query Parameters** :
-- `start_date` (ISO 8601) - Date de début (optionnel)
-- `end_date` (ISO 8601) - Date de fin (optionnel)
+- `startDayId` (integer) - ID du jour de début
+- `endDayId` (integer) - ID du jour de fin
 
 **Response** : `200 OK`
 
@@ -1427,7 +1277,7 @@ curl -X POST https://api.gauzian.com/drive/share_file \
 **Exemple curl** :
 
 ```bash
-curl -X GET "https://api.gauzian.com/agenda/events?start_date=2025-01-01T00:00:00Z&end_date=2025-01-31T23:59:59Z" \
+curl -X GET "https://gauzian.pupin.fr/api/agenda/events?startDayId=20250101&endDayId=20250131" \
   -b cookies.txt
 ```
 
@@ -1658,8 +1508,7 @@ interface AgendaEvent {
 ```bash
 #!/bin/bash
 
-# Variables
-API_URL="https://api.gauzian.com"
+API_URL="https://gauzian.pupin.fr/api"
 EMAIL="user@example.com"
 PASSWORD="password123"
 FILE_PATH="document.pdf"
@@ -1694,17 +1543,17 @@ echo "File ID: $FILE_ID"
 # 3. Split file into chunks (2MB each)
 echo "3. Splitting file into chunks..."
 split -b 2097152 "$FILE_PATH" chunk_
+TOTAL_CHUNKS=$(ls chunk_* | wc -l)
 
-# 4. Upload chunks
+# 4. Upload chunks (binary multipart)
 echo "4. Uploading chunks..."
 CHUNK_INDEX=0
 for chunk in chunk_*; do
   echo "  Uploading chunk $CHUNK_INDEX..."
-  curl -s -X POST $API_URL/drive/upload_chunk_binary \
+  curl -s -X POST "$API_URL/drive/files/$FILE_ID/upload-chunk" \
     -b cookies.txt \
-    -F "file_id=$FILE_ID" \
     -F "chunk_index=$CHUNK_INDEX" \
-    -F "total_chunks=10" \
+    -F "total_chunks=$TOTAL_CHUNKS" \
     -F "chunk=@$chunk" \
     -F "iv=iv_example"
 
@@ -1729,7 +1578,7 @@ rm chunk_*
 ```bash
 #!/bin/bash
 
-API_URL="https://api.gauzian.com"
+API_URL="https://gauzian.pupin.fr/api"
 FILE_ID="880e8400-e29b-41d4-a716-446655440003"
 RECIPIENT_EMAIL="recipient@example.com"
 
@@ -1744,17 +1593,15 @@ RECIPIENT_USER_ID=$(echo $PUBLIC_KEY_RESPONSE | jq -r '.data.user_id')
 echo "Recipient User ID: $RECIPIENT_USER_ID"
 
 # 2. Chiffrer file_key avec la clé publique RSA du destinataire
-# (Ce chiffrement se fait côté client avec crypto.ts)
-# Pour cet exemple, on suppose que wrapped_file_key est déjà généré
+# (Ce chiffrement se fait côté client avec crypto.ts / RSA-OAEP)
 WRAPPED_FILE_KEY="wrapped_file_key_example_base64"
 
 # 3. Partager le fichier
 echo "2. Sharing file..."
-curl -s -X POST $API_URL/drive/share_file \
+curl -s -X POST "$API_URL/drive/files/$FILE_ID/share" \
   -b cookies.txt \
   -H "Content-Type: application/json" \
   -d "{
-    \"file_id\": \"$FILE_ID\",
     \"recipient_user_id\": \"$RECIPIENT_USER_ID\",
     \"encrypted_file_key\": \"$WRAPPED_FILE_KEY\",
     \"access_level\": \"viewer\"
@@ -1770,23 +1617,23 @@ echo "File shared successfully!"
 ```bash
 #!/bin/bash
 
-API_URL="https://api.gauzian.com"
+API_URL="https://gauzian.pupin.fr/api"
 FILE_ID="880e8400-e29b-41d4-a716-446655440003"
 OUTPUT_FILE="downloaded_file.pdf"
 
-# 1. Récupérer les s3_keys du fichier
-echo "1. Getting file s3_keys..."
-DOWNLOAD_INFO=$(curl -s -X GET "$API_URL/drive/download/$FILE_ID" \
+# 1. Récupérer les métadonnées du fichier (s3_keys inclus)
+echo "1. Getting file metadata..."
+FILE_INFO=$(curl -s -X GET "$API_URL/drive/file/$FILE_ID" \
   -b cookies.txt)
 
-ENCRYPTED_FILE_KEY=$(echo $DOWNLOAD_INFO | jq -r '.data.encrypted_file_key')
-S3_KEYS=($(echo $DOWNLOAD_INFO | jq -r '.data.s3_keys[]'))
+ENCRYPTED_FILE_KEY=$(echo $FILE_INFO | jq -r '.data.encrypted_file_key')
+S3_KEYS=($(echo $FILE_INFO | jq -r '.data.s3_keys[]'))
 
 echo "Total chunks: ${#S3_KEYS[@]}"
 
 # 2. Download chaque chunk
 echo "2. Downloading chunks..."
-rm -f chunk_*.enc  # Cleanup previous chunks
+rm -f chunk_*.enc
 
 for i in "${!S3_KEYS[@]}"; do
   S3_KEY="${S3_KEYS[$i]}"
@@ -1800,7 +1647,6 @@ done
 
 # 3. Déchiffrer et reconstruire le fichier
 # (Le déchiffrement se fait côté client avec crypto.ts)
-# Pour cet exemple, on suppose que les chunks sont déjà déchiffrés
 echo "3. Reconstructing file..."
 cat chunk_*.enc > "$OUTPUT_FILE"
 
@@ -1812,79 +1658,11 @@ rm chunk_*.enc
 
 ---
 
-## OpenAPI Specification (YAML)
-
-Pour une intégration avec Swagger UI ou d'autres outils, une spec OpenAPI 3.0 complète est disponible ici :
-
-**Fichier** : `openapi.yaml` (à créer à la racine du projet)
-
-Exemple minimal :
-
-```yaml
-openapi: 3.0.0
-info:
-  title: GAUZIAN API
-  version: 1.0.0
-  description: Zero-Knowledge E2EE Cloud Storage API
-servers:
-  - url: https://api.gauzian.com
-    description: Production server
-paths:
-  /login:
-    post:
-      summary: Authenticate user
-      tags:
-        - Auth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  format: password
-              required:
-                - email
-                - password
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  data:
-                    type: object
-                    properties:
-                      token:
-                        type: string
-                      user_id:
-                        type: string
-                        format: uuid
-        '401':
-          description: Invalid credentials
-  # ... (continuer pour tous les endpoints)
-```
-
-**Note** : Pour générer automatiquement une spec OpenAPI complète depuis le code Rust, utiliser la crate [`utoipa`](https://github.com/juhaku/utoipa).
-
----
-
 ## Monitoring & Observabilité
 
 ### Prometheus Metrics
 
 Toutes les requêtes sont trackées automatiquement via le middleware `metrics::track_metrics`.
-
-**Dashboard Grafana** : `http://grafana.gauzian.com/d/gauzian-api`
 
 **Requêtes utiles** :
 
@@ -1946,6 +1724,6 @@ rate(gauzian_s3_uploads_total[1m]) * 60
 
 ---
 
-**Dernière mise à jour** : 2026-02-11
-**Version API** : 1.0
+**Dernière mise à jour** : 2026-02-21
+**Version API** : 1.1
 **Backend Version** : Rust stable, Axum 0.7+, SQLx 0.7+
