@@ -10,7 +10,7 @@ Content-Type: application/json
 }
 HTTP 200
 [Captures]
-token_a: cookie "auth_token"
+token_a: jsonpath "$.token"
 
 # Test 2: Login with wrong password - Should fail with 401
 POST {{base_url}}/login
@@ -198,4 +198,4 @@ Content-Type: application/json
 }
 HTTP 200
 [Captures]
-token_b: cookie "auth_token"
+token_b: jsonpath "$.token"
