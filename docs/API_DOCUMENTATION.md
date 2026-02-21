@@ -89,19 +89,24 @@ curl -X POST https://gauzian.pupin.fr/api/login \
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000"
-  }
+  "success": false,
+  "data": null,
+  "error": "Descriptive error message"
 }
 ```
 
-Le cookie `auth_token` est automatiquement set avec HttpOnly.
+### HTTP Status Codes
 
-### Token Révocation
-
-Au logout, le token est ajouté à une **blacklist Redis** (TTL = durée restante du token).
+| Code | Description |
+|------|-------------|
+| `200` | Success |
+| `201` | Created |
+| `400` | Bad Request |
+| `401` | Unauthorized |
+| `403` | Forbidden |
+| `404` | Not Found |
+| `429` | Too Many Requests (rate limiting) |
+| `500` | Internal Server Error |
 
 ---
 
@@ -121,15 +126,14 @@ OK
 
 ---
 
-### GET `/health/ready`
+### GET /health/ready
 
-**Description** : Health check Kubernetes readiness probe.
+Complete health check verifying service availability (DB, Redis, S3).
 
-**Authentification** : ❌ Non requise
+**Response:**
 
-**Réponse** :
-
-```
+```http
+HTTP/1.1 200 OK
 OK
 ```
 
@@ -154,40 +158,34 @@ gauzian_request_duration_seconds_bucket{method="POST",endpoint="/drive/initializ
 ...
 ```
 
-**Métriques disponibles** :
-- `gauzian_requests_total` (counter) - Total requêtes HTTP
-- `gauzian_request_duration_seconds` (histogram) - Durée des requêtes
-- `gauzian_active_connections` (gauge) - Connexions actives
-- `gauzian_db_pool_active` (gauge) - Connexions DB actives
-- `gauzian_redis_cache_hits` / `gauzian_redis_cache_misses` (counter)
-- `gauzian_s3_uploads_total` / `gauzian_s3_downloads_total` (counter)
-- `gauzian_file_operations_total` (counter) - Opérations fichiers par type
-- ... (voir `metrics.rs` pour liste complète)
-
 ---
 
-## Module Auth
+## Auth Module
 
-### POST `/login`
+### POST /login
 
-**Description** : Authentifie un utilisateur et retourne un JWT.
+Authenticate a user with email and password.
 
-**Authentification** : ❌ Non requise
+**Headers:**
 
-**Request Body** :
+```
+Content-Type: application/json
+```
+
+**Request Body:**
 
 ```json
 {
   "email": "user@example.com",
-  "password": "password123"
+  "password": "motdepasse123"
 }
 ```
 
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
+  "success": true,
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -215,35 +213,32 @@ curl -X POST https://gauzian.pupin.fr/api/login \
 
 ---
 
-### POST `/register`
+### POST /register
 
-**Description** : Crée un nouvel utilisateur avec clés E2EE.
+Create a new user account.
 
-**Authentification** : ❌ Non requise
+**Headers:**
 
-**Request Body** :
+```
+Content-Type: application/json
+```
+
+**Request Body:**
 
 ```json
 {
   "email": "user@example.com",
-  "username": "john_doe",
-  "password": "password123",
-  "encrypted_private_key": "<base64_encrypted_rsa_private_key>",
-  "public_key": "-----BEGIN PUBLIC KEY-----\nMIICIjANBgkqhkiG9w0...",
-  "private_key_salt": "<base64_salt>",
-  "iv": "<base64_iv>",
-  "encrypted_record_key": "<base64_encrypted_aes_key>"
+  "username": "johndoe",
+  "password": "motdepasse123",
+  "encrypted_private_key": "base64_encoded_encrypted_private_key",
+  "public_key": "base64_public_key",
+  "private_key_salt": "base64_salt",
+  "iv": "base64_iv",
+  "encrypted_record_key": "base64_encrypted_record_key"
 }
 ```
 
-**Champs E2EE** :
-- `encrypted_private_key` : Clé privée RSA-4096 chiffrée avec password-derived key (PBKDF2 310k iterations)
-- `public_key` : Clé publique RSA-4096 au format PEM
-- `encrypted_record_key` : Clé AES-256 pour chiffrer les métadonnées (nom de fichier, dossier)
-- `private_key_salt` : Salt pour dérivation de clé
-- `iv` : Initialization Vector pour AES-GCM
-
-**Response** : `201 Created`
+**Success Response:**
 
 ```json
 {
@@ -263,15 +258,11 @@ curl -X POST https://gauzian.pupin.fr/api/login \
 
 ---
 
-### POST `/logout`
+### POST /logout
 
-**Description** : Révoque le JWT (ajout à la blacklist Redis).
+Revoke the JWT token by adding it to the Redis blacklist.
 
-**Authentification** : ✅ Requise
-
-**Request Body** : Aucun
-
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
@@ -284,27 +275,17 @@ curl -X POST https://gauzian.pupin.fr/api/login \
 
 ---
 
-### GET `/autologin`
+### GET /autologin
 
-**Description** : Vérifie si le JWT actuel est valide et retourne les infos utilisateur.
+Check if the JWT token is still valid. Used to maintain session.
 
-**Authentification** : ✅ Requise
-
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "user@example.com",
-    "username": "john_doe",
-    "encrypted_private_key": "U2FsdGVkX1...",
-    "public_key": "-----BEGIN PUBLIC KEY-----\n...",
-    "encrypted_record_key": "ghi789",
-    "private_key_salt": "abc123",
-    "iv": "def456"
-  }
+  "success": true,
+  "data": "Authenticated as user 550e8400-e29b-41d4-a716-446655440000",
+  "error": null
 }
 ```
 
@@ -313,47 +294,45 @@ curl -X POST https://gauzian.pupin.fr/api/login \
 
 ---
 
-### GET `/info`
+### GET /info
 
-**Description** : Retourne les informations complètes de l'utilisateur authentifié.
+Retrieve complete information of the logged-in user.
 
-**Authentification** : ✅ Requise
-
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
+  "success": true,
   "data": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
+    "username": "johndoe",
     "email": "user@example.com",
-    "username": "john_doe",
-    "encrypted_private_key": "U2FsdGVkX1...",
-    "public_key": "-----BEGIN PUBLIC KEY-----\n...",
-    "encrypted_record_key": "ghi789",
-    "private_key_salt": "abc123",
-    "iv": "def456",
-    "created_at": "2025-01-15T10:30:00Z"
-  }
+    "public_key": "base64_public_key",
+    "encrypted_private_key": "base64_encrypted_private_key",
+    "private_key_salt": "base64_salt",
+    "iv": "base64_iv"
+  },
+  "error": null
 }
 ```
 
 ---
 
-### GET `/contacts/get_public_key/{email}`
+### GET /contacts/get_public_key/{email}
 
-**Description** : Récupère la clé publique RSA d'un utilisateur (pour partage E2EE).
+Retrieve the public key of a user for E2EE encryption.
 
-**Authentification** : ✅ Requise
+**Parameters:**
 
-**Path Parameters** :
-- `email` (string) - Email de l'utilisateur dont on veut la clé publique
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `email` | path | User email |
 
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
+  "success": true,
   "data": {
     "user_id": "660e8400-e29b-41d4-a716-446655440001",
     "email": "recipient@example.com",
@@ -373,19 +352,13 @@ curl -X POST https://gauzian.pupin.fr/api/login \
 
 ### POST `/drive/initialize_file`
 
-**Description** : Initialise un upload de fichier (crée l'enregistrement DB).
-
-**Authentification** : ✅ Requise
-
-**Request Body** :
+**Not Found Response:**
 
 ```json
 {
-  "size": 10485760,
-  "encrypted_metadata": "iv:ciphertext_base64",
-  "mime_type": "application/pdf",
-  "folder_id": "770e8400-e29b-41d4-a716-446655440002",
-  "encrypted_file_key": "encrypted_aes_key_base64"
+  "success": false,
+  "data": null,
+  "error": "User not found"
 }
 ```
 
@@ -443,7 +416,7 @@ chunk: <binary encrypted data>
 iv: <base64_iv>
 ```
 
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
@@ -476,18 +449,20 @@ curl -X POST https://gauzian.pupin.fr/api/drive/files/880e8400-e29b-41d4-a716-44
 
 **Description** : Finalise l'upload (marque `is_fully_uploaded = true` ou annule).
 
-**Authentification** : ✅ Requise
+**Parameters:**
 
-**Path Parameters** :
-- `file_id` (UUID) - ID du fichier
-- `etat` (string) - `"success"` ou `"failure"`
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `file_id` | path | File UUID |
+| `etat` | path | State: `completed` or `aborted` |
 
-**Response** : `200 OK`
+**Success Response (completed):**
 
 ```json
 {
-  "ok": true,
-  "data": "Upload finalized successfully"
+  "success": true,
+  "data": "File upload finalized successfully",
+  "error": null
 }
 ```
 
@@ -497,52 +472,51 @@ curl -X POST https://gauzian.pupin.fr/api/drive/files/880e8400-e29b-41d4-a716-44
 
 ---
 
-### POST `/drive/abort_upload`
+### File Download
 
-**Description** : Annule un upload en cours (soft delete + cleanup S3).
+#### GET /drive/files/{file_id}/download
 
-**Authentification** : ✅ Requise
+Download a file (RESTful).
 
-**Request Body** :
+**Parameters:**
 
-```json
-{
-  "file_id": "880e8400-e29b-41d4-a716-446655440003"
-}
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `file_id` | path | File UUID |
+
+**Response:**
+
 ```
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="document.pdf"
 
-**Response** : `200 OK`
-
-**Effet** : Supprime les chunks S3 et marque le fichier comme `is_deleted = true`.
+<binary data>
+```
 
 ---
 
-### GET `/drive/file/{file_id}`
+### File Operations
 
-**Description** : Récupère les métadonnées d'un fichier.
+#### GET /drive/files
 
-**Authentification** : ✅ Requise
+List all user files.
 
-**Path Parameters** :
-- `file_id` (UUID)
-
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "id": "880e8400-e29b-41d4-a716-446655440003",
-    "encrypted_metadata": "iv:ciphertext_base64",
-    "encrypted_file_key": "encrypted_aes_key_base64",
-    "size": 10485760,
-    "mime_type": "application/pdf",
-    "folder_id": "770e8400-e29b-41d4-a716-446655440002",
-    "is_fully_uploaded": true,
-    "is_deleted": false,
-    "created_at": "2025-01-15T10:30:00Z",
-    "updated_at": "2025-01-15T10:35:00Z"
-  }
+  "success": true,
+  "data": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "encrypted_metadata": "base64_encrypted_metadata",
+      "mime_type": "application/pdf",
+      "size": 10485760,
+      "folder_id": "550e8400-e29b-41d4-a716-446655440000"
+    }
+  ],
+  "error": null
 }
 ```
 
@@ -552,9 +526,9 @@ curl -X POST https://gauzian.pupin.fr/api/drive/files/880e8400-e29b-41d4-a716-44
 
 ---
 
-### GET `/drive/download_chunk_binary/{s3_key}`
+#### DELETE /drive/files/{file_id}
 
-**Description** : Download un chunk chiffré (format binaire).
+Delete a file (move to trash).
 
 **Authentification** : ✅ Requise
 
@@ -607,7 +581,7 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 }
 ```
 
-**Response** : `200 OK`
+**Success Response:**
 
 **Errors** :
 - `403 Forbidden` - Pas de permission (seul `owner` et `editor` peuvent renommer)
@@ -644,7 +618,12 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 **Description** : Soft delete d'un fichier (marque `is_deleted = true`).
 
-**Authentification** : ✅ Requise
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `file_id` | path | File UUID |
+| `user_id` | path | User UUID |
 
 **Path Parameters** :
 - `file_id` (UUID)
@@ -674,11 +653,11 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "file_id": "880e8400-e29b-41d4-a716-446655440003"
+  "success": true,
+  "data": "File accepted successfully",
+  "error": null
 }
 ```
-
-**Response** : `200 OK`
 
 ---
 
@@ -691,7 +670,7 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 **Path Parameters** :
 - `file_id` (UUID)
 
-**Request Body** :
+**Success Response:**
 
 ```json
 {
@@ -759,123 +738,108 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "ok": true,
+  "success": true,
   "data": {
-    "id": "880e8400-e29b-41d4-a716-446655440003",
-    "encrypted_metadata": "iv:ciphertext_base64",
-    "encrypted_file_key": "encrypted_aes_key_base64",
-    "size": 10485760,
-    "mime_type": "application/pdf",
-    "access_level": "owner",
-    "shared_with": [
+    "file_id": "660e8400-e29b-41d4-a716-446655440001",
+    "shared_users": [
       {
-        "user_id": "660e8400-e29b-41d4-a716-446655440001",
-        "email": "recipient@example.com",
-        "access_level": "viewer"
-      }
-    ],
-    "created_at": "2025-01-15T10:30:00Z"
-  }
-}
-```
-
----
-
-## Module Drive - Folders
-
-### POST `/drive/create_folder`
-
-**Description** : Crée un nouveau dossier.
-
-**Authentification** : ✅ Requise
-
-**Request Body** :
-
-```json
-{
-  "encrypted_metadata": "iv:ciphertext_base64",
-  "parent_folder_id": "770e8400-e29b-41d4-a716-446655440002",
-  "encrypted_folder_key": "encrypted_aes_key_base64"
-}
-```
-
-**Response** : `201 Created`
-
-```json
-{
-  "ok": true,
-  "data": {
-    "folder_id": "aa0e8400-e29b-41d4-a716-446655440005"
-  }
-}
-```
-
-**Note** : Si `parent_folder_id = null`, crée un dossier racine (`is_root = true`).
-
----
-
-### GET `/drive/get_folder/{folder_id}`
-
-**Description** : Récupère les métadonnées d'un dossier.
-
-**Authentification** : ✅ Requise
-
-**Path Parameters** :
-- `folder_id` (UUID)
-
-**Response** : `200 OK`
-
-```json
-{
-  "ok": true,
-  "data": {
-    "id": "aa0e8400-e29b-41d4-a716-446655440005",
-    "encrypted_metadata": "iv:ciphertext_base64",
-    "encrypted_folder_key": "encrypted_aes_key_base64",
-    "parent_folder_id": "770e8400-e29b-41d4-a716-446655440002",
-    "is_root": false,
-    "is_deleted": false,
-    "created_at": "2025-01-15T10:30:00Z"
-  }
-}
-```
-
----
-
-### GET `/drive/folder_contents/{folder_id}`
-
-**Description** : Liste les fichiers et sous-dossiers d'un dossier.
-
-**Authentification** : ✅ Requise
-
-**Path Parameters** :
-- `folder_id` (UUID)
-
-**Response** : `200 OK`
-
-```json
-{
-  "ok": true,
-  "data": {
-    "files": [
-      {
-        "id": "880e8400-e29b-41d4-a716-446655440003",
-        "encrypted_metadata": "iv:ciphertext_base64",
-        "encrypted_file_key": "encrypted_aes_key_base64",
-        "size": 10485760,
-        "mime_type": "application/pdf",
-        "created_at": "2025-01-15T10:30:00Z"
-      }
-    ],
-    "folders": [
-      {
-        "id": "bb0e8400-e29b-41d4-a716-446655440006",
-        "encrypted_metadata": "iv:ciphertext_base64",
-        "encrypted_folder_key": "encrypted_aes_key_base64",
-        "created_at": "2025-01-15T11:00:00Z"
+        "user_id": "770e8400-e29b-41d4-a716-446655440003",
+        "username": "johndoe",
+        "access_level": "write",
+        "public_key": "base64_public_key"
       }
     ]
-  }
+  },
+  "error": null
+}
+```
+
+---
+
+#### POST /drive/restore_file *(Non-RESTful)*
+
+Restore a file from trash.
+
+**Request Body:**
+
+```json
+{
+  "file_id": "660e8400-e29b-41d4-a716-446655440001"
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "data": "File restored successfully",
+  "error": null
+}
+```
+
+---
+
+## Drive Module - Folders
+
+### POST /drive/folders
+
+Create a new folder.
+
+**Request Body:**
+
+```json
+{
+  "encrypted_metadata": "base64_encrypted_folder_name_and_metadata",
+  "parent_folder_id": "550e8400-e29b-41d4-a716-446655440000",
+  "encrypted_folder_key": "base64_encrypted_folder_key"
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "folder_id": "880e8400-e29b-41d4-a716-446655440004"
+  },
+  "error": null
+}
+```
+
+---
+
+### GET /drive/folders/{folder_id}
+
+Get folder contents.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID (or "root" for root) |
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "folder_contents": [
+      {
+        "type": "folder",
+        "id": "880e8400-e29b-41d4-a716-446655440004",
+        "encrypted_metadata": "base64_encrypted_metadata"
+      },
+      {
+        "type": "file",
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "encrypted_metadata": "base64_encrypted_metadata"
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
@@ -932,7 +896,11 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 **Description** : Soft delete d'un dossier (et récursivement tous ses enfants).
 
-**Authentification** : ✅ Requise
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID |
 
 **Path Parameters** :
 - `folder_id` (UUID)
@@ -943,17 +911,21 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ---
 
-### POST `/drive/restore_folder`
+### PATCH /drive/folders/{folder_id}/move
 
-**Description** : Restaure un dossier soft-deleted (et récursivement tous ses enfants).
+Move a folder to another parent folder.
 
-**Authentification** : ✅ Requise
+**Parameters:**
 
-**Request Body** :
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID |
+
+**Request Body:**
 
 ```json
 {
-  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005"
+  "new_parent_folder_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -971,14 +943,9 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
-  "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
-  "encrypted_folder_key": "<folder_key_wrapped_with_recipient_rsa>",
-  "encrypted_file_keys": {
-    "880e8400-e29b-41d4-a716-446655440003": "<file_key_wrapped>",
-    "990e8400-e29b-41d4-a716-446655440008": "<file_key_wrapped>"
-  },
-  "access_level": "editor"
+  "contact_id": "770e8400-e29b-41d4-a716-446655440003",
+  "encrypted_item_key": "base64_encrypted_folder_key_for_contact",
+  "access_level": "write"
 }
 ```
 
@@ -1038,63 +1005,47 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "ok": true,
-  "data": [
-    {
-      "user_id": "660e8400-e29b-41d4-a716-446655440001",
-      "email": "recipient@example.com",
-      "access_level": "editor"
-    }
-  ]
+  "success": true,
+  "data": "Access revoked successfully",
+  "error": null
 }
 ```
 
 ---
 
-### GET `/drive/folder/{folder_id}/InfoItem`
+### POST /drive/folders/{folder_id}/accept
 
 **Description** : Récupère les métadonnées complètes d'un dossier (incluant permissions et liste de partage).
 
-**Authentification** : ✅ Requise
+**Parameters:**
 
-**Path Parameters** :
-- `folder_id` (UUID)
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID |
 
-**Response** : `200 OK`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "id": "aa0e8400-e29b-41d4-a716-446655440005",
-    "encrypted_metadata": "iv:ciphertext_base64",
-    "encrypted_folder_key": "encrypted_aes_key_base64",
-    "access_level": "owner",
-    "shared_with": [
-      {
-        "user_id": "660e8400-e29b-41d4-a716-446655440001",
-        "email": "recipient@example.com",
-        "access_level": "editor"
-      }
-    ],
-    "files_count": 15,
-    "subfolders_count": 3,
-    "created_at": "2025-01-15T10:30:00Z"
-  }
+  "success": true,
+  "data": "Folder accepted successfully",
+  "error": null
 }
 ```
 
 ---
 
-## Module Drive - Access
+### POST /drive/folders/{folder_id}/reject
 
-### POST `/drive/propagate_file_access`
+Reject a shared folder.
 
 **Description** : Propage les permissions d'un fichier à un utilisateur (après partage de dossier parent).
 
-**Authentification** : ✅ Requise
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID |
 
-**Request Body** :
+**Success Response:**
 
 ```json
 {
@@ -1113,9 +1064,13 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 **Description** : Propage les permissions d'un dossier à un utilisateur (après partage de dossier parent).
 
-**Authentification** : ✅ Requise
+**Parameters:**
 
-**Request Body** :
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID |
+
+**Success Response:**
 
 ```json
 {
@@ -1140,8 +1095,21 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "file_id": "880e8400-e29b-41d4-a716-446655440003",
-  "user_id": "660e8400-e29b-41d4-a716-446655440001"
+  "folder_id": "880e8400-e29b-41d4-a716-446655440004",
+  "contact_id": "770e8400-e29b-41d4-a716-446655440003",
+  "access_level": "write",
+  "folder_keys": [
+    {
+      "folder_id": "990e8400-e29b-41d4-a716-446655440005",
+      "encrypted_folder_key": "base64_encrypted_subfolder_key"
+    }
+  ],
+  "file_keys": [
+    {
+      "file_id": "660e8400-e29b-41d4-a716-446655440001",
+      "encrypted_file_key": "base64_encrypted_file_key"
+    }
+  ]
 }
 ```
 
@@ -1175,24 +1143,7 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "email": "user@example.com",
-      "username": "john_doe"
-    },
-    "current_folder": {
-      "id": "aa0e8400-e29b-41d4-a716-446655440005",
-      "encrypted_metadata": "iv:ciphertext_base64",
-      "parent_folder_id": "770e8400-e29b-41d4-a716-446655440002"
-    },
-    "files": [ /* ... */ ],
-    "folders": [ /* ... */ ],
-    "total_size": 104857600,
-    "files_count": 25,
-    "folders_count": 8
-  }
+  "folder_id": "880e8400-e29b-41d4-a716-446655440004"
 }
 ```
 
@@ -1223,12 +1174,9 @@ curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F8
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "deleted_files_count": 12,
-    "deleted_folders_count": 4,
-    "freed_space_bytes": 52428800
-  }
+  "success": true,
+  "data": "Folder restored successfully",
+  "error": null
 }
 ```
 
@@ -1283,219 +1231,173 @@ curl -X GET "https://gauzian.pupin.fr/api/agenda/events?startDayId=20250101&endD
 
 ---
 
-### POST `/agenda/events`
+### POST /drive/propagate_folder_access *(Non-RESTful)*
 
-**Description** : Crée un nouvel événement d'agenda.
+Propagate folder access to all its contents (files and subfolders).
 
-**Authentification** : ✅ Requise
-
-**Request Body** :
+**Request Body:**
 
 ```json
 {
-  "encrypted_title": "iv:ciphertext_base64",
-  "encrypted_description": "iv:ciphertext_base64",
-  "encrypted_data_key": "encrypted_aes_key_base64",
-  "start_time": "2025-01-20T14:00:00Z",
-  "end_time": "2025-01-20T15:00:00Z",
-  "is_all_day": false,
-  "category_id": "ee0e8400-e29b-41d4-a716-446655440010"
+  "folder_id": "880e8400-e29b-41d4-a716-446655440004"
 }
 ```
 
-**Response** : `201 Created`
+**Success Response:**
 
 ```json
 {
-  "ok": true,
+  "success": true,
+  "data": "Access propagated successfully",
+  "error": null
+}
+```
+
+---
+
+### POST /drive/revoke-access *(Non-RESTful)*
+
+Revoke access to a resource (file or folder).
+
+**Request Body:**
+
+```json
+{
+  "item_id": "660e8400-e29b-41d4-a716-446655440001",
+  "item_type": "file",
+  "user_id": "770e8400-e29b-41d4-a716-446655440003"
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "success": true,
+  "data": "Access revoked successfully",
+  "error": null
+}
+```
+
+---
+
+## Drive Module - Global Views
+
+### GET /drive/get_all_drive_info/{parent_id} *(Non-RESTful)*
+
+Get complete drive information: user, used space, files and folders, full path.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `parent_id` | path | Parent folder UUID, "corbeille" for trash, or special ID |
+
+**Success Response:**
+
+```json
+{
+  "success": true,
   "data": {
-    "event_id": "dd0e8400-e29b-41d4-a716-446655440009"
-  }
+    "user_info": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "username": "johndoe",
+      "email": "user@example.com"
+    },
+    "drive_info": {
+      "used_space": 1073741824,
+      "file_count": 42,
+      "folder_count": 10
+    },
+    "files_and_folders": [
+      {
+        "type": "folder",
+        "id": "880e8400-e29b-41d4-a716-446655440004",
+        "encrypted_metadata": "base64_encrypted_metadata"
+      },
+      {
+        "type": "file",
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "encrypted_metadata": "base64_encrypted_metadata"
+      }
+    ],
+    "full_path": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "name": "root"
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
-**Champs E2EE** :
-- `encrypted_title` : Titre chiffré avec `data_key` (AES-256-GCM)
-- `encrypted_description` : Description chiffrée avec `data_key`
-- `encrypted_data_key` : Clé AES-256 de l'événement, chiffrée avec `record_key`
-
-**Workflow** :
-
-```
-1. Client génère dataKey (AES-256)
-2. Client chiffre title et description avec dataKey
-3. Client chiffre dataKey avec recordKey → encrypted_data_key
-4. POST /agenda/events
-5. Serveur crée agenda_event record
-```
-
----
-
-## Schémas de Données
-
-### User
-
-```typescript
-interface User {
-  id: string;                       // UUID
-  email: string;
-  username: string;
-  password_hash: string;            // Argon2 hash
-  encrypted_private_key: string;    // RSA-4096 private key chiffré avec password
-  public_key: string;               // RSA-4096 public key (PEM format)
-  encrypted_record_key: string;     // AES-256 record_key chiffré avec password
-  private_key_salt: string;         // Salt pour PBKDF2
-  iv: string;                       // IV pour AES-GCM
-  auth_salt: string | null;         // Legacy salt (pour compatibilité)
-  created_at: string;               // ISO 8601
-}
-```
-
----
-
-### File
-
-```typescript
-interface File {
-  id: string;                       // UUID
-  encrypted_metadata: string;       // Nom du fichier chiffré (format: "iv:ciphertext")
-  encrypted_file_key: string;       // AES-256 file_key chiffré avec record_key
-  size: number;                     // Taille en bytes
-  mime_type: string;                // Type MIME
-  folder_id: string;                // UUID du dossier parent
-  is_fully_uploaded: boolean;       // false pendant upload, true après finalize
-  is_deleted: boolean;              // Soft delete flag
-  created_at: string;               // ISO 8601
-  updated_at: string;               // ISO 8601
-}
-```
-
----
-
-### Folder
-
-```typescript
-interface Folder {
-  id: string;                       // UUID
-  encrypted_metadata: string;       // Nom du dossier chiffré (format: "iv:ciphertext")
-  encrypted_folder_key: string;     // AES-256 folder_key chiffré avec record_key
-  parent_folder_id: string | null;  // UUID du parent (null si root)
-  is_root: boolean;                 // true si dossier racine
-  is_deleted: boolean;              // Soft delete flag
-  created_at: string;               // ISO 8601
-  updated_at: string;               // ISO 8601
-}
-```
-
----
-
-### FileAccess
-
-```typescript
-interface FileAccess {
-  id: string;                       // UUID
-  file_id: string;                  // UUID du fichier
-  user_id: string;                  // UUID de l'utilisateur
-  encrypted_file_key: string;       // file_key chiffré avec RSA public key du user
-  access_level: "owner" | "editor" | "viewer";
-  created_at: string;               // ISO 8601
-}
-```
-
-**Permissions** :
-- `owner` : Full access (read, write, delete, share, revoke)
-- `editor` : Read, write, rename, move
-- `viewer` : Read only
-
----
-
-### FolderAccess
-
-```typescript
-interface FolderAccess {
-  id: string;                       // UUID
-  folder_id: string;                // UUID du dossier
-  user_id: string;                  // UUID de l'utilisateur
-  encrypted_folder_key: string;     // folder_key chiffré avec RSA public key du user
-  access_level: "owner" | "editor" | "viewer";
-  created_at: string;               // ISO 8601
-}
-```
-
----
-
-### AgendaEvent
-
-```typescript
-interface AgendaEvent {
-  id: string;                       // UUID
-  encrypted_title: string;          // Titre chiffré avec data_key
-  encrypted_description: string;    // Description chiffrée avec data_key
-  encrypted_data_key: string;       // data_key chiffré avec record_key
-  start_time: string;               // ISO 8601
-  end_time: string;                 // ISO 8601
-  is_all_day: boolean;
-  category_id: string | null;       // UUID de la catégorie
-  is_deleted: boolean;
-  created_at: string;               // ISO 8601
-  updated_at: string;               // ISO 8601
-}
-```
-
----
-
-## Codes d'Erreur
-
-### HTTP Status Codes
-
-| Code | Nom | Description |
-|------|-----|-------------|
-| `200` | OK | Requête réussie |
-| `201` | Created | Ressource créée avec succès |
-| `204` | No Content | Requête réussie, pas de contenu à retourner |
-| `400` | Bad Request | Validation error (champs manquants, UUID invalide) |
-| `401` | Unauthorized | JWT manquant, invalide, ou révoqué |
-| `403` | Forbidden | Pas de permission pour cette ressource |
-| `404` | Not Found | Ressource introuvable |
-| `409` | Conflict | Conflit (email déjà existant) |
-| `500` | Internal Server Error | Erreur serveur (database, S3, etc.) |
-
----
-
-### Error Response Format
+**For trash:**
 
 ```json
 {
-  "ok": false,
-  "error": "Invalid credentials"
+  "success": true,
+  "data": {
+    "corbeille_info": {
+      "used_space": 52428800,
+      "file_count": 5,
+      "folder_count": 2
+    },
+    "files_and_folders": [],
+    "drive_info": {
+      "used_space": 1073741824,
+      "file_count": 42,
+      "folder_count": 10
+    },
+    "full_path": []
+  },
+  "error": null
 }
 ```
 
-**Exemples** :
+---
+
+### GET /drive/get_file_folder/{parent_id} *(Non-RESTful)*
+
+Get files and folders of a parent with full path. Also supports "corbeille" and "shared-with-me".
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `parent_id` | path | Folder UUID, "corbeille", or "shared-with-me" |
+
+**Success Response:**
 
 ```json
-// 401 Unauthorized
 {
-  "ok": false,
-  "error": "Unauthorized: Token expired"
+  "success": true,
+  "data": {
+    "files_and_folders": [],
+    "full_path": [],
+    "drive_info": {
+      "used_space": 1073741824,
+      "file_count": 42,
+      "folder_count": 10
+    }
+  },
+  "error": null
 }
+```
 
-// 403 Forbidden
-{
-  "ok": false,
-  "error": "Forbidden: You don't have permission to access this file"
-}
+---
 
-// 404 Not Found
-{
-  "ok": false,
-  "error": "File not found"
-}
+### POST /drive/empty_trash *(Non-RESTful)*
 
-// 500 Internal Server Error
+Permanently empty the trash.
+
+**Success Response:**
+
+```json
 {
-  "ok": false,
-  "error": "Database error: connection pool exhausted"
+  "success": true,
+  "data": "Corbeille emptied successfully",
+  "error": null
 }
 ```
 

@@ -1147,6 +1147,19 @@ pub async fn get_folder_contents_handler(
         }
     };
 
+    if let Some(fid) = folder_id {
+        let has_access = match repo::user_has_folder_access(&state.db_pool, claims.id, fid).await {
+            Ok(access) => access,
+            Err(e) => {
+                tracing::error!("Failed to check folder access: {:?}", e);
+                return ApiResponse::internal_error("Failed to verify folder access").into_response();
+            }
+        };
+        if !has_access {
+            return ApiResponse::forbidden("Access denied").into_response();
+        }
+    }
+
     match repo::get_folder_contents_recursive(&state.db_pool, claims.id, folder_id).await {
         Ok(contents) => ApiResponse::ok(serde_json::json!({
             "folder_id": folder_id,
@@ -1757,7 +1770,9 @@ pub async fn delete_folder_restful_handler(
 /// POST /files/{file_id}/share - Version RESTful de share_file
 #[derive(Deserialize)]
 pub struct ShareFileRestfulRequest {
+    #[serde(rename = "contact_id")]
     pub recipient_user_id: Uuid,
+    #[serde(rename = "encrypted_item_key")]
     pub encrypted_file_key: String,
     pub access_level: String,
 }
@@ -1795,7 +1810,9 @@ pub async fn share_file_restful_handler(
 /// POST /folders/{folder_id}/share - Version RESTful de share_folder
 #[derive(Deserialize)]
 pub struct ShareFolderRestfulRequest {
+    #[serde(rename = "contact_id")]
     pub recipient_user_id: Uuid,
+    #[serde(rename = "encrypted_item_key")]
     pub encrypted_folder_key: String,
     pub access_level: String,
 }

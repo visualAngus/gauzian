@@ -4,10 +4,7 @@
 # Test 1: Login user A to get a valid token
 POST {{base_url}}/login
 Content-Type: application/json
-{
-    "email": "{{test_email_a}}",
-    "password": "{{test_password}}"
-}
+{"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
 token_a: jsonpath "$.token"
@@ -43,10 +40,7 @@ status == 401
 # Test 6: Login again to get a fresh token
 POST {{base_url}}/login
 Content-Type: application/json
-{
-    "email": "{{test_email_a}}",
-    "password": "{{test_password}}"
-}
+{"email": "{{test_email_a}}", "password": "{{test_password}}"}
 HTTP 200
 [Captures]
 fresh_token: jsonpath "$.token"
