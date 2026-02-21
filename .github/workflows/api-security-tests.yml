@@ -15,20 +15,18 @@ jobs:
   api-security-tests:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Hurl
         run: |
-          # Download and install Hurl 4.3.0
           curl -fSL https://github.com/Orange-OpenSource/hurl/releases/download/4.3.0/hurl_4.3.0_amd64.deb -o hurl.deb
-          sudo apt-get update
           sudo apt-get install -y ./hurl.deb
           rm hurl.deb
           hurl --version
-      
+
       - name: Set API URL
         id: set-url
         run: |
@@ -37,162 +35,38 @@ jobs:
           else
             echo "api_url=${{ secrets.API_URL }}" >> $GITHUB_OUTPUT
           fi
-      
-      - name: Wait for deploy to be ready
+
+      - name: Wait for API to be ready
         run: |
           API_URL="${{ steps.set-url.outputs.api_url }}"
           MAX_ATTEMPTS=20
           ATTEMPT=1
-          
-          echo "Waiting for API to be ready at $API_URL..."
-          
+          echo "Waiting for API at $API_URL..."
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS..."
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/health/ready" || echo "000")
-            
             if [ "$HTTP_CODE" = "200" ]; then
               echo "API is ready!"
               exit 0
             fi
-            
-            echo "API not ready (HTTP $HTTP_CODE), waiting 10 seconds..."
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - HTTP $HTTP_CODE, retrying in 10s..."
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
-          
-          echo "API failed to become ready after $MAX_ATTEMPTS attempts"
+          echo "API failed to become ready"
           exit 1
-      
-      - name: Run Health Check
+
+      - name: Run API security tests
         run: |
-          API_URL="${{ steps.set-url.outputs.api_url }}"
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/00_health.hurl
-      
-      - name: Run Auth Tests
-        run: |
-          API_URL="${{ steps.set-url.outputs.api_url }}"
-          
-          echo "Running Auth Registration Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/auth/01_register.hurl || exit 1
-          
-          echo "Running Auth Login Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/auth/02_login.hurl || exit 1
-          
-          echo "Running Token Security Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/auth/03_token_security.hurl || exit 1
-          
-          echo "Running Logout Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/auth/04_logout.hurl || exit 1
-      
-      - name: Run Drive Tests
-        run: |
-          API_URL="${{ steps.set-url.outputs.api_url }}"
-          
-          echo "Running Folder CRUD Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/drive/01_folder_crud.hurl || exit 1
-          
-          echo "Running File CRUD Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/drive/02_file_crud.hurl || exit 1
-          
-          echo "Running IDOR Security Tests (CRITICAL)..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/drive/03_idor_security.hurl || exit 1
-          
-          echo "Running Sharing Security Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/drive/04_sharing_security.hurl || exit 1
-          
-          echo "Running Trash Tests..."
-          hurl --test \
-            --variable "base_url=$API_URL" \
-            --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-            --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-            --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-            --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-            --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-            tests/api/drive/05_trash.hurl || exit 1
-      
-      - name: Generate HTML Reports
-        if: always()
-        run: |
-          API_URL="${{ steps.set-url.outputs.api_url }}"
-          mkdir -p tests/reports
-          
-          # Generate reports for each test file
-          for test_file in tests/api/00_health.hurl tests/api/auth/*.hurl tests/api/drive/*.hurl; do
-            test_name=$(basename "$test_file" .hurl)
-            hurl --test \
-              --variable "base_url=$API_URL" \
-              --variable "test_email_a=${{ secrets.TEST_USER_EMAIL_A }}" \
-              --variable "test_email_b=${{ secrets.TEST_USER_EMAIL_B }}" \
-              --variable "test_password=${{ secrets.TEST_USER_PASSWORD }}" \
-              --variable "test_username_a=${{ secrets.TEST_USERNAME_A }}" \
-              --variable "test_username_b=${{ secrets.TEST_USERNAME_B }}" \
-              --html-report "tests/reports/${test_name}.html" \
-              "$test_file" || true
-          done
-      
+          chmod +x tests/run_tests.sh
+          tests/run_tests.sh \
+            --base-url "${{ steps.set-url.outputs.api_url }}" \
+            --email-a "${{ secrets.TEST_USER_EMAIL_A }}" \
+            --email-b "${{ secrets.TEST_USER_EMAIL_B }}" \
+            --password "${{ secrets.TEST_USER_PASSWORD }}" \
+            --username-a "${{ secrets.TEST_USERNAME_A }}" \
+            --username-b "${{ secrets.TEST_USERNAME_B }}" \
+            --report-html
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -200,27 +74,3 @@ jobs:
           name: api-security-test-reports
           path: tests/reports/
           retention-days: 30
-      
-      - name: Security test summary
-        if: always()
-        run: |
-          echo ""
-          echo "========================================"
-          echo "  Security Test Summary"
-          echo "========================================"
-          echo ""
-          echo "All security tests completed!"
-          echo ""
-          echo "This run tested:"
-          echo "  - Health check"
-          echo "  - Registration (valid, invalid, duplicate, SQL injection)"
-          echo "  - Login (valid, invalid, brute force protection)"
-          echo "  - Token security (JWT validation, expired tokens, tampering)"
-          echo "  - Logout (token blacklisting)"
-          echo "  - Folder CRUD operations"
-          echo "  - File CRUD operations"
-          echo "  - IDOR security (CRITICAL - unauthorized access to other users' resources)"
-          echo "  - Sharing security (privilege escalation, access revocation)"
-          echo "  - Trash operations (permanent deletion)"
-          echo ""
-          echo "Reports saved to: tests/reports/"
