@@ -152,9 +152,10 @@ PASSED=0
 FAILED=0
 
 # Define test files in order
+# NOTE: 01_register.hurl est exclu du CI — les comptes doivent exister au préalable.
+# Lancer tests/setup_test_accounts.sh une seule fois pour les créer.
 TEST_FILES=(
     "${SCRIPT_DIR}/api/00_health.hurl"
-    "${SCRIPT_DIR}/api/auth/01_register.hurl"
     "${SCRIPT_DIR}/api/auth/02_login.hurl"
     "${SCRIPT_DIR}/api/auth/03_token_security.hurl"
     "${SCRIPT_DIR}/api/auth/04_logout.hurl"
