@@ -26,6 +26,13 @@ Guidance for Claude Code when working with the **GAUZIAN backend**.
 - **Environment Variables** : `docs/ENV_VARIABLES.md`
 - **Metrics** : `METRICS_USAGE_EXAMPLES.md`
 
+## URL de l'API
+
+| Environnement | URL |
+|---------------|-----|
+| **Production** | `https://gauzian.pupin.fr/api` |
+| **Local** | `http://localhost:3000` |
+
 ---
 
 ## Structure
