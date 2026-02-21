@@ -8,3 +8,6 @@ k8s/secrets.yaml
 gauzian_front/
 node_modules/
 sqlmap_reports/
+
+.output/
+.nuxt/
