@@ -1,33 +1,91 @@
-# API Documentation Gauzian
+# API Documentation - GAUZIAN Backend
+
+Documentation complète de l'API REST du backend GAUZIAN (Rust / Axum).
+
+**Version** : 1.1
+**Base URL** : `https://gauzian.pupin.fr/api`
+**Format** : JSON
+**Authentification** : JWT (Cookie `auth_token` ou Header `Authorization: Bearer <token>`)
+
+---
+
+## Table des Matières
+
+1. [Introduction](#introduction)
+2. [Authentification](#authentification)
+3. [Endpoints Système](#endpoints-système)
+4. [Module Auth](#module-auth)
+5. [Module Drive - Files](#module-drive---files)
+6. [Module Drive - Folders](#module-drive---folders)
+7. [Module Drive - Access](#module-drive---access)
+8. [Module Drive - Global](#module-drive---global)
+9. [Module Agenda](#module-agenda)
+10. [Schémas de Données](#schémas-de-données)
+11. [Codes d'Erreur](#codes-derreur)
+12. [Exemples d'Utilisation](#exemples-dutilisation)
+
+---
 
 ## Introduction
 
-L'API Gauzian est une API REST permettant la gestion sécurisée de fichiers et d'événements calendrier avec chiffrement de bout en bout (E2EE). Tous les échanges sont chiffrés et les clés de chiffrement ne sont jamais transmises au serveur en clair.
+L'API GAUZIAN est une API REST **zero-knowledge, end-to-end encrypted (E2EE)**. Le serveur ne voit jamais les données en clair.
 
-### Base URL
+### Caractéristiques
 
-| Environment | URL |
-|-------------|-----|
-| **Production** | `https://gauzian.pupin.fr/api` |
-| **Local** | `http://localhost:3000` |
+- **E2EE** : Toutes les données sensibles sont chiffrées côté client
+- **Chunked Upload** : Support de fichiers volumineux (chunks de 2MB, format binaire multipart)
+- **Soft Delete** : Les fichiers/dossiers sont marqués `is_deleted = true` (pas supprimés immédiatement)
+- **Permission System** : Ownership (`owner`, `editor`, `viewer`) avec partage E2EE
+- **JWT Authentication** : Tokens valides 10 jours, révoqués au logout
 
-### Authentication
+### Technologies
 
-L'authentification utilise des tokens JWT stockés dans des cookies sécurisés. Le token est automatiquement inclus dans les requêtes via le cookie `auth_token`.
+- **Backend** : Rust (Axum 0.7+, SQLx, Tokio)
+- **Database** : PostgreSQL 17
+- **Cache** : Redis 7 (token revocation)
+- **Storage** : MinIO S3 (chunks chiffrés)
+- **Monitoring** : Prometheus (17 métriques custom)
 
-### Response Format
+---
 
-All responses follow this standard format:
+## Authentification
 
-```json
-{
-  "success": true,
-  "data": { ... },
-  "error": null
-}
+### Méthodes d'Authentification
+
+L'API supporte **deux méthodes** pour envoyer le JWT :
+
+#### 1. Cookie (Recommandé)
+
+```http
+Cookie: auth_token=<jwt_token>
 ```
 
-On error:
+- ✅ Automatiquement envoyé par le navigateur
+- ✅ HttpOnly, Secure, SameSite=None
+- ✅ Durée : 10 jours
+
+#### 2. Authorization Header
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+- Utile pour les clients non-browser (mobile apps, scripts)
+
+### Obtenir un JWT
+
+**Endpoint** : `POST /login`
+
+```bash
+curl -X POST https://gauzian.pupin.fr/api/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123"
+  }'
+```
+
+**Réponse** :
 
 ```json
 {
@@ -52,16 +110,17 @@ On error:
 
 ---
 
-## System Endpoints
+## Endpoints Système
 
-### GET /
+### GET `/`
 
-Basic health check for cloud platforms (Clever Cloud).
+**Description** : Health check.
 
-**Response:**
+**Authentification** : ❌ Non requise
 
-```http
-HTTP/1.1 200 OK
+**Réponse** :
+
+```
 OK
 ```
 
@@ -80,19 +139,22 @@ OK
 
 ---
 
-### GET /metrics
+### GET `/metrics`
 
-Prometheus metrics for monitoring.
+**Description** : Métriques Prometheus (17 métriques custom).
 
-**Response:**
+**Authentification** : ❌ Non requise
 
-```http
-HTTP/1.1 200 OK
-Content-Type: text/plain
+**Réponse** : Format Prometheus text
 
-# HELP gauzian_http_requests_total Total HTTP requests
-# TYPE gauzian_http_requests_total counter
-gauzian_http_requests_total{method="GET",endpoint="/drive/files",status="200"} 142
+```
+# HELP gauzian_requests_total Total number of HTTP requests
+# TYPE gauzian_requests_total counter
+gauzian_requests_total{method="GET",status="200"} 1234
+
+# HELP gauzian_request_duration_seconds Request duration histogram
+# TYPE gauzian_request_duration_seconds histogram
+gauzian_request_duration_seconds_bucket{method="POST",endpoint="/drive/initialize_file",le="0.1"} 456
 ...
 ```
 
@@ -126,14 +188,27 @@ Content-Type: application/json
   "success": true,
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "encrypted_private_key": "base64_encoded_encrypted_private_key",
-    "private_key_salt": "base64_salt",
-    "iv": "base64_iv",
-    "public_key": "base64_public_key"
-  },
-  "error": null
+    "user_id": "550e8400-e29b-41d4-a716-446655440000"
+  }
 }
+```
+
+**Cookie Set** : `auth_token=<token>` (HttpOnly, Secure, 10 jours)
+
+**Errors** :
+- `401 Unauthorized` - Invalid credentials
+- `500 Internal Server Error` - JWT generation failed
+
+**Exemple curl** :
+
+```bash
+curl -X POST https://gauzian.pupin.fr/api/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123"
+  }'
 ```
 
 ---
@@ -167,18 +242,19 @@ Content-Type: application/json
 
 ```json
 {
-  "success": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "encrypted_private_key": "base64_encoded_encrypted_private_key",
-    "private_key_salt": "base64_salt",
-    "iv": "base64_iv",
-    "public_key": "base64_public_key"
-  },
-  "error": null
+  "ok": true,
+  "data": "User created with ID: 550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+**Cookie Set** : `auth_token=<token>` (HttpOnly, Secure, 10 jours)
+
+**⭐ Auto-Login** : `/register` retourne automatiquement un JWT et set le cookie `auth_token`. L'utilisateur est connecté immédiatement après inscription (pas besoin d'appeler `/login`).
+
+**Errors** :
+- `400 Bad Request` - Validation error (email invalid, password too short)
+- `409 Conflict` - Email already exists
+- `500 Internal Server Error` - Database error
 
 ---
 
@@ -190,11 +266,12 @@ Revoke the JWT token by adding it to the Redis blacklist.
 
 ```json
 {
-  "success": true,
-  "data": "Logged out successfully",
-  "error": null
+  "ok": true,
+  "data": "Logged out successfully"
 }
 ```
+
+**Effet** : Le JWT est ajouté à Redis avec TTL = durée restante du token.
 
 ---
 
@@ -212,21 +289,8 @@ Check if the JWT token is still valid. Used to maintain session.
 }
 ```
 
----
-
-### GET /protected
-
-Protected endpoint example - returns authenticated user information.
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": "Hello user 550e8400-e29b-41d4-a716-446655440000 with role user",
-  "error": null
-}
-```
+**Errors** :
+- `401 Unauthorized` - Token invalide ou révoqué
 
 ---
 
@@ -270,12 +334,23 @@ Retrieve the public key of a user for E2EE encryption.
 {
   "success": true,
   "data": {
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "public_key": "base64_public_key"
-  },
-  "error": null
+    "user_id": "660e8400-e29b-41d4-a716-446655440001",
+    "email": "recipient@example.com",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMIICIjANBgkqhkiG9w0..."
+  }
 }
 ```
+
+**Errors** :
+- `404 Not Found` - Utilisateur introuvable
+
+**Usage** : Utilisé par le frontend pour récupérer la clé publique du destinataire lors d'un partage de fichier/dossier.
+
+---
+
+## Module Drive - Files
+
+### POST `/drive/initialize_file`
 
 **Not Found Response:**
 
@@ -287,95 +362,92 @@ Retrieve the public key of a user for E2EE encryption.
 }
 ```
 
----
+**Champs** :
+- `size` (i64) - Taille du fichier en bytes
+- `encrypted_metadata` (string) - Nom du fichier chiffré avec AES-256-GCM (format: `"iv:ciphertext"`)
+- `mime_type` (string) - Type MIME (`application/pdf`, `image/png`, etc.)
+- `folder_id` (string UUID) - ID du dossier parent
+- `encrypted_file_key` (string) - Clé AES-256 du fichier, chiffrée avec `record_key`
 
-## Drive Module - Files
-
-### File Upload
-
-The system uses chunked upload with **max 6 MB per request**. This allows:
-- Resume interrupted uploads
-- Reduce memory usage
-- Handle large files
-
-#### POST /drive/files/initialize
-
-Initialize a new file and create database entry.
-
-**Headers:**
-
-```
-Content-Type: application/json
-Authorization: Bearer <token>
-```
-
-**Request Body:**
+**Response** : `200 OK`
 
 ```json
 {
-  "size": 10485760,
-  "encrypted_metadata": "base64_encrypted_filename_and_metadata",
-  "mime_type": "application/pdf",
-  "folder_id": "550e8400-e29b-41d4-a716-446655440000",
-  "encrypted_file_key": "base64_encrypted_file_key"
+  "ok": true,
+  "data": {
+    "file_id": "880e8400-e29b-41d4-a716-446655440003"
+  }
 }
+```
+
+**Errors** :
+- `400 Bad Request` - folder_id invalide
+- `404 Not Found` - Dossier introuvable
+- `500 Internal Server Error` - Database error
+
+**Workflow Upload** :
+
+```
+1. Client génère fileKey (AES-256)
+2. Client chiffre filename avec recordKey → encrypted_metadata
+3. Client chiffre fileKey avec recordKey → encrypted_file_key
+4. POST /drive/initialize_file → retourne file_id
+5. Client upload chunks : POST /drive/files/{file_id}/upload-chunk
+6. Client finalise : POST /drive/finalize_upload/{file_id}/success
+```
+
+---
+
+### POST `/drive/files/{file_id}/upload-chunk`
+
+**Description** : Upload un chunk chiffré (format binaire multipart).
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID) - ID du fichier
+
+**Request Body** : `multipart/form-data`
+
+```
+chunk_index: 0
+total_chunks: 10
+chunk: <binary encrypted data>
+iv: <base64_iv>
 ```
 
 **Success Response:**
 
 ```json
 {
-  "success": true,
-  "data": {
-    "file_id": "660e8400-e29b-41d4-a716-446655440001"
-  },
-  "error": null
+  "ok": true,
+  "data": "Chunk uploaded successfully"
 }
+```
+
+**Limite** : 6 MB par chunk (DefaultBodyLimit)
+
+**Errors** :
+- `400 Bad Request` - chunk_index invalide ou chunk trop gros
+- `404 Not Found` - Fichier introuvable
+- `500 Internal Server Error` - S3 error
+
+**Exemple curl** :
+
+```bash
+curl -X POST https://gauzian.pupin.fr/api/drive/files/880e8400-e29b-41d4-a716-446655440003/upload-chunk \
+  -b cookies.txt \
+  -F "chunk_index=0" \
+  -F "total_chunks=10" \
+  -F "chunk=@chunk_0.enc" \
+  -F "iv=abc123=="
 ```
 
 ---
 
-#### POST /drive/files/{file_id}/upload-chunk
+### POST `/drive/finalize_upload/{file_id}/{etat}`
 
-Upload a chunk via multipart form (RESTful).
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
-
-**Content-Type:** `multipart/form-data`
-
-**Form Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `chunk` | binary | Chunk data (max 6MB) |
-| `chunk_index` | string | Chunk index |
-| `iv` | string | Initialization vector Base64 |
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "s3_record_id": "770e8400-e29b-41d4-a716-446655440002",
-    "s3_id": "chunks/660e8400.../0",
-    "index": 0,
-    "date_upload": "2026-02-21T10:30:00Z",
-    "data_hash": "sha256_hash_of_chunk"
-  },
-  "error": null
-}
-```
-
----
-
-#### POST /drive/finalize_upload/{file_id}/{etat} *(Non-RESTful)*
-
-Finalize or abort a file upload.
+**Description** : Finalise l'upload (marque `is_fully_uploaded = true` ou annule).
 
 **Parameters:**
 
@@ -394,15 +466,9 @@ Finalize or abort a file upload.
 }
 ```
 
-**Success Response (aborted):**
-
-```json
-{
-  "success": true,
-  "data": "File upload aborted successfully",
-  "error": null
-}
-```
+**Effet** :
+- `etat = "success"` → `UPDATE files SET is_fully_uploaded = true`
+- `etat = "failure"` → Soft delete du fichier + suppression des chunks S3
 
 ---
 
@@ -454,71 +520,9 @@ List all user files.
 }
 ```
 
----
-
-#### GET /drive/files/{file_id}
-
-Retrieve file metadata.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "encrypted_metadata": "base64_encrypted_metadata",
-    "mime_type": "application/pdf",
-    "size": 10485760,
-    "folder_id": "550e8400-e29b-41d4-a716-446655440000",
-    "chunks": [
-      {
-        "s3_key": "chunks/660e8400.../0",
-        "index": 0
-      }
-    ],
-    "created_at": "2026-02-21T10:00:00Z",
-    "updated_at": "2026-02-21T10:30:00Z"
-  },
-  "error": null
-}
-```
-
----
-
-#### PATCH /drive/files/{file_id}
-
-Rename a file (partial update).
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
-
-**Request Body:**
-
-```json
-{
-  "new_encrypted_metadata": "base64_new_encrypted_metadata"
-}
-```
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": "File renamed successfully",
-  "error": null
-}
-```
+**Errors** :
+- `403 Forbidden` - Pas de permission
+- `404 Not Found` - Fichier introuvable
 
 ---
 
@@ -526,89 +530,93 @@ Rename a file (partial update).
 
 Delete a file (move to trash).
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
+**Path Parameters** :
+- `s3_key` (string) - Clé S3 du chunk (URL-encoded)
 
-**Success Response:**
+**Response** : `200 OK` (binary stream)
 
-```json
-{
-  "success": true,
-  "data": "File deleted successfully",
-  "error": null
-}
+```
+Content-Type: application/octet-stream
+Content-Length: 2097152
+
+<binary encrypted chunk data>
+```
+
+**Workflow Download** :
+
+```
+1. GET /drive/file/{file_id} → récupérer encrypted_file_key + s3_keys
+2. Pour chaque s3_key : GET /drive/download_chunk_binary/{s3_key}
+3. Client déchiffre encrypted_file_key avec recordKey → fileKey
+4. Client déchiffre chaque chunk avec fileKey + IV
+5. Client reconstruit le fichier complet
+```
+
+**Exemple curl** :
+
+```bash
+curl -X GET "https://gauzian.pupin.fr/api/drive/download_chunk_binary/chunks%2F880e8400%2F0" \
+  -b cookies.txt \
+  -o chunk_0.enc
 ```
 
 ---
 
-#### PATCH /drive/files/{file_id}/move
+### PATCH `/drive/files/{file_id}`
 
-Move a file to another folder.
+**Description** : Renomme un fichier (update `encrypted_metadata`).
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
+**Path Parameters** :
+- `file_id` (UUID)
 
-**Request Body:**
-
-```json
-{
-  "new_parent_folder_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Success Response:**
+**Request Body** :
 
 ```json
 {
-  "success": true,
-  "data": "File moved successfully",
-  "error": null
-}
-```
-
----
-
-#### POST /drive/files/{file_id}/share
-
-Share a file with another user.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
-
-**Request Body:**
-
-```json
-{
-  "contact_id": "770e8400-e29b-41d4-a716-446655440003",
-  "encrypted_item_key": "base64_encrypted_file_key_for_contact",
-  "access_level": "write"
+  "encrypted_metadata": "new_iv:new_ciphertext_base64"
 }
 ```
 
 **Success Response:**
 
-```json
-{
-  "success": true,
-  "data": "File shared successfully",
-  "error": null
-}
-```
+**Errors** :
+- `403 Forbidden` - Pas de permission (seul `owner` et `editor` peuvent renommer)
+- `404 Not Found` - Fichier introuvable
 
 ---
 
-#### DELETE /drive/files/{file_id}/share/{user_id}
+### PATCH `/drive/files/{file_id}/move`
 
-Revoke a user's access to a file.
+**Description** : Déplace un fichier vers un autre dossier.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Request Body** :
+
+```json
+{
+  "new_folder_id": "990e8400-e29b-41d4-a716-446655440004",
+  "encrypted_file_key": "new_encrypted_file_key_base64"
+}
+```
+
+**Response** : `200 OK`
+
+**Errors** :
+- `403 Forbidden` - Pas de permission sur le fichier ou le dossier de destination
+
+---
+
+### DELETE `/drive/files/{file_id}`
+
+**Description** : Soft delete d'un fichier (marque `is_deleted = true`).
 
 **Parameters:**
 
@@ -617,29 +625,31 @@ Revoke a user's access to a file.
 | `file_id` | path | File UUID |
 | `user_id` | path | User UUID |
 
-**Success Response:**
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Response** : `200 OK`
 
 ```json
 {
-  "success": true,
-  "data": "Access revoked successfully",
-  "error": null
+  "ok": true,
+  "data": "File deleted successfully"
 }
 ```
 
+**Effet** : `UPDATE files SET is_deleted = true, updated_at = NOW()`
+
+**Note** : Les chunks S3 ne sont **pas** supprimés immédiatement (optimisation pour restore).
+
 ---
 
-#### POST /drive/files/{file_id}/accept
+### POST `/drive/restore_file`
 
-Accept a file shared with the user.
+**Description** : Restaure un fichier soft-deleted (marque `is_deleted = false`).
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
-
-**Success Response:**
+**Request Body** :
 
 ```json
 {
@@ -651,39 +661,80 @@ Accept a file shared with the user.
 
 ---
 
-#### POST /drive/files/{file_id}/reject
+### POST `/drive/files/{file_id}/share`
 
-Reject a file shared with the user.
+**Description** : Partage un fichier avec un utilisateur (E2EE).
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
+**Path Parameters** :
+- `file_id` (UUID)
 
 **Success Response:**
 
 ```json
 {
-  "success": true,
-  "data": "File rejected successfully",
-  "error": null
+  "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
+  "encrypted_file_key": "<file_key_wrapped_with_recipient_rsa_public_key>",
+  "access_level": "viewer"
 }
+```
+
+**Champs** :
+- `encrypted_file_key` : `file_key` chiffrée avec la clé publique RSA du destinataire
+- `access_level` : `"owner"`, `"editor"`, ou `"viewer"`
+
+**Response** : `200 OK`
+
+**Workflow E2EE** :
+
+```
+1. GET /contacts/get_public_key/{email} → clé publique du destinataire
+2. Client déchiffre file_key avec sa record_key
+3. Client chiffre file_key avec la clé publique RSA du destinataire (RSA-OAEP)
+4. POST /drive/files/{file_id}/share
+5. Serveur crée un file_access record
+6. Destinataire déchiffre file_key avec sa clé privée RSA
 ```
 
 ---
 
-#### GET /drive/files/{file_id}/InfoItem *(Non-RESTful)*
+### POST `/drive/files/{file_id}/accept`
 
-Get sharing information for a file (for side panel).
+**Description** : Accepte un partage de fichier reçu.
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | path | File UUID |
+**Path Parameters** :
+- `file_id` (UUID)
 
-**Success Response:**
+**Response** : `200 OK`
+
+---
+
+### POST `/drive/files/{file_id}/reject`
+
+**Description** : Rejette un partage de fichier reçu.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Response** : `200 OK`
+
+---
+
+### GET `/drive/file/{file_id}/InfoItem`
+
+**Description** : Récupère les métadonnées complètes d'un fichier (incluant permissions et liste de partage).
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `file_id` (UUID)
+
+**Response** : `200 OK`
 
 ```json
 {
@@ -794,39 +845,56 @@ Get folder contents.
 
 ---
 
-### PATCH /drive/folders/{folder_id}
+### PATCH `/drive/folders/{folder_id}`
 
-Rename a folder.
+**Description** : Renomme un dossier.
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `folder_id` | path | Folder UUID |
+**Path Parameters** :
+- `folder_id` (UUID)
 
-**Request Body:**
-
-```json
-{
-  "new_encrypted_metadata": "base64_new_encrypted_metadata"
-}
-```
-
-**Success Response:**
+**Request Body** :
 
 ```json
 {
-  "success": true,
-  "data": "Folder renamed successfully",
-  "error": null
+  "encrypted_metadata": "new_iv:new_ciphertext_base64"
 }
 ```
+
+**Response** : `200 OK`
+
+**Errors** :
+- `403 Forbidden` - Pas de permission (seul `owner` et `editor` peuvent renommer)
 
 ---
 
-### DELETE /drive/folders/{folder_id}
+### PATCH `/drive/folders/{folder_id}/move`
 
-Delete a folder (move to trash).
+**Description** : Déplace un dossier vers un nouveau dossier parent.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
+
+**Request Body** :
+
+```json
+{
+  "new_parent_folder_id": "cc0e8400-e29b-41d4-a716-446655440007"
+}
+```
+
+**Response** : `200 OK`
+
+**Validation** : Empêche les déplacements circulaires (dossier ne peut pas être son propre parent).
+
+---
+
+### DELETE `/drive/folders/{folder_id}`
+
+**Description** : Soft delete d'un dossier (et récursivement tous ses enfants).
 
 **Parameters:**
 
@@ -834,15 +902,12 @@ Delete a folder (move to trash).
 |-----------|------|-------------|
 | `folder_id` | path | Folder UUID |
 
-**Success Response:**
+**Path Parameters** :
+- `folder_id` (UUID)
 
-```json
-{
-  "success": true,
-  "data": "Folder deleted successfully",
-  "error": null
-}
-```
+**Response** : `200 OK`
+
+**Effet** : Marque `is_deleted = true` pour le dossier ET tous ses fichiers/sous-dossiers (récursif).
 
 ---
 
@@ -864,29 +929,17 @@ Move a folder to another parent folder.
 }
 ```
 
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": "Folder moved successfully",
-  "error": null
-}
-```
+**Response** : `200 OK`
 
 ---
 
-### POST /drive/folders/{folder_id}/share
+### POST `/drive/share_folder_batch`
 
-Share a folder with another user.
+**Description** : Partage un dossier ET tous ses fichiers/sous-dossiers récursivement (E2EE).
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `folder_id` | path | Folder UUID |
-
-**Request Body:**
+**Request Body** :
 
 ```json
 {
@@ -896,30 +949,59 @@ Share a folder with another user.
 }
 ```
 
-**Success Response:**
+**Champs** :
+- `encrypted_file_keys` : Map de `file_id` → `encrypted_file_key` pour tous les fichiers du dossier
 
-```json
-{
-  "success": true,
-  "data": "Folder shared successfully",
-  "error": null
-}
+**Response** : `200 OK`
+
+**Workflow** :
+
+```
+1. GET /contacts/get_public_key/{email} → clé publique du destinataire
+2. Client récupère récursivement tous les fichiers du dossier
+3. Client chiffre folder_key et chaque file_key avec la clé publique RSA du destinataire
+4. POST /drive/share_folder_batch
+5. Serveur crée folder_access + file_access pour chaque fichier
 ```
 
 ---
 
-### DELETE /drive/folders/{folder_id}/share/{user_id}
+### POST `/drive/folders/{folder_id}/accept`
 
-Revoke a user's access to a folder.
+**Description** : Accepte un partage de dossier reçu.
 
-**Parameters:**
+**Authentification** : ✅ Requise
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `folder_id` | path | Folder UUID |
-| `user_id` | path | User UUID |
+**Path Parameters** :
+- `folder_id` (UUID)
 
-**Success Response:**
+**Response** : `200 OK`
+
+---
+
+### POST `/drive/folders/{folder_id}/reject`
+
+**Description** : Rejette un partage de dossier reçu.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
+
+**Response** : `200 OK`
+
+---
+
+### GET `/drive/folder/{folder_id}/shared_users`
+
+**Description** : Liste les utilisateurs avec qui le dossier est partagé.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `folder_id` (UUID)
+
+**Response** : `200 OK`
 
 ```json
 {
@@ -933,7 +1015,7 @@ Revoke a user's access to a folder.
 
 ### POST /drive/folders/{folder_id}/accept
 
-Accept a shared folder.
+**Description** : Récupère les métadonnées complètes d'un dossier (incluant permissions et liste de partage).
 
 **Parameters:**
 
@@ -957,6 +1039,31 @@ Accept a shared folder.
 
 Reject a shared folder.
 
+**Description** : Propage les permissions d'un fichier à un utilisateur (après partage de dossier parent).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `folder_id` | path | Folder UUID |
+
+**Success Response:**
+
+```json
+{
+  "file_id": "880e8400-e29b-41d4-a716-446655440003",
+  "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
+  "encrypted_file_key": "encrypted_file_key_base64",
+  "access_level": "viewer"
+}
+```
+
+**Response** : `200 OK`
+
+---
+
+### POST `/drive/propagate_folder_access`
+
+**Description** : Propage les permissions d'un dossier à un utilisateur (après partage de dossier parent).
+
 **Parameters:**
 
 | Parameter | Type | Description |
@@ -967,50 +1074,24 @@ Reject a shared folder.
 
 ```json
 {
-  "success": true,
-  "data": "Folder rejected successfully",
-  "error": null
+  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
+  "recipient_user_id": "660e8400-e29b-41d4-a716-446655440001",
+  "encrypted_folder_key": "encrypted_folder_key_base64",
+  "access_level": "editor"
 }
 ```
 
----
-
-### GET /drive/folder/{folder_id}/shared_users *(Non-RESTful)*
-
-Get list of users with access to a folder.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `folder_id` | path | Folder UUID |
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "shared_users": [
-      {
-        "user_id": "770e8400-e29b-41d4-a716-446655440003",
-        "username": "johndoe",
-        "access_level": "write",
-        "public_key": "base64_public_key"
-      }
-    ]
-  },
-  "error": null
-}
-```
+**Response** : `200 OK`
 
 ---
 
-### POST /drive/share_folder_batch *(Non-RESTful)*
+### POST `/drive/revoke-access`
 
-Share a folder and all its contents (files and subfolders) with a user.
+**Description** : Révoque les permissions d'un fichier ou dossier pour un utilisateur.
 
-**Request Body:**
+**Authentification** : ✅ Requise
+
+**Request Body (fichier)** :
 
 ```json
 {
@@ -1032,23 +1113,33 @@ Share a folder and all its contents (files and subfolders) with a user.
 }
 ```
 
-**Success Response:**
+**Request Body (dossier)** :
 
 ```json
 {
-  "success": true,
-  "data": "Folder and contents shared successfully",
-  "error": null
+  "folder_id": "aa0e8400-e29b-41d4-a716-446655440005",
+  "user_id": "660e8400-e29b-41d4-a716-446655440001"
 }
 ```
 
+**Response** : `200 OK`
+
+**Effet** : Supprime le `file_access` ou `folder_access` record.
+
 ---
 
-### POST /drive/restore_folder *(Non-RESTful)*
+## Module Drive - Global
 
-Restore a folder from trash.
+### GET `/drive/get_all_drive_info/{parent_id}`
 
-**Request Body:**
+**Description** : Récupère les informations complètes du drive (fichiers, dossiers, quota). Endpoint principal utilisé au chargement de la page drive.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `parent_id` (string) - UUID du dossier parent, `"root"`, `"corbeille"`, ou `"shared_with_me"`
+
+**Response** : `200 OK`
 
 ```json
 {
@@ -1056,7 +1147,30 @@ Restore a folder from trash.
 }
 ```
 
-**Success Response:**
+---
+
+### GET `/drive/get_file_folder/{parent_id}`
+
+**Description** : Liste les fichiers et dossiers d'un dossier. Supporte les vues virtuelles `root`, `corbeille`, `shared_with_me`.
+
+**Authentification** : ✅ Requise
+
+**Path Parameters** :
+- `parent_id` (string) - UUID du dossier, `"root"`, `"corbeille"`, ou `"shared_with_me"`
+
+**Response** : `200 OK` (même format que `/drive/folder_contents/{folder_id}`)
+
+---
+
+### POST `/drive/empty_trash`
+
+**Description** : Vide la corbeille (hard delete de tous les fichiers/dossiers soft-deleted).
+
+**Authentification** : ✅ Requise
+
+**Request Body** : Aucun
+
+**Response** : `200 OK`
 
 ```json
 {
@@ -1066,30 +1180,53 @@ Restore a folder from trash.
 }
 ```
 
+**Effet** :
+1. Supprime tous les chunks S3 des fichiers soft-deleted
+2. Hard delete tous les `files` et `folders` où `is_deleted = true`
+3. Libère l'espace de stockage
+
+**⚠️ Attention** : Opération **irréversible**.
+
 ---
 
-## Drive Module - Access Management
+## Module Agenda
 
-### POST /drive/propagate_file_access *(Non-RESTful)*
+### GET `/agenda/events`
 
-Propagate file access to parent subfolders (for access inheritance).
+**Description** : Liste les événements d'agenda de l'utilisateur pour une plage de jours.
 
-**Request Body:**
+**Authentification** : ✅ Requise
+
+**Query Parameters** :
+- `startDayId` (integer) - ID du jour de début
+- `endDayId` (integer) - ID du jour de fin
+
+**Response** : `200 OK`
 
 ```json
 {
-  "file_id": "660e8400-e29b-41d4-a716-446655440001"
+  "ok": true,
+  "data": [
+    {
+      "id": "dd0e8400-e29b-41d4-a716-446655440009",
+      "encrypted_title": "iv:ciphertext_base64",
+      "encrypted_description": "iv:ciphertext_base64",
+      "encrypted_data_key": "encrypted_aes_key_base64",
+      "start_time": "2025-01-20T14:00:00Z",
+      "end_time": "2025-01-20T15:00:00Z",
+      "is_all_day": false,
+      "category_id": "ee0e8400-e29b-41d4-a716-446655440010",
+      "created_at": "2025-01-15T10:30:00Z"
+    }
+  ]
 }
 ```
 
-**Success Response:**
+**Exemple curl** :
 
-```json
-{
-  "success": true,
-  "data": "Access propagated successfully",
-  "error": null
-}
+```bash
+curl -X GET "https://gauzian.pupin.fr/api/agenda/events?startDayId=20250101&endDayId=20250131" \
+  -b cookies.txt
 ```
 
 ---
@@ -1266,212 +1403,229 @@ Permanently empty the trash.
 
 ---
 
-## Drive Module - Internal Endpoints
+## Exemples d'Utilisation
 
-### POST /drive/upload_chunk *(Non-RESTful - Internal)*
+### Workflow Complet : Upload Fichier E2EE
 
-Upload a chunk encoded in Base64.
+```bash
+#!/bin/bash
 
-**Request Body:**
+API_URL="https://gauzian.pupin.fr/api"
+EMAIL="user@example.com"
+PASSWORD="password123"
+FILE_PATH="document.pdf"
+FOLDER_ID="770e8400-e29b-41d4-a716-446655440002"
 
-```json
-{
-  "file_id": "660e8400-e29b-41d4-a716-446655440001",
-  "index": 0,
-  "chunk_data": "base64_encrypted_chunk_data",
-  "iv": "base64_iv_for_this_chunk"
-}
+# 1. Login
+echo "1. Login..."
+LOGIN_RESPONSE=$(curl -s -X POST $API_URL/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+
+echo $LOGIN_RESPONSE
+
+# 2. Initialize file
+echo "2. Initialize file..."
+FILE_SIZE=$(stat -f%z "$FILE_PATH")
+INIT_RESPONSE=$(curl -s -X POST $API_URL/drive/initialize_file \
+  -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"size\": $FILE_SIZE,
+    \"encrypted_metadata\": \"iv_example:encrypted_filename_example\",
+    \"mime_type\": \"application/pdf\",
+    \"folder_id\": \"$FOLDER_ID\",
+    \"encrypted_file_key\": \"encrypted_file_key_example\"
+  }")
+
+FILE_ID=$(echo $INIT_RESPONSE | jq -r '.data.file_id')
+echo "File ID: $FILE_ID"
+
+# 3. Split file into chunks (2MB each)
+echo "3. Splitting file into chunks..."
+split -b 2097152 "$FILE_PATH" chunk_
+TOTAL_CHUNKS=$(ls chunk_* | wc -l)
+
+# 4. Upload chunks (binary multipart)
+echo "4. Uploading chunks..."
+CHUNK_INDEX=0
+for chunk in chunk_*; do
+  echo "  Uploading chunk $CHUNK_INDEX..."
+  curl -s -X POST "$API_URL/drive/files/$FILE_ID/upload-chunk" \
+    -b cookies.txt \
+    -F "chunk_index=$CHUNK_INDEX" \
+    -F "total_chunks=$TOTAL_CHUNKS" \
+    -F "chunk=@$chunk" \
+    -F "iv=iv_example"
+
+  CHUNK_INDEX=$((CHUNK_INDEX + 1))
+done
+
+# 5. Finalize upload
+echo "5. Finalizing upload..."
+curl -s -X POST $API_URL/drive/finalize_upload/$FILE_ID/success \
+  -b cookies.txt
+
+echo "Upload complete!"
+
+# Cleanup
+rm chunk_*
 ```
 
 ---
 
-### POST /drive/upload_chunk_binary *(Non-RESTful - Internal)*
+### Workflow Complet : Partage E2EE
 
-Upload a chunk in raw binary format.
+```bash
+#!/bin/bash
 
-**Query Parameters:**
+API_URL="https://gauzian.pupin.fr/api"
+FILE_ID="880e8400-e29b-41d4-a716-446655440003"
+RECIPIENT_EMAIL="recipient@example.com"
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `file_id` | query | File UUID |
-| `index` | query | Chunk index |
-| `iv` | query | Initialization vector Base64 |
+# 1. Récupérer la clé publique du destinataire
+echo "1. Getting recipient's public key..."
+PUBLIC_KEY_RESPONSE=$(curl -s -X GET "$API_URL/contacts/get_public_key/$RECIPIENT_EMAIL" \
+  -b cookies.txt)
 
-**Headers:**
+RECIPIENT_PUBLIC_KEY=$(echo $PUBLIC_KEY_RESPONSE | jq -r '.data.public_key')
+RECIPIENT_USER_ID=$(echo $PUBLIC_KEY_RESPONSE | jq -r '.data.user_id')
 
-```
-Content-Type: application/octet-stream
-```
+echo "Recipient User ID: $RECIPIENT_USER_ID"
 
-**Body:** Raw binary chunk data (max 6MB)
+# 2. Chiffrer file_key avec la clé publique RSA du destinataire
+# (Ce chiffrement se fait côté client avec crypto.ts / RSA-OAEP)
+WRAPPED_FILE_KEY="wrapped_file_key_example_base64"
 
----
+# 3. Partager le fichier
+echo "2. Sharing file..."
+curl -s -X POST "$API_URL/drive/files/$FILE_ID/share" \
+  -b cookies.txt \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"recipient_user_id\": \"$RECIPIENT_USER_ID\",
+    \"encrypted_file_key\": \"$WRAPPED_FILE_KEY\",
+    \"access_level\": \"viewer\"
+  }"
 
-### GET /drive/download_chunk/{s3_key} *(Non-RESTful - Internal)*
-
-Download a specific chunk encoded in Base64.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `s3_key` | path | S3 chunk key |
-
----
-
-### GET /drive/download_chunk_binary/{s3_key} *(Non-RESTful - Internal)*
-
-Download a specific chunk in raw binary format.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `s3_key` | path | S3 chunk key |
-
----
-
-### GET /drive/folder_contents/{folder_id} *(Non-RESTful - Internal)*
-
-Get recursive folder contents.
-
----
-
-## Agenda Module
-
-### GET /agenda/events
-
-Retrieve calendar events in a date range.
-
-**Query Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `startDayId` | query | Start day ID (encrypted format) |
-| `endDayId` | query | End day ID (encrypted format) |
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "events": [
-      {
-        "id": "aa0e8400-e29b-41d4-a716-446655440006",
-        "title": "Réunion équipe",
-        "description": "Discussion hebdomadaire",
-        "dayId": 738150,
-        "startDayId": "encrypted_start_day",
-        "endDayId": "encrypted_end_day",
-        "startHour": "encrypted_09:00",
-        "endHour": "encrypted_10:30",
-        "isAllDay": false,
-        "isMultiDay": false,
-        "category": "work",
-        "color": "#4A90E2",
-        "encryptedDataKey": "base64_encrypted_data_key",
-        "created_at": "2026-02-21T10:00:00Z",
-        "updated_at": "2026-02-21T10:00:00Z"
-      }
-    ]
-  },
-  "error": null
-}
+echo "File shared successfully!"
 ```
 
 ---
 
-### POST /agenda/events
+### Workflow Complet : Download Fichier E2EE
 
-Create a new calendar event.
+```bash
+#!/bin/bash
 
-**Headers:**
+API_URL="https://gauzian.pupin.fr/api"
+FILE_ID="880e8400-e29b-41d4-a716-446655440003"
+OUTPUT_FILE="downloaded_file.pdf"
 
-```
-Content-Type: application/json
-```
+# 1. Récupérer les métadonnées du fichier (s3_keys inclus)
+echo "1. Getting file metadata..."
+FILE_INFO=$(curl -s -X GET "$API_URL/drive/file/$FILE_ID" \
+  -b cookies.txt)
 
-**Request Body:**
+ENCRYPTED_FILE_KEY=$(echo $FILE_INFO | jq -r '.data.encrypted_file_key')
+S3_KEYS=($(echo $FILE_INFO | jq -r '.data.s3_keys[]'))
 
-```json
-{
-  "title": "Réunion équipe",
-  "description": "Discussion hebdomadaire",
-  "dayId": 738150,
-  "startDayId": "encrypted_start_day",
-  "endDayId": "encrypted_end_day",
-  "startHour": "encrypted_09:00",
-  "endHour": "encrypted_10:30",
-  "isAllDay": false,
-  "isMultiDay": false,
-  "category": "work",
-  "color": "#4A90E2",
-  "encryptedDataKey": "base64_encrypted_data_key"
-}
-```
+echo "Total chunks: ${#S3_KEYS[@]}"
 
-**Success Response:**
+# 2. Download chaque chunk
+echo "2. Downloading chunks..."
+rm -f chunk_*.enc
 
-```json
-{
-  "success": true,
-  "data": {
-    "events": [
-      {
-        "id": "aa0e8400-e29b-41d4-a716-446655440006",
-        "title": "Réunion équipe",
-        "description": "Discussion hebdomadaire",
-        "dayId": 738150,
-        "startDayId": "encrypted_start_day",
-        "endDayId": "encrypted_end_day",
-        "startHour": "encrypted_09:00",
-        "endHour": "encrypted_10:30",
-        "isAllDay": false,
-        "isMultiDay": false,
-        "category": "work",
-        "color": "#4A90E2",
-        "encryptedDataKey": "base64_encrypted_data_key",
-        "created_at": "2026-02-21T10:00:00Z",
-        "updated_at": "2026-02-21T10:00:00Z"
-      }
-    ]
-  },
-  "error": null
-}
+for i in "${!S3_KEYS[@]}"; do
+  S3_KEY="${S3_KEYS[$i]}"
+  S3_KEY_ENCODED=$(printf %s "$S3_KEY" | jq -sRr @uri)
+
+  echo "  Downloading chunk $i..."
+  curl -s -X GET "$API_URL/drive/download_chunk_binary/$S3_KEY_ENCODED" \
+    -b cookies.txt \
+    -o "chunk_$i.enc"
+done
+
+# 3. Déchiffrer et reconstruire le fichier
+# (Le déchiffrement se fait côté client avec crypto.ts)
+echo "3. Reconstructing file..."
+cat chunk_*.enc > "$OUTPUT_FILE"
+
+echo "Download complete: $OUTPUT_FILE"
+
+# Cleanup
+rm chunk_*.enc
 ```
 
 ---
 
-## Important Notes
+## Monitoring & Observabilité
 
-### E2EE Encryption
+### Prometheus Metrics
 
-- All file and folder metadata is encrypted client-side with AES-256-GCM
-- Encryption keys are stored encrypted by the user key (master key)
-- The server never sees encryption keys in plaintext
-- File names and contents are fully encrypted
+Toutes les requêtes sont trackées automatiquement via le middleware `metrics::track_metrics`.
 
-### File Upload
+**Requêtes utiles** :
 
-- **Maximum chunk size: 6 MB**
-- Chunks are uploaded sequentially with an index
-- Each chunk has its own initialization vector (IV)
-- After all chunks, call `finalize_upload` with state `completed`
+```promql
+# Latence p99 par endpoint
+histogram_quantile(0.99,
+  rate(gauzian_request_duration_seconds_bucket[5m])
+)
 
-### Rate Limiting
+# Taux d'erreur 5xx
+rate(gauzian_requests_total{status=~"5.."}[5m])
+/
+rate(gauzian_requests_total[5m])
 
-Authentication endpoints are protected by Redis rate limiting:
-- 5 failed login attempts → blocked for 15 minutes
-- Counters are stored in Redis with key `failed_login:{email}`
+# Uploads S3 par minute
+rate(gauzian_s3_uploads_total[1m]) * 60
+```
 
-### Error Handling
-
-- Validation errors return `400 Bad Request`
-- Resources not found return `404 Not Found`
-- Unauthorized access returns `403 Forbidden`
-- Internal errors return `500 Internal Server Error` with a correlation ID
+**Alerts configurées** :
+- `HighErrorRate` : Taux d'erreur > 5%
+- `HighLatency` : P99 latency > 1s
+- `DatabasePoolExhausted` : `gauzian_db_pool_active` > 18/20
+- `RedisDown` : `gauzian_redis_cache_hits == 0` pendant 5 min
 
 ---
 
-Last updated: 2026-02-21
+## Notes de Sécurité
+
+### Zero-Knowledge Architecture
+
+⚠️ **Le serveur ne voit JAMAIS les données en clair.**
+
+**Ce qui est chiffré côté client** :
+- Noms de fichiers / dossiers (`encrypted_metadata`)
+- Contenu des fichiers (chunks S3)
+- Titres / descriptions d'événements d'agenda
+- Toutes les clés AES (`encrypted_file_key`, `encrypted_folder_key`, `encrypted_data_key`)
+
+**Ce qui est en clair côté serveur** :
+- Emails
+- Password hashes (Argon2)
+- Métadonnées non-sensibles (taille fichier, MIME type, timestamps)
+- Clés publiques RSA (nécessaires pour le partage E2EE)
+
+### Bonnes Pratiques
+
+✅ **DO** :
+- Toujours utiliser HTTPS en production
+- Générer des IV uniques pour chaque chiffrement AES
+- Utiliser des clés RSA-4096 minimum
+- Utiliser PBKDF2 avec 310k iterations minimum
+- Nettoyer IndexedDB au logout
+
+❌ **DON'T** :
+- Ne jamais logger les clés crypto ou les JWTs
+- Ne jamais réutiliser le même IV
+- Ne jamais envoyer les clés en clair (même en HTTPS)
+- Ne jamais stocker les clés côté serveur
+
+---
+
+**Dernière mise à jour** : 2026-02-21
+**Version API** : 1.1
+**Backend Version** : Rust stable, Axum 0.7+, SQLx 0.7+
