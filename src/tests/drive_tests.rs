@@ -139,3 +139,58 @@ fn test_nil_uuid_parse_uuid_or_error() {
 
     assert_eq!(result, Ok(None), "Nil UUID should return Ok(None)");
 }
+
+#[test]
+fn test_format_and_parse_consistency_on_valid_uuid_samples() {
+    for _ in 0..200 {
+        let id = Uuid::new_v4();
+        let input = format!("\n\t {} \t\n", id);
+
+        let formatted = services::format_string_to_uuid_or_root(&input);
+        let parsed = services::parse_uuid_or_error(&input);
+
+        assert_eq!(formatted, Some(id));
+        assert_eq!(parsed, Ok(Some(id)));
+    }
+}
+
+#[test]
+fn test_special_values_are_consistently_mapped_to_none() {
+    let special_values = [
+        "",
+        " ",
+        "\n\t",
+        "null",
+        "NULL",
+        "Null",
+        "root",
+        "ROOT",
+        "Root",
+        "00000000-0000-0000-0000-000000000000",
+    ];
+
+    for value in special_values {
+        assert_eq!(services::format_string_to_uuid_or_root(value), None, "format should map to None for {value:?}");
+        assert_eq!(services::parse_uuid_or_error(value), Ok(None), "parse should map to Ok(None) for {value:?}");
+    }
+}
+
+#[test]
+fn test_parse_rejects_obviously_invalid_uuid_patterns() {
+    let invalid_values = [
+        "123",
+        "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+        "123e4567-e89b-12d3-a456-42661417400",  // too short
+        "123e4567-e89b-12d3-a456-4266141740000", // too long
+        "123e4567--e89b-12d3-a456-426614174000", // malformed separators
+        "123e4567-e89b-12d3-a456-42661417400g",  // invalid char
+    ];
+
+    for value in invalid_values {
+        assert!(services::format_string_to_uuid_or_root(value).is_none());
+        assert_eq!(
+            services::parse_uuid_or_error(value),
+            Err("Invalid UUID format".to_string())
+        );
+    }
+}

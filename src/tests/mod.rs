@@ -6,3 +6,9 @@ mod auth_tests;
 
 #[cfg(test)]
 mod drive_tests;
+
+#[cfg(test)]
+mod response_tests;
+
+#[cfg(test)]
+mod metrics_tests;
