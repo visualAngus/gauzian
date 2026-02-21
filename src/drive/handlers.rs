@@ -13,6 +13,19 @@ use axum::body::{Body, Bytes};
 use axum::http::header;
 use futures::stream::StreamExt;
 
+fn sanitize_content_disposition_filename(raw: &str) -> String {
+    let sanitized = raw
+        .chars()
+        .filter(|c| *c != '\r' && *c != '\n' && *c != '"' && *c != '\\')
+        .collect::<String>();
+
+    if sanitized.trim().is_empty() {
+        "download".to_string()
+    } else {
+        sanitized
+    }
+}
+
 // ========== Request/Response Structures ==========
 
 #[derive(Deserialize)]
@@ -1029,12 +1042,13 @@ pub async fn download_file_handler(
         .get("encrypted_metadata")
         .and_then(|m| m.as_str())
         .unwrap_or("download");
+    let safe_filename = sanitize_content_disposition_filename(filename);
 
     axum::response::Response::builder()
         .header(header::CONTENT_TYPE, "application/octet-stream")
         .header(
             header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", filename),
+            format!("attachment; filename=\"{}\"", safe_filename),
         )
         .body(body)
         .unwrap()

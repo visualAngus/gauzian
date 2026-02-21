@@ -42,8 +42,6 @@ pub struct UserInfo {
     pub private_key_salt: String,
     pub iv: String,
     pub public_key: String,
-    pub password_hash: String,
-    pub auth_salt: Option<String>,
 }
 
 // ========== Queries ==========
@@ -95,7 +93,7 @@ pub async fn get_user_by_email(pool: &PgPool, email: &str) -> Result<User, sqlx:
 pub async fn get_user_by_id(pool: &PgPool, user_id: Uuid) -> Result<UserInfo, sqlx::Error> {
     sqlx::query_as::<_, UserInfo>(
         r#"
-        SELECT id, username, email, password_hash, auth_salt, encrypted_private_key,
+        SELECT id, username, email, encrypted_private_key,
                private_key_salt, iv, public_key
         FROM users
         WHERE id = $1
