@@ -81,7 +81,7 @@ status == 200
 GET {{base_url}}/contacts/get_public_key/any@email.com
 HTTP 404
 [Asserts]
-status == 401
+status == 404
 
 # Test 12: GET /contacts/get_public_key/any@email.com with valid token - Should return 404 (not found)
 GET {{base_url}}/contacts/get_public_key/any@email.com

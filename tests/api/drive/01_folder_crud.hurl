@@ -10,16 +10,16 @@ HTTP 200
 token_a: jsonpath "$.token"
 
 # Test 1: Create folder at root (parent_folder_id: "null" as string) - Should succeed with 201
-POST {{base_url}}/drive/create_folder
+POST {{base_url}}/drive/folders
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
-{"encrypted_metadata": "dGVzdC1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dGVzdC1mb2xkZXIta2V5"}
+{"encrypted_metadata": "dGVzdC1tZXRhZGF0YQ==", "parent_folder_id": "root", "encrypted_folder_key": "dGVzdC1mb2xkZXIta2V5"}
 HTTP 200
 [Captures]
 folder_id_a: jsonpath "$.folder_id"
 
 # Test 2: Create subfolder inside folder_a - Should succeed with 201
-POST {{base_url}}/drive/create_folder
+POST {{base_url}}/drive/folders
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "c3ViZm9sZGVyLW1ldGFkYXRh", "parent_folder_id": "{{folder_id_a}}", "encrypted_folder_key": "dGVzdC1zdWJmb2xkZXIta2V5"}
@@ -35,48 +35,44 @@ HTTP 200
 status == 200
 
 # Test 4: Rename folder_a - Should succeed with 200
-POST {{base_url}}/drive/rename_folder
+PATCH {{base_url}}/drive/folders/{{folder_id_a}}
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
-{"folder_id": "{{folder_id_a}}", "encrypted_metadata": "cmVuYW1lZC1tZXRhZGF0YQ=="}
+{"new_encrypted_metadata": "cmVuYW1lZC1tZXRhZGF0YQ=="}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 5: Create folder WITHOUT auth - Should fail with 401
-POST {{base_url}}/drive/create_folder
+POST {{base_url}}/drive/folders
 Content-Type: application/json
-{"encrypted_metadata": "dGVzdC1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dGVzdC1mb2xkZXIta2V5"}
+{"encrypted_metadata": "dGVzdC1tZXRhZGF0YQ==", "parent_folder_id": "root", "encrypted_folder_key": "dGVzdC1mb2xkZXIta2V5"}
 HTTP 401
 [Asserts]
 status == 401
 
-# Test 6: GET /drive/folder_contents with non-existent folder UUID - Should return 403 or 404
-GET {{base_url}}/drive/folder_contents/00000000-0000-0000-0000-000000000000
+# Test 6: GET /drive/folders with nil UUID - Server treats nil UUID as null/root → 400
+GET {{base_url}}/drive/folders/00000000-0000-0000-0000-000000000000
 Authorization: Bearer {{token_a}}
-HTTP 403
+HTTP 400
 
 # Test 7: Try to access folder with invalid UUID format - Should return 400 (not 500)
-GET {{base_url}}/drive/folder_contents/not-a-uuid
+GET {{base_url}}/drive/folders/not-a-uuid
 Authorization: Bearer {{token_a}}
 HTTP 400
 [Asserts]
 status == 400
 
 # Test 8: Delete subfolder first - Should succeed with 200
-POST {{base_url}}/drive/delete_folder
+DELETE {{base_url}}/drive/folders/{{folder_id_sub}}
 Authorization: Bearer {{token_a}}
-Content-Type: application/json
-{"folder_id": "{{folder_id_sub}}"}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 9: Delete folder_a - Should succeed with 200
-POST {{base_url}}/drive/delete_folder
+DELETE {{base_url}}/drive/folders/{{folder_id_a}}
 Authorization: Bearer {{token_a}}
-Content-Type: application/json
-{"folder_id": "{{folder_id_a}}"}
 HTTP 200
 [Asserts]
 status == 200

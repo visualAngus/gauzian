@@ -12,7 +12,7 @@ token_a: jsonpath "$.token"
 user_a_id: jsonpath "$.user_id"
 
 # User A creates a folder
-POST {{base_url}}/drive/create_folder
+POST {{base_url}}/drive/folders
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"encrypted_metadata": "dXNlci1hLWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dXNlci1hLWZvbGRlci1rZXk="}
@@ -27,15 +27,15 @@ Content-Type: application/json
 {"size": 1024, "encrypted_metadata": "dXNlci1hLWZpbGUtbWV0YWRhdGE=", "mime_type": "text/plain", "folder_id": "{{folder_id_a}}", "encrypted_file_key": "dXNlci1hLWZpbGUta2V5"}
 HTTP 200
 [Captures]
-file_id_a: jsonpath "$.data.file_id"
+file_id_a: jsonpath "$.file_id"
 
 POST {{base_url}}/drive/upload_chunk
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
-{"file_id": "{{file_id_a}}", "chunk_index": 0, "total_chunks": 1, "encrypted_chunk": "dXNlci1hLWZpbGUtY2h1bms=", "iv": "dXNlci1hLWl2"}
+{"file_id": "{{file_id_a}}", "index": 0, "chunk_data": "dXNlci1hLWZpbGUtY2h1bms=", "iv": "dXNlci1hLWl2"}
 HTTP 200
 
-POST {{base_url}}/drive/finalize_upload/{{file_id_a}}/success
+POST {{base_url}}/drive/finalize_upload/{{file_id_a}}/completed
 Authorization: Bearer {{token_a}}
 HTTP 200
 
@@ -49,7 +49,7 @@ token_b: jsonpath "$.token"
 user_b_id: jsonpath "$.user_id"
 
 # User B creates their own folder
-POST {{base_url}}/drive/create_folder
+POST {{base_url}}/drive/folders
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
 {"encrypted_metadata": "dXNlci1iLWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "dXNlci1iLWZvbGRlci1rZXk="}
@@ -65,57 +65,53 @@ Authorization: Bearer {{token_b}}
 HTTP 403
 
 # Test 2: IDOR - User B tries to GET file of User A's file
-GET {{base_url}}/drive/file/{{file_id_a}}
+GET {{base_url}}/drive/files/{{file_id_a}}
 Authorization: Bearer {{token_b}}
 HTTP 403
 
 # Test 3: IDOR - User B tries to RENAME User A's folder
-POST {{base_url}}/drive/rename_folder
+PATCH {{base_url}}/drive/folders/{{folder_id_a}}
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
-{"folder_id": "{{folder_id_a}}", "encrypted_metadata": "c2FsdGktcmVuYW1lLWZvbGRlcg=="}
+{"new_encrypted_metadata": "c2FsdGktcmVuYW1lLWZvbGRlcg=="}
 HTTP 403
 
 # Test 4: IDOR - User B tries to DELETE User A's folder
-POST {{base_url}}/drive/delete_folder
+DELETE {{base_url}}/drive/folders/{{folder_id_a}}
 Authorization: Bearer {{token_b}}
-Content-Type: application/json
-{"folder_id": "{{folder_id_a}}"}
 HTTP 403
 
 # Test 5: IDOR - User B tries to RENAME User A's file
-POST {{base_url}}/drive/rename_file
+PATCH {{base_url}}/drive/files/{{file_id_a}}
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
-{"file_id": "{{file_id_a}}", "encrypted_metadata": "c2FsdGktcmVuYW1lLWZpbGU="}
+{"new_encrypted_metadata": "c2FsdGktcmVuYW1lLWZpbGU="}
 HTTP 403
 
 # Test 6: IDOR - User B tries to DELETE User A's file
-POST {{base_url}}/drive/delete_file
+DELETE {{base_url}}/drive/files/{{file_id_a}}
 Authorization: Bearer {{token_b}}
-Content-Type: application/json
-{"file_id": "{{file_id_a}}"}
 HTTP 403
 
 # Test 7: IDOR - User B tries to SHARE User A's file
-POST {{base_url}}/drive/share_file
+POST {{base_url}}/drive/files/{{file_id_a}}/share
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
-{"file_id": "{{file_id_a}}", "recipient_user_id": "{{user_b_id}}", "encrypted_file_key": "c2FsdGgtZW5jcnlwdGVkLWZpbGUta2V5", "access_level": "viewer"}
+{"contact_id": "{{user_b_id}}", "encrypted_item_key": "c2FsdGgtZW5jcnlwdGVkLWZpbGUta2V5", "access_level": "viewer"}
 HTTP 403
 
 # Test 8: IDOR - User B tries to SHARE User A's folder
-POST {{base_url}}/drive/share_folder
+POST {{base_url}}/drive/folders/{{folder_id_a}}/share
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
-{"folder_id": "{{folder_id_a}}", "recipient_user_id": "{{user_b_id}}", "encrypted_folder_key": "c2FsdGgtZW5jcnlwdGVkLWZvbGRlci1rZXk=", "access_level": "viewer"}
+{"contact_id": "{{user_b_id}}", "encrypted_item_key": "c2FsdGgtZW5jcnlwdGVkLWZvbGRlci1rZXk=", "access_level": "viewer"}
 HTTP 403
 
 # Test 9: IDOR - User B tries to REVOKE access to User A's file
 POST {{base_url}}/drive/revoke-access
 Authorization: Bearer {{token_b}}
 Content-Type: application/json
-{"file_id": "{{file_id_a}}", "user_id": "{{user_b_id}}"}
+{"item_id": "{{file_id_a}}", "item_type": "file", "user_id": "{{user_b_id}}"}
 HTTP 403
 
 # Test 10: IDOR - User B tries to get all drive info of User A's folder
@@ -133,14 +129,14 @@ HTTP 400
 status == 400
 
 # Test 12: UUID Manipulation - GET file with invalid UUID format
-GET {{base_url}}/drive/file/not-a-uuid
+GET {{base_url}}/drive/files/not-a-uuid
 Authorization: Bearer {{token_a}}
 HTTP 400
 [Asserts]
 status == 400
 
 # Test 13: UUID Manipulation - Path traversal attempt in file_id
-POST {{base_url}}/drive/delete_file
+DELETE {{base_url}}/drive/files/{{file_id_a}}
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
 {"file_id": "../../../etc/passwd"}
@@ -165,7 +161,7 @@ HTTP 200
 status == 200
 
 # Test 16: Verify User A can still access their own file
-GET {{base_url}}/drive/file/{{file_id_a}}
+GET {{base_url}}/drive/files/{{file_id_a}}
 Authorization: Bearer {{token_a}}
 HTTP 200
 [Asserts]
@@ -174,21 +170,15 @@ status == 200
 # ===== Cleanup =====
 
 # User A deletes their own resources
-POST {{base_url}}/drive/delete_file
+DELETE {{base_url}}/drive/files/{{file_id_a}}
 Authorization: Bearer {{token_a}}
-Content-Type: application/json
-{"file_id": "{{file_id_a}}"}
 HTTP 200
 
-POST {{base_url}}/drive/delete_folder
+DELETE {{base_url}}/drive/folders/{{folder_id_a}}
 Authorization: Bearer {{token_a}}
-Content-Type: application/json
-{"folder_id": "{{folder_id_a}}"}
 HTTP 200
 
 # User B deletes their own resources
-POST {{base_url}}/drive/delete_folder
+DELETE {{base_url}}/drive/folders/{{folder_id_b}}
 Authorization: Bearer {{token_b}}
-Content-Type: application/json
-{"folder_id": "{{folder_id_b}}"}
 HTTP 200
