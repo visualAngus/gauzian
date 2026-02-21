@@ -10,10 +10,10 @@ HTTP 200
 token_a: jsonpath "$.token"
 
 # Setup: Create a folder to hold our test files
-POST {{base_url}}/drive/create_folder
+POST {{base_url}}/drive/folders
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
-{"encrypted_metadata": "ZmlsZWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "null", "encrypted_folder_key": "ZmlsZWZvbGRlci1rZXk="}
+{"encrypted_metadata": "ZmlsZWZvbGRlci1tZXRhZGF0YQ==", "parent_folder_id": "root", "encrypted_folder_key": "ZmlsZWZvbGRlci1rZXk="}
 HTTP 200
 [Captures]
 folder_id: jsonpath "$.folder_id"
@@ -25,45 +25,43 @@ Content-Type: application/json
 {"size": 1024, "encrypted_metadata": "ZmlsZS1tZXRhZGF0YQ==", "mime_type": "text/plain", "folder_id": "{{folder_id}}", "encrypted_file_key": "ZmlsZS1rZXk="}
 HTTP 200
 [Captures]
-file_id: jsonpath "$.data.file_id"
+file_id: jsonpath "$.file_id"
 
 # Test 2: Upload a chunk - Should succeed with 200
 POST {{base_url}}/drive/upload_chunk
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
-{"file_id": "{{file_id}}", "chunk_index": 0, "total_chunks": 1, "encrypted_chunk": "dGVzdC1jaHVuaw==", "iv": "dGVzdC1pdg=="}
+{"file_id": "{{file_id}}", "index": 0, "chunk_data": "dGVzdC1jaHVuaw==", "iv": "dGVzdC1pdg=="}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 3: Finalize upload with etat "success" - Should succeed with 200
-POST {{base_url}}/drive/finalize_upload/{{file_id}}/success
+POST {{base_url}}/drive/finalize_upload/{{file_id}}/completed
 Authorization: Bearer {{token_a}}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 4: GET /drive/file/{{file_id}} - Should succeed with 200
-GET {{base_url}}/drive/file/{{file_id}}
+GET {{base_url}}/drive/files/{{file_id}}
 Authorization: Bearer {{token_a}}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 5: Rename file - Should succeed with 200
-POST {{base_url}}/drive/rename_file
+PATCH {{base_url}}/drive/files/{{file_id}}
 Authorization: Bearer {{token_a}}
 Content-Type: application/json
-{"file_id": "{{file_id}}", "encrypted_metadata": "cmVuYW1lZC1maWxlLW1ldGFkYXRh"}
+{"new_encrypted_metadata": "cmVuYW1lZC1maWxlLW1ldGFkYXRh"}
 HTTP 200
 [Asserts]
 status == 200
 
 # Test 6: Delete file - Should succeed with 200
-POST {{base_url}}/drive/delete_file
+DELETE {{base_url}}/drive/files/{{file_id}}
 Authorization: Bearer {{token_a}}
-Content-Type: application/json
-{"file_id": "{{file_id}}"}
 HTTP 200
 [Asserts]
 status == 200
@@ -77,10 +75,8 @@ HTTP 401
 status == 401
 
 # Test 8: Delete folder - Should succeed with 200
-POST {{base_url}}/drive/delete_folder
+DELETE {{base_url}}/drive/folders/{{folder_id}}
 Authorization: Bearer {{token_a}}
-Content-Type: application/json
-{"folder_id": "{{folder_id}}"}
 HTTP 200
 [Asserts]
 status == 200
