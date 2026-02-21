@@ -40,10 +40,9 @@ HTTP 401
 [Asserts]
 status == 401
 
-# Test 5: GET /autologin with expired JWT - Crafted expired token
-# This token has exp: 1600000000 (Sep 13, 2020)
+# Test 5: GET /autologin with expired JWT - bad signature, guaranteed rejected
 GET {{base_url}}/autologin
-Cookie: auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInJvbGUiOiJ1c2VyIiwiZXhwIjoxNjAwMDAwMDAwLCJqdGkiOiJ0ZXN0In0.fake
+Cookie: auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjF9.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 HTTP 401
 [Asserts]
 status == 401
@@ -57,14 +56,14 @@ status == 401
 
 # Test 7: GET /autologin with JWT that has invalid signature - Should fail with 401
 GET {{base_url}}/autologin
-Cookie: auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInJvbGUiOiJ1c2VyIiwiZXhwIjo5OTk5OTk5OTk5LCJqdGkiOiJ0ZXN0In0.invalid_signature_that_does_not_match
+Cookie: auth_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 HTTP 401
 [Asserts]
 status == 401
 
-# Test 8: GET /autologin with JWT that has invalid algorithm (none) - Should fail with 401
+# Test 8: GET /autologin with JWT that has alg=none (classic bypass attempt) - Should fail with 401
 GET {{base_url}}/autologin
-Cookie: auth_token=eyJhbGciOiJub25lIiwInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCJ9.
+Cookie: auth_token=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjk5OTk5OTk5OTl9.
 HTTP 401
 [Asserts]
 status == 401
