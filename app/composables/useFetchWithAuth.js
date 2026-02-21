@@ -66,12 +66,23 @@ export const useFetchWithAuth = () => {
     // 8. Gestion erreur 401 (token expiré/invalide)
     if (response.status === 401) {
       console.warn('Session expirée (401), redirection vers login');
-      // Logout automatique (efface token + clés + redirige)
       await logout();
       throw new Error('Session expirée');
     }
 
-    // 9. Retourner la response (le code appelant gère le reste)
+    // 9. Validation du status HTTP
+    if (!response.ok) {
+      let errorMessage = `Request failed with status ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        // Ignore JSON parse errors
+      }
+      throw new Error(errorMessage);
+    }
+
+    // 10. Retourner la response (le code appelant gère le reste)
     return response;
   };
 

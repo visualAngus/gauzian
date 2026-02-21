@@ -9,9 +9,11 @@ export type KeyStoreConfig = {
   storeName: string;
 };
 
+const KEY_EXPIRY_DAYS = 90;
+const MAX_RSA_PLAINTEXT_BYTES = 446;
+
 export const DEFAULT_KEYSTORE: KeyStoreConfig = {
-  dbName: "GauzianSecureDB",
-  dbVersion: 2,
+  dbName: "gauzian_key_store",
   storeName: "keys",
 };
 
@@ -284,7 +286,7 @@ export async function saveUserKeysToIndexedDb(
     {
       id: "user_private_key",
       key: privateKey,
-      expires: Date.now() + 10 * 24 * 60 * 60 * 1000, // 10 jours
+      expires: Date.now() + KEY_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
     },
     config
   );
@@ -343,7 +345,9 @@ export async function clearAllKeys(config: KeyStoreConfig = DEFAULT_KEYSTORE): P
     const clearRequest = store.clear();
 
     clearRequest.onsuccess = () => {
-      console.log('All crypto keys cleared from IndexedDB');
+      if (import.meta.dev) {
+        console.log('All crypto keys cleared from IndexedDB');
+      }
       resolve();
     };
 
@@ -362,6 +366,11 @@ export async function encryptWithStoredPublicKey(
   assertClient();
   const publicKey = await getUserPublicKeyFromIndexedDb(config);
   const encodedData = new TextEncoder().encode(data) as U8;
+  
+  if (encodedData.byteLength > MAX_RSA_PLAINTEXT_BYTES) {
+    throw new Error(`Data too large for RSA encryption (max ${MAX_RSA_PLAINTEXT_BYTES} bytes)`);
+  }
+  
   const encryptedData = await window.crypto.subtle.encrypt(
     { name: "RSA-OAEP" },
     publicKey,
