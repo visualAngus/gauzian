@@ -86,9 +86,13 @@ export const useAuth = () => {
         email: email
       };
 
-      console.log('Login successful, token stored in localStorage');
+      if (import.meta.dev) {
+        console.log('Login successful, token stored in localStorage');
+      }
     } catch (error) {
-      console.error('Login failed:', error);
+      if (import.meta.dev) {
+        console.error('Login failed:', error);
+      }
       throw error;
     }
   };
@@ -159,12 +163,16 @@ export const useAuth = () => {
         username: username
       };
 
-      console.log('Register successful, token stored in localStorage');
+      if (import.meta.dev) {
+        console.log('Register successful, token stored in localStorage');
+      }
 
       // 9. Retourner recovery key pour téléchargement
       return recovery_key_data.recovery_key;
     } catch (error) {
-      console.error('Register failed:', error);
+      if (import.meta.dev) {
+        console.error('Register failed:', error);
+      }
       throw error;
     }
   };
@@ -185,7 +193,9 @@ export const useAuth = () => {
           }
         }).catch(err => {
           // Ignorer les erreurs (401 si token déjà expiré)
-          console.warn('Logout backend call failed:', err);
+          if (import.meta.dev) {
+            console.warn('Logout backend call failed:', err);
+          }
         });
       }
 
@@ -202,12 +212,16 @@ export const useAuth = () => {
       isAuthenticated.value = false;
       user.value = null;
 
-      console.log('Logout successful, token and keys cleared');
+      if (import.meta.dev) {
+        console.log('Logout successful, token and keys cleared');
+      }
 
       // 5. Rediriger vers login
       navigateTo('/login');
     } catch (error) {
-      console.error('Logout error:', error);
+      if (import.meta.dev) {
+        console.error('Logout error:', error);
+      }
       // Même en cas d'erreur, nettoyer l'état local
       if (import.meta.client) {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -245,7 +259,9 @@ export const useAuth = () => {
         const keysOk = await getKeyStatus();
 
         if (!keysOk) {
-          console.warn('Token valid but crypto keys missing in IndexedDB');
+          if (import.meta.dev) {
+            console.warn('Token valid but crypto keys missing in IndexedDB');
+          }
           // Token valide mais clés absentes → forcer logout
           await logout();
           return false;
@@ -253,16 +269,22 @@ export const useAuth = () => {
 
         // Session valide
         isAuthenticated.value = true;
-        console.log('Session validated successfully');
+        if (import.meta.dev) {
+          console.log('Session validated successfully');
+        }
         return true;
       } else {
         // Token expiré ou invalide
-        console.warn('Session validation failed (401)');
+        if (import.meta.dev) {
+          console.warn('Session validation failed (401)');
+        }
         await logout();
         return false;
       }
     } catch (error) {
-      console.error('Session validation error:', error);
+      if (import.meta.dev) {
+        console.error('Session validation error:', error);
+      }
       // Erreur réseau → considérer session invalide
       await logout();
       return false;

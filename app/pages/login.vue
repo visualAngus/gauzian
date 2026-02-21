@@ -227,7 +227,9 @@ const handleLogin = async () => {
   try {
 		await login(loginForm.value.email, loginForm.value.password);
 		// useAuth gère le storage token + clés IndexedDB
-		console.log("Login OK");
+		if (import.meta.dev) {
+			console.log("Login OK");
+		}
 		// Navigation SPA (pas de rechargement complet)
 		await navigateTo('/drive');
   } catch (error) {
@@ -267,7 +269,9 @@ const handleRegister = async () => {
 		document.body.removeChild(element);
 
 		// Redirect to drive
-		console.log("Register OK");
+		if (import.meta.dev) {
+			console.log("Register OK");
+		}
 		await navigateTo('/drive');
   } catch (error) {
     alert(error.message || "Register failed");
