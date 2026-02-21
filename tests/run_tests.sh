@@ -128,7 +128,7 @@ run_test() {
     
     if [ "$REPORT_HTML" = true ]; then
         local report_file="${REPORTS_DIR}/${test_name}.html"
-        if hurl --test "${HURL_VARS[@]}" --html-report "${report_file}" "${test_file}"; then
+        if hurl --test "${HURL_VARS[@]}" --report-html "${report_file}" "${test_file}"; then
             echo -e "  ${GREEN}✓ PASSED${NC}"
             return 0
         else
