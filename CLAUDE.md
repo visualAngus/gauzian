@@ -25,6 +25,7 @@ Guidance for Claude Code when working with the **GAUZIAN backend**.
 - **Database Schema** : `docs/DATABASE_SCHEMA.md` (⭐ 700 lignes, ERD Mermaid)
 - **Environment Variables** : `docs/ENV_VARIABLES.md`
 - **Metrics** : `METRICS_USAGE_EXAMPLES.md`
+- **Tests E2E API** : `docs/TESTING.md` (comptes CI, rate limit, structure réponses)
 
 ## URL de l'API
 

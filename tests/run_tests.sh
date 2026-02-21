@@ -18,13 +18,13 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Parse command line arguments
-BASE_URL="${DEFAULT_BASE_URL}"
-EMAIL_A="${DEFAULT_EMAIL_A}"
-EMAIL_B="${DEFAULT_EMAIL_B}"
-PASSWORD="${DEFAULT_PASSWORD}"
-USERNAME_A="${DEFAULT_USERNAME_A}"
-USERNAME_B="${DEFAULT_USERNAME_B}"
+# Parse command line arguments (env vars take priority over defaults)
+BASE_URL="${API_URL:-${DEFAULT_BASE_URL}}"
+EMAIL_A="${TEST_USER_EMAIL_A:-${DEFAULT_EMAIL_A}}"
+EMAIL_B="${TEST_USER_EMAIL_B:-${DEFAULT_EMAIL_B}}"
+PASSWORD="${TEST_USER_PASSWORD:-${DEFAULT_PASSWORD}}"
+USERNAME_A="${TEST_USERNAME_A:-${DEFAULT_USERNAME_A}}"
+USERNAME_B="${TEST_USERNAME_B:-${DEFAULT_USERNAME_B}}"
 REPORT_HTML=false
 
 print_usage() {
@@ -119,13 +119,49 @@ echo "  User A: ${EMAIL_A} (${USERNAME_A})"
 echo "  User B: ${EMAIL_B} (${USERNAME_B})"
 echo ""
 
+# Check if the API is currently rate limiting login requests
+check_rate_limited() {
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE_URL}/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"email\":\"${EMAIL_A}\",\"password\":\"${PASSWORD}\"}")
+    [ "$status" = "429" ]
+}
+
 # Function to run a test file
+RATE_LIMITED=false
+
 run_test() {
     local test_file="$1"
     local test_name=$(basename "$test_file" .hurl)
-    
+
     echo -e "${YELLOW}Running: ${test_name}${NC}"
-    
+
+    # Skip all remaining tests if rate limited
+    if [ "$RATE_LIMITED" = true ]; then
+        echo -e "  ${YELLOW}⚠ SKIPPED — rate limit actif (réessaie dans ~15 min)${NC}"
+        return 2
+    fi
+
+    # For non-health tests, detect 429 before running hurl
+    if [[ "$test_name" != "00_health" ]]; then
+        local status
+        status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE_URL}/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${EMAIL_A}\",\"password\":\"${PASSWORD}\"}")
+        if [ "$status" = "429" ]; then
+            RATE_LIMITED=true
+            echo ""
+            echo -e "  ${YELLOW}⚠ RATE LIMIT DÉTECTÉ (HTTP 429)${NC}"
+            echo -e "  ${YELLOW}  → Le serveur bloque les connexions depuis cette IP/email.${NC}"
+            echo -e "  ${YELLOW}  → Fenêtre : ~15 minutes. Réessaie plus tard.${NC}"
+            echo -e "  ${YELLOW}  → Pour débloquer immédiatement :${NC}"
+            echo -e "  ${YELLOW}    ssh vps 'kubectl exec -n gauzian-v2 deploy/redis -- redis-cli DEL login_attempts:${EMAIL_A} login_attempts:${EMAIL_B}'${NC}"
+            echo -e "  ${YELLOW}⚠ SKIPPED${NC}"
+            return 2
+        fi
+    fi
+
     if hurl --test "${HURL_VARS[@]}" "${test_file}"; then
         echo -e "  ${GREEN}✓ PASSED${NC}"
         return 0
@@ -139,6 +175,7 @@ run_test() {
 TOTAL=0
 PASSED=0
 FAILED=0
+SKIPPED=0
 
 # Define test files in order
 # NOTE: 01_register.hurl est exclu du CI — les comptes doivent exister au préalable.
@@ -164,8 +201,12 @@ echo ""
 for test_file in "${TEST_FILES[@]}"; do
     if [ -f "$test_file" ]; then
         TOTAL=$((TOTAL + 1))
-        if run_test "$test_file"; then
+        run_test "$test_file"
+        rc=$?
+        if [ $rc -eq 0 ]; then
             PASSED=$((PASSED + 1))
+        elif [ $rc -eq 2 ]; then
+            SKIPPED=$((SKIPPED + 1))
         else
             FAILED=$((FAILED + 1))
         fi
@@ -180,12 +221,16 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Test Summary${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo -e "Total:  ${TOTAL}"
-echo -e "Passed: ${GREEN}${PASSED}${NC}"
-echo -e "Failed: ${RED}${FAILED}${NC}"
+echo -e "Total:   ${TOTAL}"
+echo -e "Passed:  ${GREEN}${PASSED}${NC}"
+echo -e "Skipped: ${YELLOW}${SKIPPED}${NC}"
+echo -e "Failed:  ${RED}${FAILED}${NC}"
 echo ""
 
-if [ $FAILED -gt 0 ]; then
+if [ $SKIPPED -gt 0 ] && [ $FAILED -eq 0 ]; then
+    echo -e "${YELLOW}⚠ Tests partiellement exécutés — rate limit actif. Réessaie dans ~15 min.${NC}"
+    exit 2
+elif [ $FAILED -gt 0 ]; then
     echo -e "${RED}Some tests failed!${NC}"
     exit 1
 else
