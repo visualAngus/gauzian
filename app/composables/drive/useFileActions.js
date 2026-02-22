@@ -333,7 +333,7 @@ export function useFileActions({
     const openItemMenu = (item, event) => {
         const panel = rightClickPanel.value;
         if (!panel) return;
-
+        
         // Trouver l'élément DOM réel correspondant à l'item
         const itemId = item.file_id || item.folder_id;
         const realElement = document.querySelector(`.item[data-item-id="${itemId}"]`);
@@ -344,7 +344,7 @@ export function useFileActions({
         
         // Utiliser l'élément DOM réel qui a déjà tous les dataset nécessaires
         rightClikedItem.value = realElement;
-
+        
         // Positionner le menu à l'endroit du clic
         panel.style.display = "flex";
         

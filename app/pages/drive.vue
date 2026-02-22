@@ -1109,7 +1109,10 @@ onMounted(async () => {
 
   // Fermer le menu contextuel au clic n'importe où
   const closeContextMenu = () => {
-    if (rightClickPanel.value) {
+    console.log(event.target);
+    // si il y a des circle nearby, ne pas fermer le menu (ex: clic sur un item du menu contextuel)
+    console.log(event.target.closest(".menu-dots"));
+    if (rightClickPanel.value && !event.target.closest(".menu-dots")) {
       rightClickPanel.value.style.display = "none";
     }
   };
