@@ -310,7 +310,7 @@ export function useFileActions({
 
     const handleTreeContextMenu = ({ node, event }) => {
         event.preventDefault();
-        const panel = rightClickPanel.value;
+        const panel = rightClickPanel.value?.$el || rightClickPanel.value;
         if (!panel) return;
 
         // Créer un élément virtuel pour le dossier du tree
@@ -331,9 +331,8 @@ export function useFileActions({
 
 
     const openItemMenu = (item, event) => {
-        const panel = rightClickPanel.value;
+        const panel = rightClickPanel.value?.$el || rightClickPanel.value;
         if (!panel) return;
-        
         // Trouver l'élément DOM réel correspondant à l'item
         const itemId = item.file_id || item.folder_id;
         const realElement = document.querySelector(`.item[data-item-id="${itemId}"]`);
@@ -365,7 +364,7 @@ export function useFileActions({
         event.preventDefault();
         event.stopPropagation();
         
-        const panel = rightClickPanel.value;
+        const panel = rightClickPanel.value?.$el || rightClickPanel.value;
         if (!panel) return;
 
         rightClikedItem.value = null;
@@ -378,7 +377,7 @@ export function useFileActions({
 
     // Fonction pour fermer le menu contextuel
     const closeContextMenu = () => {
-        const panel = rightClickPanel.value;
+        const panel = rightClickPanel.value?.$el || rightClickPanel.value;
         if (panel) {
             panel.style.display = "none";
         }
