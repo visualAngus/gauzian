@@ -340,22 +340,40 @@ export function useFileActions({
         if (!realElement) {
             return;
         }
-        
-        // Utiliser l'élément DOM réel qui a déjà tous les dataset nécessaires
+
+        const pageSize = {
+            width: window.innerWidth,
+            height: window.innerHeight
+        };
         rightClikedItem.value = realElement;
         
         // Positionner le menu à l'endroit du clic
         panel.style.display = "flex";
-        
-        // Si on a un event, on positionne au curseur, sinon position par défaut
-        if (event && event.pageY && event.pageX) {
-            panel.style.top = event.pageY + "px";
-            panel.style.left = event.pageX + "px";
-        } else {
-            // Position par défaut si pas d'event (cas du dotclick)
-            const rect = realElement.getBoundingClientRect();
-            panel.style.top = (rect.bottom + window.scrollY) + "px";
-            panel.style.left = (rect.left + window.scrollX) + "px";
+
+        if ((event.pageX - pageSize.width > - panel.offsetWidth && event.pageX - pageSize.width < 0)) {
+            if (event && event.pageY && event.pageX) {
+                panel.style.top = event.pageY + "px";
+                panel.style.left = event.pageX - panel.offsetWidth + "px";
+            } else {
+                const rect = realElement.getBoundingClientRect();
+                panel.style.top = (rect.bottom + window.scrollY) + "px";
+                panel.style.left = (rect.left + window.scrollX) + "px";
+            }
+        } else if ((event.pageY - pageSize.height > - panel.offsetHeight && event.pageY - pageSize.height < 0)){
+            if (event && event.pageY && event.pageX) {
+                panel.style.top = event.pageY - panel.offsetHeight + "px";
+                panel.style.left = event.pageX + "px";
+            }
+        }
+        else {
+            if (event && event.pageY && event.pageX) {
+                panel.style.top = event.pageY + "px";
+                panel.style.left = event.pageX + "px";
+            } else {
+                const rect = realElement.getBoundingClientRect();
+                panel.style.top = (rect.bottom + window.scrollY) + "px";
+                panel.style.left = (rect.left + window.scrollX) + "px";
+            }
         }
     };
 

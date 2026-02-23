@@ -498,6 +498,7 @@ main {
   gap: 4px;
   margin-bottom: 15px;
   padding: 12px 0;
+  min-height: 40px;
 
   max-width: 1540px;
   overflow-x: auto;
