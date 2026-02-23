@@ -94,12 +94,10 @@
 									type="email" 
 									id="register_email"
 									name="email"
-									autocomplete="email"
+									autocomplete="username"
 									@input="validateEmail(registerForm.email)"
 									required 
 								>
-								<!-- Hidden input so browser treats the account username as the email -->
-								<input type="hidden" v-model="registerForm.email" name="username" autocomplete="username" />
 
 								<label for="register_password">Mot de passe :</label>
 								<div class="input-with-icon">
