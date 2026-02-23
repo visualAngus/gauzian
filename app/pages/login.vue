@@ -28,13 +28,15 @@
 						<!-- BLOC LOGIN -->
 						<div v-if="etat === 'login'" class="auth-block" key="login">
 							<h2>LOGIN</h2>
-							<form @submit.prevent="handleLogin">
+							<form @submit.prevent="handleLogin" autocomplete="on">
 								<label for="login_email">Email :</label>
 								<input 
 									ref="emailInputRef"
 									v-model="loginForm.email" 
 									type="email" 
-									id="login_email" 
+									id="login_email"
+									name="username"
+									autocomplete="username"
 									@input="validateEmail(loginForm.email)"
 									required 
 								>
@@ -44,7 +46,9 @@
 									<input 
 										v-model="loginForm.password" 
 										:type="showLoginPassword ? 'text' : 'password'" 
-										id="login_password" 
+										id="login_password"
+										name="password"
+										autocomplete="current-password"
 										required 	
 									/>
 									<button
@@ -79,26 +83,32 @@
 						<!-- BLOC REGISTER -->
 						<div v-else class="auth-block" key="register">
 							<h2>S'ENREGISTRER</h2>
-							<form @submit.prevent="handleRegister">
+							<form @submit.prevent="handleRegister" autocomplete="on">
 								<label for="register_username">Nom d'utilisateur :</label>
-								<input v-model="registerForm.username" type="text" id="register_username" required />
+								<input v-model="registerForm.username" type="text" id="register_username" name="display_name" autocomplete="nickname" required />
 
 								<label for="register_email">Email :</label>
 								<input 
 									ref="emailInputRef"
 									v-model="registerForm.email" 
 									type="email" 
-									id="register_email" 
+									id="register_email"
+									name="email"
+									autocomplete="email"
 									@input="validateEmail(registerForm.email)"
 									required 
 								>
+								<!-- Hidden input so browser treats the account username as the email -->
+								<input type="hidden" v-model="registerForm.email" name="username" autocomplete="username" />
 
 								<label for="register_password">Mot de passe :</label>
 								<div class="input-with-icon">
 									<input 
 										v-model="registerForm.password" 
 										:type="showRegisterPassword ? 'text' : 'password'" 
-										id="register_password" 
+										id="register_password"
+										name="password"
+										autocomplete="new-password"
 										required 
 										@input="changement"
 									/>
