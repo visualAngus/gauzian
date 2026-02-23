@@ -35,6 +35,8 @@
   --color-selected: #d0e6ff;
 
   --color-progress-track: #d1dce5;
+
+  --cols: 5;
 }
 
 html,

@@ -47,114 +47,13 @@
     "
   />
 
-  <div id="div_pannel_right_click" ref="rightClickPanel">
-    <!-- Options quand c'est un dossier -->
-    <a
-      @click.stop="
-        createFolder();
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset?.itemType === 'folder' &&
-        activeFolderId !== 'corbeille'
-      "
-      >Nouveau dossier</a
-    >
-    <a
-      @click.stop="
-        downloadItem(rightClikedItem);
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset &&
-        (rightClikedItem.dataset.itemType === 'file' ||
-          rightClikedItem.dataset.itemType === 'folder') &&
-        activeFolderId !== 'corbeille'
-      "
-      >Télécharger</a
-    >
-    <a
-      @click.stop="
-        renameItem(rightClikedItem);
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset &&
-        (rightClikedItem.dataset.itemType === 'file' ||
-          rightClikedItem.dataset.itemType === 'folder') &&
-        activeFolderId !== 'corbeille'
-      "
-      >Renommer</a
-    >
-    <a
-      @click.stop="
-        restoreItem(rightClikedItem);
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset &&
-        (rightClikedItem.dataset.itemType === 'file' ||
-          rightClikedItem.dataset.itemType === 'folder') &&
-        activeFolderId === 'corbeille'
-      "
-      >Restaurer</a
-    >
-    <a
-      @click.stop="
-        deleteItem(rightClikedItem);
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset &&
-        (rightClikedItem.dataset.itemType === 'file' ||
-          rightClikedItem.dataset.itemType === 'folder')
-      "
-      >Supprimer</a
-    >
-    <a
-      @click.stop="
-        openPropertiesFromContext();
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset &&
-        (rightClikedItem.dataset.itemType === 'file' ||
-          rightClikedItem.dataset.itemType === 'folder')
-      "
-      >Propriétés</a
-    >
-    <a
-      @click.stop="
-        shareItem(rightClikedItem);
-        closeContextMenu();
-      "
-      v-if="
-        rightClikedItem?.dataset &&
-        (rightClikedItem.dataset.itemType === 'file' ||
-          rightClikedItem.dataset.itemType === 'folder') &&
-        activeFolderId !== 'corbeille'
-      "
-      >Partager</a
-    >
-
-    <!-- Options quand c'est l'espace vide -->
-    <a
-      @click.stop="
-        createFolder();
-        closeContextMenu();
-      "
-      v-if="rightClikedItem === null && activeFolderId !== 'corbeille'"
-      >Nouveau dossier</a
-    >
-    <a
-      @click.stop="
-        fileInput.click();
-        closeContextMenu();
-      "
-      v-if="rightClikedItem === null && activeFolderId !== 'corbeille'"
-      >Importer des fichiers</a
-    >
-  </div>
+  <ContextMenu
+    ref="rightClickPanel"
+    :clicked-item="rightClikedItem"
+    :active-folder-id="activeFolderId"
+    @action="handleContextMenuAction"
+    @close="closeContextMenu"
+  />
 
   <!-- Panneau Upload/Download moderne -->
   <div
@@ -655,6 +554,7 @@
         @contextmenu.self="openEmptySpaceMenu"
         v-dropzone="{
           inputRef: fileInput,
+  rightClickPanel,
           onFiles: onFilesFromDrop,
           onOverChange: setIsOver,
           isDisabled: activeFolderId === 'corbeille',
@@ -775,6 +675,7 @@ import ShareItemVue from "~/components/ShareItem.vue";
 import FolderTreeNode from "~/components/FolderTreeNode.vue";
 import Notification from "~/components/Notification.vue";
 import InfoItem from "~/components/InfoItem.vue";
+import ContextMenu from "~/components/ContextMenu.vue";
 
 const vDropzone = dropzone;
 // Configuration dynamique de l'API URL (Clever Cloud, K8s, local)
@@ -1089,6 +990,36 @@ const openPropertiesFromContext = () => {
   openInfoPanel?.();
 };
 
+// Gestionnaire centralisé des actions du menu contextuel
+const handleContextMenuAction = ({ action, item }) => {
+  switch (action) {
+    case 'createFolder':
+      createFolder();
+      break;
+    case 'download':
+      downloadItem(item);
+      break;
+    case 'rename':
+      renameItem(item);
+      break;
+    case 'restore':
+      restoreItem(item);
+      break;
+    case 'delete':
+      deleteItem(item);
+      break;
+    case 'properties':
+      openPropertiesFromContext();
+      break;
+    case 'share':
+      shareItem(item);
+      break;
+    case 'importFiles':
+      fileInput.value.click();
+      break;
+  }
+};
+
 // Initialisation
 const activeSection = ref("my_drive"); // Simple ref UI locale
 
@@ -1109,8 +1040,12 @@ onMounted(async () => {
 
   // Fermer le menu contextuel au clic n'importe où
   const closeContextMenu = () => {
-    if (rightClickPanel.value) {
-      rightClickPanel.value.style.display = "none";
+    console.log(event.target);
+    // si il y a des circle nearby, ne pas fermer le menu (ex: clic sur un item du menu contextuel)
+    console.log(event.target.closest(".menu-dots"));
+    const contextMenuEl = document.getElementById('div_pannel_right_click');
+    if (contextMenuEl && !event.target.closest(".menu-dots")) {
+      contextMenuEl.style.display = "none";
     }
   };
   document.addEventListener("click", closeContextMenu);

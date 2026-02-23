@@ -154,6 +154,7 @@ const emit = defineEmits([
   "reject",
   "restore",
   "delete-permanent",
+  "contextmenu",
 ]);
 
 const DRAG_THRESHOLD = 5; // pixels avant d'activer le drag

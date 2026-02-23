@@ -24,10 +24,9 @@ export function useInfoPanel({ API_URL, selectedItemsMap, formatBytes, addNotifi
         const isFolder = item.type === "folder";
         const id = isFolder ? item.folder_id : item.file_id;
         if (!id) return [];
-
         const endpoint = isFolder
-            ? `${API_URL}/drive/folder/${id}/InfoItem`
-            : `${API_URL}/drive/file/${id}/InfoItem`;
+            ? `/drive/folder/${id}/InfoItem`
+            : `/drive/file/${id}/InfoItem`;
 
         try {
             const res = await fetchWithAuth(endpoint, { method: "GET" });
