@@ -11,10 +11,10 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   const { isAuthenticated, validateSession } = useAuth();
 
   // Pages publiques (pas besoin d'auth)
-  const publicPages = ['/login', '/'];
+  const publicPages = ['/login', '/register', '/'];
   if (publicPages.includes(to.path)) {
-    // Si va vers /login et déjà authentifié, rediriger vers /drive
-    if (to.path === '/login' && isAuthenticated.value) {
+    // Si va vers /login ou /register et déjà authentifié, rediriger vers /drive
+    if ((to.path === '/login' || to.path === '/register') && isAuthenticated.value) {
       return navigateTo('/drive');
     }
     // Autoriser accès aux pages publiques (index.vue gère sa propre redirection)
