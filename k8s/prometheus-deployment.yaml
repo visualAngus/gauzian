@@ -32,6 +32,9 @@ spec:
           mountPath: /etc/prometheus
         - name: storage
           mountPath: /prometheus
+        - name: metrics-token
+          mountPath: /etc/prometheus/secrets
+          readOnly: true
         resources:
           requests:
             cpu: 250m
@@ -58,6 +61,12 @@ spec:
       - name: storage
         persistentVolumeClaim:
           claimName: prometheus-pvc
+      - name: metrics-token
+        secret:
+          secretName: prometheus-metrics-token
+          items:
+            - key: token
+              path: metrics-token
 ---
 apiVersion: v1
 kind: Service

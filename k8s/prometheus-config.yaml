@@ -15,6 +15,10 @@ data:
     scrape_configs:
       # Gauzian Backend (Rust/Axum)
       - job_name: 'gauzian-backend'
+        # Token Bearer monté depuis le Secret K8s 'prometheus-metrics-token'
+        # (voir k8s/prometheus-metrics-secret.yaml)
+        authorization:
+          credentials_file: /etc/prometheus/secrets/metrics-token
         kubernetes_sd_configs:
           - role: endpoints
             namespaces:

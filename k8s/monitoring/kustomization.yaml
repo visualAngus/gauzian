@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - grafana-ingressroute.yaml
   - backend-servicemonitor.yaml
+  - prometheus-metrics-secret.yaml
