@@ -70,27 +70,10 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       S3_BUCKET: ${S3_BUCKET:-gauzian}
       JWT_SECRET: ${JWT_SECRET}
+      METRICS_SECRET: ${METRICS_SECRET:-}
       RUST_LOG: gauzian_back=info,tower_http=info
     ports:
       - "3000:3000"
-
-  # 4. Reverse Proxy Caddy
-  caddy:
-    build:
-      context: .
-      dockerfile: Caddy.Dockerfile
-    image: gauzian_back-caddy:latest
-    container_name: gauzian_caddy
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - backend
 
   # 5. Front Nuxt (MODE PRODUCTION avec build complet)
   front:
@@ -106,5 +89,3 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
-  caddy_data:
-  caddy_config:

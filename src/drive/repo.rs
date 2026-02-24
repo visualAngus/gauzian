@@ -64,6 +64,8 @@ pub async fn user_has_chunk_access(
             JOIN file_access fa ON fa.file_id = sk.file_id
             WHERE sk.s3_key = $1
               AND fa.user_id = $2
+                AND fa.is_deleted = FALSE
+                and fa.is_accepted = TRUE
         )
         "#,
     )

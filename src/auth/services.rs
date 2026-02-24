@@ -238,18 +238,11 @@ pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Er
 /// Vérifie le mot de passe.
 /// Supporte Argon2 (nouveau) et SHA256 (legacy) pour la rétrocompatibilité.
 pub fn verify_password(password: &str, password_hash: &str, salt: &str) -> bool {
-    // Les hash Argon2 commencent par "$argon2"
-    if password_hash.starts_with("$argon2") {
-        // Argon2 verification (le salt est inclus dans le hash PHC)
-        match PasswordHash::new(password_hash) {
-            Ok(parsed_hash) => Argon2::default()
-                .verify_password(password.as_bytes(), &parsed_hash)
-                .is_ok(),
-            Err(_) => false,
-        }
-    } else {
-        // Legacy SHA256 verification
-        let hashed_input = hash_password_sha256_legacy(password, salt);
-        hashed_input == password_hash
+    // Argon2 verification (le salt est inclus dans le hash PHC)
+    match PasswordHash::new(password_hash) {
+        Ok(parsed_hash) => Argon2::default()
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok(),
+        Err(_) => false,
     }
 }
