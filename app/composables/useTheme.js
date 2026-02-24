@@ -14,9 +14,7 @@ export const useTheme = () => {
   const initTheme = () => {
     if (!import.meta.client) return;
     const saved = localStorage.getItem('gauzian-theme');
-    const dark = saved
-      ? saved === 'dark'
-      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = saved === 'dark';
     isDark.value = dark;
     applyClass(dark);
   };
