@@ -265,7 +265,7 @@ const displayName = computed(() => {
   position: relative;
   height: 48px;
   border-radius: 12px;
-  background-color: #eff3f8;
+  background-color: var(--color-surface-muted);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -277,7 +277,7 @@ const displayName = computed(() => {
 }
 
 .item:hover {
-  background-color: var(--color-surface-muted);
+  background-color: var(--color-surface-soft);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
@@ -412,6 +412,7 @@ const displayName = computed(() => {
   height: 18px;
   color: var(-color-text-muted);
   transform: rotate(90deg);
+  fill: var(--color-black);
 }
 
 .menu-dots:hover {

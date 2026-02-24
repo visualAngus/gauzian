@@ -31,7 +31,7 @@ defineProps({
 .loading-overlay {
   position: fixed;
   inset: 0;
-  background: #fff;
+  background: var(--color-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -56,7 +56,7 @@ defineProps({
 .bars span {
   width: 3px;
   border-radius: 2px;
-  background: #4c8eaf;
+  background: var(--color-primary);
   animation: bar-grow 1s ease-in-out infinite;
 }
 
@@ -76,7 +76,7 @@ defineProps({
   font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.25em;
-  color: #1a2533;
+  color: var(--color-black);
   text-transform: uppercase;
   margin: 0;
 }
@@ -84,7 +84,7 @@ defineProps({
 .loading-message {
   font-family: "Roboto", sans-serif;
   font-size: 14px;
-  color: #aab4be;
+  color: var(--color-text-muted);
   margin: -8px 0 0;
 }
 
@@ -105,7 +105,7 @@ defineProps({
   position: absolute;
   top: 0;
   height: 100%;
-  background: #4c8eaf;
+  background: var(--color-primary);
 }
 
 .progress-bar::before {

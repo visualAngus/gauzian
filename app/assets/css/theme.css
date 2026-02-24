@@ -2,6 +2,11 @@
   --color-white: #ffffff;
   --color-black: #000000;
 
+  /* Variables utilisées dans AppHeader (anciennes conventions) */
+  --color-dark: #333333;
+  --color-gray-light: #eeeeee;
+  --color-gray-lighter: #cccccc;
+
   --color-surface-muted: #eff3f8;
   --color-surface-soft: #f8f9fa;
 
@@ -30,6 +35,8 @@
   --color-pastel-danger: #db675f;
   --color-pastel-primary: #dceefc;
 
+  --color-border-subtle: rgba(0, 0, 0, 0.06);
+
   --color-drop-border: #548d61;
   --color-drop-bg: #f3fffb;
   --color-selected: #d0e6ff;
@@ -41,7 +48,108 @@
 
 html,
 body {
-  background-color: var(--color-bg);
+  background-color: var(--color-white);
   color: var(--color-text);
   margin: 0px !important;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ─── Dark mode ──────────────────────────────────────────────────────────────── */
+html.dark {
+  --color-white: #252525;
+  --color-black: #e8e8e8;
+
+  --color-surface-muted: #202020;
+  --color-surface-soft: #2c2c2c;
+
+  --color-text: #d8d8d8;
+  --color-text-strong: #f0f0f0;
+  --color-text-muted: #a8a8a8;
+  --color-text-subtle: #888888;
+
+  --color-border: #3a3a3a;
+
+  --color-neutral-900: #e0e0e0;
+  --color-neutral-700: #cccccc;
+
+  --color-primary-soft: #1a2a35;
+  --color-primary-border-alpha: rgba(76, 142, 175, 0.3);
+
+  --color-pastel-primary: #1a2535;
+  --color-pastel-success: #0f2a20;
+  --color-pastel-danger: #f07060;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+
+  --color-drop-border: #4a7a55;
+  --color-drop-bg: #0f1f18;
+  --color-selected: #1e3060;
+  --color-progress-track: #2a2a3a;
+
+  /* Variables AppHeader */
+  --color-dark: #e0e0e0;
+  --color-gray-light: #2a2a2a;
+  --color-gray-lighter: #333333;
+}
+
+html.dark body {
+  background-color: #1a1a1a;
+}
+
+
+/* Élément sélectionné dans drive (hardcodé dans drive.css) */
+html.dark .selected-item,
+html.dark .active {
+  background-color: #1e3060 !important;
+}
+
+/* Boutons sidebar drive (hardcodés dans drive.css) */
+html.dark .div-autre-menu a {
+  background-color: #2a2a2a !important;
+  color: #d0d0d0 !important;
+  border-color: #3a3a3a !important;
+}
+
+html.dark .div-autre-menu a:hover {
+  background-color: #333333 !important;
+  border-color: #4a4a4a !important;
+}
+
+html.dark .div-autre-menu a svg {
+  fill: #a0a0a0 !important;
+}
+
+html.dark .div-autre-menu a:hover svg {
+  fill: var(--color-primary) !important;
+}
+
+html.dark #import-files-button,
+html.dark #shared-with-me-button {
+  background-color: #2e2e2e !important;
+  color: #d0d0d0 !important;
+  border: 1px solid #3a3a3a !important;
+}
+
+html.dark #import-files-button:hover,
+html.dark #shared-with-me-button:hover {
+  background-color: #363636 !important;
+  border-color: #4a4a4a !important;
+}
+
+html.dark #import-files-button svg,
+html.dark #shared-with-me-button svg {
+  fill: #d0d0d0 !important;
+}
+
+/* Scrollbar dark */
+html.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+html.dark *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+html.dark *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
