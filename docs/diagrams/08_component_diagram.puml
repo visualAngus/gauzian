@@ -1,0 +1,128 @@
+@startuml Component Diagram - Gauzian Backend
+
+skinparam {
+    backgroundColor #FAFAFA
+    componentStyle uml2
+    componentBackgroundColor #D6EAF8
+    componentBorderColor #2980B9
+    componentFontColor #2C3E50
+    interfaceBackgroundColor #D5E8D4
+    interfaceBorderColor #27AE60
+    packageBackgroundColor #EBF5FB
+    packageBorderColor #1A5276
+    databaseBackgroundColor #FDEBD0
+    databaseBorderColor #E67E22
+    arrowColor #2C3E50
+    arrowThickness 1.5
+    defaultFontSize 12
+    shadowing false
+}
+
+title <b>Diagramme de Composants — Gauzian Backend</b>
+
+' ====================== INTERFACES EXPOSÉES ======================
+interface "HTTP :3000" as http_iface
+interface "Prometheus /metrics" as metrics_iface
+
+' ====================== COMPOSANTS PRINCIPAUX ======================
+package "gauzian-back (Rust/Axum)" as app {
+
+    package "Infrastructure" as infra {
+        [main.rs\n(Entry Point)] as main
+        [state.rs\n(AppState)] as state
+        [routes.rs\n(Router)] as routes
+        [metrics.rs\n(Prometheus)] as metrics
+        [jwt.rs\n(JWT Tools)] as jwt
+        [storage.rs\n(S3 Client)] as storage
+        [response.rs\n(ApiResponse)] as response
+    }
+
+    package "Module Auth" as auth_mod {
+        [auth/routes.rs] as auth_routes
+        [auth/handlers.rs] as auth_handlers
+        [auth/services.rs] as auth_services
+        [auth/repo.rs] as auth_repo
+    }
+
+    package "Module Drive" as drive_mod {
+        [drive/routes.rs] as drive_routes
+        [drive/handlers.rs] as drive_handlers
+        [drive/services.rs] as drive_services
+        [drive/repo.rs] as drive_repo
+    }
+
+    package "Module Agenda" as agenda_mod {
+        [agenda/routes.rs] as agenda_routes
+        [agenda/handlers.rs] as agenda_handlers
+        [agenda/services.rs] as agenda_services
+        [agenda/repo.rs] as agenda_repo
+    }
+
+    package "Tests" as tests_mod {
+        [tests/auth_tests.rs] as auth_tests
+        [tests/drive_tests.rs] as drive_tests
+        [tests/metrics_tests.rs] as metrics_tests
+    }
+}
+
+' ====================== DÉPENDANCES EXTERNES ======================
+database "PostgreSQL\n(sqlx PgPool)" as postgres
+database "Redis\n(ConnectionManager)" as redis
+storage "MinIO/S3\n(aws-sdk-s3)" as minio
+
+' ====================== CRATES AXUM ======================
+package "Crates Rust" as crates #F5EEF8 {
+    [axum 0.8] as axum_crate
+    [tokio 1.49] as tokio_crate
+    [sqlx 0.8] as sqlx_crate
+    [redis 1.0] as redis_crate
+    [argon2 0.5] as argon2_crate
+    [jsonwebtoken 10.3] as jwt_crate
+    [aws-sdk-s3 1.68] as s3_crate
+    [prometheus 0.14] as prom_crate
+    [tower-http 0.6] as tower_crate
+}
+
+' ====================== FLUX COMPOSANTS ======================
+
+http_iface --> main : "requêtes entrantes"
+main --> state : "initialise AppState"
+main --> routes : "configure Router"
+routes --> auth_routes
+routes --> drive_routes
+routes --> agenda_routes
+
+auth_routes --> auth_handlers
+auth_handlers --> auth_services
+auth_handlers --> auth_repo
+auth_services --> jwt
+auth_services --> redis : "rate limiting"
+
+drive_routes --> drive_handlers
+drive_handlers --> drive_services
+drive_handlers --> drive_repo
+drive_services --> storage : "chunks S3"
+
+agenda_routes --> agenda_handlers
+agenda_handlers --> agenda_services
+agenda_handlers --> agenda_repo
+
+auth_repo --> postgres
+drive_repo --> postgres
+agenda_repo --> postgres
+storage --> minio
+
+metrics --> metrics_iface
+
+' Crates utilisées
+app ..> axum_crate : "HTTP framework"
+app ..> tokio_crate : "async runtime"
+app ..> sqlx_crate : "ORM async"
+app ..> redis_crate : "cache"
+auth_services ..> argon2_crate : "password hash"
+jwt ..> jwt_crate : "HS256 tokens"
+storage ..> s3_crate : "S3 operations"
+metrics ..> prom_crate : "17 métriques"
+routes ..> tower_crate : "middleware trace"
+
+@enduml

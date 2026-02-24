@@ -1,0 +1,225 @@
+@startuml MCD - Modèle Conceptuel de Données Gauzian
+
+!define PRIMARY_KEY(x) <b><u>x</u></b>
+!define FOREIGN_KEY(x) <i>x</i>
+!define NOT_NULL(x) <b>x</b>
+
+skinparam {
+    linetype ortho
+    backgroundColor #FAFAFA
+    entityBackgroundColor #E8F4FD
+    entityBorderColor #2980B9
+    entityFontColor #2C3E50
+    entityFontSize 12
+    arrowColor #2980B9
+    arrowThickness 1.5
+    noteFontSize 10
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F39C12
+}
+
+title <b>MCD — Gauzian Backend</b>\nSchéma Base de Données PostgreSQL
+
+' ====================== USERS ======================
+entity "**users**" as users {
+    PRIMARY_KEY(id) : UUID
+    --
+    NOT_NULL(email) : TEXT UNIQUE
+    NOT_NULL(username) : TEXT UNIQUE
+    NOT_NULL(password_hash) : TEXT
+    NOT_NULL(encrypted_private_key) : TEXT
+    NOT_NULL(public_key) : TEXT
+    NOT_NULL(encrypted_record_key) : TEXT
+    private_key_salt : TEXT
+    iv : TEXT
+    auth_salt : TEXT
+    encrypted_settings : TEXT
+    is_active : BOOLEAN DEFAULT TRUE
+}
+
+' ====================== FILES ======================
+entity "**files**" as files {
+    PRIMARY_KEY(id) : UUID
+    --
+    NOT_NULL(encrypted_metadata) : BYTEA
+    NOT_NULL(size) : BIGINT
+    NOT_NULL(mime_type) : TEXT
+    is_deleted : BOOLEAN DEFAULT FALSE
+    is_fully_uploaded : BOOLEAN DEFAULT FALSE
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+}
+
+note right of files
+    encrypted_metadata contient:
+    - nom du fichier (chiffré)
+    - description (chiffrée)
+    Déchiffrable uniquement
+    avec encrypted_file_key
+end note
+
+' ====================== FILE_ACCESS ======================
+entity "**file_access**" as file_access {
+    PRIMARY_KEY(id) : UUID
+    --
+    FOREIGN_KEY(file_id) : UUID → files.id
+    FOREIGN_KEY(user_id) : UUID → users.id
+    FOREIGN_KEY(folder_id) : UUID → folders.id
+    NOT_NULL(encrypted_file_key) : BYTEA
+    access_level : TEXT DEFAULT 'read'
+    is_deleted : BOOLEAN DEFAULT FALSE
+    is_accepted : BOOLEAN DEFAULT FALSE
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+    --
+    UNIQUE(file_id, user_id)
+}
+
+note bottom of file_access
+    access_level: 'read' | 'write' | 'admin'
+    is_accepted=false → partage en attente
+    is_deleted=true → rejeté / supprimé
+end note
+
+' ====================== S3_KEYS ======================
+entity "**s3_keys**" as s3_keys {
+    PRIMARY_KEY(id) : UUID
+    --
+    FOREIGN_KEY(file_id) : UUID → files.id
+    NOT_NULL(s3_key) : TEXT
+    index : INTEGER DEFAULT 0
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+}
+
+note right of s3_keys
+    Chaque entrée = un chunk S3
+    index = numéro d'ordre
+    s3_key = chemin dans MinIO
+end note
+
+' ====================== FOLDERS ======================
+entity "**folders**" as folders {
+    PRIMARY_KEY(id) : UUID
+    --
+    NOT_NULL(encrypted_metadata) : BYTEA
+    FOREIGN_KEY(parent_folder_id) : UUID → folders.id
+    is_root : BOOLEAN DEFAULT FALSE
+    is_deleted : BOOLEAN DEFAULT FALSE
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+}
+
+note right of folders
+    parent_folder_id NULL = racine
+    is_root=true = dossier racine user
+    Arborescence récursive
+end note
+
+' ====================== FOLDER_ACCESS ======================
+entity "**folder_access**" as folder_access {
+    PRIMARY_KEY(id) : UUID
+    --
+    FOREIGN_KEY(folder_id) : UUID → folders.id
+    FOREIGN_KEY(user_id) : UUID → users.id
+    NOT_NULL(encrypted_folder_key) : BYTEA
+    access_level : TEXT DEFAULT 'read'
+    is_deleted : BOOLEAN DEFAULT FALSE
+    is_accepted : BOOLEAN DEFAULT FALSE
+    is_root_anchor : BOOLEAN DEFAULT FALSE
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+    --
+    UNIQUE(folder_id, user_id)
+}
+
+note bottom of folder_access
+    is_root_anchor=true → le dossier
+    partagé apparaît à la racine du Drive
+end note
+
+' ====================== AGENDA_EVENTS ======================
+entity "**agenda_events**" as agenda_events {
+    PRIMARY_KEY(id) : UUID
+    --
+    FOREIGN_KEY(owner_id) : UUID → users.id
+    FOREIGN_KEY(category_id) : UUID → agenda_categories.id
+    NOT_NULL(title) : TEXT
+    description : TEXT
+    NOT_NULL(day_id) : NUMERIC
+    NOT_NULL(start_day_id) : TEXT [CHIFFRÉ]
+    NOT_NULL(end_day_id) : TEXT [CHIFFRÉ]
+    NOT_NULL(start_hour) : TEXT [CHIFFRÉ]
+    NOT_NULL(end_hour) : TEXT [CHIFFRÉ]
+    NOT_NULL(is_all_day) : BOOLEAN
+    NOT_NULL(is_multi_day) : BOOLEAN
+    category : TEXT [CHIFFRÉ]
+    color : TEXT
+    NOT_NULL(encrypted_data_key) : BYTEA
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
+' ====================== AGENDA_CATEGORIES ======================
+entity "**agenda_categories**" as agenda_categories {
+    PRIMARY_KEY(id) : UUID
+    --
+    FOREIGN_KEY(owner_id) : UUID → users.id
+    NOT_NULL(name) : TEXT
+    color : TEXT
+    icon : TEXT
+    description : TEXT
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
+' ====================== AGENDA_EVENT_PARTICIPANTS ======================
+entity "**agenda_event_participants**" as agenda_participants {
+    PRIMARY_KEY(id) : UUID
+    --
+    FOREIGN_KEY(event_id) : UUID → agenda_events.id
+    FOREIGN_KEY(participant_id) : UUID → users.id
+    NOT_NULL(encrypted_event_key) : BYTEA DEFAULT ''
+    created_at : TIMESTAMP
+    updated_at : TIMESTAMP
+}
+
+' ====================== RELATIONS ======================
+
+' Users ↔ File Access (1:N)
+users ||--o{ file_access : "possède / reçoit partage"
+
+' File Access ↔ Files (N:1)
+file_access }o--|| files : "donne accès à"
+
+' File Access ↔ Folders (N:1, optionnel)
+file_access }o--o| folders : "organisé dans"
+
+' Files ↔ S3 Keys (1:N)
+files ||--o{ s3_keys : "stocké en chunks"
+
+' Users ↔ Folder Access (1:N)
+users ||--o{ folder_access : "possède / reçoit partage"
+
+' Folder Access ↔ Folders (N:1)
+folder_access }o--|| folders : "donne accès à"
+
+' Folders (auto-référence hiérarchie)
+folders ||--o{ folders : "contient (parent_folder_id)"
+
+' Users ↔ Agenda Events (1:N)
+users ||--o{ agenda_events : "possède"
+
+' Users ↔ Agenda Categories (1:N)
+users ||--o{ agenda_categories : "crée"
+
+' Agenda Categories ↔ Events (1:N)
+agenda_categories ||--o{ agenda_events : "classe"
+
+' Agenda Events ↔ Participants (1:N)
+agenda_events ||--o{ agenda_participants : "a des participants"
+
+' Users ↔ Participants (1:N)
+users ||--o{ agenda_participants : "participe à"
+
+@enduml

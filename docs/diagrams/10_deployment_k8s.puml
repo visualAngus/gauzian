@@ -1,0 +1,126 @@
+@startuml Kubernetes Deployment - Gauzian
+
+skinparam {
+    backgroundColor #F8F9FA
+    componentStyle rectangle
+    nodeBackgroundColor #D6EAF8
+    nodeBorderColor #2980B9
+    packageBackgroundColor #EBF5FB
+    packageBorderColor #1A5276
+    componentBackgroundColor #FFFFFF
+    componentBorderColor #85929E
+    databaseBackgroundColor #D5E8D4
+    databaseBorderColor #27AE60
+    arrowColor #2C3E50
+    arrowThickness 1.5
+    defaultFontSize 11
+    shadowing false
+    linetype ortho
+}
+
+title <b>Déploiement Kubernetes / VPS — Gauzian</b>
+
+actor "Internet\n(Users)" as internet
+
+' ====================== INGRESS ======================
+package "Ingress Layer" as ingress_layer #FFF9C4 {
+    node "**Caddy Pod**\nLet's Encrypt TLS\n:80 + :443" as caddy_pod {
+        component "Reverse Proxy\ngauzian.pupin.fr" as caddy_svc
+        component "Rate Limiter\n50 req/s" as caddy_rl
+    }
+}
+
+' ====================== APPLICATION PODS ======================
+package "Application Pods" as app_pods #D5E8D4 {
+    node "**Frontend Pod**\nNuxt 4 / Node\nangusvisual/gauzian-front:dev\n:3000" as front_pod
+    node "**Backend Pod**\nRust / Axum\nangusvisual/gauzian-back:dev\n:3000" as back_pod {
+        component "PgPool (max 15)" as pgpool
+        component "Redis Pool" as redis_pool
+        component "S3 Client" as s3_client_comp
+        component "Semaphore (50)" as sem_comp
+    }
+}
+
+' ====================== SERVICES STATEFUL ======================
+package "Stateful Services" as stateful_pkg #FDEBD0 {
+    node "**PostgreSQL Pod**\npostgres:alpine3.19\n:5432" as pg_pod {
+        database "gauzian DB" as pg_db
+    }
+    node "**Redis Pod**\nredis:alpine\n:6379\nRDB Persistence" as redis_pod {
+        database "JWT Blacklist\nRate Limit Cache" as redis_db
+    }
+    node "**MinIO Pod**\nS3-Compatible\n:9000 API\n:9001 Console" as minio_pod {
+        storage "Bucket: gauzian\nChunks E2EE chiffrés" as minio_storage
+    }
+}
+
+' ====================== VOLUMES PERSISTANTS ======================
+package "Persistent Volumes" as pv_pkg #E8F8F5 {
+    storage "PVC: postgres-pvc\n/var/lib/postgresql/data" as postgres_pvc
+    storage "PVC: minio-pvc\n/data" as minio_pvc
+}
+
+' ====================== CI/CD ======================
+package "CI/CD Pipeline" as cicd_pkg #F5EEF8 {
+    component "GitHub Actions\n(push front/back branch)" as gh_actions
+    node "Docker Hub\nangusvisual/" as docker_hub
+    component "ci-deploy.sh\nssh VPS → kubectl apply" as deploy_sh
+}
+
+' ====================== ENV SECRETS ======================
+package "Secrets K8s" as secrets_pkg #FADBD8 {
+    component "Secret: jwt-secret" as k8s_jwt
+    component "Secret: db-credentials" as k8s_db
+    component "Secret: s3-credentials" as k8s_s3
+    component "ConfigMap: app-config" as k8s_config
+}
+
+' ====================== ROUTING ======================
+internet --> caddy_pod : "HTTPS :443"
+caddy_svc --> front_pod : "/* → :3000"
+caddy_svc --> back_pod : "/api/* → :3000"
+caddy_svc --> minio_pod : "/minio/* → :9001\n/s3/* → :9000"
+caddy_rl --> caddy_svc
+
+' App connections
+back_pod --> pg_pod : "TCP :5432\n(Cluster DNS)"
+back_pod --> redis_pod : "TCP :6379\n(Cluster DNS)"
+back_pod --> minio_pod : "TCP :9000 (HTTP)\n(Cluster DNS)"
+
+' Volumes
+pg_pod --> postgres_pvc : "mount"
+minio_pod --> minio_pvc : "mount"
+
+' Secrets injection
+k8s_jwt ..> back_pod : "JWT_SECRET env"
+k8s_db ..> back_pod : "DATABASE_URL env"
+k8s_s3 ..> back_pod : "S3_ACCESS_KEY env\nS3_SECRET_KEY env"
+k8s_config ..> back_pod : "HOST, PORT,\nRUST_LOG env"
+
+' CI/CD flow
+gh_actions --> docker_hub : "docker push\n:dev tag"
+gh_actions --> deploy_sh : "ssh deploy"
+deploy_sh -.-> caddy_pod : "kubectl apply\ndocker-compose"
+deploy_sh -.-> front_pod : "kubectl rollout"
+deploy_sh -.-> back_pod : "kubectl rollout"
+docker_hub ..> back_pod : "image pull"
+docker_hub ..> front_pod : "image pull"
+
+note bottom of back_pod
+    **Variables d'env Backend:**
+    DATABASE_URL, REDIS_URL,
+    S3_ENDPOINT, S3_REGION,
+    S3_ACCESS_KEY, S3_SECRET_KEY,
+    S3_BUCKET, JWT_SECRET,
+    MAX_CONCURRENT_UPLOADS=50,
+    RUST_LOG=gauzian_back=info
+end note
+
+note right of minio_pod
+    Les fichiers sont stockés
+    chiffrés (AES-256-GCM).
+    MinIO ne peut pas
+    les déchiffrer.
+end note
+
+@enduml

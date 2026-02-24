@@ -1,0 +1,125 @@
+@startuml File Upload Flow - Gauzian E2EE
+
+skinparam {
+    backgroundColor #FAFAFA
+    participantBackgroundColor #D6EAF8
+    participantBorderColor #2980B9
+    sequenceArrowColor #2C3E50
+    sequenceArrowThickness 1.5
+    noteFontSize 10
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F39C12
+    defaultFontSize 11
+}
+
+title <b>Flux Upload de Fichier E2EE — Gauzian</b>\nChiffrement côté client + Stockage en chunks S3
+
+actor Client as C
+participant "drive/handlers.rs" as H
+participant "drive/services.rs" as S
+participant "drive/repo.rs" as R
+participant "PostgreSQL" as PG
+participant "MinIO (S3)" as S3
+participant "Semaphore\n(max 50)" as SEM
+
+' ====================== CHIFFREMENT CLIENT ======================
+group #D5E8D4 PHASE 0: Chiffrement côté client (Browser)
+    C -> C : Générer AES-256-GCM key (file_key)
+    C -> C : Chiffrer fichier avec file_key\n→ encrypted_chunks[]
+    C -> C : Chiffrer file_key avec\nRSA-4096 public key user\n→ encrypted_file_key
+    C -> C : Chiffrer métadonnées (nom, desc)\navec file_key\n→ encrypted_metadata
+    note right of C
+        Tout le chiffrement se fait
+        dans le navigateur via WebCrypto API.
+        Le serveur ne voit jamais
+        les données en clair.
+    end note
+end
+
+|||
+
+' ====================== INITIALIZE ======================
+group #D6EAF8 PHASE 1: Initialisation (POST /drive/initialize_file)
+    C -> H : InitializeFileRequest {\n  size: 10485760,\n  encrypted_metadata: "...",\n  mime_type: "image/jpeg",\n  folder_id: "uuid",\n  encrypted_file_key: "..."\n}
+    H -> R : create_file(encrypted_metadata, size, mime_type)
+    R -> PG : INSERT INTO files (\n  encrypted_metadata,\n  size, mime_type,\n  is_fully_uploaded=FALSE\n) RETURNING id
+    PG --> R : file_id: UUID
+    R -> R : create_file_access(\n  file_id, user_id, folder_id,\n  encrypted_file_key,\n  access_level='admin'\n)
+    R -> PG : INSERT INTO file_access (...)
+    H --> C : 201 Created { file_id: "uuid" }
+end
+
+|||
+
+' ====================== UPLOAD CHUNKS ======================
+group #FFF9C4 PHASE 2: Upload des chunks (POST /drive/files/{id}/upload-chunk)
+    loop Pour chaque chunk (max 6MB)
+        C -> H : POST /drive/files/{file_id}/upload-chunk\nBody: chunk_data (binary, E2EE)\nHeaders: Content-Type: application/octet-stream
+
+        H -> SEM : acquire() [semaphore.acquire()]
+        SEM --> H : permit (slot disponible)
+
+        H -> S : upload_chunk_to_s3(\n  file_id, chunk_data, index\n)
+        S -> S3 : PutObject {\n  key: "{file_id}/{index}",\n  body: chunk_data\n}
+        S3 --> S : ETag (confirmation)
+
+        S -> R : save_s3_key(file_id, s3_key, index)
+        R -> PG : INSERT INTO s3_keys (\n  file_id, s3_key, index\n)
+
+        H -> SEM : release() [drop permit]
+
+        H --> C : 200 OK { s3_key: "uuid/0" }
+    end
+    note right of SEM
+        Limite 50 uploads
+        simultanés pour éviter
+        la surcharge MinIO
+    end note
+end
+
+|||
+
+' ====================== FINALIZE ======================
+group #E8F8F5 PHASE 3: Finalisation (POST /drive/finalize_upload/{id}/{etat})
+    C -> H : POST /drive/finalize_upload/{file_id}/success
+    H -> R : finalize_file(file_id)
+    R -> PG : UPDATE files\nSET is_fully_uploaded=TRUE\nWHERE id = $1
+    H --> C : 200 OK { "Upload finalized" }
+end
+
+|||
+
+' ====================== ABORT ======================
+group #FADBD8 PHASE 3b: Abandon (POST /drive/abort_upload)
+    C -> H : POST /drive/abort_upload\n{ file_id }
+    H -> R : get_s3_keys(file_id)
+    R -> PG : SELECT s3_key FROM s3_keys WHERE file_id=$1
+    PG --> R : s3_keys[]
+    loop Pour chaque s3_key
+        H -> S3 : DeleteObject(s3_key)
+    end
+    H -> R : delete_file(file_id)
+    R -> PG : DELETE FROM files WHERE id=$1\n(CASCADE → s3_keys, file_access)
+    H --> C : 200 OK { "Upload aborted" }
+end
+
+|||
+
+' ====================== DOWNLOAD ======================
+group #D5E8D4 PHASE 4: Téléchargement (GET /drive/download_chunk_binary/{s3_key})
+    C -> H : GET /drive/download_chunk_binary/{s3_key}
+    H -> S : download_chunk(s3_key)
+    S -> S3 : GetObject(s3_key)
+    S3 --> S : chunk_data (binary, chiffré)
+    H --> C : 200 OK\nContent-Type: application/octet-stream\nbody: chunk_data (chiffré)
+    C -> C : Déchiffrer chunk avec file_key\n(récupérée via file_access.encrypted_file_key\n+ RSA private key locale)
+    note right of C
+        Le client reconstitue le fichier
+        en déchiffrant tous les chunks
+        avec sa clé privée RSA.
+        Rien n'est jamais déchiffré
+        côté serveur.
+    end note
+end
+
+@enduml

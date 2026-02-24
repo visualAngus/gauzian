@@ -1,0 +1,111 @@
+@startuml Infrastructure - Gauzian Deployment
+
+!include <C4/C4_Container>
+' Fallback si C4 non disponible : utilisation de composants classiques
+
+skinparam {
+    backgroundColor #F8F9FA
+    componentStyle rectangle
+    packageBackgroundColor #EBF5FB
+    packageBorderColor #1A5276
+    componentBackgroundColor #D6EAF8
+    componentBorderColor #2980B9
+    databaseBackgroundColor #D5E8D4
+    databaseBorderColor #27AE60
+    storageBackgroundColor #FFF9C4
+    storageBorderColor #F39C12
+    arrowColor #2C3E50
+    arrowThickness 1.5
+    defaultFontSize 12
+    linetype ortho
+    shadowing false
+}
+
+title <b>Infrastructure — Gauzian</b>\nDéploiement VPS + Kubernetes
+
+' ====================== INTERNET ======================
+actor "Client\n(Browser / App)" as client
+
+' ====================== VPS / K8S CLUSTER ======================
+package "VPS / Kubernetes Cluster" as vps #E8F4FD {
+
+    ' ====================== REVERSE PROXY ======================
+    package "Reverse Proxy (Caddy)" as caddy_pkg #D5E8D4 {
+        component "**Caddy**\ngauzian.pupin.fr\n:80 → HTTPS redirect\n:443 TLS (Let's Encrypt)\nRate Limit: 50 req/s" as caddy
+    }
+
+    ' ====================== SERVICES APPLICATIFS ======================
+    package "Services Applicatifs" as app_pkg #FDEBD0 {
+        component "**Backend Rust/Axum**\naxum :3000\nGauzian API" as backend
+        component "**Frontend Nuxt 4**\nNode :3000\nVue 3 + SSR" as frontend
+    }
+
+    ' ====================== STOCKAGE ======================
+    package "Stockage" as storage_pkg #E8F8F5 {
+        database "**PostgreSQL**\nalpine:3.19\n:5432\nPVC: /var/lib/postgresql/data" as postgres
+        database "**Redis**\nalpine\n:6379\nPersistance RDB" as redis
+        storage "**MinIO**\nS3-compatible\n:9000 API\n:9001 Console\nPVC: /data" as minio
+    }
+
+    ' ====================== OBSERVABILITE ======================
+    package "Observabilité" as obs_pkg #F5EEF8 {
+        component "**Prometheus**\n/metrics endpoint\n17 métriques custom" as prometheus
+    }
+}
+
+' ====================== CI/CD ======================
+package "CI/CD" as cicd_pkg #FFF9C4 {
+    component "GitHub Actions\n(push → front/back branch)" as github_actions
+    component "Docker Hub\nangusvisual/gauzian-*:dev" as dockerhub
+    component "SSH Deploy Script\nci-deploy.sh" as deploy_script
+}
+
+' ====================== ROUTES CADDY ======================
+note right of caddy
+    **Routing Caddy:**
+    /minio/* → MinIO :9001 (console)
+    /s3/*    → MinIO :9000 (API)
+    /api/*   → Backend :3000
+    /        → Frontend :3000
+end note
+
+' ====================== ENV VARS BACKEND ======================
+note bottom of backend
+    **Variables d'environnement:**
+    DATABASE_URL = postgres://...
+    REDIS_URL = redis://redis:6379
+    S3_ENDPOINT = http://minio:9000
+    S3_BUCKET = gauzian
+    JWT_SECRET = <secret>
+    MAX_CONCURRENT_UPLOADS = 50
+    RUST_LOG = gauzian_back=info
+end note
+
+' ====================== K8S RESOURCES ======================
+note left of postgres
+    **K8s: db.yaml**
+    Deployment + PVC
+    Service ClusterIP :5432
+end note
+
+' ====================== FLUX ======================
+
+client --> caddy : "HTTPS :443"
+
+caddy --> frontend : "GET / (SSR)"
+caddy --> backend : "GET|POST /api/*"
+caddy --> minio : "GET /s3/* (chunks E2EE)"
+
+backend --> postgres : "sqlx PgPool\n(max 15 conn)"
+backend --> redis : "ConnectionManager\n(JWT blacklist + rate limit)"
+backend --> minio : "aws-sdk-s3\n(upload/download chunks)"
+
+prometheus ..> backend : "scrape /metrics"
+
+github_actions --> dockerhub : "docker push"
+github_actions --> deploy_script : "ssh"
+deploy_script --> vps : "kubectl apply"
+dockerhub --> backend : "image pull"
+dockerhub --> frontend : "image pull"
+
+@enduml
