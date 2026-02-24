@@ -230,9 +230,21 @@ pub async fn register_handler(
         .map_err(|e| {
             tracing::error!("Failed to create user: {}", e);
             crate::metrics::track_auth_attempt("register", false);
+            // Détecter violation de contrainte unique PostgreSQL (code 23505)
+            if let sqlx::Error::Database(ref db_err) = e {
+                if db_err.code().as_deref() == Some("23505") {
+                    let msg = db_err.message();
+                    if msg.contains("email") {
+                        return (StatusCode::CONFLICT, "Cette adresse email est déjà utilisée".to_string());
+                    } else if msg.contains("username") {
+                        return (StatusCode::CONFLICT, "Ce nom d'utilisateur est déjà pris".to_string());
+                    }
+                    return (StatusCode::CONFLICT, "Ce compte existe déjà".to_string());
+                }
+            }
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal authentication error".to_string(),
+                "Erreur serveur, veuillez réessayer".to_string(),
             )
         })?;
 
