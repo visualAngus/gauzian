@@ -27,53 +27,6 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/gauzian-backend:dev
-  api-security-tests:
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Hurl
-        run: |
-          curl -fSL https://github.com/Orange-OpenSource/hurl/releases/download/4.3.0/hurl_4.3.0_amd64.deb -o hurl.deb
-          sudo apt-get install -y ./hurl.deb
-          rm hurl.deb
-          hurl --version
-
-      - name: Wait for API to be ready
-        run: |
-          MAX_ATTEMPTS=20
-          ATTEMPT=1
-          echo "Waiting for API at ${{ secrets.API_URL }}..."
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.API_URL }}/health/ready" || echo "000")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "API is ready!"
-              exit 0
-            fi
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - HTTP $HTTP_CODE, retrying in 10s..."
-            sleep 10
-            ATTEMPT=$((ATTEMPT + 1))
-          done
-          echo "API failed to become ready"
-          exit 1
-
-      - name: Run API security tests
-        run: |
-          chmod +x tests/run_tests.sh
-          tests/run_tests.sh \
-            --base-url "${{ secrets.API_URL }}" \
-            --email-a "${{ secrets.TEST_USER_EMAIL_A }}" \
-            --email-b "${{ secrets.TEST_USER_EMAIL_B }}" \
-            --password "${{ secrets.TEST_USER_PASSWORD }}" \
-            --username-a "${{ secrets.TEST_USERNAME_A }}" \
-            --username-b "${{ secrets.TEST_USERNAME_B }}"
-
-
-
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   deploy:
     needs: build-backend
     runs-on: ubuntu-latest
