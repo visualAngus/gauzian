@@ -119,8 +119,8 @@ defineExpose({
 #div_pannel_right_click {
   display: none;
   position: fixed;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
   z-index: 1000;
@@ -131,14 +131,14 @@ defineExpose({
 #div_pannel_right_click a {
   display: block;
   padding: 8px 16px;
-  color: #333;
+  color: var(--color-black);
   text-decoration: none;
   cursor: pointer;
   font-size: 14px;
 }
 
 #div_pannel_right_click a:hover {
-  background: #f5f5f5;
-  color: #000;
+  background: var(--color-surface-soft);
+  color: var(--color-black);
 }
 </style>

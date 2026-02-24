@@ -46,11 +46,132 @@
   --cols: 5;
 }
 
+/* ─── Reset / Normalize ──────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%; /* Empêche iOS de zoomer le texte en paysage */
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  tab-size: 4;
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+}
+
+body {
+  font-family: "Roboto", "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: inherit;
+  -webkit-font-smoothing: antialiased;  /* Meilleur rendu police sur Mac/iOS */
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Éléments de liste sans style par défaut */
+ol, ul, menu {
+  list-style: none;
+}
+
+/* Images et médias : jamais débordants */
+img, video, svg, canvas, audio, iframe, embed, object {
+  display: block;
+  max-width: 100%;
+}
+
+img, video {
+  height: auto;
+}
+
+/* Boutons et inputs : héritent de la police */
+button, input, optgroup, select, textarea {
+  font-family: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+/* Boutons : reset navigateur */
+button, [type="button"], [type="reset"], [type="submit"] {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Liens : héritent la couleur */
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/* Titres : poids normal par défaut (évite le bold forcé navigateur) */
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Tableaux */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  text-indent: 0;
+}
+
+/* hr */
+hr {
+  height: 0;
+  color: inherit;
+  border-top-width: 1px;
+}
+
+/* Abbr */
+abbr:where([title]) {
+  text-decoration: underline dotted;
+}
+
+/* Code */
+code, kbd, samp, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1em;
+}
+
+/* Small, sub, sup */
+small { font-size: 80%; }
+sub, sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+sub { bottom: -0.25em; }
+sup { top: -0.5em; }
+
+/* Textarea : pas de resize horizontal */
+textarea {
+  resize: vertical;
+}
+
+/* Fieldset */
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+/* Hidden */
+[hidden] { display: none; }
+
+/* ─── Base ───────────────────────────────────────────────────────────────────── */
 html,
 body {
   background-color: var(--color-white);
   color: var(--color-text);
-  margin: 0px !important;
+  margin: 0 !important;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 

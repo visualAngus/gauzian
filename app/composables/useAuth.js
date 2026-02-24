@@ -50,8 +50,15 @@ export const useAuth = () => {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Login failed');
+        let errorMessage = 'Identifiants invalides';
+        const raw = await response.text().catch(() => '');
+        try {
+          const data = JSON.parse(raw);
+          errorMessage = data.error || data.message || raw || errorMessage;
+        } catch {
+          if (raw) errorMessage = raw;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -138,8 +145,19 @@ export const useAuth = () => {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Register failed');
+        let errorMessage = 'Erreur lors de l\'inscription';
+        const raw = await response.text().catch(() => '');
+        try {
+          const data = JSON.parse(raw);
+          errorMessage = data.error || data.message || raw || errorMessage;
+        } catch {
+          if (raw) errorMessage = raw;
+        }
+        // Traduire les messages anglais du backend
+        if (errorMessage.toLowerCase().includes('too many registration')) {
+          errorMessage = 'Trop de tentatives d\'inscription. Veuillez réessayer plus tard.';
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
