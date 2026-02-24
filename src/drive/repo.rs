@@ -284,7 +284,7 @@ pub async fn initialize_file_in_db(
 
     if let Some(folder_id) = folder_id {
         let has_access = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = FALSE)",
         )
         .bind(folder_id)
         .bind(user_id)
@@ -843,7 +843,7 @@ pub async fn move_file(
 
     if let Some(folder_id) = new_folder_id {
         let has_folder_access = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = FALSE AND is_accepted = TRUE)",
         )
         .bind(folder_id)
         .bind(user_id)
@@ -886,7 +886,7 @@ pub async fn move_folder(
 
     if let Some(parent_folder_id) = new_parent_folder_id {
         let has_parent_access = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2)",
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = FALSE AND is_accepted = TRUE)",
         )
         .bind(parent_folder_id)
         .bind(user_id)
@@ -1450,17 +1450,18 @@ pub async fn empty_corbeille(
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    let file_ids: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+    // Fichiers dont l'utilisateur est owner : suppression physique complète (S3 + DB)
+    let owned_file_ids: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
         "
         SELECT file_id FROM file_access
-        WHERE user_id = $1 AND is_deleted = TRUE
+        WHERE user_id = $1 AND is_deleted = TRUE AND access_level = 'owner'
         ",
     )
     .bind(user_id)
     .fetch_all(&mut *tx)
     .await?;
 
-    for file_id in file_ids.iter() {
+    for file_id in owned_file_ids.iter() {
         let s3_keys: Vec<String> =
             sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = $1")
                 .bind(file_id)
@@ -1489,10 +1490,47 @@ pub async fn empty_corbeille(
             .await?;
     }
 
+    // Fichiers partagés dont l'utilisateur n'est PAS owner :
+    // supprimer uniquement la ligne file_access de cet utilisateur
+    sqlx::query(
+        "
+        DELETE FROM file_access
+        WHERE user_id = $1 AND is_deleted = TRUE AND access_level != 'owner'
+        ",
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Dossiers dont l'utilisateur est owner : suppression physique complète
+    let owned_folder_ids: Vec<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "
+        SELECT folder_id FROM folder_access
+        WHERE user_id = $1 AND is_deleted = TRUE AND access_level = 'owner'
+        ",
+    )
+    .bind(user_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    for folder_id in owned_folder_ids.iter() {
+        sqlx::query("DELETE FROM folder_access WHERE folder_id = $1")
+            .bind(folder_id)
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("DELETE FROM folders WHERE id = $1")
+            .bind(folder_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    // Dossiers partagés dont l'utilisateur n'est PAS owner :
+    // supprimer uniquement la ligne folder_access de cet utilisateur
     sqlx::query(
         "
         DELETE FROM folder_access
-        WHERE user_id = $1 AND is_deleted = TRUE
+        WHERE user_id = $1 AND is_deleted = TRUE AND access_level != 'owner'
         ",
     )
     .bind(user_id)

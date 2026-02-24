@@ -3,7 +3,7 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -157,14 +157,36 @@ pub async fn login_handler(
 /// POST /register - Crée un nouvel utilisateur
 pub async fn register_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
-    // 0. Valider le format de l'email
+    // 0. Rate limit par IP avant tout traitement coûteux (Argon2)
+    let ip = headers
+        .get("X-Real-IP")
+        .or_else(|| headers.get("X-Forwarded-For"))
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown");
+
+    let mut redis = state.redis_manager.clone();
+    if services::is_register_rate_limited(&mut redis, ip).await.map_err(|e| {
+        tracing::error!("Redis error during register rate limit check: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+    })? {
+        crate::metrics::track_auth_attempt("register", false);
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Too many registration attempts. Please try again later.".to_string()));
+    }
+
+    services::increment_register_attempt(&mut redis, ip).await.map_err(|e| {
+        tracing::error!("Redis error during register attempt increment: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+    })?;
+
+    // 0b. Valider le format de l'email
     if !validate_email_format(&payload.email) {
         return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
     }
 
-    // 0b. Valider le mot de passe
+    // 0c. Valider le mot de passe
     if let Err(msg) = validate_password(&payload.password) {
         return Err((StatusCode::BAD_REQUEST, msg.to_string()));
     }
@@ -294,9 +316,10 @@ pub async fn info_handler(
     Ok(ApiResponse::ok(user_info))
 }
 
-/// GET /contacts/get_public_key/:email - Récupère la clé publique d'un utilisateur
+/// GET /contacts/get_public_key/:email - Récupère la clé publique d'un utilisateur (authentifié)
 pub async fn get_public_key_handler(
     State(state): State<AppState>,
+    _claims: services::Claims,
     Path(email): Path<String>,
 ) -> Result<ApiResponse<serde_json::Value>, (StatusCode, String)> {
     let (user_id, public_key) = repo::get_public_key_by_email(&state.db_pool, &email)

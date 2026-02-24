@@ -175,6 +175,42 @@ pub async fn reset_failed_login(
     Ok(())
 }
 
+// ========== Rate Limiting inscription ==========
+
+fn register_rate_limit_key(ip: &str) -> String {
+    format!("ratelimit:register:{}", ip.trim())
+}
+
+/// Vérifie si une IP est rate-limitée pour l'inscription
+pub async fn is_register_rate_limited(
+    manager: &mut redis::aio::ConnectionManager,
+    ip: &str,
+) -> Result<bool, redis::RedisError> {
+    let key = register_rate_limit_key(ip);
+    let attempts: Option<u32> = manager.get(&key).await?;
+
+    crate::metrics::track_redis_operation("get", true);
+    Ok(attempts.unwrap_or(0) >= MAX_LOGIN_ATTEMPTS)
+}
+
+/// Incrémente le compteur de tentatives d'inscription par IP
+pub async fn increment_register_attempt(
+    manager: &mut redis::aio::ConnectionManager,
+    ip: &str,
+) -> Result<(), redis::RedisError> {
+    let key = register_rate_limit_key(ip);
+
+    manager.incr::<&str, u32, u32>(&key, 1).await?;
+
+    let ttl: i64 = manager.ttl(&key).await?;
+    if ttl == -1 {
+        manager.expire::<&str, i32>(&key, RATE_LIMIT_WINDOW_SECONDS as i64).await?;
+    }
+
+    crate::metrics::track_redis_operation("incr", true);
+    Ok(())
+}
+
 // ========== Extracteur Axum pour Claims ==========
 
 impl FromRequestParts<AppState> for Claims {

@@ -3,6 +3,16 @@ use tower_http::trace::TraceLayer;
 
 use crate::{auth, drive, agenda, metrics, state::AppState};
 
+/// Comparaison en temps constant pour éviter les timing attacks.
+/// Retourne false immédiatement si les longueurs diffèrent (pas d'information
+/// sur le contenu), puis compare octet par octet en accumulant les différences.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
 pub fn app(state: AppState) -> Router {
     Router::new()
         // Endpoints système (health check, métriques)
@@ -46,7 +56,7 @@ async fn metrics_handler(
             .and_then(|s| s.strip_prefix("Bearer "))
             .unwrap_or("");
 
-        if provided != secret {
+        if !constant_time_eq(provided, &secret) {
             return (
                 axum::http::StatusCode::UNAUTHORIZED,
                 "Unauthorized",

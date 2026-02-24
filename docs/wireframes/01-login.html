@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <title>GAUZIAN Wireframe — 01 Login</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, 'Inter', sans-serif;
+      background: #FFFFFF;
+      color: #111111;
+      min-height: 900px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: #FFFFFF;
+      border-bottom: 1.5px solid #BDBDBD;
+      display: flex;
+      align-items: center;
+      padding: 0 32px;
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #111111;
+      text-transform: uppercase;
+    }
+
+    .logo span {
+      font-weight: 300;
+      color: #555555;
+    }
+
+    /* ── PAGE BODY ── */
+    .page-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-top: 56px;
+      padding-bottom: 48px;
+      min-height: 900px;
+    }
+
+    /* ── CARD ── */
+    .card {
+      width: 400px;
+      background: #FFFFFF;
+      border: 1.5px solid #BDBDBD;
+      border-radius: 6px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      padding: 40px 36px 32px;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-align: center;
+      text-transform: uppercase;
+      color: #111111;
+      margin-bottom: 32px;
+    }
+
+    /* ── FORM ELEMENTS ── */
+    .field-group {
+      margin-bottom: 20px;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #555555;
+      margin-bottom: 6px;
+    }
+
+    .field-input {
+      width: 100%;
+      height: 42px;
+      background: #E8E8E8;
+      border: 1.5px solid #BDBDBD;
+      border-radius: 4px;
+      padding: 0 12px;
+      font-size: 13px;
+      color: #888888;
+      display: flex;
+      align-items: center;
+    }
+
+    .field-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .field-input-wrapper .field-input {
+      padding-right: 48px;
+    }
+
+    .field-eye {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 42px;
+      height: 42px;
+      background: #D8D8D8;
+      border: 1.5px solid #BDBDBD;
+      border-left: none;
+      border-radius: 0 4px 4px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #555555;
+    }
+
+    /* ── BUTTON ── */
+    .btn-primary {
+      display: block;
+      width: 100%;
+      height: 44px;
+      background: #333333;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+      line-height: 44px;
+      margin-top: 28px;
+      cursor: default;
+    }
+
+    /* ── LINK ── */
+    .card-link {
+      display: block;
+      text-align: center;
+      font-size: 13px;
+      color: #333333;
+      text-decoration: underline;
+      margin-top: 16px;
+    }
+
+    /* ── FOOTER ── */
+    .page-footer {
+      height: 40px;
+      background: #F5F5F5;
+      border-top: 1px solid #BDBDBD;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #888888;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── WIREFRAME ANNOTATION ── */
+    .zone-label {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #AAAAAA;
+      border: 1px dashed #CCCCCC;
+      padding: 2px 6px;
+      border-radius: 2px;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ZONE : HEADER FIXE -->
+  <header class="header">
+    <div class="logo">GZ<span>AUTH</span></div>
+  </header>
+
+  <!-- ZONE : CONTENU PRINCIPAL -->
+  <main class="page-body">
+    <div class="card">
+
+      <div class="card-title">Login</div>
+
+      <!-- Champ Email -->
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <div class="field-input">utilisateur@exemple.com</div>
+      </div>
+
+      <!-- Champ Mot de passe -->
+      <div class="field-group">
+        <label class="field-label">Mot de passe</label>
+        <div class="field-input-wrapper">
+          <div class="field-input">••••••••••••</div>
+          <div class="field-eye">&#128065;</div>
+        </div>
+      </div>
+
+      <!-- Bouton principal -->
+      <div class="btn-primary">S'identifier</div>
+
+      <!-- Lien inscription -->
+      <a class="card-link">S'enregistrer</a>
+
+    </div>
+  </main>
+
+  <!-- ZONE : FOOTER -->
+  <footer class="page-footer">
+    Ecran 1/4 &mdash; Page Login &mdash; GAUZIAN Wireframes &mdash; Soutenance 2026
+  </footer>
+
+</body>
+</html>
