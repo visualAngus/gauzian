@@ -12,6 +12,41 @@ use crate::{response::ApiResponse, state::AppState};
 
 use super::{repo, services};
 
+// ========== Validation ==========
+
+fn validate_password(password: &str) -> Result<(), &'static str> {
+    if password.len() < 10 {
+        return Err("Le mot de passe doit contenir au moins 10 caractères");
+    }
+    if !password.chars().any(|c| c.is_uppercase()) {
+        return Err("Le mot de passe doit contenir au moins une majuscule");
+    }
+    if !password.chars().any(|c| c.is_ascii_digit()) {
+        return Err("Le mot de passe doit contenir au moins un chiffre");
+    }
+    if !password.chars().any(|c| "!@#$%^&*()_+-=[]{};\':\"\\|,.<>/?".contains(c)) {
+        return Err("Le mot de passe doit contenir au moins un caractère spécial");
+    }
+    Ok(())
+}
+
+fn validate_email_format(email: &str) -> bool {
+    if email.is_empty() || email.len() > 254 {
+        return false;
+    }
+    let mut parts = email.splitn(2, '@');
+    let local = parts.next().unwrap_or("");
+    let domain = match parts.next() {
+        Some(d) => d,
+        None => return false,
+    };
+    !local.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && domain.len() > 2
+}
+
 // ========== Structures de requêtes/réponses ==========
 
 #[derive(Deserialize)]
@@ -124,6 +159,16 @@ pub async fn register_handler(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
+    // 0. Valider le format de l'email
+    if !validate_email_format(&payload.email) {
+        return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
+    }
+
+    // 0b. Valider le mot de passe
+    if let Err(msg) = validate_password(&payload.password) {
+        return Err((StatusCode::BAD_REQUEST, msg.to_string()));
+    }
+
     // 1. Hash le mot de passe avec Argon2
     let password_hash = services::hash_password(&payload.password)
         .map_err(|e| {
