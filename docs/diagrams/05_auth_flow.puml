@@ -1,0 +1,142 @@
+@startuml Auth Flow - Gauzian
+
+skinparam {
+    backgroundColor #FAFAFA
+    participantBackgroundColor #D6EAF8
+    participantBorderColor #2980B9
+    sequenceArrowColor #2C3E50
+    sequenceArrowThickness 1.5
+    sequenceGroupBackgroundColor #EBF5FB
+    sequenceGroupBorderColor #1A5276
+    noteFontSize 10
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F39C12
+    sequenceLifeLineBorderColor #2980B9
+    defaultFontSize 12
+}
+
+title <b>Flux d'Authentification — Gauzian Backend</b>
+
+actor Client as C
+participant "Axum\nHandler" as H
+participant "auth/services.rs" as S
+participant "auth/repo.rs" as R
+participant "PostgreSQL" as PG
+participant "Redis" as RD
+participant "JWT Module" as JWT
+
+' ====================== REGISTER ======================
+group #D5E8D4 REGISTER (POST /register)
+    C -> H : RegisterRequest {\n  email, username, password,\n  encrypted_private_key,\n  public_key, private_key_salt,\n  iv, encrypted_record_key\n}
+    H -> S : hash_password(password)
+    S -> S : Argon2::hash_password(\n  password, auth_salt\n)
+    S -> R : create_user(user_data)
+    R -> PG : INSERT INTO users (...)
+    PG --> R : user_id: UUID
+    R --> S : user created
+    S -> JWT : create_token(user_id, role)
+    JWT --> S : token: String (10 jours)
+    S --> H : LoginResponse
+    H --> C : 201 Created {\n  token, user_id,\n  encrypted_private_key,\n  private_key_salt, iv,\n  public_key\n}
+    note right of C
+        Le client déchiffre sa
+        clé privée avec son
+        mot de passe en local
+        (PBKDF2 + AES-256-GCM)
+    end note
+end
+
+|||
+
+' ====================== LOGIN ======================
+group #D6EAF8 LOGIN (POST /login)
+    C -> H : LoginRequest { email, password }
+    H -> R : find_by_email(email)
+    R -> PG : SELECT * FROM users WHERE email = $1
+    PG --> R : User { password_hash, auth_salt, ... }
+    R --> H : Option<User>
+
+    alt User not found
+        H --> C : 401 Unauthorized
+    end
+
+    H -> S : check_rate_limit(email)
+    S -> RD : GET rate_limit:{email}
+    RD --> S : attempts count
+    alt Too many attempts (>5)
+        S --> H : RateLimitExceeded
+        H --> C : 429 Too Many Requests
+    end
+
+    H -> S : verify_password(password, hash, salt)
+    S -> S : Argon2::verify_password(...)
+
+    alt Password incorrect
+        S -> RD : INCR rate_limit:{email}
+        S -> RD : EXPIRE rate_limit:{email} 900s
+        S --> H : Invalid credentials
+        H --> C : 401 Unauthorized
+    end
+
+    S -> JWT : create_token(user_id, role, jti)
+    JWT --> S : token: String
+
+    S -> RD : DEL rate_limit:{email}
+    S --> H : LoginResponse
+    H --> C : 200 OK {\n  token, user_id,\n  encrypted_private_key,\n  private_key_salt, iv,\n  public_key\n}\n+ Cookie: session_token (HttpOnly)
+end
+
+|||
+
+' ====================== PROTECTED REQUEST ======================
+group #FFF9C4 REQUÊTE PROTÉGÉE (Claims Extractor)
+    C -> H : GET /drive/... \nAuthorization: Bearer <token>
+    H -> JWT : decode_token(token)
+    JWT --> H : Claims { id, role, exp, jti }
+
+    alt Token expiré
+        H --> C : 401 Unauthorized
+    end
+
+    H -> RD : SISMEMBER blacklist:{jti}
+    RD --> H : is_blacklisted: bool
+
+    alt Token blacklisté
+        H --> C : 401 Unauthorized
+    end
+
+    note right of H
+        Claims { id, role, jti }
+        injectés dans le handler
+        par l'extractor Axum
+    end note
+
+    H -> H : handler(Claims, ...)
+    H --> C : 200 OK Response
+end
+
+|||
+
+' ====================== LOGOUT ======================
+group #FDEBD0 LOGOUT (POST /logout)
+    C -> H : POST /logout\nAuthorization: Bearer <token>
+    H -> JWT : decode_token(token) → Claims { jti }
+    H -> RD : SADD blacklist:{jti}
+    H -> RD : EXPIRE blacklist:{jti} 864000s (10 jours)
+    H --> C : 200 OK\nClear-Cookie: session_token
+end
+
+|||
+
+' ====================== AUTOLOGIN ======================
+group #E8F8F5 AUTOLOGIN (GET /autologin)
+    C -> H : GET /autologin\nCookie: session_token=<token>
+    H -> JWT : decode_cookie_token(token)
+    JWT --> H : Claims
+    H -> R : find_user_info(user_id)
+    R -> PG : SELECT id, email, username,\nencrypted_private_key, ...\nFROM users WHERE id = $1
+    PG --> R : UserInfo
+    H --> C : 200 OK { UserInfo }
+end
+
+@enduml

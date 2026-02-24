@@ -1,0 +1,105 @@
+@startuml E2EE Sharing - Gauzian
+
+skinparam {
+    backgroundColor #FAFAFA
+    participantBackgroundColor #D6EAF8
+    participantBorderColor #2980B9
+    sequenceArrowColor #2C3E50
+    sequenceArrowThickness 1.5
+    noteFontSize 10
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F39C12
+    defaultFontSize 11
+}
+
+title <b>Flux de Partage E2EE — Gauzian</b>\nRSA-4096 + AES-256-GCM
+
+actor "Alice\n(Propriétaire)" as Alice
+actor "Bob\n(Destinataire)" as Bob
+participant "drive/handlers.rs" as H
+participant "drive/repo.rs" as R
+participant "PostgreSQL" as PG
+
+' ====================== ALICE RÉCUPÈRE LA CLÉ PUBLIQUE DE BOB ======================
+group #D5E8D4 ÉTAPE 1: Récupérer la clé publique de Bob
+    Alice -> H : GET /contacts/get_public_key/{bob_email}
+    H -> R : get_user_public_key(email)
+    R -> PG : SELECT public_key FROM users WHERE email=$1
+    PG --> R : bob_public_key: RSA-4096
+    H --> Alice : { public_key: "-----BEGIN PUBLIC KEY-----..." }
+end
+
+|||
+
+' ====================== ALICE CHIFFRE LA CLÉ DU FICHIER ======================
+group #D6EAF8 ÉTAPE 2: Chiffrement côté client (Alice)
+    Alice -> Alice : Récupérer file_key (AES-256)\n← déchiffrer file_access.encrypted_file_key\nvia RSA private key d'Alice
+    Alice -> Alice : Chiffrer file_key avec\nbob_public_key (RSA-4096)\n→ encrypted_file_key_for_bob
+end
+
+|||
+
+' ====================== ALICE PARTAGE LE FICHIER ======================
+group #FFF9C4 ÉTAPE 3: Créer le partage (POST /drive/files/{id}/share)
+    Alice -> H : ShareFileRequest {\n  file_id: "uuid",\n  recipient_email: "bob@...",\n  encrypted_file_key: "...",\n  folder_id: null,\n  access_level: "read"\n}
+    H -> R : create_file_access(\n  file_id, bob_id, folder_id,\n  encrypted_file_key_for_bob,\n  is_accepted=FALSE\n)
+    R -> PG : INSERT INTO file_access (\n  file_id, user_id=bob_id,\n  encrypted_file_key=encrypted_for_bob,\n  access_level='read',\n  is_accepted=FALSE\n)
+    H --> Alice : 200 OK { "Share created" }
+    note right of H
+        is_accepted=FALSE:
+        Le fichier est en attente
+        dans la boîte de Bob.
+        Il n'apparaît pas encore
+        dans son Drive.
+    end note
+end
+
+|||
+
+' ====================== BOB ACCEPTE LE PARTAGE ======================
+group #E8F8F5 ÉTAPE 4: Bob accepte le partage (POST /drive/files/{id}/accept)
+    Bob -> H : POST /drive/files/{file_id}/accept
+    H -> R : accept_file_access(file_id, bob_id)
+    R -> PG : UPDATE file_access\nSET is_accepted=TRUE\nWHERE file_id=$1 AND user_id=$2
+    H --> Bob : 200 OK { "File accepted" }
+    note right of Bob
+        Le fichier apparaît
+        maintenant dans le Drive de Bob.
+    end note
+end
+
+|||
+
+' ====================== BOB TÉLÉCHARGE ======================
+group #FDEBD0 ÉTAPE 5: Bob télécharge le fichier (déchiffrement)
+    Bob -> H : GET /drive/file/{file_id}
+    H -> R : get_file_with_access(file_id, bob_id)
+    R -> PG : SELECT f.*, fa.encrypted_file_key\nFROM files f JOIN file_access fa\nON f.id=fa.file_id\nWHERE fa.user_id=bob_id AND fa.is_accepted=TRUE
+    PG --> R : { file_info, encrypted_file_key_for_bob }
+    H --> Bob : { encrypted_metadata, encrypted_file_key }
+
+    Bob -> Bob : Déchiffrer encrypted_file_key\nvia RSA private key de Bob\n→ file_key (AES-256)
+    Bob -> Bob : Déchiffrer metadata avec file_key\n→ nom, description en clair
+    Bob -> H : GET /drive/download_chunk_binary/{s3_key}
+    H --> Bob : chunk_data (chiffré E2EE)
+    Bob -> Bob : Déchiffrer chunks avec file_key\n→ fichier en clair
+end
+
+|||
+
+' ====================== RÉVOCATION ======================
+group #FADBD8 ÉTAPE 6: Alice révoque l'accès (POST /drive/revoke-access)
+    Alice -> H : RevokeAccessRequest {\n  file_id: "uuid",\n  user_id: "bob_uuid"\n}
+    H -> R : revoke_access(file_id, bob_id)
+    R -> PG : UPDATE file_access\nSET is_deleted=TRUE\nWHERE file_id=$1 AND user_id=$2
+    H --> Alice : 200 OK { "Access revoked" }
+    note right of Alice
+        Bob ne peut plus
+        accéder au fichier.
+        Les données chiffrées
+        restent dans S3 jusqu'à
+        suppression physique.
+    end note
+end
+
+@enduml

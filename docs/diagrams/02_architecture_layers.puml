@@ -1,0 +1,127 @@
+@startuml Architecture Layers - Gauzian Backend
+
+skinparam {
+    backgroundColor #FAFAFA
+    componentStyle rectangle
+    componentBackgroundColor #E8F4FD
+    componentBorderColor #2980B9
+    componentFontColor #2C3E50
+    packageBackgroundColor #EBF5FB
+    packageBorderColor #1A5276
+    arrowColor #2980B9
+    arrowThickness 1.5
+    shadowing false
+    defaultFontSize 12
+    linetype ortho
+}
+
+title <b>Architecture en Couches — Gauzian Backend (Rust/Axum)</b>
+
+' ====================== COUCHE TRANSPORT ======================
+package "Couche Transport (Axum + Tower)" #D5E8D4 {
+    component "HTTP/HTTPS\nListener\n:3000" as http_listener
+    component "TraceLayer\n(tower-http)" as trace_layer
+    component "MetricsLayer\n(track_metrics)" as metrics_layer
+    component "Router\n(axum::Router)" as router
+}
+
+' ====================== COUCHE AUTH ======================
+package "Middleware Auth" #FFF9C4 {
+    component "Claims Extractor\n(JWT Bearer / Cookie)" as jwt_extractor
+    component "Rate Limiter\n(Redis)" as rate_limiter
+}
+
+' ====================== COUCHE ROUTES ======================
+package "Couche Routes" #EBF5FB {
+    package "auth/" #D6EAF8 {
+        component "routes.rs" as auth_routes
+    }
+    package "drive/" #D6EAF8 {
+        component "routes.rs" as drive_routes
+    }
+    package "agenda/" #D6EAF8 {
+        component "routes.rs" as agenda_routes
+    }
+    component "System Routes\n(/health, /metrics)" as system_routes
+}
+
+' ====================== COUCHE HANDLERS ======================
+package "Couche Handlers (HTTP)" #FDEBD0 {
+    component "auth/handlers.rs\nlogin · register · logout\nautologin · info · contacts" as auth_handlers
+    component "drive/handlers.rs\nupload · download · share\nmove · delete · rename\nfolder CRUD" as drive_handlers
+    component "agenda/handlers.rs\nget_events · create_event" as agenda_handlers
+}
+
+' ====================== COUCHE SERVICES ======================
+package "Couche Services (Business Logic)" #F5EEF8 {
+    component "auth/services.rs\npassword hash (Argon2)\nJWT create/verify\nrate limit check" as auth_services
+    component "drive/services.rs\nUUID parsing\nchunk orchestration\nS3 operations" as drive_services
+    component "agenda/services.rs\nE2EE event handling" as agenda_services
+}
+
+' ====================== COUCHE REPO ======================
+package "Couche Repository (Data Access)" #E8F8F5 {
+    component "auth/repo.rs\nfind_by_email\ncreate_user\nget_public_key" as auth_repo
+    component "drive/repo.rs\nfile CRUD\nfolder CRUD\naccess management\nsharing queries" as drive_repo
+    component "agenda/repo.rs\nget_events\ncreate_event\nparticipants" as agenda_repo
+}
+
+' ====================== COUCHE INFRA ======================
+package "AppState (Contexte Partagé)" #FADBD8 {
+    component "PgPool\n(max 15 connexions)" as pg_pool
+    component "ConnectionManager\n(Redis)" as redis_conn
+    component "StorageClient\n(S3/MinIO)" as s3_client
+    component "Semaphore\n(max 50 uploads)" as semaphore
+    component "jwt_secret: String" as jwt_secret
+}
+
+' ====================== INFRASTRUCTURE EXTERNE ======================
+package "Infrastructure Externe" #F2F3F4 {
+    database "PostgreSQL\n:5432" as postgres
+    database "Redis\n:6379" as redis
+    storage "MinIO (S3)\n:9000" as minio
+    component "Prometheus\n/metrics" as prometheus
+}
+
+' ====================== FLUX ======================
+
+http_listener --> trace_layer
+trace_layer --> metrics_layer
+metrics_layer --> router
+
+router --> jwt_extractor : "routes protégées"
+router --> auth_routes
+router --> drive_routes
+router --> agenda_routes
+router --> system_routes
+
+jwt_extractor --> auth_handlers
+jwt_extractor --> drive_handlers
+jwt_extractor --> agenda_handlers
+
+auth_routes --> auth_handlers
+drive_routes --> drive_handlers
+agenda_routes --> agenda_handlers
+
+auth_handlers --> auth_services
+auth_handlers --> auth_repo
+drive_handlers --> drive_services
+drive_handlers --> drive_repo
+agenda_handlers --> agenda_services
+agenda_handlers --> agenda_repo
+
+auth_services --> rate_limiter
+rate_limiter --> redis_conn
+
+auth_repo --> pg_pool
+drive_repo --> pg_pool
+agenda_repo --> pg_pool
+drive_services --> s3_client
+drive_services --> semaphore
+
+pg_pool --> postgres
+redis_conn --> redis
+s3_client --> minio
+metrics_layer --> prometheus
+
+@enduml

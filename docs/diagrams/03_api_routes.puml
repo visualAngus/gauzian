@@ -1,0 +1,107 @@
+@startuml API Routes - Gauzian Backend
+
+skinparam {
+    backgroundColor #FAFAFA
+    rectangleBackgroundColor #EBF5FB
+    rectangleBorderColor #2980B9
+    arrowColor #2980B9
+    noteFontSize 10
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F39C12
+    defaultFontSize 11
+    linetype ortho
+}
+
+title <b>API Routes — Gauzian Backend</b>\nTous les endpoints HTTP
+
+' ====================== AUTH ======================
+rectangle "**AUTH** (Public + Protected)" as auth_box #D5E8D4 {
+    rectangle "POST /login" as r_login #FFFFFF
+    rectangle "POST /register" as r_register #FFFFFF
+    rectangle "POST /logout 🔒" as r_logout #FFF9C4
+    rectangle "GET /autologin 🔒" as r_autologin #FFF9C4
+    rectangle "GET /info 🔒" as r_info #FFF9C4
+    rectangle "GET /contacts/get_public_key/{email} 🔒" as r_pubkey #FFF9C4
+}
+
+' ====================== DRIVE - FILES ======================
+rectangle "**DRIVE — Fichiers** 🔒" as drive_files_box #D6EAF8 {
+    rectangle "POST /drive/initialize_file" as r_init_file #FFFFFF
+    rectangle "POST /drive/files/{id}/upload-chunk" as r_upload #FFFFFF
+    rectangle "POST /drive/finalize_upload/{id}/{etat}" as r_finalize #FFFFFF
+    rectangle "POST /drive/abort_upload" as r_abort #FFFFFF
+    rectangle "GET /drive/file/{id}" as r_get_file #FFFFFF
+    rectangle "GET /drive/download_chunk_binary/{s3_key}" as r_download #FFFFFF
+    rectangle "GET /drive/file/{id}/InfoItem" as r_file_info #FFFFFF
+    rectangle "PATCH /drive/files/{id}/move" as r_move_file #FFFFFF
+    rectangle "PATCH /drive/files/{id}" as r_rename_file #FFFFFF
+    rectangle "DELETE /drive/files/{id}" as r_delete_file #FFFFFF
+    rectangle "POST /drive/restore_file" as r_restore_file #FFFFFF
+    rectangle "POST /drive/files/{id}/share" as r_share_file #FFFFFF
+    rectangle "POST /drive/files/{id}/accept" as r_accept_file #FFFFFF
+    rectangle "POST /drive/files/{id}/reject" as r_reject_file #FFFFFF
+}
+
+' ====================== DRIVE - FOLDERS ======================
+rectangle "**DRIVE — Dossiers** 🔒" as drive_folders_box #EBF5FB {
+    rectangle "POST /drive/create_folder" as r_create_folder #FFFFFF
+    rectangle "GET /drive/get_folder/{id}" as r_get_folder #FFFFFF
+    rectangle "GET /drive/folder_contents/{id}" as r_folder_contents #FFFFFF
+    rectangle "GET /drive/folder/{id}/InfoItem" as r_folder_info #FFFFFF
+    rectangle "PATCH /drive/folders/{id}/move" as r_move_folder #FFFFFF
+    rectangle "PATCH /drive/folders/{id}" as r_rename_folder #FFFFFF
+    rectangle "DELETE /drive/folders/{id}" as r_delete_folder #FFFFFF
+    rectangle "POST /drive/restore_folder" as r_restore_folder #FFFFFF
+    rectangle "POST /drive/share_folder_batch" as r_share_folder #FFFFFF
+    rectangle "GET /drive/folder/{id}/shared_users" as r_folder_shared #FFFFFF
+    rectangle "POST /drive/folders/{id}/accept" as r_accept_folder #FFFFFF
+    rectangle "POST /drive/folders/{id}/reject" as r_reject_folder #FFFFFF
+}
+
+' ====================== DRIVE - GLOBAL ======================
+rectangle "**DRIVE — Global** 🔒" as drive_global_box #F5EEF8 {
+    rectangle "GET /drive/get_all_drive_info/{parent_id}" as r_all_drive #FFFFFF
+    rectangle "GET /drive/get_file_folder/{parent_id}" as r_file_folder #FFFFFF
+    rectangle "POST /drive/empty_trash" as r_empty_trash #FFFFFF
+    rectangle "POST /drive/propagate_file_access" as r_prop_file #FFFFFF
+    rectangle "POST /drive/propagate_folder_access" as r_prop_folder #FFFFFF
+    rectangle "POST /drive/revoke-access" as r_revoke #FFFFFF
+}
+
+' ====================== AGENDA ======================
+rectangle "**AGENDA** 🔒" as agenda_box #FDEBD0 {
+    rectangle "GET /agenda/events?startDayId=X&endDayId=Y" as r_get_events #FFFFFF
+    rectangle "POST /agenda/events" as r_create_event #FFFFFF
+}
+
+' ====================== SYSTEM ======================
+rectangle "**SYSTEM** (Public)" as system_box #E8F8F5 {
+    rectangle "GET /" as r_health
+    rectangle "GET /health/ready" as r_health_ready
+    rectangle "GET /metrics (Prometheus)" as r_metrics
+}
+
+note bottom of system_box
+    🔒 = requiert JWT valide
+    (Authorization: Bearer <token>)
+    ou Cookie de session
+end note
+
+note right of r_upload
+    Max 6MB par chunk
+    Semaphore: 50 uploads
+    simultanés max
+end note
+
+note right of r_share_file
+    Partage E2EE:
+    clé chiffrée avec
+    RSA public key du destinataire
+end note
+
+note right of r_get_events
+    Filtrage par plage de dates
+    Données chiffrées côté client
+end note
+
+@enduml

@@ -1,0 +1,125 @@
+@startuml Soft Delete & Share States - Gauzian
+
+skinparam {
+    backgroundColor #FAFAFA
+    stateBackgroundColor #D6EAF8
+    stateBorderColor #2980B9
+    stateFontColor #2C3E50
+    arrowColor #2C3E50
+    arrowThickness 1.5
+    defaultFontSize 12
+    shadowing false
+    NoteBackgroundColor #FFF9C4
+    NoteBorderColor #F39C12
+}
+
+title <b>États des Fichiers & Partages — Gauzian</b>
+
+' ====================== ÉTAT D'UN FICHIER ======================
+state "**Cycle de vie d'un fichier**" as file_lifecycle {
+
+    [*] --> Initializing : POST /initialize_file
+
+    state Initializing {
+        : is_fully_uploaded = FALSE
+        : is_deleted = FALSE
+    }
+
+    Initializing --> Uploading : upload-chunk (x N)
+
+    state Uploading {
+        : chunks en cours d'envoi
+        : s3_keys créées progressivement
+    }
+
+    Uploading --> Active : POST /finalize_upload/success
+    Uploading --> [*] : POST /abort_upload\n(suppression physique)
+
+    state Active {
+        : is_fully_uploaded = TRUE
+        : is_deleted = FALSE
+        : visible dans le Drive
+    }
+
+    Active --> Trashed : DELETE /drive/files/{id}\n(soft delete)
+    Trashed --> Active : POST /restore_file
+
+    state Trashed {
+        : is_deleted = TRUE
+        : parent_id = NULL
+        : dans la corbeille
+    }
+
+    Trashed --> [*] : POST /empty_trash\n(suppression physique\n+ chunks S3)
+}
+
+|||
+
+' ====================== ÉTAT D'UN PARTAGE ======================
+state "**Cycle de vie d'un partage (file_access)**" as share_lifecycle {
+
+    [*] --> Pending : POST /share\nis_accepted=FALSE
+
+    state Pending {
+        : is_accepted = FALSE
+        : is_deleted = FALSE
+        : en attente d'acceptation
+        : N'apparaît PAS dans le Drive
+    }
+
+    Pending --> Accepted : POST /files/{id}/accept\nis_accepted=TRUE
+    Pending --> Rejected : POST /files/{id}/reject\nis_deleted=TRUE
+
+    state Accepted {
+        : is_accepted = TRUE
+        : is_deleted = FALSE
+        : visible dans le Drive
+    }
+
+    state Rejected {
+        : is_deleted = TRUE
+        : partage refusé
+    }
+
+    Accepted --> Revoked : POST /revoke-access\nis_deleted=TRUE
+
+    state Revoked {
+        : is_deleted = TRUE
+        : accès révoqué
+    }
+
+    Rejected --> [*]
+    Revoked --> [*]
+}
+
+|||
+
+' ====================== ÉTAT D'UN UPLOAD CHUNKED ======================
+state "**Upload Chunked (Semaphore)**" as upload_states {
+
+    [*] --> WaitingSlot : POST /upload-chunk
+
+    state WaitingSlot {
+        : semaphore.acquire() en attente
+        : MAX 50 uploads simultanés
+    }
+
+    WaitingSlot --> UploadingToS3 : slot disponible
+
+    state UploadingToS3 {
+        : PutObject → MinIO
+        : INSERT INTO s3_keys
+    }
+
+    UploadingToS3 --> WaitingSlot : chunk suivant\n(release slot)
+    UploadingToS3 --> [*] : dernier chunk\n→ POST /finalize_upload
+}
+
+note bottom of upload_states
+    Le Semaphore (Arc<Semaphore>)
+    limite à 50 uploads concurrents
+    pour protéger MinIO
+    d'une surcharge.
+end note
+
+@enduml
