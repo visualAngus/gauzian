@@ -7,6 +7,8 @@ metadata:
     app: prometheus
 spec:
   replicas: 1
+  strategy:
+    type: Recreate  # Obligatoire avec ReadWriteOnce : termine l'ancien pod avant de démarrer le nouveau
   selector:
     matchLabels:
       app: prometheus
