@@ -188,11 +188,11 @@ defineProps({
   min-height: 50vh;
   max-height: 70vh;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   z-index: 1000;
   overflow-y: auto;
   overflow-x: hidden;
-  border: 1px solid var(--color-surface-muted);
+  border: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -215,7 +215,7 @@ defineProps({
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text);
-  border-bottom: 1px solid var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 8px;
 }
 
@@ -230,7 +230,7 @@ defineProps({
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--color-border-subtle);
   gap: 12px;
 }
 
@@ -272,15 +272,15 @@ defineProps({
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background-color: rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background-color: var(--color-border-subtle);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   transition: all 0.2s ease;
 }
 
 .share-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--color-border);
+  border-color: var(--color-border);
 }
 
 .share-user {
@@ -325,7 +325,7 @@ defineProps({
 .revoke-btn {
   padding: 4px;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -354,7 +354,7 @@ defineProps({
   gap: 8px;
   margin-top: auto;
   padding-top: 16px;
-  border-top: 2px solid rgba(0, 0, 0, 0.08);
+  border-top: 2px solid var(--color-border);
 }
 
 .action-buttons button {
@@ -368,7 +368,7 @@ defineProps({
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
-  border: 1px solid var(--color-surface-muted);
+  border: 1px solid var(--color-border);
   white-space: nowrap;
 }
 
@@ -385,23 +385,23 @@ defineProps({
 .btn-secondary {
   background-color: transparent;
   color: var(--color-text);
-  border: 1px solid var(--color-surface-muted);
+  border: 1px solid var(--color-border);
 }
 
 .btn-secondary:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--color-border-subtle);
 }
 
 .btn-danger {
   background-color: transparent;
   color: var(--color-text-muted);
-  border: 1px solid var(--color-surface-muted);
+  border: 1px solid var(--color-border);
 }
 
 .btn-danger:hover {
-  background-color: rgba(239, 68, 68, 0.08);
+  background-color: rgba(239, 68, 68, 0.12);
   color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .action-buttons button:active {

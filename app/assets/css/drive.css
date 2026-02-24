@@ -93,7 +93,7 @@ main {
     top: 0;
     height: 100vh;
     z-index: 999;
-    background-color: white;
+    background-color: var(--color-white);
     flex: 0 0 280px;
     width: 280px;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
@@ -166,6 +166,11 @@ main {
   gap: 10px;
   /* margin-left: 35px; */
   margin-top: 0px;
+}
+
+html.dark #import-files-button,
+html.dark #shared-with-me-button {
+  background-color: var(--color-surface-muted);
 }
 
 #create-folder-button {
@@ -249,6 +254,14 @@ main {
 #import-files-button:hover,
 #shared-with-me-button:hover {
   background-color: var(--color-neutral-700);
+
+}
+
+/* mode sombre */
+html.dark #import-files-button:hover,
+html.dark #shared-with-me-button:hover {
+  background-color: var(--color-surface-soft);
+
 }
 
 #create-folder-button:hover {
@@ -837,7 +850,7 @@ main {
 }
 
 .selected-item {
-  background-color: #d0e6ff !important;
+  background-color: var(--color-selected) !important;
 }
 
 /* div_treeview */
@@ -906,7 +919,7 @@ main {
 }
 
 .select-folder-three {
-  background-color: #e6f0ff;
+  background-color: var(--color-selected);
 }
 
 .div-enfants {
@@ -991,7 +1004,7 @@ main {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: calc(50% - 8px);
+  width: calc(50% - 4px);
   padding: 12px 14px;
   background-color: #f3f3f3;
   color: var(--color-neutral-900);
@@ -1063,7 +1076,7 @@ main {
   width: 100%;
   border-radius: 10px;
   padding: 16px 12px;
-  box-shadow: 0 2px 8px rgba(76, 142, 175, 0.08);
+  /* box-shadow: 0 2px 8px rgba(76, 142, 175, 0.08); */
   margin-top: auto;
   transition: all 0.3s ease;
 }
@@ -1358,7 +1371,7 @@ main {
 .transfer-name {
   font-weight: 600;
   font-size: 14px;
-  color: #222;
+  color: var(--color-black);
   margin-bottom: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
