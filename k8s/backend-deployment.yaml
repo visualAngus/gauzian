@@ -103,6 +103,11 @@ spec:
             secretKeyRef:
               name: gauzian-secrets
               key: JWT_SECRET
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-secrets
+              key: SMTP_PASSWORD
         - name: COOKIE_SECURE
           value: "true"  # Force HTTPS pour les cookies en production
 
