@@ -4,6 +4,9 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 use redis::aio::ConnectionManager;
 
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{SmtpTransport};
+
 #[derive(Clone)]
 pub struct AppState {
     pub jwt_secret: String,
@@ -12,6 +15,7 @@ pub struct AppState {
     pub storage_client: StorageClient,
     // Limite le nombre d'uploads concurrents pour éviter la saturation RAM
     pub upload_semaphore: Arc<Semaphore>,
+    pub mailer: SmtpTransport,
 }
 
 impl AppState {
@@ -40,12 +44,21 @@ impl AppState {
             .unwrap_or(50);
         tracing::info!("Max concurrent uploads: {}", max_concurrent_uploads);
 
+        // mail
+        let creds = Credentials::new("gauzian@pupin.fr".to_string(), std::env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD must be set"));
+        let mailer = SmtpTransport::relay("smtp.ionos.fr")
+            .expect("Failed to create SMTP transport")
+            .credentials(creds)
+            .build();
+        tracing::info!("SMTP transport initialized");
+
         Self {
             jwt_secret,
             redis_manager,
             db_pool,
             storage_client,
             upload_semaphore: Arc::new(Semaphore::new(max_concurrent_uploads)),
+            mailer,
         }
     }
 }
