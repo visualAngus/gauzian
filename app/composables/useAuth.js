@@ -50,15 +50,8 @@ export const useAuth = () => {
       });
 
       if (!response.ok) {
-        let errorMessage = 'Identifiants invalides';
-        const raw = await response.text().catch(() => '');
-        try {
-          const data = JSON.parse(raw);
-          errorMessage = data.error || data.message || raw || errorMessage;
-        } catch {
-          if (raw) errorMessage = raw;
-        }
-        throw new Error(errorMessage);
+        const data = await response.json();
+        throw new Error(data.error || 'Login failed');
       }
 
       const data = await response.json();
@@ -111,7 +104,173 @@ export const useAuth = () => {
    * @param {string} password
    * @returns {Promise<string>} Recovery key (à télécharger)
    */
-  const register = async (username, email, password) => {
+  // const register = async (username, email, password) => {
+  //   try {
+  //     // 1. Générer paire de clés RSA-4096
+  //     const { publicKey, privateKey } = await generateRsaKeyPairPem();
+
+  //     // 2. Générer record key (pour métadonnées)
+  //     const recovery_key_data = await generateRecordKey(privateKey);
+
+  //     // 3. Sauvegarder clés dans IndexedDB
+  //     await saveUserKeysToIndexedDb(privateKey, publicKey);
+
+  //     // 4. Chiffrer clé privée avec mot de passe
+  //     const cryptoPayload = await encryptPrivateKeyPemWithPassword(
+  //       privateKey,
+  //       password
+  //     );
+
+  //     // 5. Envoyer requête register au backend
+  //     const response = await fetch(`${apiUrl}/register`, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({
+  //         username,
+  //         email,
+  //         password,
+  //         public_key: publicKey,
+  //         encrypted_private_key: cryptoPayload.encrypted_private_key,
+  //         private_key_salt: cryptoPayload.private_key_salt,
+  //         iv: cryptoPayload.iv,
+  //         encrypted_record_key: recovery_key_data.encrypted_private_key_reco
+  //       })
+  //     });
+
+  //     if (!response.ok) {
+  //       let errorMessage = 'Erreur lors de l\'inscription';
+  //       const raw = await response.text().catch(() => '');
+  //       try {
+  //         const data = JSON.parse(raw);
+  //         errorMessage = data.error || data.message || raw || errorMessage;
+  //       } catch {
+  //         if (raw) errorMessage = raw;
+  //       }
+  //       // Traduire les messages anglais du backend
+  //       if (errorMessage.toLowerCase().includes('too many registration')) {
+  //         errorMessage = 'Trop de tentatives d\'inscription. Veuillez réessayer plus tard.';
+  //       }
+  //       throw new Error(errorMessage);
+  //     }
+
+  //     const data = await response.json();
+
+  //     // 6. Vérifier que le backend retourne le token
+  //     if (!data.token) {
+  //       throw new Error('Backend did not return token');
+  //     }
+
+  //     // 7. Stocker token dans localStorage (auto-login après register)
+  //     if (import.meta.client) {
+  //       localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+  //     }
+  //     authToken.value = data.token;
+
+  //     // 8. Mettre à jour l'état d'authentification
+  //     isAuthenticated.value = true;
+  //     user.value = {
+  //       id: data.user_id,
+  //       email: email,
+  //       username: username
+  //     };
+
+  //     if (import.meta.dev) {
+  //       console.log('Register successful, token stored in localStorage');
+  //     }
+
+  //     // 9. Retourner recovery key pour téléchargement
+  //     return recovery_key_data.recovery_key;
+  //   } catch (error) {
+  //     if (import.meta.dev) {
+  //       console.error('Register failed:', error);
+  //     }
+  //     throw error;
+  //   }
+  // };
+
+
+
+  /**
+   * Envoie de la requête pour l'OTP
+   * @param {string} email
+   * @returns {Promise<void>}
+   */
+  const requestOtp = async (email) => {
+    try {
+      const response = await fetch(`${apiUrl}/register/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Erreur lors de la demande d\'OTP';
+        const raw = await response.text().catch(() => '');
+        try {
+          const data = JSON.parse(raw);
+          errorMessage = data.error || data.message || raw || errorMessage;
+        } catch {
+          if (raw) errorMessage = raw;
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (import.meta.dev) {
+        console.log('OTP requested successfully');
+      }
+    } catch (error) {
+      if (import.meta.dev) {
+        console.error('Request OTP failed:', error);
+      }
+      throw error;
+    }
+  };
+
+
+  /**
+   * Valider l'OTP
+   * @param {string} email
+   * @param {string} otp
+   * @returns {Promise<string>} token JWT temporaire pour finaliser le processus
+   */
+  const validateOtp = async (email, otp) => {
+    try {
+      const response = await fetch(`${apiUrl}/register/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp })
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Erreur lors de la validation de l\'OTP';
+        const raw = await response.text().catch(() => '');
+        try {
+          const data = JSON.parse(raw);
+          errorMessage = data.error || data.message || raw || errorMessage;
+        } catch {
+          if (raw) errorMessage = raw;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (import.meta.dev) {
+        console.error('Validate OTP failed:', error);
+      }
+      throw error;
+    }
+  };
+
+  /**
+   * Finaliser l'inscription après validation OTP
+   * @param {string} username
+   * @param {string} password
+   * @param {string} email
+   * @param {string} tempToken - token temporaire reçu après validation OTP
+   * @returns {Promise<string>} Recovery key (à télécharger)
+   */
+  const finalizeRegistration = async (username, password, email, tempToken) => {
     try {
       // 1. Générer paire de clés RSA-4096
       const { publicKey, privateKey } = await generateRsaKeyPairPem();
@@ -128,15 +287,19 @@ export const useAuth = () => {
         password
       );
 
-      // 5. Envoyer requête register au backend
-      const response = await fetch(`${apiUrl}/register`, {
+      // 5. Envoyer requête finalize register au backend
+      const response = await fetch(`${apiUrl}/register/finalize`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${tempToken}`
+        },
         body: JSON.stringify({
           username,
           email,
           password,
           public_key: publicKey,
+          temp_token: tempToken,
           encrypted_private_key: cryptoPayload.encrypted_private_key,
           private_key_salt: cryptoPayload.private_key_salt,
           iv: cryptoPayload.iv,
@@ -145,17 +308,13 @@ export const useAuth = () => {
       });
 
       if (!response.ok) {
-        let errorMessage = 'Erreur lors de l\'inscription';
+        let errorMessage = 'Erreur lors de la finalisation de l\'inscription';
         const raw = await response.text().catch(() => '');
         try {
           const data = JSON.parse(raw);
           errorMessage = data.error || data.message || raw || errorMessage;
         } catch {
           if (raw) errorMessage = raw;
-        }
-        // Traduire les messages anglais du backend
-        if (errorMessage.toLowerCase().includes('too many registration')) {
-          errorMessage = 'Trop de tentatives d\'inscription. Veuillez réessayer plus tard.';
         }
         throw new Error(errorMessage);
       }
@@ -164,7 +323,7 @@ export const useAuth = () => {
 
       // 6. Vérifier que le backend retourne le token
       if (!data.token) {
-        throw new Error('Backend did not return token');
+        throw new Error('Backend did not return token after registration finalization');
       }
 
       // 7. Stocker token dans localStorage (auto-login après register)
@@ -182,18 +341,19 @@ export const useAuth = () => {
       };
 
       if (import.meta.dev) {
-        console.log('Register successful, token stored in localStorage');
+        console.log('Registration finalized successfully, token stored in localStorage');
       }
 
       // 9. Retourner recovery key pour téléchargement
       return recovery_key_data.recovery_key;
     } catch (error) {
       if (import.meta.dev) {
-        console.error('Register failed:', error);
+        console.error('Finalize registration failed:', error);
       }
       throw error;
     }
   };
+
 
   /**
    * Logout utilisateur
@@ -317,7 +477,9 @@ export const useAuth = () => {
 
     // Actions
     login,
-    register,
+    requestOtp,
+    validateOtp,
+    finalizeRegistration,
     logout,
     validateSession
   };

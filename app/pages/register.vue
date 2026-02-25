@@ -1,6 +1,6 @@
 <template>
   <div class="page" :class="{ dark: isDark }">
-    <div class="register-card" :class="{ 'register-card--recovery': currentStep === 'recovery' }">
+    <div class="register-card">
       <!-- En-tête carte -->
       <div class="card-header">
         <span class="brand">GAUZIAN</span>
@@ -77,18 +77,33 @@
             </div>
           </div>
 
+            <!-- Étape 2.5 : otp -->
+          <div v-else-if="currentStep === 'otp'" key="otp" class="step">
+            <div class="step-label">Un dernier effort !</div>
+            <h2 class="step-title">Entrez le code de vérification<br>envoyé à votre email</h2>
+            <div class="field-group">
+              <!-- 6 gros input number -->
+              <div class="otp-inputs">
+                <input
+                  v-for="(_, i) in 6"
+                  :key="i"
+                  type="text"
+                  inputmode="numeric"
+                  maxlength="1"
+                  class="otp-input"
+                  :class="{ 'field-input--error': otpError }"
+                  :ref="(el) => setOtpInputRef(el, i)"
+                  @input="(e) => handleOtpInput(e, i)"
+                  @keydown.backspace="(e) => handleOtpBackspace(e, i)"
+                />
+              </div>
+
+              <p v-if="otpError" class="field-error">{{ otpError }}</p>
+            </div>
+          </div>
+
           <!-- Étape 3 : password -->
           <div v-else-if="currentStep === 'password'" key="password" class="step">
-            <!-- Input caché pour que le gestionnaire de mots de passe associe l'email -->
-            <input
-              type="email"
-              name="username"
-              autocomplete="username"
-              :value="registerForm.email"
-              style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;"
-              tabindex="-1"
-              aria-hidden="true"
-            />
             <div class="step-label">Presque !</div>
             <h2 class="step-title">Créez un mot de<br>passe sécurisé</h2>
             <div class="field-group">
@@ -151,59 +166,27 @@
           </div>
 
           <!-- Étape 5 : recovery -->
-          <div v-else-if="currentStep === 'recovery'" key="recovery" class="step step--recovery">
-            <div class="recovery-header">
-              <div class="recovery-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <path d="M9 12l2 2 4-4"/>
-                </svg>
-              </div>
-              <div>
-                <div class="step-label">Votre espace est prêt !</div>
-                <h2 class="step-title step-title--recovery">Sauvegardez votre clé de récupération</h2>
-              </div>
+          <div v-else-if="currentStep === 'recovery'" key="recovery" class="step">
+            <div class="recovery-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M9 12l2 2 4-4"/>
+              </svg>
             </div>
-
+            <div class="step-label">Votre espace est prêt !</div>
+            <h2 class="step-title">Sauvegardez<br>votre clé de récupération</h2>
             <p class="recovery-warning">
-              Cette clé est <strong>la seule façon</strong> de retrouver l'accès à votre compte si vous oubliez votre mot de passe. <strong>Il n'en existe qu'un seul exemplaire.</strong>
+              Cette clé est <strong>indispensable</strong> pour récupérer votre compte si vous perdez votre mot de passe. Conservez-la en lieu sûr.
             </p>
-
-            <div class="recovery-key-preview">
-              <div class="recovery-key-header">
-                <div class="recovery-key-label">Votre clé</div>
-                <button class="btn-copy" @click="copyRecoveryKey" :class="{ copied: copyStatus === 'copied' }">
-                  <svg v-if="copyStatus !== 'copied'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                  <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                  {{ copyStatus === 'copied' ? 'Copié !' : 'Copier' }}
-                </button>
-              </div>
-              <div class="recovery-key-value">{{ recoveryKeyValue }}</div>
-            </div>
-
-            <p class="recovery-last-chance">
-              Cette page est la <strong>seule occasion</strong> de récupérer cette clé — elle ne sera plus jamais affichée.
-            </p>
-
             <div class="recovery-actions">
-              <button class="btn btn--primary btn--recovery-dl" @click="downloadRecoveryKey" :disabled="downloadStatus === 'downloading'">
-                <svg v-if="downloadStatus !== 'done'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon" :class="{ 'btn-icon--spinning': downloadStatus === 'downloading' }">
+              <button class="btn btn--primary" @click="downloadRecoveryKey">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                {{ downloadStatus === 'downloading' ? 'Préparation…' : downloadStatus === 'done' ? 'Téléchargé !' : 'Télécharger la clé' }}
+                Télécharger la clé
               </button>
-              <p v-if="downloadStatus === 'done'" class="download-hint">
-                Le fichier est dans vos Téléchargements — jetez-y un œil avant de continuer.
-              </p>
             </div>
           </div>
 
@@ -218,8 +201,7 @@
           @click="goBack"
           :disabled="currentStep === 'recovery'"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          Retour
+          ← Retour
         </button>
         <div v-else></div>
 
@@ -229,16 +211,14 @@
           @click="goNext"
           :disabled="!canGoNext"
         >
-          Suivant
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          Suivant →
         </button>
         <button
           v-else
           class="btn btn--primary"
           @click="navigateTo('/drive')"
         >
-          Accéder à mon drive
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          Accéder à mon drive →
         </button>
       </div>
 
@@ -259,7 +239,7 @@ import { ref, computed, watch, nextTick } from "vue";
 import { useHead } from "#imports";
 import { useAuth } from "~/composables/useAuth";
 
-const { register } = useAuth();
+const { requestOtp, validateOtp, finalizeRegistration } = useAuth();
 const { isDark, toggleTheme } = useTheme();
 
 // ─── État du formulaire ───────────────────────────────────────────────────────
@@ -271,14 +251,46 @@ const passwordMsgColor = ref("");
 const emailInputRef = ref(null);
 const recoveryKeyValue = ref("");
 const generateError = ref("");
-const downloadStatus = ref("idle"); // 'idle' | 'downloading' | 'done'
-const copyStatus = ref("idle"); // 'idle' | 'copied'
+const otpCode = ref("");
+const tempToken = ref("");
+const otpInputRefs = ref([]);
 
+const setOtpInputRef = (el, index) => {
+  if (el) otpInputRefs.value[index] = el;
+};
+
+const handleOtpInput = (event, index) => {
+  const target = event.target;
+  const sanitizedValue = (target.value || "")
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, "")
+  .slice(0, 1);
+  target.value = sanitizedValue;
+
+  otpCode.value = otpInputRefs.value
+    .map((input) => input?.value || "")
+    .join("");
+
+  if (sanitizedValue && index < 5) {
+    otpInputRefs.value[index + 1]?.focus();
+  }
+
+  if (otpCode.value.length === 6) {
+    goNext();
+  }
+};
+
+const handleOtpBackspace = (event, index) => {
+  const target = event.target;
+  if ((target.value || "").length === 0 && index > 0) {
+    otpInputRefs.value[index - 1]?.focus();
+  }
+};
 // ─── Navigation par étapes ────────────────────────────────────────────────────
-const currentStep = ref("username"); // 'username'|'email'|'password'|'generating'|'recovery'
+const currentStep = ref("username"); // 'username'|'email'|'otp'|'password'|'generating'|'recovery'
 const direction = ref("forward");
-const steps = ["username", "email", "password", "generating", "recovery"];
-const visibleSteps = ["username", "email", "password", "recovery"]; // dots de progression (4 visibles)
+const steps = ["username", "email","otp","password", "generating", "recovery"];
+const visibleSteps = ["username", "email", "otp", "password", "recovery"]; // dots de progression (4 visibles)
 
 const stepIndex = computed(() => steps.indexOf(currentStep.value));
 
@@ -286,6 +298,7 @@ const stepIndex = computed(() => steps.indexOf(currentStep.value));
 const usernameError = ref("");
 const emailError = ref("");
 const passwordError = ref("");
+const otpError = ref("");
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 const validateEmail = (email) => {
@@ -367,6 +380,8 @@ const canGoNext = computed(() => {
       return registerForm.value.username.trim().length >= 2;
     case "email":
       return validateEmail(registerForm.value.email);
+    case "otp":
+      return otpCode.value.trim().length === 6;
     case "password":
       return isPasswordValid.value;
     default:
@@ -381,8 +396,29 @@ const goNext = async () => {
   usernameError.value = "";
   emailError.value = "";
   passwordError.value = "";
+  otpError.value = "";
 
   direction.value = "forward";
+
+  if (currentStep.value === "email") {
+    try {
+      await requestOtp(registerForm.value.email);
+      currentStep.value = "otp";
+    } catch (error) {
+      emailError.value = error.message || "Erreur lors de l'envoi du code OTP";
+    }
+    return;
+  }
+
+  if (currentStep.value === "otp") {
+    try {
+      tempToken.value = await validateOtp(registerForm.value.email, otpCode.value.trim().toUpperCase());
+      currentStep.value = "password";
+    } catch (error) {
+      otpError.value = error.message || "Code OTP invalide";
+    }
+    return;
+  }
 
   if (currentStep.value === "password") {
     currentStep.value = "generating";
@@ -417,217 +453,38 @@ watch(currentStep, async (step) => {
 const handleRegister = async () => {
   loading.value = true;
   try {
-    const recoveryKey = await register(
+    const recoveryKey = await finalizeRegistration(
       registerForm.value.username,
-      registerForm.value.email,
       registerForm.value.password,
+      registerForm.value.email,
+      tempToken.value,
     );
 
     recoveryKeyValue.value = recoveryKey;
     direction.value = "forward";
     currentStep.value = "recovery";
   } catch (error) {
-    const msg = error.message || "Erreur lors de l'inscription";
-    generateError.value = msg;
-    // Détecter l'étape cible selon le type d'erreur
-    const targetStep = msg.toLowerCase().includes("too many") || msg.toLowerCase().includes("rate") ? "username"
-      : msg.toLowerCase().includes("email") ? "email"
-      : msg.toLowerCase().includes("utilisateur") ? "username"
-      : "password";
+    generateError.value = error.message || "Erreur lors de l'inscription";
+    // Revenir à l'étape password après un court délai
     setTimeout(() => {
       direction.value = "backward";
-      currentStep.value = targetStep;
+      currentStep.value = "password";
       generateError.value = "";
-      // Afficher l'erreur sur l'étape cible
-      if (targetStep === "email") emailError.value = msg;
-      else if (targetStep === "username") usernameError.value = msg;
-      else passwordError.value = msg;
     }, 2000);
   } finally {
     loading.value = false;
   }
 };
 
-// ─── Générer QR code SVG inline (sans appel réseau) ───────────────────────────
-const generateQRSvg = async (text) => {
-  const { renderSVG } = await import('uqr');
-  return renderSVG(text, { ecc: 'M' });
-};
-
-// ─── Télécharger la clé de récupération (PDF imprimable) ──────────────────────
-const copyRecoveryKey = async () => {
-  await navigator.clipboard.writeText(recoveryKeyValue.value);
-  copyStatus.value = "copied";
-  setTimeout(() => { copyStatus.value = "idle"; }, 2000);
-};
-
-const downloadRecoveryKey = async () => {
-  downloadStatus.value = "downloading";
-  const key = recoveryKeyValue.value;
-  const recoveryUrl = `${window.location.origin}/recovery#recoveryKey=${encodeURIComponent(key)}`;
-  const qrSvg = await generateQRSvg(recoveryUrl);
-  const date = new Date().toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
-
-  const html = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <title>Gauzian — Clé de secours</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Montserrat', sans-serif;
-      background: #fff;
-      color: #1a1a1a;
-      padding: 48px;
-      max-width: 680px;
-      margin: 0 auto;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .brand { font-size: 22px; font-weight: 800; letter-spacing: 2px; }
-    .date { font-size: 12px; color: #888; }
-    hr { border: none; border-top: 1px solid #ccc; margin: 10px 0 28px; }
-    h1 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
-    .intro { margin-bottom: 20px; color: #333; }
-    .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #888;
-      margin-bottom: 10px;
-    }
-    .points { margin-bottom: 24px; }
-    .point { display: flex; gap: 10px; margin-bottom: 10px; color: #333; }
-    .point-icon { flex-shrink: 0; color: #1a1a1a; font-size: 13px; padding-top: 1px; }
-    .key-box {
-      background: #f7f7f7;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      padding: 14px 16px;
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      word-break: break-all;
-      line-height: 1.9;
-      color: #1a1a1a;
-      margin-bottom: 24px;
-    }
-    .bottom-section {
-      display: flex;
-      align-items: flex-start;
-      gap: 28px;
-      margin-bottom: 28px;
-    }
-    .qr-wrap {
-      flex-shrink: 0;
-      width: 140px;
-    }
-    .qr-wrap svg {
-      width: 140px;
-      height: 140px;
-      display: block;
-    }
-    .instructions { flex: 1; }
-    .instructions .section-title { margin-bottom: 8px; }
-    .step { display: flex; gap: 8px; margin-bottom: 7px; font-size: 13px; color: #333; }
-    .step-num {
-      flex-shrink: 0;
-      width: 20px; height: 20px;
-      background: #1a1a1a; color: #fff;
-      border-radius: 50%;
-      font-size: 10px; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 1px;
-    }
-    .qr-note { margin-top: 10px; font-size: 12px; color: #555; line-height: 1.5; }
-    .footer {
-      border-top: 1px solid #e0e0e0;
-      padding-top: 12px;
-      font-size: 11px;
-      color: #aaa;
-      text-align: center;
-    }
-    @media print {
-      body { padding: 28px; }
-      @page { margin: 1.2cm; }
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="brand">GAUZIAN</div>
-    <div class="date">${date}</div>
-  </div>
-  <hr>
-
-  <h1>Votre clé de secours</h1>
-  <p class="intro">
-    Bonjour&nbsp;! Vous venez de créer votre compte Gauzian.<br>
-    Ce document contient votre clé de secours.
-  </p>
-
-  <div class="section-title">Qu'est-ce que c'est&nbsp;?</div>
-  <p class="intro">
-    Imaginez cette clé comme un double de vos clés de maison. Si un jour vous oubliez
-    votre mot de passe, cette clé vous permettra de retrouver l'accès à votre compte
-    et à tous vos fichiers.
-  </p>
-
-  <div class="section-title">À savoir</div>
-  <div class="points">
-    <div class="point">
-      <span class="point-icon">✦</span>
-      <span>Cette clé a été créée uniquement pour vous. Il n'en existe qu'un seul exemplaire — celui-ci.</span>
-    </div>
-    <div class="point">
-      <span class="point-icon">✦</span>
-      <span>Nous ne pouvons pas vous en envoyer une autre, donc gardez ce document précieusement.</span>
-    </div>
-    <div class="point">
-      <span class="point-icon">✦</span>
-      <span>Comme un double de clés, ne le laissez pas traîner n'importe où — un tiroir ou un classeur personnel, c'est parfait.</span>
-    </div>
-  </div>
-
-  <hr>
-  <div class="section-title">Votre clé personnelle</div>
-  <div class="key-box">${key}</div>
-
-  <hr>
-  <div class="bottom-section">
-    <div class="qr-wrap">${qrSvg}</div>
-    <div class="instructions">
-      <div class="section-title">Comment l'utiliser si besoin</div>
-      <div class="step"><div class="step-num">1</div><span>Aller sur <strong>gauzian.pupin.fr</strong></span></div>
-      <div class="step"><div class="step-num">2</div><span>Cliquer « Mot de passe oublié »</span></div>
-      <div class="step"><div class="step-num">3</div><span>Entrer votre email + cette clé</span></div>
-      <div class="step"><div class="step-num">4</div><span>Choisir un nouveau mot de passe</span></div>
-      <p class="qr-note">Sur téléphone&nbsp;: scannez le QR code, il vous amène directement au bon endroit.</p>
-    </div>
-  </div>
-
-  <hr>
-  <div class="footer">Gauzian — stockage privé &bull; gauzian.pupin.fr</div>
-
-</body>
-</html>`;
-
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "gauzian-cle-de-secours.html";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  downloadStatus.value = "done";
+// ─── Télécharger la clé de récupération ──────────────────────────────────────
+const downloadRecoveryKey = () => {
+  const element = document.createElement("a");
+  const file = new Blob([recoveryKeyValue.value], { type: "text/plain" });
+  element.href = URL.createObjectURL(file);
+  element.download = "gauzian_recovery_key.txt";
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
 };
 
 useHead({
@@ -806,6 +663,25 @@ useHead({
   line-height: 1.4;
 }
 
+.otp-inputs {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  width: 100%;
+}
+.otp-input{
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #cccccc;
+  border-radius: 4px;
+  font-family: "Montserrat", sans-serif;
+  font-size: 18px;
+  text-align: center;
+  color: var(--color-neutral-900);
+  background: white;
+  transition: border-color 0.15s ease;
+}
+
 /* ─── Input with icon ────────────────────────────────────────────────────────── */
 .input-with-icon {
   position: relative;
@@ -897,32 +773,14 @@ useHead({
 }
 
 /* ─── Recovery ───────────────────────────────────────────────────────────────── */
-.register-card--recovery {
-  max-width: 540px;
-}
-
-.step--recovery {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.recovery-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
 .recovery-icon {
-  flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0faf0;
-  border-radius: 14px;
-  color: #2a7a3a;
+  margin-bottom: 12px;
+  color: var(--color-neutral-900);
 }
 
 .recovery-icon svg {
@@ -930,120 +788,19 @@ useHead({
   height: 28px;
 }
 
-.step-title--recovery {
-  font-size: 18px;
-  line-height: 1.3;
-  margin-bottom: 0;
-}
-
 .recovery-warning {
-  font-size: 14px;
-  color: #333;
-  line-height: 1.6;
-  padding: 14px 16px;
-  background: #fffbee;
-  border-left: 4px solid #d4a017;
-  border-radius: 0 6px 6px 0;
-  margin: 0;
+  font-size: 13px;
+  color: #444;
+  line-height: 1.55;
+  padding: 12px 14px;
+  background: #fffbf0;
+  border: 1px solid #e8d48a;
+  border-radius: 4px;
+  margin-bottom: 18px;
 }
 
 .recovery-warning strong {
-  color: #1a1a1a;
-}
-
-.recovery-key-preview {
-  background: #f7f7f7;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 14px 16px;
-}
-
-.recovery-key-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.recovery-key-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #999;
-}
-
-.btn-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-  background: none;
-  border: 1px solid #d0d0d0;
-  border-radius: 5px;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-  font-family: inherit;
-}
-
-.btn-copy:hover {
-  color: #1a1a1a;
-  border-color: #aaa;
-}
-
-.btn-copy.copied {
-  color: #2a7a3a;
-  border-color: #a0d4a8;
-  background: #f0faf0;
-}
-
-.recovery-last-chance {
-  font-size: 13px;
-  color: #555;
-  line-height: 1.55;
-  padding: 11px 14px;
-  background: #f5f5f5;
-  border-radius: 6px;
-  border-left: 3px solid #aaa;
-}
-
-.recovery-last-chance strong {
-  color: #1a1a1a;
-}
-
-.recovery-key-value {
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  word-break: break-all;
-  line-height: 1.8;
-  color: #1a1a1a;
-  user-select: all;
-}
-
-.btn--recovery-dl {
-  width: 100%;
-  padding: 14px;
-  font-size: 15px;
-}
-
-.download-hint {
-  font-size: 13px;
-  color: #555;
-  line-height: 1.5;
-  text-align: center;
-  margin-top: 2px;
-}
-
-.btn-icon--spinning {
-  animation: btn-spin 1s linear infinite;
-}
-
-@keyframes btn-spin {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+  color: var(--color-neutral-900);
 }
 
 .recovery-actions {
@@ -1058,8 +815,7 @@ useHead({
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 42px;
-  padding: 0 15px;
+  padding: 10px 15px;
   border-radius: 4px;
   font-family: "Montserrat", sans-serif;
   font-size: 14px;
@@ -1068,7 +824,6 @@ useHead({
   border: none;
   transition: background-color 0.15s ease;
   white-space: nowrap;
-  line-height: 1;
 }
 
 .btn:disabled {
@@ -1269,8 +1024,7 @@ useHead({
 }
 
 .page.dark .recovery-icon {
-  background: #0d2b14;
-  color: #5dc67a;
+  color: #cccccc;
 }
 
 .page.dark .recovery-warning {
@@ -1281,45 +1035,6 @@ useHead({
 
 .page.dark .recovery-warning strong {
   color: #f0d060;
-}
-
-.page.dark .recovery-key-preview {
-  background: #1a1a1a;
-  border-color: #333;
-}
-
-.page.dark .recovery-key-value {
-  color: #e0e0e0;
-}
-
-.page.dark .download-hint {
-  color: #aaa;
-}
-
-.page.dark .btn-copy {
-  color: #888;
-  border-color: #444;
-}
-
-.page.dark .btn-copy:hover {
-  color: #ddd;
-  border-color: #666;
-}
-
-.page.dark .btn-copy.copied {
-  color: #5dc67a;
-  border-color: #2a5a34;
-  background: #0d2b14;
-}
-
-.page.dark .recovery-last-chance {
-  background: #1e1e1e;
-  border-color: #555;
-  color: #aaa;
-}
-
-.page.dark .recovery-last-chance strong {
-  color: #e0e0e0;
 }
 
 .page.dark .btn--primary {
