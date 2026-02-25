@@ -1,5 +1,20 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-25
+
+### [2026-02-25] - chore(k8s): Mise en place SOPS + age pour la gestion des secrets [skip ci]
+
+- Ajout `.sops.yaml` : configuration SOPS (règle de chiffrement pour `k8s/secrets.yaml` avec age)
+- Ajout `k8s/secrets.yaml.example` : template complet avec toutes les clés requises (DB, Redis, MinIO, JWT, SMTP)
+- Ajout `k8s/scripts/apply-secrets.sh` : script de déchiffrement + application kubectl (supporte `SOPS_AGE_KEY` pour CI/CD)
+- Mise à jour `.gitignore` : ajout de `k8s/secrets.yaml` (déchiffré) pour éviter tout commit accidentel
+
+**Workflow secrets désormais :**
+1. `cp k8s/secrets.yaml.example k8s/secrets.yaml` → remplir les valeurs
+2. `sops --encrypt k8s/secrets.yaml > k8s/secrets.enc.yaml` → chiffrer
+3. `git add k8s/secrets.enc.yaml` → committer le fichier chiffré (safe)
+4. `./k8s/scripts/apply-secrets.sh` → déchiffrer + appliquer sur le cluster
+
 ## 2026-02-20
 
 ### [2026-02-20] - chore: Restructuration mono-repo en branches orphelines
