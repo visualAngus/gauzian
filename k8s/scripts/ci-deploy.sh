@@ -4,10 +4,18 @@ set -e
 NAMESPACE="gauzian-v2"
 REGISTRY="angusvisual"
 TAG="dev"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENC_FILE="$SCRIPT_DIR/../secrets.enc.yaml"
 
 echo "📥 Téléchargement des nouvelles images Docker Hub... V2"
 docker pull "$REGISTRY/gauzian-backend:$TAG"
 docker pull "$REGISTRY/gauzian-frontend:$TAG"
+
+# Déchiffrement et application des secrets si secrets.enc.yaml existe
+if [ -f "$ENC_FILE" ]; then
+  echo "🔓 Application des secrets chiffrés..."
+  "$SCRIPT_DIR/apply-secrets.sh"
+fi
 
 echo "🚀 Déploiement CI/CD - Redémarrage des pods..."
 
