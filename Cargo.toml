@@ -30,6 +30,7 @@ futures = "0.3.31"
 argon2 = "0.5.3"
 prometheus = "0.14.0"
 lazy_static = "1.5.0"
+lettre = "0.11.19"
 
 [dev-dependencies]
 tower = { version = "0.5.2", features = ["util"] }
