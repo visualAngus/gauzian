@@ -15,7 +15,7 @@ use super::handlers;
 pub fn auth_routes() -> Router<AppState> {
     Router::new()
         .route("/login", post(handlers::login_handler))
-        .route("/register", post(handlers::register_handler))
+        // .route("/register", post(handlers::register_handler))
         .route("/logout", post(handlers::logout_handler))
         .route("/autologin", get(handlers::auto_login_handler))
         .route("/info", get(handlers::info_handler))
@@ -23,4 +23,8 @@ pub fn auth_routes() -> Router<AppState> {
             "/contacts/get_public_key/{email}",
             get(handlers::get_public_key_handler),
         )
+        .route("/register/send-otp", post(handlers::send_otp_handler))
+        .route("/register/verify-otp", post(handlers::verify_otp_handler))
+        .route("/register/finalize", post(handlers::finalize_registration_handler))
+        // .route("/recovery", post(handlers::recovery_handler))
 }

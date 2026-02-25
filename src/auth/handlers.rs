@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use rand::distr::{Alphanumeric, SampleString};
 
 use crate::{response::ApiResponse, state::AppState};
 
@@ -86,6 +87,7 @@ pub struct RegisterRequest {
     pub private_key_salt: String,
     pub iv: String,
     pub encrypted_record_key: String,
+    pub temp_token: String, // Token temporaire obtenu après vérification OTP
 }
 
 // ========== Handlers ==========
@@ -155,121 +157,121 @@ pub async fn login_handler(
 }
 
 /// POST /register - Crée un nouvel utilisateur
-pub async fn register_handler(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<RegisterRequest>,
-) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
-    // 0. Rate limit par IP avant tout traitement coûteux (Argon2)
-    let ip = headers
-        .get("X-Real-IP")
-        .or_else(|| headers.get("X-Forwarded-For"))
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("unknown");
+// pub async fn register_handler(
+//     State(state): State<AppState>,
+//     headers: HeaderMap,
+//     Json(payload): Json<RegisterRequest>,
+// ) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
+//     // 0. Rate limit par IP avant tout traitement coûteux (Argon2)
+//     let ip = headers
+//         .get("X-Real-IP")
+//         .or_else(|| headers.get("X-Forwarded-For"))
+//         .and_then(|h| h.to_str().ok())
+//         .unwrap_or("unknown");
 
-    let mut redis = state.redis_manager.clone();
-    if services::is_register_rate_limited(&mut redis, ip).await.map_err(|e| {
-        tracing::error!("Redis error during register rate limit check: {:?}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
-    })? {
-        crate::metrics::track_auth_attempt("register", false);
-        return Err((StatusCode::TOO_MANY_REQUESTS, "Too many registration attempts. Please try again later.".to_string()));
-    }
+//     let mut redis = state.redis_manager.clone();
+//     if services::is_register_rate_limited(&mut redis, ip).await.map_err(|e| {
+//         tracing::error!("Redis error during register rate limit check: {:?}", e);
+//         (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+//     })? {
+//         crate::metrics::track_auth_attempt("register", false);
+//         return Err((StatusCode::TOO_MANY_REQUESTS, "Too many registration attempts. Please try again later.".to_string()));
+//     }
 
-    services::increment_register_attempt(&mut redis, ip).await.map_err(|e| {
-        tracing::error!("Redis error during register attempt increment: {:?}", e);
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
-    })?;
+//     services::increment_register_attempt(&mut redis, ip).await.map_err(|e| {
+//         tracing::error!("Redis error during register attempt increment: {:?}", e);
+//         (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+//     })?;
 
-    // 0b. Valider le format de l'email
-    if !validate_email_format(&payload.email) {
-        return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
-    }
+//     // 0b. Valider le format de l'email
+//     if !validate_email_format(&payload.email) {
+//         return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
+//     }
 
-    // 0c. Valider le mot de passe
-    if let Err(msg) = validate_password(&payload.password) {
-        return Err((StatusCode::BAD_REQUEST, msg.to_string()));
-    }
+//     // 0c. Valider le mot de passe
+//     if let Err(msg) = validate_password(&payload.password) {
+//         return Err((StatusCode::BAD_REQUEST, msg.to_string()));
+//     }
 
-    // 1. Hash le mot de passe avec Argon2
-    let password_hash = services::hash_password(&payload.password)
-        .map_err(|e| {
-            tracing::error!("Failed to hash password during register: {}", e);
-            crate::metrics::track_auth_attempt("register", false);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal authentication error".to_string(),
-            )
-        })?;
+//     // 1. Hash le mot de passe avec Argon2
+//     let password_hash = services::hash_password(&payload.password)
+//         .map_err(|e| {
+//             tracing::error!("Failed to hash password during register: {}", e);
+//             crate::metrics::track_auth_attempt("register", false);
+//             (
+//                 StatusCode::INTERNAL_SERVER_ERROR,
+//                 "Internal authentication error".to_string(),
+//             )
+//         })?;
 
-    // 2. Générer un salt (pour compatibilité legacy)
-    let auth_salt = Some(services::generate_salt());
+//     // 2. Générer un salt (pour compatibilité legacy)
+//     let auth_salt = Some(services::generate_salt());
 
-    // 3. Stocker les champs crypto pour la réponse (avant move)
-    let encrypted_private_key = payload.encrypted_private_key.clone();
-    let private_key_salt = payload.private_key_salt.clone();
-    let iv = payload.iv.clone();
-    let public_key = payload.public_key.clone();
+//     // 3. Stocker les champs crypto pour la réponse (avant move)
+//     let encrypted_private_key = payload.encrypted_private_key.clone();
+//     let private_key_salt = payload.private_key_salt.clone();
+//     let iv = payload.iv.clone();
+//     let public_key = payload.public_key.clone();
 
-    // 4. Créer l'utilisateur en DB
-    let new_user = repo::NewUser {
-        username: payload.username,
-        password_hash,
-        encrypted_private_key: payload.encrypted_private_key,
-        public_key: payload.public_key,
-        email: payload.email,
-        encrypted_settings: None,
-        private_key_salt: payload.private_key_salt,
-        iv: payload.iv,
-        auth_salt,
-        encrypted_record_key: payload.encrypted_record_key,
-    };
+//     // 4. Créer l'utilisateur en DB
+//     let new_user = repo::NewUser {
+//         username: payload.username,
+//         password_hash,
+//         encrypted_private_key: payload.encrypted_private_key,
+//         public_key: payload.public_key,
+//         email: payload.email,
+//         encrypted_settings: None,
+//         private_key_salt: payload.private_key_salt,
+//         iv: payload.iv,
+//         auth_salt,
+//         encrypted_record_key: payload.encrypted_record_key,
+//     };
 
-    let user_id = repo::create_user(&state.db_pool, new_user)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to create user: {}", e);
-            crate::metrics::track_auth_attempt("register", false);
-            // Détecter violation de contrainte unique PostgreSQL (code 23505)
-            if let sqlx::Error::Database(ref db_err) = e {
-                if db_err.code().as_deref() == Some("23505") {
-                    let msg = db_err.message();
-                    if msg.contains("email") {
-                        return (StatusCode::CONFLICT, "Cette adresse email est déjà utilisée".to_string());
-                    } else if msg.contains("username") {
-                        return (StatusCode::CONFLICT, "Ce nom d'utilisateur est déjà pris".to_string());
-                    }
-                    return (StatusCode::CONFLICT, "Ce compte existe déjà".to_string());
-                }
-            }
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Erreur serveur, veuillez réessayer".to_string(),
-            )
-        })?;
+//     let user_id = repo::create_user(&state.db_pool, new_user)
+//         .await
+//         .map_err(|e| {
+//             tracing::error!("Failed to create user: {}", e);
+//             crate::metrics::track_auth_attempt("register", false);
+//             // Détecter violation de contrainte unique PostgreSQL (code 23505)
+//             if let sqlx::Error::Database(ref db_err) = e {
+//                 if db_err.code().as_deref() == Some("23505") {
+//                     let msg = db_err.message();
+//                     if msg.contains("email") {
+//                         return (StatusCode::CONFLICT, "Cette adresse email est déjà utilisée".to_string());
+//                     } else if msg.contains("username") {
+//                         return (StatusCode::CONFLICT, "Ce nom d'utilisateur est déjà pris".to_string());
+//                     }
+//                     return (StatusCode::CONFLICT, "Ce compte existe déjà".to_string());
+//                 }
+//             }
+//             (
+//                 StatusCode::INTERNAL_SERVER_ERROR,
+//                 "Erreur serveur, veuillez réessayer".to_string(),
+//             )
+//         })?;
 
-    // 5. Créer JWT pour auto-login après inscription
-    let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
-        .map_err(|e| {
-            tracing::error!("Failed to create JWT during register: {}", e);
-            crate::metrics::track_auth_attempt("register", false);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal authentication error".to_string(),
-            )
-        })?;
+//     // 5. Créer JWT pour auto-login après inscription
+//     let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
+//         .map_err(|e| {
+//             tracing::error!("Failed to create JWT during register: {}", e);
+//             crate::metrics::track_auth_attempt("register", false);
+//             (
+//                 StatusCode::INTERNAL_SERVER_ERROR,
+//                 "Internal authentication error".to_string(),
+//             )
+//         })?;
 
-    crate::metrics::track_auth_attempt("register", true);
+//     crate::metrics::track_auth_attempt("register", true);
 
-    Ok(ApiResponse::ok(RegisterResponse {
-        token: token.clone(),
-        user_id: user_id.to_string(),
-        encrypted_private_key,
-        private_key_salt,
-        iv,
-        public_key,
-    }))
-}
+//     Ok(ApiResponse::ok(RegisterResponse {
+//         token: token.clone(),
+//         user_id: user_id.to_string(),
+//         encrypted_private_key,
+//         private_key_salt,
+//         iv,
+//         public_key,
+//     }))
+// }
 
 /// POST /logout - Révoque le token JWT
 pub async fn logout_handler(
@@ -342,4 +344,332 @@ pub async fn get_public_key_handler(
         "user_id": user_id,
         "public_key": public_key
     })))
+}
+
+pub async fn send_otp_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<services::SendOtpRequest>,
+) -> Result<ApiResponse<String>, (StatusCode, String)> {
+    if !validate_email_format(&payload.email) {
+        return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
+    }
+    let mut redis = state.redis_manager.clone();
+
+    // verifier le cooldown
+    if services::is_otp_cooldown(&mut redis, payload.email.clone()).await.map_err(|e| {
+        tracing::error!("Failed to check OTP cooldown in Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })? {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "OTP recently sent. Please wait before requesting another one.".to_string()));
+    }
+
+    // veririfier le counter
+    let attempts = services::get_otp_attempts(&mut redis, payload.email.clone()).await.map_err(|e| {
+        tracing::error!("Failed to get OTP attempts from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    if attempts >= 5 {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Too many OTP requests. Please try again later.".to_string()));
+    }
+
+    // verifier que l'email existe en DB
+    let exists = repo::check_email_exists(&state.db_pool, &payload.email)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to check email existence: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+
+    if exists {
+        return Err((StatusCode::BAD_REQUEST, "Email already registered".to_string()));
+    }
+    let otp = Alphanumeric.sample_string(&mut rand::rng(), 6).to_uppercase();
+    services::send_otp(&payload.email, &otp, &state.mailer).await.map_err(|e| {
+        tracing::error!("Failed to send OTP: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to send OTP".to_string(),
+        )
+    })?;
+
+    // mettre dans redis avec TTL de 5 minutes
+    services::store_otp(&mut redis, payload.email.clone(), otp.clone()).await.map_err(|e| {
+        tracing::error!("Failed to store OTP in Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    // cooldown
+    services::cooldown_otp(&mut redis, payload.email.clone()).await.map_err(|e| {
+        tracing::error!("Failed to set OTP cooldown in Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    Ok(ApiResponse::ok("OTP sent successfully".to_string()))
+}
+
+pub async fn verify_otp_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<services::VerifyOtpRequest>,
+) -> Result<ApiResponse<String>, (StatusCode, String)> {
+    let mut redis = state.redis_manager.clone();
+
+    // verifier le counter 
+    let attempts = services::get_otp_attempts(&mut redis, payload.email.clone()).await.map_err(|e| {
+        tracing::error!("Failed to get OTP attempts from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    if attempts >= 5 {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Too many OTP verification attempts. Please try again later.".to_string()));
+    }
+
+    let is_valid = services::verify_otp(&mut redis, payload.email.clone(), payload.otp.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to verify OTP: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+
+    if !is_valid {
+
+        // augmenter le compteur d'échecs
+        services::counter_otp_attempts(&mut redis, payload.email.clone()).await.map_err(|e| {
+            tracing::error!("Failed to increment OTP attempts in Redis: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+
+
+        return Err((StatusCode::UNAUTHORIZED, "Invalid or expired OTP".to_string()));
+    }
+
+    // générer un token temporaire pour permettre à l'utilisateur d'accéder à l'étape finale de l'inscription
+    let temp_token = services::create_temp_token(&payload.email, state.jwt_secret.as_bytes())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create temp token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
+        })?;
+
+    // suprimer l'OTP de Redis
+    services::delete_otp(&mut redis, payload.email.as_str()).await.map_err(|e| {
+        tracing::error!("Failed to delete OTP from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+    // ajouter le token temporaire dans Redis avec un TTL de 15 minutes
+    services::store_temp_token(&mut redis, payload.email.clone(), temp_token.clone()).await.map_err(|e| {
+        tracing::error!("Failed to store temp token in Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    Ok(ApiResponse::ok(temp_token))
+}
+
+
+pub async fn finalize_registration_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<RegisterRequest>,
+) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
+    // 0. Rate limit par IP avant tout traitement coûteux (Argon2)
+    let ip = headers
+        .get("X-Real-IP")
+        .or_else(|| headers.get("X-Forwarded-For"))
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown");
+
+    let mut redis = state.redis_manager.clone();
+    if services::is_register_rate_limited(&mut redis, ip).await.map_err(|e| {
+        tracing::error!("Redis error during register rate limit check: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+    })? {
+        crate::metrics::track_auth_attempt("register", false);
+        return Err((StatusCode::TOO_MANY_REQUESTS, "Too many registration attempts. Please try again later.".to_string()));
+    }
+
+    services::increment_register_attempt(&mut redis, ip).await.map_err(|e| {
+        tracing::error!("Redis error during register attempt increment: {:?}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+    })?;
+
+    // 0b. Valider le format de l'email
+    if !validate_email_format(&payload.email) {
+        return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
+    }
+
+
+    // verification que le token temporaire est valide
+    if payload.temp_token.is_empty() {
+        return Err((StatusCode::UNAUTHORIZED, "OTP verification required".to_string()));
+    }
+    // verifier que le token temporaire correspond à celui stocké dans Redis pour cet email
+    services::verify_temp_token(
+        &payload.temp_token,
+        &payload.email,
+        state.jwt_secret.as_bytes(),
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to verify temp token: {}", e);
+        (StatusCode::UNAUTHORIZED, "Invalid or expired temp token".to_string())
+    })?;
+    // valider le token temporaire
+    let stored_token = services::get_temp_token(&mut redis, payload.email.clone()).await.map_err(|e| {
+        tracing::error!("Failed to get temp token from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    if stored_token.is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "OTP verification required".to_string()));
+    }
+    if stored_token.unwrap() != payload.temp_token {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid temp token".to_string()));
+    }
+    // 0c. Valider le mot de passe
+    if let Err(msg) = validate_password(&payload.password) {
+        return Err((StatusCode::BAD_REQUEST, msg.to_string()));
+    }
+
+    // 1. Hash le mot de passe avec Argon2
+    let password_hash = services::hash_password(&payload.password)
+        .map_err(|e| {
+            tracing::error!("Failed to hash password during register: {}", e);
+            crate::metrics::track_auth_attempt("register", false);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
+        })?;
+
+    // 2. Générer un salt (pour compatibilité legacy)
+    let auth_salt = Some(services::generate_salt());
+
+    // 3. Stocker les champs crypto pour la réponse (avant move)
+    let encrypted_private_key = payload.encrypted_private_key.clone();
+    let private_key_salt = payload.private_key_salt.clone();
+    let iv = payload.iv.clone();
+    let public_key = payload.public_key.clone();
+    let email_for_otp_cleanup = payload.email.clone();
+
+    // 4. Créer l'utilisateur en DB
+    let new_user = repo::NewUser {
+        username: payload.username,
+        password_hash,
+        encrypted_private_key: payload.encrypted_private_key,
+        public_key: payload.public_key,
+        email: payload.email,
+        encrypted_settings: None,
+        private_key_salt: payload.private_key_salt,
+        iv: payload.iv,
+        auth_salt,
+        encrypted_record_key: payload.encrypted_record_key,
+    };
+
+    let user_id = repo::create_user(&state.db_pool, new_user)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create user: {}", e);
+            crate::metrics::track_auth_attempt("register", false);
+            // Détecter violation de contrainte unique PostgreSQL (code 23505)
+            if let sqlx::Error::Database(ref db_err) = e {
+                if db_err.code().as_deref() == Some("23505") {
+                    let msg = db_err.message();
+                    if msg.contains("email") {
+                        return (StatusCode::CONFLICT, "Cette adresse email est déjà utilisée".to_string());
+                    } else if msg.contains("username") {
+                        return (StatusCode::CONFLICT, "Ce nom d'utilisateur est déjà pris".to_string());
+                    }
+                    return (StatusCode::CONFLICT, "Ce compte existe déjà".to_string());
+                }
+            }
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Erreur serveur, veuillez réessayer".to_string(),
+            )
+        })?;
+
+    // 5. Créer JWT pour auto-login après inscription
+    let token = services::create_jwt(user_id, "user", state.jwt_secret.as_bytes())
+        .map_err(|e| {
+            tracing::error!("Failed to create JWT during register: {}", e);
+            crate::metrics::track_auth_attempt("register", false);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal authentication error".to_string(),
+            )
+        })?;
+
+    crate::metrics::track_auth_attempt("register", true);
+
+    // suprimer l'OTP de Redis
+    services::delete_otp(&mut redis, email_for_otp_cleanup.as_str()).await.map_err(|e| {
+        tracing::error!("Failed to delete OTP from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    // suprimer le compteur d'OTP de Redis
+    services::delete_otp_attempts(&mut redis, email_for_otp_cleanup.as_str()).await.map_err(|e| {
+        tracing::error!("Failed to reset OTP attempts in Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    // suprimer le token temporaire de Redis
+    services::store_temp_token(&mut redis, email_for_otp_cleanup, "".to_string()).await.map_err(|e| {
+        tracing::error!("Failed to delete temp token from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),    
+        )
+    })?;
+
+    Ok(ApiResponse::ok(RegisterResponse {
+        token: token.clone(),
+        user_id: user_id.to_string(),
+        encrypted_private_key,
+        private_key_salt,
+        iv,
+        public_key,
+    }))
 }

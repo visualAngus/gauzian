@@ -120,3 +120,18 @@ pub async fn get_public_key_by_email(
     .fetch_one(pool)
     .await
 }
+
+pub async fn check_email_exists(pool: &PgPool, email: &str) -> Result<bool, sqlx::Error> {
+    let count: (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(*)
+        FROM users
+        WHERE email = $1
+        "#,
+    )
+    .bind(email)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count.0 > 0)
+}
