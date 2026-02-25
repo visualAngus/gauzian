@@ -217,7 +217,7 @@
                 {{ downloadStatus === 'downloading' ? 'Préparation…' : downloadStatus === 'done' ? 'Téléchargé !' : 'Télécharger la clé' }}
               </button>
               <p v-if="downloadStatus === 'done'" class="download-hint">
-                Le fichier est dans vos Téléchargements — jetez-y un œil avant de continuer.
+                Dans la fenêtre qui s'est ouverte, choisissez "Enregistrer en PDF".
               </p>
             </div>
           </div>
@@ -626,7 +626,7 @@ const downloadRecoveryKey = async () => {
 <body>
   <div class="header">
     <div class="brand">GAUZIAN</div>
-    <div class="date">\${date}</div>
+    <div class="date">${date}</div>
   </div>
   <hr>
 
@@ -661,11 +661,11 @@ const downloadRecoveryKey = async () => {
 
   <hr>
   <div class="section-title">Votre clé personnelle</div>
-  <div class="key-box">\${key}</div>
+  <div class="key-box">${key}</div>
 
   <hr>
   <div class="bottom-section">
-    <div class="qr-wrap">\${qrSvg}</div>
+    <div class="qr-wrap">${qrSvg}</div>
     <div class="instructions">
       <div class="section-title">Comment l'utiliser si besoin</div>
       <div class="step"><div class="step-num">1</div><span>Aller sur <strong>gauzian.pupin.fr</strong></span></div>
@@ -678,16 +678,15 @@ const downloadRecoveryKey = async () => {
 
   <hr>
   <div class="footer">Gauzian — stockage privé &bull; gauzian.pupin.fr</div>
+
+  <script>window.onload = () => window.print();<\/script>
 </body>
 </html>`;
 
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "gauzian-cle-de-secours.html";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  const win = window.open(url, "_blank");
+  if (win) setTimeout(() => URL.revokeObjectURL(url), 15000);
   downloadStatus.value = "done";
 };
 
