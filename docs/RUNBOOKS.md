@@ -759,6 +759,113 @@ aws s3 sync /backup/minio/gauzian-chunks/ s3://gauzian-backups/minio/
 
 ---
 
+## Rotation des Mots de Passe (Secrets K8s)
+
+### Contexte
+
+Les secrets sont stockés dans `~/gauzian/k8s/secrets.yaml` sur le VPS (**ne jamais commiter ce fichier**).
+Le deployment `backend-deployment.yaml` expose ces secrets comme variables d'environnement.
+
+### Variables gérées par le secret `gauzian-secrets`
+
+| Clé | Description |
+|-----|-------------|
+| `DB_USER` | Utilisateur PostgreSQL (fixe : `admin`) |
+| `DB_NAME` | Nom de la base (fixe : `gauzian`) |
+| `DB_PASSWORD` | Mot de passe PostgreSQL |
+| `DATABASE_URL` | URL complète PostgreSQL |
+| `REDIS_PASSWORD` | Mot de passe Redis |
+| `REDIS_URL` | URL complète Redis |
+| `MINIO_ROOT_USER` | Utilisateur MinIO (fixe : `minioadmin`) |
+| `MINIO_ROOT_PASSWORD` | Mot de passe MinIO |
+| `S3_BUCKET` | Nom du bucket (fixe : `gauzian`) |
+| `MINIO_BROWSER_REDIRECT_URL` | URL console MinIO (fixe) |
+| `JWT_SECRET` | Secret de signature JWT |
+| `METRICS_SECRET` | Secret Prometheus metrics |
+| `SMTP_PASSWORD` | Mot de passe SMTP (service externe, ne pas régénérer sans mise à jour du provider) |
+
+### Procédure de rotation complète (reset données)
+
+> **⚠️ DESTRUCTIF** : Cette procédure supprime toutes les données DB, Redis et MinIO.
+
+```bash
+# Sur le VPS — Étape 1 : Générer les nouveaux mots de passe
+DB_PASS=$(openssl rand -base64 24 | tr -d '/+=')
+REDIS_PASS=$(openssl rand -base64 24 | tr -d '/+=')
+MINIO_PASS=$(openssl rand -base64 24 | tr -d '/+=')
+JWT_SECRET=$(openssl rand -base64 48 | tr -d '/+=')
+METRICS_SECRET=$(openssl rand -base64 32 | tr -d '/+=')
+
+# Étape 2 : Encoder en base64 (IMPORTANT : guillemets simples pour les caractères spéciaux)
+echo -n "$DB_PASS" | base64          # → DB_PASSWORD
+echo -n "postgres://admin:${DB_PASS}@db:5432/gauzian" | base64  # → DATABASE_URL
+echo -n "$REDIS_PASS" | base64       # → REDIS_PASSWORD
+echo -n "redis://:${REDIS_PASS}@redis:6379" | base64             # → REDIS_URL
+echo -n "$MINIO_PASS" | base64       # → MINIO_ROOT_PASSWORD
+echo -n "$JWT_SECRET" | base64       # → JWT_SECRET
+echo -n "$METRICS_SECRET" | base64   # → METRICS_SECRET
+
+# Étape 3 : Éditer le fichier secrets.yaml avec nano
+nano ~/gauzian/k8s/secrets.yaml
+# Remplacer les valeurs base64, garder les valeurs fixes et SMTP_PASSWORD
+# ⚠️ Les valeurs base64 doivent être sur UNE SEULE LIGNE (pas de retour à la ligne)
+# ⚠️ Le namespace doit être gauzian-v2
+
+# Étape 4 : Supprimer les déploiements et PVCs (perte des données)
+sudo kubectl delete deployment postgres redis minio -n gauzian-v2
+sudo kubectl delete pvc postgres-pvc redis-pvc minio-pvc -n gauzian-v2
+
+# Étape 5 : Appliquer le nouveau secret
+sudo kubectl replace --force -f ~/gauzian/k8s/secrets.yaml
+
+# Étape 6 : Recréer les PVCs et services de données
+sudo kubectl apply \
+  -f ~/gauzian/k8s/postgres-pvc.yaml \
+  -f ~/gauzian/k8s/redis-pvc.yaml \
+  -f ~/gauzian/k8s/minio-pvc.yaml \
+  -f ~/gauzian/k8s/postgres-deployment.yaml \
+  -f ~/gauzian/k8s/redis-deployment.yaml \
+  -f ~/gauzian/k8s/minio-deployment.yaml
+
+# Étape 7 : Redémarrer le backend
+sudo kubectl rollout restart deployment/backend -n gauzian-v2
+
+# Vérification
+sudo kubectl get pods -n gauzian-v2
+```
+
+### Procédure de rotation sans perte de données
+
+> Rotation du JWT_SECRET, METRICS_SECRET uniquement (pas les credentials DB/Redis/MinIO).
+
+```bash
+# 1. Générer les nouveaux secrets
+JWT_SECRET=$(openssl rand -base64 48 | tr -d '/+=')
+METRICS_SECRET=$(openssl rand -base64 32 | tr -d '/+=')
+
+# 2. Encoder
+echo -n "$JWT_SECRET" | base64
+echo -n "$METRICS_SECRET" | base64
+
+# 3. Éditer et appliquer
+nano ~/gauzian/k8s/secrets.yaml
+sudo kubectl replace --force -f ~/gauzian/k8s/secrets.yaml
+sudo kubectl rollout restart deployment/backend -n gauzian-v2
+```
+
+> ⚠️ Rotation du JWT_SECRET déconnecte tous les utilisateurs (leurs tokens sont invalidés).
+
+### Points d'attention
+
+- **Format base64** : toujours utiliser `echo -n` (sans le `-n` un `\n` est encodé en plus)
+- **Caractères spéciaux** : utiliser des guillemets simples `'` dans `echo -n` si le mot de passe contient `!`, `$`, etc.
+- **Multiligne** : les valeurs base64 doivent être sur une seule ligne dans le YAML
+- **Namespace** : vérifier que `namespace: gauzian-v2` est bien dans le fichier
+- **SMTP_PASSWORD** : c'est un service externe — ne pas régénérer sans mettre à jour le provider email
+- **deployment.yaml** : si une nouvelle variable est ajoutée au secret, l'ajouter aussi dans `k8s/backend-deployment.yaml` (section `env`) et commiter sur `main`
+
+---
+
 ## Security Incidents
 
 ### Suspected Data Breach
