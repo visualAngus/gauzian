@@ -150,6 +150,20 @@
               </p>
               <p v-if="passwordError" class="field-error">{{ passwordError }}</p>
             </div>
+            <div class="field-group" style="margin-top: 12px;">
+              <div class="input-with-icon">
+                <input
+                  v-model="confirmPassword"
+                  :type="showRegisterPassword ? 'text' : 'password'"
+                  placeholder="Confirmer le mot de passe"
+                  autocomplete="new-password"
+                  @keydown.enter="goNext"
+                  class="field-input"
+                  :class="{ 'field-input--error': confirmPasswordError }"
+                />
+              </div>
+              <p v-if="confirmPasswordError" class="field-error">{{ confirmPasswordError }}</p>
+            </div>
           </div>
 
           <!-- Étape 4 : generating -->
@@ -333,6 +347,8 @@ const usernameError = ref("");
 const emailError = ref("");
 const passwordError = ref("");
 const otpError = ref("");
+const confirmPassword = ref("");
+const confirmPasswordError = ref("");
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 const validateEmail = (email) => {
@@ -431,6 +447,7 @@ const goNext = async () => {
   emailError.value = "";
   passwordError.value = "";
   otpError.value = "";
+  confirmPasswordError.value = "";
 
   direction.value = "forward";
 
@@ -455,6 +472,11 @@ const goNext = async () => {
   }
 
   if (currentStep.value === "password") {
+    if (registerForm.value.password !== confirmPassword.value) {
+      confirmPasswordError.value = "Les mots de passe ne correspondent pas.";
+      return;
+    }
+    confirmPasswordError.value = "";
     currentStep.value = "generating";
     return;
   }
