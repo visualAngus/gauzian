@@ -1,0 +1,23 @@
+# Configuration SOPS - Chiffrement des secrets Kubernetes
+#
+# Prérequis :
+#   apt install age sops  (ou voir https://github.com/getsops/sops/releases)
+#
+# Setup initial (une seule fois) :
+#   age-keygen -o ~/.config/sops/age/keys.txt
+#   → Copier la clé publique (age1...) dans ce fichier ci-dessous
+#
+# Chiffrer les secrets :
+#   sops --encrypt k8s/secrets.yaml > k8s/secrets.enc.yaml
+#
+# Déchiffrer (pour éditer) :
+#   sops k8s/secrets.enc.yaml
+#   → SOPS ouvre l'éditeur directement, re-chiffre à la sauvegarde
+#
+# Appliquer sur le cluster :
+#   ./k8s/scripts/apply-secrets.sh
+
+creation_rules:
+  - path_regex: k8s/secrets\.yaml$
+    age: >-
+      age1REMPLACER_PAR_TA_CLE_PUBLIQUE_AGE
