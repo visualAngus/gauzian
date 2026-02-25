@@ -21,7 +21,7 @@ use chrono::{Duration, Utc};
 use crate::state::AppState;
 
 
-use lettre::message::header::ContentType;
+use lettre::message::{header::ContentType, MultiPart, SinglePart};
 use lettre::{Message, SmtpTransport, Transport};
 use lettre::message::Mailbox;
 
@@ -307,19 +307,61 @@ pub fn verify_password(password: &str, password_hash: &str, _salt: &str) -> bool
 pub async fn send_otp(email: &str, otp: &str, mailer: &SmtpTransport) -> Result<(), String> {
     tracing::info!("Sending OTP to email {}", email);
 
+        let plain_body = format!(
+                "Bonjour,\n\nVoici votre code OTP pour finaliser votre inscription sur Gauzian:\n\n{}\n\nCe code est valide pendant 10 minutes.\n\nMerci,\nL'équipe Gauzian",
+                otp
+        );
+
+        let html_body = format!(
+                "<!doctype html>
+                <html lang=\"fr\">
+                    <body style=\"margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#1f2937;\">
+                        <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"padding:24px 12px;\">
+                            <tr>
+                                <td align=\"center\">
+                                    <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:560px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;padding:24px;\">
+                                        <tr>
+                                            <td>
+                                                <h1 style=\"margin:0 0 16px 0;font-size:20px;line-height:1.3;color:#111827;\">Votre code OTP Gauzian</h1>
+                                                <p style=\"margin:0 0 12px 0;font-size:15px;line-height:1.6;\">Bonjour,</p>
+                                                <p style=\"margin:0 0 20px 0;font-size:15px;line-height:1.6;\">Voici votre code OTP pour finaliser votre inscription :</p>
+                                                <p style=\"margin:0 0 20px 0;text-align:center;\">
+                                                    <span style=\"display:inline-block;padding:12px 20px;border-radius:10px;background:#111827;color:#ffffff;font-size:28px;letter-spacing:4px;font-weight:700;\">{}</span>
+                                                </p>
+                                                <p style=\"margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#4b5563;\">Ce code est valide pendant <strong>10 minutes</strong>.</p>
+                                                <p style=\"margin:0;font-size:14px;line-height:1.6;color:#4b5563;\">Merci,<br>L'équipe Gauzian</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </body>
+                </html>",
+                otp
+        );
+
     let message = Message::builder()
-        .from("Expediteur <gauzian@pupin.fr>"
+        .from("GAUZIAN <gauzian@pupin.fr>"
             .parse::<Mailbox>()
             .map_err(|e| e.to_string())?)
         .to(format!("Destinataire <{}>", email)
             .parse::<Mailbox>()
             .map_err(|e| e.to_string())?)
         .subject("Votre code OTP pour Gauzian")
-        .header(ContentType::TEXT_PLAIN)
-        .body(format!(
-            "Bonjour,\n\nVoici votre code OTP pour finaliser votre inscription sur Gauzian:\n\n{}\n\nCe code est valide pendant 10 minutes.\n\nMerci,\nL'équipe Gauzian",
-            otp
-        ))
+                .multipart(
+                        MultiPart::alternative()
+                                .singlepart(
+                                        SinglePart::builder()
+                                                .header(ContentType::TEXT_PLAIN)
+                                                .body(plain_body),
+                                )
+                                .singlepart(
+                                        SinglePart::builder()
+                                                .header(ContentType::TEXT_HTML)
+                                                .body(html_body),
+                                ),
+                )
         .map_err(|e| e.to_string())?;
 
     match mailer.send(&message) {
