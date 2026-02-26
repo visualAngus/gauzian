@@ -70,6 +70,7 @@ h1 {
 	font-optical-sizing: auto;
 	font-weight: 800;
 	font-style: normal;
+	font-size: 28px;
 
 	margin-left: 40px;
 }

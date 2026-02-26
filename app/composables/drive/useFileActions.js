@@ -700,32 +700,57 @@ export function useFileActions({
     };
 
     const deleteItem = async (item) => {
-        // Récupérer l'id depuis l'attribut data-item-id de l'élément DOM
-        const itemId = item.dataset?.itemId;
-        const itemType = item.dataset?.itemType;
+        console.log("Delete item:", item);
+
+        const normalizeItem = (rawItem) => {
+            const id =
+                rawItem?.dataset?.itemId ?? rawItem?.file_id ?? rawItem?.folder_id ?? null;
+            const type =
+                rawItem?.dataset?.itemType ??
+                rawItem?.type ??
+                (rawItem?.file_id ? "file" : rawItem?.folder_id ? "folder" : null);
+
+            return {
+                type,
+                file_id: type === "file" ? id : null,
+                folder_id: type === "folder" ? id : null,
+            };
+        };
+
+        const normalizedCurrentItem = normalizeItem(item);
+        const itemId = normalizedCurrentItem.file_id || normalizedCurrentItem.folder_id;
+        const itemType = normalizedCurrentItem.type;
+
+        if (!itemId || !itemType) {
+            console.error("Invalid item for deletion:", item);
+            addNotification({
+                title: "Erreur",
+                message: "Impossible de déterminer l'élément à supprimer.",
+                duration: 5000,
+            });
+            return;
+        }
 
         // Vérifier si cet item fait partie d'une sélection multiple
         let itemsToDelete = [];
 
         if (selectedItems.value.has(itemId) && selectedItems.value.size > 1) {
             // Supprimer tous les items sélectionnés
-            itemsToDelete = Array.from(selectedItemsMap.value.values());
+            itemsToDelete = Array.from(selectedItemsMap.value.values()).map(normalizeItem);
             const confirmMessage = `Voulez-vous vraiment supprimer ${itemsToDelete.length} éléments ?`;
             if (!confirm(confirmMessage)) {
                 return;
             }
         } else {
             // Supprimer juste cet item
-            itemsToDelete = [
-                {
-                    type: itemType,
-                    file_id: itemType === "file" ? itemId : null,
-                    folder_id: itemType === "folder" ? itemId : null,
-                },
-            ];
+            console.log("Deleting single item:", { itemId, itemType });
+            itemsToDelete = [normalizedCurrentItem];
         }
 
+        console.log("Items to delete:", itemsToDelete);
+
         try {
+
             // Supprimer tous les items (RESTful endpoints)
             const deletePromises = itemsToDelete.map(async (itemToDelete) => {
                 const id = itemToDelete.file_id || itemToDelete.folder_id;
