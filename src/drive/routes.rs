@@ -3,9 +3,9 @@
 
 use crate::state::AppState;
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     routing::{get, patch, post},
-    Router,
 };
 
 use super::handlers;
