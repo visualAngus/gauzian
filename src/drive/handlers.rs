@@ -706,7 +706,7 @@ pub async fn delete_file_handler(
     Json(body): Json<DeleteFileRequest>,
 ) -> Response {
     // transfer-tracking removed: deletions no longer blocked by Redis
-    match repo::delete_file(&state.db_pool, claims.id, body.file_id).await {
+    match repo::delete_file(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
         Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found").into_response(),
         Err(e) => {
@@ -1656,7 +1656,7 @@ pub async fn delete_file_restful_handler(
     claims: Claims,
     Path(file_id): Path<Uuid>,
 ) -> Response {
-    match repo::delete_file(&state.db_pool, claims.id, file_id).await {
+    match repo::delete_file(&state.db_pool, &state.storage_client, claims.id, file_id).await {
         Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found").into_response(),
         Err(e) => {

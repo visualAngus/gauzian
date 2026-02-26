@@ -544,54 +544,84 @@ pub async fn abort_file_upload(
 /// Supprimer un fichier (soft delete pour owner, hard delete pour non-owner)
 pub async fn delete_file(
     db_pool: &PgPool,
+    storage_client: &crate::storage::StorageClient,
     user_id: Uuid,
     file_id: Uuid,
 ) -> Result<(), sqlx::Error> {
     let mut tx = db_pool.begin().await?;
 
-    let user_access_level: Option<String> = sqlx::query_scalar(
-        "SELECT access_level FROM file_access WHERE file_id = $1 AND user_id = $2 FOR UPDATE",
+    let user_access: Option<(String, bool)> = sqlx::query_as(
+        "SELECT access_level, is_deleted FROM file_access WHERE file_id = $1 AND user_id = $2 FOR UPDATE",
     )
     .bind(file_id)
     .bind(user_id)
     .fetch_optional(&mut *tx)
     .await?;
 
-    let access_level = match user_access_level {
-        Some(level) => level,
+    let (access_level, is_deleted) = match user_access {
+        Some((level, deleted)) => (level, deleted),
         None => return Err(sqlx::Error::RowNotFound),
     };
 
     let is_owner = access_level == "owner";
 
     if is_owner {
-        sqlx::query(
-            "UPDATE file_access
-             SET is_deleted = TRUE, updated_at = NOW()
-             WHERE file_id = $1 AND user_id = $2",
-        )
-        .bind(file_id)
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
+        if is_deleted {
+            let s3_keys: Vec<String> =
+                sqlx::query_scalar::<_, String>("SELECT s3_key FROM s3_keys WHERE file_id = $1")
+                    .bind(file_id)
+                    .fetch_all(&mut *tx)
+                    .await?;
 
-        sqlx::query(
-            "DELETE FROM file_access
-             WHERE file_id = $1 AND user_id != $2",
-        )
-        .bind(file_id)
-        .bind(user_id)
-        .execute(&mut *tx)
-        .await?;
+            for s3_key in s3_keys.iter() {
+                storage_client.delete_line(s3_key).await.map_err(|e| {
+                    sqlx::Error::Protocol(format!("Failed to delete from storage: {}", e))
+                })?;
+            }
 
-        sqlx::query(
-            "UPDATE files
-             SET is_deleted = TRUE, updated_at = NOW()
-             WHERE id = $1",
-        )
-        .bind(file_id)
-        .execute(&mut *tx)
-        .await?;
+            sqlx::query("DELETE FROM s3_keys WHERE file_id = $1")
+                .bind(file_id)
+                .execute(&mut *tx)
+                .await?;
+
+            sqlx::query("DELETE FROM file_access WHERE file_id = $1")
+                .bind(file_id)
+                .execute(&mut *tx)
+                .await?;
+
+            sqlx::query("DELETE FROM files WHERE id = $1")
+                .bind(file_id)
+                .execute(&mut *tx)
+                .await?;
+        } else {
+            sqlx::query(
+                "UPDATE file_access
+                 SET is_deleted = TRUE, updated_at = NOW()
+                 WHERE file_id = $1 AND user_id = $2",
+            )
+            .bind(file_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+            sqlx::query(
+                "DELETE FROM file_access
+                 WHERE file_id = $1 AND user_id != $2",
+            )
+            .bind(file_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await?;
+
+            sqlx::query(
+                "UPDATE files
+                 SET is_deleted = TRUE, updated_at = NOW()
+                 WHERE id = $1",
+            )
+            .bind(file_id)
+            .execute(&mut *tx)
+            .await?;
+        }
     } else {
         sqlx::query(
             "DELETE FROM file_access
