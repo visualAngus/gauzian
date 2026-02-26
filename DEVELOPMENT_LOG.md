@@ -1,5 +1,32 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-02-25
+
+### [2026-02-25] - chore(k8s): Automatisation chiffrement/déchiffrement secrets SOPS [skip ci]
+
+- Ajout `.githooks/pre-commit` : chiffre automatiquement `k8s/secrets.yaml` → `secrets.enc.yaml` à chaque `git commit`
+- Ajout `k8s/scripts/setup-dev.sh` : script d'initialisation dev (active hooks, vérifie outils)
+- Mise à jour `k8s/scripts/ci-deploy.sh` : déchiffrement automatique de `secrets.enc.yaml` avant redémarrage des pods
+
+**Workflow complet :**
+1. `./k8s/scripts/setup-dev.sh` (une seule fois par dev)
+2. `cp k8s/secrets.yaml.example k8s/secrets.yaml` → remplir les valeurs
+3. `git add k8s/secrets.yaml && git commit` → hook chiffre + committe `secrets.enc.yaml` auto
+4. `git push origin main` → CI/CD → VPS déchiffre + applique + redémarre les pods
+
+### [2026-02-25] - chore(k8s): Mise en place SOPS + age pour la gestion des secrets [skip ci]
+
+- Ajout `.sops.yaml` : configuration SOPS (règle de chiffrement pour `k8s/secrets.yaml` avec age)
+- Ajout `k8s/secrets.yaml.example` : template complet avec toutes les clés requises (DB, Redis, MinIO, JWT, SMTP)
+- Ajout `k8s/scripts/apply-secrets.sh` : script de déchiffrement + application kubectl (supporte `SOPS_AGE_KEY` pour CI/CD)
+- Mise à jour `.gitignore` : ajout de `k8s/secrets.yaml` (déchiffré) pour éviter tout commit accidentel
+
+**Workflow secrets désormais :**
+1. `cp k8s/secrets.yaml.example k8s/secrets.yaml` → remplir les valeurs
+2. `sops --encrypt k8s/secrets.yaml > k8s/secrets.enc.yaml` → chiffrer
+3. `git add k8s/secrets.enc.yaml` → committer le fichier chiffré (safe)
+4. `./k8s/scripts/apply-secrets.sh` → déchiffrer + appliquer sur le cluster
+
 ## 2026-02-20
 
 ### [2026-02-20] - chore: Restructuration mono-repo en branches orphelines
