@@ -243,28 +243,28 @@
       <div class="card-footer" v-if="currentStep !== 'generating'">
         <button
           v-if="currentStep !== 'username'"
-          class="btn btn--ghost"
+          class="btn btn--ghost btn--arrow-left"
           @click="goBack"
           :disabled="currentStep === 'recovery'"
         >
-          ← Retour
+          Retour
         </button>
         <div v-else></div>
 
         <button
           v-if="currentStep !== 'recovery'"
-          class="btn btn--primary"
+          class="btn btn--primary btn--arrow-right"
           @click="goNext"
           :disabled="!canGoNext"
         >
-          Suivant →
+          Suivant
         </button>
         <button
           v-else
-          class="btn btn--primary"
+          class="btn btn--primary btn--arrow-right"
           @click="navigateTo('/drive')"
         >
-          Accéder à mon drive →
+          Accéder à mon drive
         </button>
       </div>
 
@@ -1168,6 +1168,24 @@ useHead({
   border: none;
   transition: background-color 0.15s ease;
   white-space: nowrap;
+}
+
+.btn--arrow-right::after,
+.btn--arrow-left::before {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 600;
+  transform: translateY(-1px);
+}
+
+.btn--arrow-right::after {
+  content: "›";
+  margin-left: 2px;
+}
+
+.btn--arrow-left::before {
+  content: "‹";
+  margin-right: 2px;
 }
 
 .btn:disabled {
