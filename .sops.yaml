@@ -20,4 +20,4 @@
 creation_rules:
   - path_regex: k8s/secrets\.yaml$
     age: >-
-      age1REMPLACER_PAR_TA_CLE_PUBLIQUE_AGE
+      age1xcm4yhupmd4krp7h0kt25ygxq8zsl452de87ndjujy2nf6sz3saq2e3den
