@@ -25,7 +25,16 @@ secrets.enc.yaml (en git)     →  VPS deploy  →  kubectl Secret K8s
 ### Installer les outils
 
 ```bash
-apt install age sops
+# age (disponible dans apt)
+sudo apt install age
+
+# sops (pas dans apt — télécharger depuis GitHub)
+curl -LO https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
+sudo mv sops-v3.9.4.linux.amd64 /usr/local/bin/sops
+sudo chmod +x /usr/local/bin/sops
+
+# Vérifier
+sops --version && age --version
 ```
 
 ### Générer ta clé age
@@ -73,7 +82,14 @@ Ce script :
 
 ```bash
 ssh vps
-apt install age sops
+
+# age
+sudo apt install age
+
+# sops (pas dans apt)
+curl -LO https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64
+sudo mv sops-v3.9.4.linux.amd64 /usr/local/bin/sops
+sudo chmod +x /usr/local/bin/sops
 ```
 
 ### Copier ta clé privée sur le VPS
@@ -92,45 +108,33 @@ scp ~/.config/sops/age/keys.txt vps:~/.config/sops/age/keys.txt
 
 ## Utilisation quotidienne (machine de dev)
 
-### Créer ou modifier les secrets
+### Workflow normal — éditer les secrets
 
 ```bash
-# Première fois : partir du template
-cp k8s/secrets.yaml.example k8s/secrets.yaml
-
-# Remplir les vraies valeurs
-vim k8s/secrets.yaml
-```
-
-### Committer (le chiffrement est automatique)
-
-```bash
-git add k8s/secrets.yaml
-git commit -m "chore(k8s): mise à jour secrets"
-
-# Le hook pre-commit fait automatiquement :
-#   ✅ sops --encrypt secrets.yaml → secrets.enc.yaml
-#   ✅ git add secrets.enc.yaml
-#   ✅ rm secrets.yaml (supprimé, ne sera jamais committé)
-```
-
-### Pousser
-
-```bash
-git push origin main
-# → CI/CD déclenche le déploiement sur le VPS
-# → Le VPS déchiffre secrets.enc.yaml et applique les secrets K8s
-```
-
-### Modifier des secrets existants
-
-```bash
-# Déchiffrer et éditer directement (re-chiffre à la sauvegarde)
+# Ouvre l'éditeur avec le contenu déchiffré, re-chiffre à la sauvegarde
 sops k8s/secrets.enc.yaml
 
-# Puis committer le fichier re-chiffré
+# Committer et pousser
 git add k8s/secrets.enc.yaml
-git commit -m "chore(k8s): rotation secrets"
+git commit -m "chore(k8s): rotation secrets [skip ci]"
+git push origin main
+# → CI/CD déploie sur le VPS qui déchiffre et applique les secrets K8s
+```
+
+### Première fois — créer secrets.enc.yaml depuis le template
+
+> Uniquement si `secrets.enc.yaml` n'existe pas encore.
+
+```bash
+cp k8s/secrets.yaml.example k8s/secrets.yaml
+vim k8s/secrets.yaml  # remplir les vraies valeurs
+
+# Le hook pre-commit chiffre automatiquement :
+#   ✅ sops --encrypt secrets.yaml → secrets.enc.yaml
+#   ✅ git add secrets.enc.yaml
+#   ✅ git rm --cached secrets.yaml + rm secrets.yaml (jamais committé)
+git add k8s/secrets.yaml
+git commit -m "chore(k8s): initialisation secrets [skip ci]"
 git push origin main
 ```
 
@@ -193,4 +197,19 @@ SOPS_AGE_KEY="AGE-SECRET-KEY-..." ./k8s/scripts/apply-secrets.sh
 **Appliquer les secrets manuellement sur le VPS (sans CI/CD)**
 ```bash
 ssh vps 'bash /home/debian/gauzian/k8s/scripts/apply-secrets.sh'
+```
+
+**Erreur `error loading config: no matching creation rules found`**
+```bash
+# Le path_regex dans .sops.yaml ne correspond pas au fichier
+# Vérifier que .sops.yaml contient bien :
+#   path_regex: k8s/secrets(\.enc)?\.yaml$
+cat .sops.yaml
+```
+
+**Impossible de faire `git pull` après un force push**
+```bash
+# Le force push a réécrit l'historique distant — ne pas utiliser git pull
+git fetch origin
+git reset --hard origin/main
 ```
