@@ -2,7 +2,8 @@ name: Build and Push Frontend
 
 on:
   push:
-    branches: [front]
+    tags:
+      - 'v*-stable'
   workflow_dispatch:
 
 jobs:
