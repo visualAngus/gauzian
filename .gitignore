@@ -1,0 +1,16 @@
+# Secrets — JAMAIS commiter en clair
+k8s/secrets.yaml
+k8s/secrets.dec.yaml
+
+# Fichiers chiffrés SOPS (commiter uniquement secrets.enc.yaml)
+# secrets.enc.yaml est OK à commiter
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo

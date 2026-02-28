@@ -1,0 +1,177 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: gauzian-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: rust:latest
+        imagePullPolicy: IfNotPresent
+        workingDir: /app
+        command: ["cargo", "run"]
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 4000m
+            memory: 4Gi
+        env:
+        # ===== CARGO CACHE =====
+        - name: CARGO_HOME
+          value: /cargo-cache
+        - name: CARGO_TARGET_DIR
+          value: /build-cache
+
+        # ===== VARIABLES DE CONNEXION BASE DE DONNÉES =====
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: DB_NAME
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: DATABASE_URL
+
+        # ===== VARIABLES REDIS =====
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: REDIS_PASSWORD
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: REDIS_URL
+
+        # ===== VARIABLES S3/MinIO =====
+        - name: S3_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: S3_ENDPOINT
+        - name: S3_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: S3_REGION
+        - name: S3_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: S3_BUCKET
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: MINIO_ROOT_USER
+        - name: S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: MINIO_ROOT_PASSWORD
+
+        # ===== VARIABLES S3/MinIO (Format AWS SDK) =====
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: MINIO_ROOT_USER
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: MINIO_ROOT_PASSWORD
+        - name: AWS_DEFAULT_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: S3_REGION
+
+        # ===== VARIABLES SÉCURITÉ =====
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: JWT_SECRET
+        - name: COOKIE_SECURE
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: COOKIE_SECURE
+
+        # ===== VARIABLES SERVEUR =====
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: HOST
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: PORT
+
+        # ===== LOGGING =====
+        - name: RUST_LOG
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: RUST_LOG
+
+        # ===== PERFORMANCE =====
+        - name: MAX_CONCURRENT_UPLOADS
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: MAX_CONCURRENT_UPLOADS
+
+        volumeMounts:
+        - name: source
+          mountPath: /app
+        - name: cargo-cache
+          mountPath: /cargo-cache
+        - name: build-cache
+          mountPath: /build-cache
+
+        # Pas de startupProbe/readinessProbe : cargo run prend ~5-15 min au premier démarrage
+        # Le pod sera NotReady pendant la compilation — comportement attendu
+
+      volumes:
+      - name: source
+        hostPath:
+          path: REPLACE_WITH_GAUZIANBACK_PATH   # ex: /home/gael/gauzianBack
+          type: Directory
+      - name: cargo-cache
+        hostPath:
+          path: /opt/gauzian-dev/cargo-cache
+          type: DirectoryOrCreate
+      - name: build-cache
+        hostPath:
+          path: /opt/gauzian-dev/backend-target
+          type: DirectoryOrCreate

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: front
+  namespace: gauzian-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: front
+  template:
+    metadata:
+      labels:
+        app: front
+    spec:
+      containers:
+      - name: front
+        image: node:20-alpine
+        imagePullPolicy: IfNotPresent
+        workingDir: /app
+        command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        env:
+        # ===== FRONTEND =====
+        - name: NUXT_BACKEND_PROXY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: NUXT_BACKEND_PROXY_URL
+        - name: NUXT_PUBLIC_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: gauzian-dev-config
+              key: NUXT_PUBLIC_API_URL
+        - name: HOST
+          value: "0.0.0.0"
+        - name: PORT
+          value: "3000"
+
+        volumeMounts:
+        - name: source
+          mountPath: /app
+        - name: node-modules
+          mountPath: /app/node_modules
+
+      volumes:
+      - name: source
+        hostPath:
+          path: REPLACE_WITH_GAUZIANFRONT_PATH   # ex: /home/gael/gauzianFront
+          type: Directory
+      - name: node-modules
+        hostPath:
+          path: /opt/gauzian-dev/front-node_modules
+          type: DirectoryOrCreate

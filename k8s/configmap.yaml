@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gauzian-dev-config
+  namespace: gauzian-dev
+data:
+  # ===== SERVEUR BACKEND =====
+  HOST: "0.0.0.0"
+  PORT: "8080"
+
+  # ===== S3/MinIO =====
+  S3_ENDPOINT: "http://minio:9000"
+  S3_BUCKET: "gauzian-bucket"
+  S3_REGION: "us-east-1"
+
+  # ===== SÉCURITÉ =====
+  COOKIE_SECURE: "false"   # HTTP acceptable en dev (pas de HTTPS interne K8s)
+
+  # ===== LOGGING =====
+  RUST_LOG: "gauzian_back=debug,tower_http=debug,sqlx=warn"
+
+  # ===== PERFORMANCE =====
+  MAX_CONCURRENT_UPLOADS: "10"
+
+  # ===== FRONTEND =====
+  NUXT_BACKEND_PROXY_URL: "http://backend:8080"
+  NUXT_PUBLIC_API_URL: "https://dev.gauzian.pupin.fr/api"
