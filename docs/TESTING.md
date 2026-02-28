@@ -1,6 +1,6 @@
 # Tests E2E API — GAUZIAN
 
-Tests de sécurité et fonctionnels de l'API, exécutés via [Hurl](https://hurl.dev/).
+Tests de sécurité et fonctionnels de l'API, exécutés via [Hurl](https://hurl.dev/).Tests intégrés dans la CI GitHub Actions, avec des comptes de test dédiés.
 
 ---
 
