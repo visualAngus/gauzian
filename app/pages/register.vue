@@ -85,7 +85,7 @@
               <!-- 6 gros input number -->
               <div class="otp-inputs">
                 <input
-                  v-for="(_, i) in 6"
+                v-for="(_, i) in 6"
                   :key="i"
                   type="text"
                   inputmode="numeric"
@@ -95,8 +95,22 @@
                   :ref="(el) => setOtpInputRef(el, i)"
                   @input="(e) => handleOtpInput(e, i)"
                   @keydown.backspace="(e) => handleOtpBackspace(e, i)"
-                />
-              </div>
+                  />
+                </div>
+                <div class="timerOPT">
+                  <p class="timerOPT-text">Vous n'avez pas reçu le code ?</p>
+                  <button
+                    class="btn btn--ghost btn--small"
+                    @click="resendOtp"
+                    :disabled="remainingTime > 0 || loading"
+                  >
+                    Renvoyer un nouveau code
+                  </button>
+                  <!-- afficher le timer si besoin -->
+                  <div v-if="remainingTime > 0" class="timerOPT-countdown">
+                    ({{ remainingTime }}s)
+                  </div>
+                </div>
 
               <p v-if="otpError" class="field-error">{{ otpError }}</p>
             </div>
@@ -281,7 +295,7 @@
 definePageMeta({
   layout: "blank",
 });
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useHead } from "#imports";
 import { useAuth } from "~/composables/useAuth";
 
@@ -302,6 +316,9 @@ const copyStatus = ref("idle"); // 'idle' | 'copied'
 const otpCode = ref("");
 const tempToken = ref("");
 const otpInputRefs = ref([]);
+const optLastRequestTime = ref(0);
+const nowMs = ref(Date.now());
+let otpTimerInterval = null;
 
 const setOtpInputRef = (el, index) => {
   if (el) otpInputRefs.value[index] = el;
@@ -334,6 +351,20 @@ const handleOtpBackspace = (event, index) => {
     otpInputRefs.value[index - 1]?.focus();
   }
 };
+
+const resendOtp = async () => {
+  if (remainingTime.value > 0 || loading.value) return;
+  try {
+    loading.value = true;
+    otpError.value = "";
+    await requestOtp(registerForm.value.email);
+    optLastRequestTime.value = Date.now();
+  } catch (error) {
+    otpError.value = error.message || "Erreur lors du renvoi du code OTP";
+  } finally {
+    loading.value = false;
+  }
+};
 // ─── Navigation par étapes ────────────────────────────────────────────────────
 const currentStep = ref("username"); // 'username'|'email'|'otp'|'password'|'generating'|'recovery'
 const direction = ref("forward");
@@ -349,6 +380,25 @@ const passwordError = ref("");
 const otpError = ref("");
 const confirmPassword = ref("");
 const confirmPasswordError = ref("");
+
+// ─── OTP resend timer ───────────────────────────────────────────────────────────
+const remainingTime = computed(() => {
+  const elapsed = nowMs.value - optLastRequestTime.value;
+  return Math.max(0, Math.ceil((30000 - elapsed) / 1000));
+});
+
+onMounted(() => {
+  otpTimerInterval = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
+});
+
+onUnmounted(() => {
+  if (otpTimerInterval) {
+    clearInterval(otpTimerInterval);
+    otpTimerInterval = null;
+  }
+});
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 const validateEmail = (email) => {
@@ -454,6 +504,7 @@ const goNext = async () => {
   if (currentStep.value === "email") {
     try {
       await requestOtp(registerForm.value.email);
+      optLastRequestTime.value = Date.now();
       currentStep.value = "otp";
     } catch (error) {
       emailError.value = error.message || "Erreur lors de l'envoi du code OTP";
@@ -906,6 +957,29 @@ useHead({
   background: white;
   transition: border-color 0.15s ease;
 }
+
+.timerOPT {
+  font-size: 12px;
+  color: #666;
+  text-align: right;
+  margin-top: -6px;
+  margin-top: 6px;
+}
+
+.timerOPT-text {
+  font-weight: 500;
+}
+
+.timerOPT button {
+  background: none;
+  border: none;
+  color: var(--color-neutral-900);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 4px;
+}
+
 
 /* ─── Input with icon ────────────────────────────────────────────────────────── */
 .input-with-icon {

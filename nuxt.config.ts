@@ -16,8 +16,10 @@ export default defineNuxtConfig({
 
   nitro: {
     routeRules: {
-      // Proxy dev : redirige /api/* vers le backend de prod (évite CORS en local)
-      '/api/**': { proxy: 'https://gauzian.pupin.fr/api/**' },
+      // Proxy dev : redirige /api/* vers le backend configuré via env var, ou prod par défaut
+      '/api/**': { proxy: process.env.NUXT_BACKEND_PROXY_URL
+        ? `${process.env.NUXT_BACKEND_PROXY_URL}/**`
+        : 'https://gauzian.pupin.fr/api/**' },
       '/**': {
         headers: {
           // HSTS
