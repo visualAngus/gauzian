@@ -437,8 +437,14 @@ pub async fn delete_otp_cooldown(manager: &mut redis::aio::ConnectionManager, em
     
 pub async fn store_temp_token(manager: &mut redis::aio::ConnectionManager, email: String, temp_token: String) -> Result<(), redis::RedisError> {
     let key = format!("temp_token:{}", email.trim().to_ascii_lowercase());
-    manager.set_ex(key, temp_token, 600).await // 10 minutes TTL
+    manager.set_ex(key, temp_token, 600).await // 10 minutes TTL (aligné avec JWT exp)
 }
+
+pub async fn delete_temp_token(manager: &mut redis::aio::ConnectionManager, email: &str) -> Result<(), redis::RedisError> {
+    let key = format!("temp_token:{}", email.trim().to_ascii_lowercase());
+    manager.del(key).await
+}
+
 pub async fn get_temp_token(manager: &mut redis::aio::ConnectionManager, email: String) -> Result<Option<String>, redis::RedisError> {
     let key = format!("temp_token:{}", email.trim().to_ascii_lowercase());
     manager.get(key).await
@@ -449,7 +455,7 @@ pub async fn create_temp_token(
     secret: &[u8],
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = Utc::now()
-        .checked_add_signed(Duration::minutes(15))
+        .checked_add_signed(Duration::minutes(10))
         .expect("valid timestamp")
         .timestamp() as usize;  
 

@@ -637,15 +637,6 @@ pub async fn finalize_registration_handler(
 
     crate::metrics::track_auth_attempt("register", true);
 
-    // suprimer l'OTP de Redis
-    services::delete_otp(&mut redis, email_for_otp_cleanup.as_str()).await.map_err(|e| {
-        tracing::error!("Failed to delete OTP from Redis: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),
-        )
-    })?;
-
     // suprimer le compteur d'OTP de Redis
     services::delete_otp_attempts(&mut redis, email_for_otp_cleanup.as_str()).await.map_err(|e| {
         tracing::error!("Failed to reset OTP attempts in Redis: {}", e);
@@ -655,12 +646,21 @@ pub async fn finalize_registration_handler(
         )
     })?;
 
+    // suprimer le cooldown d'OTP de Redis
+    services::delete_otp_cooldown(&mut redis, email_for_otp_cleanup.as_str()).await.map_err(|e| {
+        tracing::error!("Failed to delete OTP cooldown from Redis: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
     // suprimer le token temporaire de Redis
-    services::store_temp_token(&mut redis, email_for_otp_cleanup, "".to_string()).await.map_err(|e| {
+    services::delete_temp_token(&mut redis, email_for_otp_cleanup.as_str()).await.map_err(|e| {
         tracing::error!("Failed to delete temp token from Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),    
+            "Internal server error".to_string(),
         )
     })?;
 
