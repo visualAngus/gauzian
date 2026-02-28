@@ -40,13 +40,15 @@ mkdir -p /opt/gauzian-dev/backend-target
 mkdir -p /opt/gauzian-dev/front-node_modules
 echo "      /opt/gauzian-dev/ OK"
 
-# --- Appliquer les secrets déchiffrés ---
-echo "[2/3] Application des secrets (SOPS déchiffrement)..."
+# --- Appliquer les manifests ---
+echo "[2/3] Application des manifests Kubernetes..."
+kubectl apply -f "$K8S_DIR/namespace.yaml"
+
+# --- Appliquer les secrets déchiffrés (après création du namespace) ---
+echo "[3/4] Application des secrets (SOPS déchiffrement)..."
 "$SCRIPT_DIR/apply-secrets.sh"
 
-# --- Appliquer les manifests ---
-echo "[3/3] Application des manifests Kubernetes..."
-kubectl apply -f "$K8S_DIR/namespace.yaml"
+echo "[4/4] Application des ressources restantes..."
 kubectl apply -f "$K8S_DIR/configmap.yaml"
 kubectl apply -f "$K8S_DIR/postgres-pvc.yaml"
 kubectl apply -f "$K8S_DIR/postgres-deployment.yaml"
@@ -65,7 +67,7 @@ kubectl apply -f "$K8S_DIR/middleware.yaml"
 kubectl apply -f "$K8S_DIR/ingressroute.yaml"
 
 echo ""
-echo "=== Setup terminé ==="
+echo "=== Setup terminé (4/4) ==="
 echo ""
 echo "Vérifier le statut des pods :"
 echo "  kubectl get pods -n gauzian-dev"
