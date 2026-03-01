@@ -14,8 +14,8 @@ INSERT INTO account_tiers (name, description, storage_limit_bytes, price) VALUES
 ('premium', 'Full access to all features', 100::BIGINT * 1024 * 1024 * 1024, 29.99),
 ('ultra', 'Unlimited storage and priority support', 200::BIGINT * 1024 * 1024 * 1024, 99.99);
 
-ALTER TABLE users ADD COLUMN account_tier_id UUID REFERENCES account_tiers(id) DEFAULT (SELECT id FROM account_tiers WHERE name = 'free');
+ALTER TABLE users ADD COLUMN account_tier_id UUID REFERENCES account_tiers(id);
 
-UPDATE users SET account_tier_id = (SELECT id FROM account_tiers WHERE name = 'free') WHERE account_tier_id IS NULL;
+UPDATE users SET account_tier_id = (SELECT id FROM account_tiers WHERE name = 'free');
 
 ALTER TABLE users ALTER COLUMN account_tier_id SET NOT NULL;
