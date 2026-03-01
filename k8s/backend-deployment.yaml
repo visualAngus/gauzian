@@ -18,7 +18,18 @@ spec:
         image: rust:latest
         imagePullPolicy: IfNotPresent
         workingDir: /app
-        command: ["cargo", "run"]
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Installer mold (linker ultra-rapide) si absent
+          if ! command -v mold >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq mold
+          fi
+          [ -f "$CARGO_HOME/bin/cargo-watch" ] || cargo install cargo-watch --locked
+          # -d 1 : debounce 1s pour éviter les recompils en rafale lors des sauvegardes
+          # -w src -w Cargo.toml : surveille uniquement ce qui compte
+          exec cargo watch -d 1 -w src -w Cargo.toml -x run
         ports:
         - containerPort: 8080
         resources:
@@ -34,6 +45,15 @@ spec:
           value: /cargo-cache
         - name: CARGO_TARGET_DIR
           value: /build-cache
+
+        # ===== COMPILATION RAPIDE (DEV) =====
+        # mold : linker ~5x plus rapide que lld, ~10x vs ld
+        # codegen-units élevé : plus de parallélisme, moins d'optimisations (ok en dev)
+        # CARGO_INCREMENTAL : ne recompile que ce qui a changé
+        - name: RUSTFLAGS
+          value: "-C link-arg=-fuse-ld=mold -C codegen-units=256"
+        - name: CARGO_INCREMENTAL
+          value: "1"
 
         # ===== VARIABLES DE CONNEXION BASE DE DONNÉES =====
         - name: DB_USER
@@ -113,6 +133,13 @@ spec:
               name: gauzian-dev-config
               key: S3_REGION
 
+        # ===== VARIABLES SMTP =====
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gauzian-dev-secrets
+              key: SMTP_PASSWORD
+
         # ===== VARIABLES SÉCURITÉ =====
         - name: JWT_SECRET
           valueFrom:
@@ -165,7 +192,7 @@ spec:
       volumes:
       - name: source
         hostPath:
-          path: REPLACE_WITH_GAUZIANBACK_PATH   # ex: /home/gael/gauzianBack
+          path: /home/dev/gauzian/gauzianBack   # ex: /home/gael/gauzianBack
           type: Directory
       - name: cargo-cache
         hostPath:

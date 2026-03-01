@@ -54,7 +54,7 @@ spec:
       volumes:
       - name: source
         hostPath:
-          path: REPLACE_WITH_GAUZIANFRONT_PATH   # ex: /home/gael/gauzianFront
+          path: /home/dev/gauzian/gauzianFront   # ex: /home/gael/gauzianFront
           type: Directory
       - name: node-modules
         hostPath:
