@@ -51,6 +51,18 @@ pub async fn initialize_file_handler(
         }
     };
 
+    let drive_info = match repo::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+        }
+    };
+
+    if drive_info.used_space + body.size > drive_info.storage_limit_bytes {
+        return ApiResponse::insufficient_storage("Insufficient storage space").into_response();
+    }
+
     let file_id = match repo::initialize_file_in_db(
         &state.db_pool,
         claims.id,
@@ -128,9 +140,11 @@ pub async fn get_account_and_drive_info_handler(
             },
             "files_and_folders": files_and_folders,
             "drive_info": {
-                "used_space": drive_info.0,
-                "file_count": drive_info.1,
-                "folder_count": drive_info.2,
+                "used_space": drive_info.used_space,
+                "file_count": drive_info.file_count,
+                "folder_count": drive_info.folder_count,
+                "storage_limit_bytes": drive_info.storage_limit_bytes,
+                "account_tier": drive_info.account_tier,
             },
             "full_path": [],
 
@@ -193,9 +207,11 @@ pub async fn get_account_and_drive_info_handler(
             "email": user_info.email,
         },
         "drive_info": {
-            "used_space": drive_info.0,
-            "file_count": drive_info.1,
-            "folder_count": drive_info.2,
+            "used_space": drive_info.used_space,
+            "file_count": drive_info.file_count,
+            "folder_count": drive_info.folder_count,
+            "storage_limit_bytes": drive_info.storage_limit_bytes,
+            "account_tier": drive_info.account_tier,
         },
         "files_and_folders": files_and_folders,
         "full_path": full_path,
@@ -318,6 +334,18 @@ pub async fn upload_chunk_restful_handler(
         return ApiResponse::not_found("File not found or access denied").into_response();
     }
 
+    let drive_info = match repo::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+        }
+    };
+
+    if drive_info.used_space >= drive_info.storage_limit_bytes {
+        return ApiResponse::insufficient_storage("Insufficient storage space").into_response();
+    }
+
     let mut chunk_bytes: Option<Bytes> = None;
     let mut chunk_index: Option<i32> = None;
     let mut iv: Option<String> = None;
@@ -391,6 +419,10 @@ pub async fn upload_chunk_restful_handler(
     let Some(iv) = iv else {
         return ApiResponse::bad_request("Missing IV").into_response();
     };
+    
+    if drive_info.used_space + body.len() as i64 > drive_info.storage_limit_bytes {
+        return ApiResponse::insufficient_storage("Insufficient storage space").into_response();
+    } 
 
     let upload_start = std::time::Instant::now();
     let meta_data_s3 = match state
@@ -513,9 +545,11 @@ pub async fn get_file_folder_handler(
                 "folder_count": corbeille_info["deleted_folders_count"],
             },
             "drive_info": {
-                "used_space": drive_info.0,
-                "file_count": drive_info.1,
-                "folder_count": drive_info.2,
+                "used_space": drive_info.used_space,
+                "file_count": drive_info.file_count,
+                "folder_count": drive_info.folder_count,
+                "storage_limit_bytes": drive_info.storage_limit_bytes,
+                "account_tier": drive_info.account_tier,
             },
             "full_path": [],
         }))
@@ -542,9 +576,11 @@ pub async fn get_file_folder_handler(
         return ApiResponse::ok(serde_json::json!({
             "files_and_folders": files_and_folders,
             "drive_info": {
-                "used_space": drive_info.0,
-                "file_count": drive_info.1,
-                "folder_count": drive_info.2,
+                "used_space": drive_info.used_space,
+                "file_count": drive_info.file_count,
+                "folder_count": drive_info.folder_count,
+                "storage_limit_bytes": drive_info.storage_limit_bytes,
+                "account_tier": drive_info.account_tier,
             },
             "full_path": [],
         }))
@@ -594,9 +630,11 @@ pub async fn get_file_folder_handler(
         "files_and_folders": files_and_folders,
         "full_path": full_path,
         "drive_info": {
-            "used_space": drive_info.0,
-            "file_count": drive_info.1,
-            "folder_count": drive_info.2,
+            "used_space": drive_info.used_space,
+            "file_count": drive_info.file_count,
+            "folder_count": drive_info.folder_count,
+            "storage_limit_bytes": drive_info.storage_limit_bytes,
+            "account_tier": drive_info.account_tier,
         },
     }))
     .into_response()

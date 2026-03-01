@@ -81,6 +81,14 @@ impl ApiResponse<ErrorResponse> {
             status: StatusCode::FORBIDDEN,
         }
     }
+
+    pub fn insufficient_storage(message: impl Into<String>) -> Self {
+        Self {
+            data: ErrorResponse { error: message.into() },
+            token: None,
+            status: StatusCode::INSUFFICIENT_STORAGE,
+        }
+    }
 }
 
 impl<T: Serialize> IntoResponse for ApiResponse<T> {

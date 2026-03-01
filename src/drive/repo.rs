@@ -89,10 +89,18 @@ pub async fn get_file_size(pool: &PgPool, file_id: Uuid) -> Result<i64, sqlx::Er
 pub async fn health_check_db(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").fetch_one(pool).await.map(|_| ())
 }
+#[derive(sqlx::FromRow)]
+pub struct DriveInfo {
+    pub used_space: i64,
+    pub file_count: i64,
+    pub folder_count: i64,
+    pub storage_limit_bytes: i64,
+    pub account_tier: String,
+}
 
 /// Récupérer les informations du drive (espace utilisé, nombre de fichiers et dossiers)
-pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<(i64, i64, i64), sqlx::Error> {
-    let (used_space, file_count, folder_count) = sqlx::query_as::<_, (i64, i64, i64)>(
+pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<DriveInfo, sqlx::Error> {
+    let (used_space, file_count, folder_count,storage_limit_bytes, account_tier) = sqlx::query_as::<_, (i64, i64, i64, i64, String)>(
         "
         WITH file_stats AS (
             SELECT 
@@ -119,16 +127,26 @@ pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<(i64, i64, i
         SELECT 
             COALESCE(fs.used_space, 0)::BIGINT as used_space,
             COALESCE(fs.file_count, 0)::BIGINT as file_count,
-            COALESCE(fld.folder_count, 0)::BIGINT as folder_count
+            COALESCE(fld.folder_count, 0)::BIGINT as folder_count,
+            COALESCE(at.storage_limit_bytes, 2 * 1024 * 1024 * 1024)::BIGINT as storage_limit_bytes,
+            COALESCE(at.name, 'free') as account_tier
         FROM (SELECT $1::uuid as id) u
         LEFT JOIN file_stats fs ON fs.user_id = u.id
-        LEFT JOIN folder_stats fld ON fld.user_id = u.id;
+        LEFT JOIN folder_stats fld ON fld.user_id = u.id
+        LEFT JOIN users ON users.id = u.id
+        LEFT JOIN account_tiers at ON at.id = users.account_tier_id;
         ",
     )
     .bind(user_id)
     .fetch_one(pool)
     .await?;
-    Ok((used_space, file_count, folder_count))
+    Ok(DriveInfo {
+        used_space,
+        file_count,
+        folder_count,
+        storage_limit_bytes,
+        account_tier,
+    })
 }
 
 /// Récupérer la liste des fichiers et dossiers dans un dossier parent

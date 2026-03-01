@@ -48,6 +48,32 @@ fn validate_email_format(email: &str) -> bool {
         && domain.len() > 2
 }
 
+fn validate_otp_format(otp: &str) -> bool {
+    otp.len() == 6 && otp.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+fn map_send_otp_error(error: &str) -> (StatusCode, String) {
+    let normalized = error.to_ascii_lowercase();
+    let looks_like_invalid_recipient =
+        normalized.contains("550")
+            || normalized.contains("mailbox unavailable")
+            || normalized.contains("recipient address rejected")
+            || normalized.contains("user unknown")
+            || normalized.contains("no such user")
+            || normalized.contains("invalid dns mx")
+            || normalized.contains("invalid dns")
+            || normalized.contains("domain not found");
+
+    if looks_like_invalid_recipient {
+        (StatusCode::BAD_REQUEST, "Invalid email address".to_string())
+    } else {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to send OTP".to_string(),
+        )
+    }
+}
+
 // ========== Structures de requêtes/réponses ==========
 
 #[derive(Deserialize)]
@@ -350,13 +376,17 @@ pub async fn send_otp_handler(
     State(state): State<AppState>,
     Json(payload): Json<services::SendOtpRequest>,
 ) -> Result<ApiResponse<String>, (StatusCode, String)> {
-    if !validate_email_format(&payload.email) {
-        return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
+    let email = payload.email.trim().to_lowercase();
+    if email.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Email is required".to_string()));
+    }
+    if !validate_email_format(&email) {
+        return Err((StatusCode::BAD_REQUEST, "Invalid email format".to_string()));
     }
     let mut redis = state.redis_manager.clone();
 
     // verifier le cooldown
-    if services::is_otp_cooldown(&mut redis, payload.email.clone()).await.map_err(|e| {
+    if services::is_otp_cooldown(&mut redis, email.clone()).await.map_err(|e| {
         tracing::error!("Failed to check OTP cooldown in Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -367,7 +397,7 @@ pub async fn send_otp_handler(
     }
 
     // veririfier le counter
-    let attempts = services::get_otp_attempts(&mut redis, payload.email.clone()).await.map_err(|e| {
+    let attempts = services::get_otp_attempts(&mut redis, email.clone()).await.map_err(|e| {
         tracing::error!("Failed to get OTP attempts from Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -380,7 +410,7 @@ pub async fn send_otp_handler(
     }
 
     // verifier que l'email existe en DB
-    let exists = repo::check_email_exists(&state.db_pool, &payload.email)
+    let exists = repo::check_email_exists(&state.db_pool, &email)
         .await
         .map_err(|e| {
             tracing::error!("Failed to check email existence: {}", e);
@@ -394,16 +424,13 @@ pub async fn send_otp_handler(
         return Err((StatusCode::BAD_REQUEST, "Email already registered".to_string()));
     }
     let otp = Alphanumeric.sample_string(&mut rand::rng(), 6).to_uppercase();
-    services::send_otp(&payload.email, &otp, &state.mailer).await.map_err(|e| {
+    services::send_otp(&email, &otp, &state.mailer).await.map_err(|e| {
         tracing::error!("Failed to send OTP: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to send OTP".to_string(),
-        )
+        map_send_otp_error(&e)
     })?;
 
     // mettre dans redis avec TTL de 5 minutes
-    services::store_otp(&mut redis, payload.email.clone(), otp.clone()).await.map_err(|e| {
+    services::store_otp(&mut redis, email.clone(), otp.clone()).await.map_err(|e| {
         tracing::error!("Failed to store OTP in Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -412,7 +439,7 @@ pub async fn send_otp_handler(
     })?;
 
     // cooldown
-    services::cooldown_otp(&mut redis, payload.email.clone()).await.map_err(|e| {
+    services::cooldown_otp(&mut redis, email.clone()).await.map_err(|e| {
         tracing::error!("Failed to set OTP cooldown in Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -427,10 +454,26 @@ pub async fn verify_otp_handler(
     State(state): State<AppState>,
     Json(payload): Json<services::VerifyOtpRequest>,
 ) -> Result<ApiResponse<String>, (StatusCode, String)> {
+    let email = payload.email.trim().to_lowercase();
+    let otp = payload.otp.trim().to_uppercase();
+
+    if email.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Email is required".to_string()));
+    }
+    if !validate_email_format(&email) {
+        return Err((StatusCode::BAD_REQUEST, "Invalid email format".to_string()));
+    }
+    if otp.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "OTP is required".to_string()));
+    }
+    if !validate_otp_format(&otp) {
+        return Err((StatusCode::BAD_REQUEST, "Invalid OTP format. Expected 6 alphanumeric characters".to_string()));
+    }
+
     let mut redis = state.redis_manager.clone();
 
     // verifier le counter 
-    let attempts = services::get_otp_attempts(&mut redis, payload.email.clone()).await.map_err(|e| {
+    let attempts = services::get_otp_attempts(&mut redis, email.clone()).await.map_err(|e| {
         tracing::error!("Failed to get OTP attempts from Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -442,7 +485,7 @@ pub async fn verify_otp_handler(
         return Err((StatusCode::TOO_MANY_REQUESTS, "Too many OTP verification attempts. Please try again later.".to_string()));
     }
 
-    let is_valid = services::verify_otp(&mut redis, payload.email.clone(), payload.otp.clone())
+    let is_valid = services::verify_otp(&mut redis, email.clone(), otp)
         .await
         .map_err(|e| {
             tracing::error!("Failed to verify OTP: {}", e);
@@ -455,7 +498,7 @@ pub async fn verify_otp_handler(
     if !is_valid {
 
         // augmenter le compteur d'échecs
-        services::counter_otp_attempts(&mut redis, payload.email.clone()).await.map_err(|e| {
+        services::counter_otp_attempts(&mut redis, email.clone()).await.map_err(|e| {
             tracing::error!("Failed to increment OTP attempts in Redis: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -468,7 +511,7 @@ pub async fn verify_otp_handler(
     }
 
     // générer un token temporaire pour permettre à l'utilisateur d'accéder à l'étape finale de l'inscription
-    let temp_token = services::create_temp_token(&payload.email, state.jwt_secret.as_bytes())
+    let temp_token = services::create_temp_token(&email, state.jwt_secret.as_bytes())
         .await
         .map_err(|e| {
             tracing::error!("Failed to create temp token: {}", e);
@@ -479,7 +522,7 @@ pub async fn verify_otp_handler(
         })?;
 
     // suprimer l'OTP de Redis
-    services::delete_otp(&mut redis, payload.email.as_str()).await.map_err(|e| {
+    services::delete_otp(&mut redis, email.as_str()).await.map_err(|e| {
         tracing::error!("Failed to delete OTP from Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -487,7 +530,7 @@ pub async fn verify_otp_handler(
         )
     })?;
     // ajouter le token temporaire dans Redis avec un TTL de 15 minutes
-    services::store_temp_token(&mut redis, payload.email.clone(), temp_token.clone()).await.map_err(|e| {
+    services::store_temp_token(&mut redis, email.clone(), temp_token.clone()).await.map_err(|e| {
         tracing::error!("Failed to store temp token in Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -504,6 +547,12 @@ pub async fn finalize_registration_handler(
     headers: HeaderMap,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<ApiResponse<RegisterResponse>, (StatusCode, String)> {
+    let normalized_email = payload.email.trim().to_lowercase();
+
+    if normalized_email.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Email is required".to_string()));
+    }
+
     // 0. Rate limit par IP avant tout traitement coûteux (Argon2)
     let ip = headers
         .get("X-Real-IP")
@@ -526,8 +575,8 @@ pub async fn finalize_registration_handler(
     })?;
 
     // 0b. Valider le format de l'email
-    if !validate_email_format(&payload.email) {
-        return Err((StatusCode::BAD_REQUEST, "Format d'email invalide".to_string()));
+    if !validate_email_format(&normalized_email) {
+        return Err((StatusCode::BAD_REQUEST, "Invalid email format".to_string()));
     }
 
 
@@ -538,7 +587,7 @@ pub async fn finalize_registration_handler(
     // verifier que le token temporaire correspond à celui stocké dans Redis pour cet email
     services::verify_temp_token(
         &payload.temp_token,
-        &payload.email,
+        &normalized_email,
         state.jwt_secret.as_bytes(),
     )
     .await
@@ -547,7 +596,7 @@ pub async fn finalize_registration_handler(
         (StatusCode::UNAUTHORIZED, "Invalid or expired temp token".to_string())
     })?;
     // valider le token temporaire
-    let stored_token = services::get_temp_token(&mut redis, payload.email.clone()).await.map_err(|e| {
+    let stored_token = services::get_temp_token(&mut redis, normalized_email.clone()).await.map_err(|e| {
         tracing::error!("Failed to get temp token from Redis: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -585,7 +634,7 @@ pub async fn finalize_registration_handler(
     let private_key_salt = payload.private_key_salt.clone();
     let iv = payload.iv.clone();
     let public_key = payload.public_key.clone();
-    let email_for_otp_cleanup = payload.email.clone();
+    let email_for_otp_cleanup = normalized_email.clone();
 
     // 4. Créer l'utilisateur en DB
     let new_user = repo::NewUser {
@@ -593,7 +642,7 @@ pub async fn finalize_registration_handler(
         password_hash,
         encrypted_private_key: payload.encrypted_private_key,
         public_key: payload.public_key,
-        email: payload.email,
+        email: normalized_email,
         encrypted_settings: None,
         private_key_salt: payload.private_key_salt,
         iv: payload.iv,
