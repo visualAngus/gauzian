@@ -73,6 +73,7 @@
               </button>
             </div>
           </div>
+          <p v-if="connnError" class="field-error">{{ connnError }}</p>
 
           <button type="submit" class="btn btn--primary" :disabled="loading">
             {{ loading ? "Connexion…" : "Se connecter" }}
@@ -105,6 +106,7 @@ const loading = ref(false);
 const loginForm = ref({ email: "", password: "" });
 const showLoginPassword = ref(false);
 const emailInputRef = ref(null);
+const connnError = ref(null);
 
 const validateEmail = (email) => {
   const re =
@@ -141,7 +143,14 @@ const handleLogin = async () => {
     }
     await navigateTo("/drive");
   } catch (error) {
-    alert(error.message || "Login failed");
+    if (error.message === "Invalid credentials") {
+      connnError.value = "Email ou mot de passe incorrect";
+    } else if (error.message === "Network Error") {
+      connnError.value = "Impossible de se connecter au serveur";
+    } else {
+      connnError.value = error.message || "Échec de la connexion";
+    }
+    // alert(error.message || "Login failed");
   } finally {
     loading.value = false;
   }
@@ -291,6 +300,12 @@ form {
 
 .field-input:focus {
   border-color: var(--color-neutral-900);
+}
+
+.field-error {
+  font-size: 12px;
+  color: var(--color-pastel-danger);
+  font-weight: 500;
 }
 
 /* ─── Input with icon ────────────────────────────────────────────────────────── */

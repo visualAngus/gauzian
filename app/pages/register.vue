@@ -58,8 +58,8 @@
 
           <!-- Étape 2 : email -->
           <div v-else-if="currentStep === 'email'" key="email" class="step">
-            <div class="step-label">Parfait !</div>
-            <h2 class="step-title">Quelle est votre<br>adresse email ?</h2>
+            <div class="step-label">Parfait ! Bonjour <b>{{ registerForm.username }}</b> !</div>
+            <h2 class="step-title">Quelle est votre adresse email ?</h2>
             <div class="field-group">
               <input
                 id="reg-email"
@@ -68,19 +68,20 @@
                 type="email"
                 placeholder="votre@email.com"
                 autocomplete="username"
-                @input="validateEmail(registerForm.email)"
+                @input="onEmailInput"
                 @keydown.enter="goNext"
                 class="field-input"
                 :class="{ 'field-input--error': emailError }"
               />
               <p v-if="emailError" class="field-error">{{ emailError }}</p>
+              <p v-else-if="emailDomainChecking" class="field-hint">Vérification du domaine email…</p>
             </div>
           </div>
 
             <!-- Étape 2.5 : otp -->
           <div v-else-if="currentStep === 'otp'" key="otp" class="step">
             <div class="step-label">Un dernier effort !</div>
-            <h2 class="step-title">Entrez le code de vérification<br>envoyé à votre email</h2>
+            <h2 class="step-title">Entrez le code de vérification<br>envoyé à votre email {{ registerForm.email }}</h2>
             <div class="field-group">
               <!-- 6 gros input number -->
               <div class="otp-inputs">
@@ -349,27 +350,159 @@ const passwordError = ref("");
 const otpError = ref("");
 const confirmPassword = ref("");
 const confirmPasswordError = ref("");
+const emailDomainChecking = ref(false);
 
 // ─── Validation ──────────────────────────────────────────────────────────────
-const validateEmail = (email) => {
-  const re =
-    /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-  const hasDotInDomain =
-    email.includes("@") && email.split("@")[1].includes(".");
-  const final =
-    re.test(email) &&
-    email.length <= 254 &&
-    !email.startsWith(".") &&
-    !email.endsWith(".") &&
-    hasDotInDomain;
+const normalizeEmail = (email) => (email || "").trim().toLowerCase();
 
-  if (emailInputRef.value) {
-    emailInputRef.value.style.color = final
-      ? "var(--color-success)"
-      : "var(--color-pastel-danger)";
+const validateEmailDetailed = (rawEmail) => {
+  const email = normalizeEmail(rawEmail);
+
+  if (!email) {
+    return { valid: false, reason: "Email requis", email };
   }
 
-  return final;
+  if (email.length > 254) {
+    return { valid: false, reason: "Email trop long (max 254 caractères)", email };
+  }
+
+  if (/\s/.test(email)) {
+    return { valid: false, reason: "L'email ne doit pas contenir d'espaces", email };
+  }
+
+  if (email.startsWith(".") || email.endsWith(".")) {
+    return { valid: false, reason: "Format d'email invalide", email };
+  }
+
+  if (email.includes("..")) {
+    return { valid: false, reason: "Format d'email invalide", email };
+  }
+
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf("@")) {
+    return { valid: false, reason: "Format d'email invalide", email };
+  }
+
+  const [local, domain] = email.split("@");
+  if (!local || !domain) {
+    return { valid: false, reason: "Format d'email invalide", email };
+  }
+
+  if (local.length > 64) {
+    return { valid: false, reason: "Partie locale de l'email trop longue", email };
+  }
+
+  if (local.startsWith(".") || local.endsWith(".")) {
+    return { valid: false, reason: "Format d'email invalide", email };
+  }
+
+  const localRe = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i;
+  if (!localRe.test(local)) {
+    return { valid: false, reason: "Caractères invalides dans l'email", email };
+  }
+
+  if (!domain.includes(".")) {
+    return { valid: false, reason: "Le domaine de l'email est incomplet", email };
+  }
+
+  const domainParts = domain.split(".");
+  if (domainParts.some((part) => !part)) {
+    return { valid: false, reason: "Domaine d'email invalide", email };
+  }
+
+  const domainLabelRe = /^[a-z0-9-]+$/i;
+  for (const label of domainParts) {
+    if (label.length > 63) {
+      return { valid: false, reason: "Domaine d'email invalide", email };
+    }
+    if (label.startsWith("-") || label.endsWith("-")) {
+      return { valid: false, reason: "Domaine d'email invalide", email };
+    }
+    if (!domainLabelRe.test(label)) {
+      return { valid: false, reason: "Domaine d'email invalide", email };
+    }
+  }
+
+  const tld = domainParts[domainParts.length - 1];
+  if (tld.length < 2) {
+    return { valid: false, reason: "Extension d'email invalide", email };
+  }
+
+  return { valid: true, reason: "", email };
+};
+
+const validateEmail = (email) => {
+  const { valid } = validateEmailDetailed(email);
+
+  if (emailInputRef.value) {
+    if (!email || !email.trim()) {
+      emailInputRef.value.style.color = "var(--color-neutral-900)";
+    } else {
+      emailInputRef.value.style.color = valid
+        ? "var(--color-success)"
+        : "var(--color-pastel-danger)";
+    }
+  }
+
+  return valid;
+};
+
+const onEmailInput = () => {
+  emailDomainChecking.value = false;
+  const result = validateEmailDetailed(registerForm.value.email);
+  const hasTypedSomething = normalizeEmail(registerForm.value.email).length > 0;
+  emailError.value = hasTypedSomething && !result.valid ? result.reason : "";
+  validateEmail(registerForm.value.email);
+};
+
+const fetchDnsRecords = async (domain, type) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    const res = await fetch(
+      `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`,
+      { signal: controller.signal },
+    );
+
+    if (!res.ok) return { ok: false, hasRecord: false, networkError: true };
+
+    const data = await res.json();
+
+    if (data?.Status === 3) {
+      return { ok: true, hasRecord: false, networkError: false };
+    }
+
+    const hasRecord = Array.isArray(data?.Answer) && data.Answer.length > 0;
+    return { ok: true, hasRecord, networkError: false };
+  } catch {
+    return { ok: false, hasRecord: false, networkError: true };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const hasResolvableEmailDomain = async (domain) => {
+  const dnsTypes = ["MX", "A", "AAAA"];
+  let hadNetworkError = false;
+
+  for (const type of dnsTypes) {
+    const result = await fetchDnsRecords(domain, type);
+    if (result.networkError) {
+      hadNetworkError = true;
+      continue;
+    }
+    if (result.hasRecord) {
+      return true;
+    }
+  }
+
+  if (hadNetworkError) {
+    // fail-open: ne pas bloquer les emails valides si le resolver DNS n'est pas joignable
+    return true;
+  }
+
+  return false;
 };
 
 const passwordRules = computed(() => {
@@ -429,7 +562,7 @@ const canGoNext = computed(() => {
     case "username":
       return registerForm.value.username.trim().length >= 2;
     case "email":
-      return validateEmail(registerForm.value.email);
+      return validateEmailDetailed(registerForm.value.email).valid && !emailDomainChecking.value;
     case "otp":
       return otpCode.value.trim().length === 6;
     case "password":
@@ -452,11 +585,32 @@ const goNext = async () => {
   direction.value = "forward";
 
   if (currentStep.value === "email") {
+    if (emailDomainChecking.value) {
+      return;
+    }
+
+    const emailCheck = validateEmailDetailed(registerForm.value.email);
+    if (!emailCheck.valid) {
+      emailError.value = emailCheck.reason;
+      return;
+    }
+
+    emailDomainChecking.value = true;
     try {
-      await requestOtp(registerForm.value.email);
+      const domain = emailCheck.email.split("@")[1];
+      const domainIsResolvable = await hasResolvableEmailDomain(domain);
+      if (!domainIsResolvable) {
+        emailError.value = "Domaine email invalide ou introuvable";
+        return;
+      }
+
+      registerForm.value.email = emailCheck.email;
+      await requestOtp(emailCheck.email);
       currentStep.value = "otp";
     } catch (error) {
       emailError.value = error.message || "Erreur lors de l'envoi du code OTP";
+    } finally {
+      emailDomainChecking.value = false;
     }
     return;
   }

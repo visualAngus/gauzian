@@ -50,8 +50,15 @@ export const useAuth = () => {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Login failed');
+        let errorMessage = 'Erreur lors de la connexion';
+        const raw = await response.text().catch(() => '');
+        try {
+          const data = JSON.parse(raw);
+          errorMessage = data.error || data.message || raw || errorMessage;
+        } catch {
+          if (raw) errorMessage = raw;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
