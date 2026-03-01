@@ -128,7 +128,7 @@ pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<DriveInfo, s
             COALESCE(fs.used_space, 0)::BIGINT as used_space,
             COALESCE(fs.file_count, 0)::BIGINT as file_count,
             COALESCE(fld.folder_count, 0)::BIGINT as folder_count,
-            COALESCE(at.storage_limit_bytes, 2 * 1024 * 1024 * 1024)::BIGINT as storage_limit_bytes,
+            COALESCE(at.storage_limit_bytes, 2::BIGINT * 1024 * 1024 * 1024) as storage_limit_bytes,
             COALESCE(at.name, 'free') as account_tier
         FROM (SELECT $1::uuid as id) u
         LEFT JOIN file_stats fs ON fs.user_id = u.id
