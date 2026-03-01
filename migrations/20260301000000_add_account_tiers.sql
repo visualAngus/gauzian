@@ -9,10 +9,10 @@ CREATE table account_tiers (
 );
 
 INSERT INTO account_tiers (name, description, storage_limit_bytes, price) VALUES
-('free', 'Basic tier with limited features', 2 * 1024 * 1024 * 1024, 0.00),
-('pro', 'Advanced tier with more features', 25 * 1024 * 1024 * 1024, 9.99),
-('premium', 'Full access to all features', 100 * 1024 * 1024 * 1024, 29.99),
-('ultra', 'Unlimited storage and priority support', 200 * 1024 * 1024 * 1024, 99.99);
+('free', 'Basic tier with limited features', 2::BIGINT * 1024 * 1024 * 1024, 0.00),
+('pro', 'Advanced tier with more features', 25::BIGINT * 1024 * 1024 * 1024, 9.99),
+('premium', 'Full access to all features', 100::BIGINT * 1024 * 1024 * 1024, 29.99),
+('ultra', 'Unlimited storage and priority support', 200::BIGINT * 1024 * 1024 * 1024, 99.99);
 
 ALTER TABLE users ADD COLUMN account_tier_id UUID REFERENCES account_tiers(id) DEFAULT (SELECT id FROM account_tiers WHERE name = 'free');
 
