@@ -26,7 +26,7 @@ TMP_FILE="$(mktemp /tmp/gauzian-secrets-XXXXXX.yaml)"
 trap 'rm -f "$TMP_FILE"' EXIT
 
 # Vérifications
-if [ ! -f "$ENC_FILE" ]; then
+if [[ ! -f "$ENC_FILE" ]]; then
   echo "❌ Erreur : $ENC_FILE introuvable."
   echo "   → Chiffrer d'abord : sops --encrypt k8s/secrets.yaml > k8s/secrets.enc.yaml"
   exit 1

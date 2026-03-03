@@ -22,13 +22,13 @@ echo "╚═══════════════════════�
 echo ""
 echo "📂 Répertoire K8s : $K8S_DIR"
 echo "🎯 Namespace      : $NAMESPACE"
-echo "🧹 Mode nettoyage : $([ "$CLEAN_MODE" == "true" ] && echo "OUI (--clean)" || echo "NON")"
+echo "🧹 Mode nettoyage : $([[ "$CLEAN_MODE" == "true" ]] && echo "OUI (--clean)" || echo "NON")"
 echo ""
 
 # =====================================================================
 # ÉTAPE 0 : NETTOYAGE COMPLET (si --clean)
 # =====================================================================
-if [ "$CLEAN_MODE" == "true" ]; then
+if [[ "$CLEAN_MODE" == "true" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🧹 ÉTAPE 0/5 : NETTOYAGE COMPLET DU NAMESPACE"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -94,7 +94,7 @@ echo ""
 cd "$K8S_DIR"
 
 # Vérifier que kustomization.yaml existe
-if [ ! -f "kustomization.yaml" ]; then
+if [[ ! -f "kustomization.yaml" ]]; then
     echo "❌ ERREUR : kustomization.yaml introuvable dans $K8S_DIR"
     exit 1
 fi

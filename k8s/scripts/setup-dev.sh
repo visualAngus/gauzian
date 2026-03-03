@@ -38,7 +38,7 @@ check_tool "kubectl" "https://kubernetes.io/docs/tasks/tools/"
 # Vérifier la clé age
 echo ""
 AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
-if [ -f "$AGE_KEY_FILE" ]; then
+if [[ -f "$AGE_KEY_FILE" ]]; then
   echo "✅ Clé age trouvée : $AGE_KEY_FILE"
 else
   echo "⚠️  Clé age non trouvée. Pour en créer une :"

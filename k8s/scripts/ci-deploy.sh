@@ -12,7 +12,7 @@ docker pull "$REGISTRY/gauzian-backend:$TAG"
 docker pull "$REGISTRY/gauzian-frontend:$TAG"
 
 # Déchiffrement et application des secrets si secrets.enc.yaml existe
-if [ -f "$ENC_FILE" ]; then
+if [[ -f "$ENC_FILE" ]]; then
   echo "🔓 Application des secrets chiffrés..."
   "$SCRIPT_DIR/apply-secrets.sh"
 fi

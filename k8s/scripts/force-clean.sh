@@ -97,7 +97,7 @@ FINALIZERS=$(kubectl get namespace $NAMESPACE -o jsonpath='{.spec.finalizers}')
 echo "   Finalizers actuels : $FINALIZERS"
 echo ""
 
-if [ "$FINALIZERS" != "[]" ] && [ -n "$FINALIZERS" ]; then
+if [[ "$FINALIZERS" != "[]" ]] && [[ -n "$FINALIZERS" ]]; then
     echo "🔧 Suppression des finalizers via patch..."
 
     if kubectl patch namespace $NAMESPACE -p '{"spec":{"finalizers":[]}}' --type=merge; then
@@ -135,7 +135,7 @@ echo "⏳ Attente de la suppression complète (max 60 secondes)..."
 # Attendre que le namespace soit supprimé (max 60 secondes)
 WAIT_COUNT=0
 while kubectl get namespace $NAMESPACE &>/dev/null; do
-    if [ $WAIT_COUNT -ge 20 ]; then
+    if [[ $WAIT_COUNT -ge 20 ]]; then
         echo ""
         echo "⚠️  Le namespace met trop de temps à se supprimer"
         echo "   Tentative de suppression via API directe..."
