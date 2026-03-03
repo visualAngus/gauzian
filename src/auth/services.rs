@@ -393,9 +393,7 @@ pub async fn store_otp(
     let key = format!("otp:{}", email.trim().to_ascii_lowercase());
     let hased_otp = hash_password(&otp).map_err(|e| {
         tracing::error!("Failed to hash OTP: {}", e);
-        redis::RedisError::from(std::io::Error::other(
-            "Failed to hash OTP",
-        ))
+        redis::RedisError::from(std::io::Error::other("Failed to hash OTP"))
     })?;
     manager.set_ex(key, hased_otp, 600).await
 }

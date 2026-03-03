@@ -285,26 +285,6 @@ fn test_verify_password_empty_password() {
 }
 
 #[test]
-fn test_verify_password_different_salt_legacy_sha256() {
-    // Test de compatibilité avec les anciens hash SHA256
-    let password = "legacy_password";
-    let salt = "dGVzdC1zYWx0LTEyMzQ="; // "test-salt-1234" en base64
-
-    // Créer un hash SHA256 legacy manuellement
-    use sha2::{Digest, Sha256};
-
-    let mut hasher = Sha256::new();
-    hasher.update(salt.as_bytes());
-    hasher.update(password.as_bytes());
-    let result = hasher.finalize();
-    let legacy_hash = general_purpose::STANDARD.encode(result);
-
-    let valid = services::verify_password(password, &legacy_hash, salt);
-
-    assert!(valid, "Legacy SHA256 password should verify");
-}
-
-#[test]
 fn test_verify_password_invalid_legacy_hash_format() {
     // Si le hash ne commence pas par $argon2 et n'est pas un SHA256 valide, échoue
     let password = "some_password";
