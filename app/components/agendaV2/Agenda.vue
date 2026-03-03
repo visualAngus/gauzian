@@ -76,7 +76,6 @@
 import { computed, ref } from 'vue';
 
 const daysOfWeek = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-// const monthsOfYear = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const daysWithDate = ref([]);
 
 // Sauvegarder le layout précédent pour stabilité
@@ -276,7 +275,6 @@ const dragStartY = ref(0);
 const dragStartX = ref(0);
 const originalStart = ref(null);
 const originalEnd = ref(null);
-// const preferredColumn = ref(null); // Colonne préférée pour le drop
 
 const onEventMouseDown = (event, evt) => {
     evt.preventDefault(); // Empêcher la sélection de texte

@@ -23,7 +23,6 @@
 </template>
 <script setup>
 
-// import { ref } from 'vue';
 
 const props = defineProps({
     events: {
@@ -48,7 +47,6 @@ const emit = defineEmits(['event-click']);
 
 // Référence à l'événement en cours de drag
 let draggedEvent = null;
-// let originalDayId = null;
 let originalStartHour = null;
 let originalEndHour = null;
 let gridContainer = null;
@@ -61,7 +59,6 @@ const dragEvent = (event, elem, mouseEvent) => {
     // Si event.isSegment est true, faire un return pour bloquer le drag
 
     draggedEvent = event;
-    // originalDayId = event.dayId;
     originalStartHour = event.startHour;
     originalEndHour = event.endHour;
     hasMoved = false;

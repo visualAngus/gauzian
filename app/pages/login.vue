@@ -150,7 +150,6 @@ const handleLogin = async () => {
     } else {
       connnError.value = error.message || "Échec de la connexion";
     }
-    // alert(error.message || "Login failed");
   } finally {
     loading.value = false;
   }

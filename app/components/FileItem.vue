@@ -248,8 +248,6 @@ const startDrag = (mouseDownEvent) => {
 };
 
 const displayName = computed(() => {
-  // console.log("Item metadata:", props.item);
-
   return (
     props.item.metadata?.folder_name ||
     props.item.metadata?.filename ||

@@ -11,7 +11,6 @@
           <span></span>
           <span></span>
         </div>
-        <!-- <p class="loading-message">{{ message || 'Chargement…' }}</p> -->
       </div>
 
       <div class="progress-bar"></div>
