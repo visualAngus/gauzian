@@ -65,14 +65,14 @@ const menuConfig = [
   {
     label: 'Supprimer',
     action: 'delete',
-    condition: (item, folderId) => 
+    condition: (item, _folderId) => 
       item?.dataset && 
       ['file', 'folder'].includes(item.dataset.itemType)
   },
   {
     label: 'Propriétés',
     action: 'properties',
-    condition: (item, folderId) => 
+    condition: (item, _folderId) => 
       item?.dataset && 
       ['file', 'folder'].includes(item.dataset.itemType)
   },

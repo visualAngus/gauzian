@@ -44,15 +44,24 @@
           </button>
 
           <div class="step-dots">
-            <span class="dot" :class="{ active: step === 1, completed: step > 1 }"></span>
-            <span class="dot" :class="{ active: step === 2, completed: step > 2 }"></span>
+            <span
+              class="dot"
+              :class="{ active: step === 1, completed: step > 1 }"
+            ></span>
+            <span
+              class="dot"
+              :class="{ active: step === 2, completed: step > 2 }"
+            ></span>
             <span class="dot" :class="{ active: step === 3 }"></span>
           </div>
         </div>
       </div>
 
       <div class="card-body">
-        <Transition :name="direction === 'forward' ? 'slide-left' : 'slide-right'" mode="out-in">
+        <Transition
+          :name="direction === 'forward' ? 'slide-left' : 'slide-right'"
+          mode="out-in"
+        >
           <div v-if="step === 1" key="email-step" class="step">
             <div class="step-label">Récupération</div>
             <h2 class="step-title">Entrez votre adresse email</h2>
@@ -85,7 +94,9 @@
                 placeholder="Collez votre clé de récupération ici"
                 @input="recoveryKeyError = ''"
               ></textarea>
-              <p v-if="recoveryKeyError" class="field-error">{{ recoveryKeyError }}</p>
+              <p v-if="recoveryKeyError" class="field-error">
+                {{ recoveryKeyError }}
+              </p>
             </div>
 
             <div class="or-divider">ou</div>
@@ -101,9 +112,12 @@
               <button class="btn btn--ghost" @click="openFilePicker">
                 Importer un fichier de récupération
               </button>
-              <p v-if="selectedFileName" class="upload-name">Fichier sélectionné : {{ selectedFileName }}</p>
+              <p v-if="selectedFileName" class="upload-name">
+                Fichier sélectionné : {{ selectedFileName }}
+              </p>
               <p class="upload-hint">
-                PDF, HTML ou TXT accepté. Si le fichier contient la clé, elle sera préremplie.
+                PDF, HTML ou TXT accepté. Si le fichier contient la clé, elle
+                sera préremplie.
               </p>
             </div>
 
@@ -136,7 +150,9 @@
               />
 
               <p class="field-hint">Utilisez au moins 10 caractères.</p>
-              <p v-if="passwordError" class="field-error">{{ passwordError }}</p>
+              <p v-if="passwordError" class="field-error">
+                {{ passwordError }}
+              </p>
               <p v-if="globalError" class="field-error">{{ globalError }}</p>
             </div>
           </div>
@@ -144,7 +160,9 @@
       </div>
 
       <div class="card-footer">
-        <button v-if="step > 1" class="btn btn--ghost" @click="goBack">Retour</button>
+        <button v-if="step > 1" class="btn btn--ghost" @click="goBack">
+          Retour
+        </button>
         <div v-else></div>
 
         <button
@@ -156,30 +174,41 @@
           Continuer
         </button>
 
-        <button v-else-if="step === 2" class="btn btn--primary" :disabled="submitting" @click="submitRecovery">
+        <button
+          v-else-if="step === 2"
+          class="btn btn--primary"
+          :disabled="submitting"
+          @click="submitRecovery"
+        >
           {{ submitting ? "Vérification..." : "Valider la récupération" }}
         </button>
 
-        <button v-else class="btn btn--primary" :disabled="submitting" @click="submitNewPassword">
+        <button
+          v-else
+          class="btn btn--primary"
+          :disabled="submitting"
+          @click="submitNewPassword"
+        >
           {{ submitting ? "Mise à jour..." : "Changer le mot de passe" }}
         </button>
       </div>
 
       <div class="card-login-link">
         Retour à la connexion
-        <button class="link-btn" @click="navigateTo('/login')">Se connecter</button>
+        <button class="link-btn" @click="navigateTo('/login')">
+          Se connecter
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref, computed } from "vue";
+import { useHead } from "#imports";
 definePageMeta({
   layout: "blank",
 });
-
-import { ref, computed } from "vue";
-import { useHead } from "#imports";
 
 const { isDark, toggleTheme } = useTheme();
 
@@ -206,7 +235,8 @@ const fileInputRef = ref(null);
 const validateEmail = (email) => {
   const re =
     /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
-  const hasDotInDomain = email.includes("@") && email.split("@")[1]?.includes(".");
+  const hasDotInDomain =
+    email.includes("@") && email.split("@")[1]?.includes(".");
   const final =
     re.test(email) &&
     email.length <= 254 &&
@@ -285,7 +315,8 @@ const handleRecoveryFile = async (event) => {
       // TODO: appeler une fonction d'extraction de clé depuis PDF
       // Option 1: parser PDF côté front (pdf.js)
       // Option 2: upload temporaire au backend et extraction serveur
-      globalError.value = "Extraction PDF non branchée pour l'instant. Collez la clé manuellement.";
+      globalError.value =
+        "Extraction PDF non branchée pour l'instant. Collez la clé manuellement.";
       return;
     }
 
@@ -313,8 +344,6 @@ const validateRecoveryKey = (key) => {
   }
 };
 
-
-
 const submitRecovery = async () => {
   recoveryKeyError.value = "";
   passwordError.value = "";
@@ -329,7 +358,6 @@ const submitRecovery = async () => {
 
   try {
     validateRecoveryKey(form.value.recoveryKey);
-
 
     // TODO: appeler la fonction/API qui valide email + recovery key
     // Exemple: await validateRecoveryKey(form.value.email, form.value.recoveryKey)
@@ -348,7 +376,8 @@ const submitNewPassword = async () => {
   globalError.value = "";
 
   if (form.value.newPassword.length < 10) {
-    passwordError.value = "Le nouveau mot de passe doit contenir au moins 10 caractères.";
+    passwordError.value =
+      "Le nouveau mot de passe doit contenir au moins 10 caractères.";
     return;
   }
 
@@ -370,7 +399,8 @@ const submitNewPassword = async () => {
 
     await navigateTo("/login");
   } catch (error) {
-    globalError.value = error?.message || "Erreur pendant le changement de mot de passe.";
+    globalError.value =
+      error?.message || "Erreur pendant le changement de mot de passe.";
   } finally {
     submitting.value = false;
   }
@@ -635,7 +665,9 @@ useHead({
 .slide-left-leave-active,
 .slide-right-enter-active,
 .slide-right-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .slide-left-enter-from {

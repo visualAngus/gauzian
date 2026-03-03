@@ -16,4 +16,13 @@ jobs:
           node-version: 20
           cache: 'npm'
       - run: npm install
-      - run: npm run lint
+
+      - name: Run ESLint
+        run: npm run lint 2>&1 | tee eslint-report.txt; exit ${PIPESTATUS[0]}
+
+      - name: Upload ESLint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-report
+          path: eslint-report.txt

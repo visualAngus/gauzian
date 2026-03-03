@@ -483,7 +483,7 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
         const resData = await res.json();
         const drive_info = resData.drive_info;
         const files_and_folders = resData.files_and_folders;
-        const user_info = resData.user_info;
+        // const user_info = resData.user_info;
         const fullPathData = resData.full_path;
 
         usedSpace.value = drive_info.used_space;

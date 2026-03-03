@@ -8,14 +8,14 @@
           title="Mois précédent"
           @click="goToPrevMonth"
         >
-          <
+          -
         </button>
         <button
           class="mini-titre__btns--next"
           title="Mois suivant"
           @click="goToNextMonth"
         >
-          >
+          -
         </button>
       </div>
     </div>

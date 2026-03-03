@@ -23,7 +23,7 @@
 </template>
 <script setup>
 
-import { ref } from 'vue';
+// import { ref } from 'vue';
 
 const props = defineProps({
     events: {
@@ -48,7 +48,7 @@ const emit = defineEmits(['event-click']);
 
 // Référence à l'événement en cours de drag
 let draggedEvent = null;
-let originalDayId = null;
+// let originalDayId = null;
 let originalStartHour = null;
 let originalEndHour = null;
 let gridContainer = null;
@@ -61,7 +61,7 @@ const dragEvent = (event, elem, mouseEvent) => {
     // Si event.isSegment est true, faire un return pour bloquer le drag
 
     draggedEvent = event;
-    originalDayId = event.dayId;
+    // originalDayId = event.dayId;
     originalStartHour = event.startHour;
     originalEndHour = event.endHour;
     hasMoved = false;
@@ -96,7 +96,7 @@ const dragEvent = (event, elem, mouseEvent) => {
     window.addEventListener('mouseup', upHandler, { once: true });
 };
 
-const onMouseMove = (e, elem) => {
+const onMouseMove = (e, _elem) => {
     if (!draggedEvent || !gridContainer) return;
 
     // Détecter si la souris a bougé de plus de 5px (pour éviter les micro-mouvements)

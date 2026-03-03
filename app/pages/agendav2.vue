@@ -17,8 +17,9 @@
   </main>
 </template>
 <script setup>
-import { useRouter } from "vue-router";
-const router = useRouter();
+import BtnAddEvent from "@/components/agendaV2/BtnAddEvent.vue";
+import MiniMapagenda from "~/components/agendaV2/MiniMapAgenda.vue";
+import Agenda from "~/components/agendaV2/Agenda.vue";
 definePageMeta({ headerTitle: "GZAgenda" });
 useHead({
   title: "GZAgenda | AGENDA",
@@ -37,9 +38,6 @@ useHead({
   ],
 });
 
-import BtnAddEvent from "@/components/agendaV2/BtnAddEvent.vue";
-import MiniMapagenda from "~/components/agendaV2/MiniMapAgenda.vue";
-import Agenda from "~/components/agendaV2/Agenda.vue";
 </script>
 <style scoped>
 * {

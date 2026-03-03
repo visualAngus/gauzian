@@ -350,7 +350,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         return pausedTransfers.value.has(transferId);
     };
 
-    const togglePauseTransfer = (transferId, type) => {
+    const togglePauseTransfer = (transferId, _type) => {
         if (pausedTransfers.value.has(transferId)) {
             pausedTransfers.value.delete(transferId);
         } else {
@@ -511,12 +511,12 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             );
 
             if (!contentsRes.ok) {
-                throw new Error("Failed to fetch folder contents");
                 addNotification({
                     title: "Erreur de téléchargement",
                     message: `Erreur lors du téléchargement: Impossible de récupérer le contenu du dossier.`,
                     duration: 8000,
                 });
+                throw new Error("Failed to fetch folder contents");
             }
 
             const { contents } = await contentsRes.json();
@@ -976,7 +976,6 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
         // Download-related state
         downloadAbortControllers,
-        downloadFile,
         downloadFolderAsZip,
         listDownloadInProgress,
         downloadProgressMap,

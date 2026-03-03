@@ -8,7 +8,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "lint": "eslint ."
+    "lint": "eslint . --max-warnings -1"
   },
   "dependencies": {
     "jszip": "^3.10.1",

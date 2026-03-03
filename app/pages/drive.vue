@@ -1,10 +1,11 @@
 <template>
-  <Loading
-    :message="loadingMessage"
-    :isLoading="loadingDrive === true"
-    />
+  <div>
+    <Loading
+      :message="loadingMessage"
+      :isLoading="loadingDrive === true"
+      />
 
-  <Transition name="notif-pop">
+    <Transition name="notif-pop">
     <Notification
       v-if="notifications.length > 0"
       :key="notifications[0].id"
@@ -109,10 +110,6 @@
           title="Tout reprendre"
         >
           <svg
-            loadPath,
-            downloadFile,
-            usedSpace,
-            totalSpaceLeft
             fill="currentColor"
           >
             <path d="M7 5V19L17 12L7 5Z" />
@@ -657,6 +654,7 @@
     multiple
     @change="handleFileInputChange"
   />
+  </div>
 </template>
 
 <script setup>
@@ -665,7 +663,6 @@ import { useRouter } from "vue-router";
 import { useHead } from "#imports";
 
 // Composables
-import { useAuth } from "~/composables/useAuth";
 import { useLayout } from "~/composables/drive/useLayout";
 import { useSelection } from "~/composables/drive/useSelection";
 import { useDriveData } from "~/composables/drive/useDriveData";
@@ -676,12 +673,12 @@ import { useContextMenu } from "~/composables/drive/useContextMenu";
 import { useNotification } from "~/composables/useNotification";
 
 // Directives & Components
-import Loading from "~/components/Loading.vue";
+import Loading from "~/components/LoadingCompo.vue";
 import dropzone from "~/directives/dropzone";
 import FileItem from "~/components/FileItem.vue";
 import ShareItemVue from "~/components/ShareItem.vue";
 import FolderTreeNode from "~/components/FolderTreeNode.vue";
-import Notification from "~/components/Notification.vue";
+import Notification from "~/components/NotificationCompo.vue";
 import InfoItem from "~/components/InfoItem.vue";
 import ContextMenu from "~/components/ContextMenu.vue";
 import RechercheBar from "~/components/RechercheBar.vue";
@@ -768,9 +765,9 @@ const {
   allTransfersPaused,
   isPanelCollapsed,
   abortControllers,
-  downloadAbortControllers,
+  _downloadAbortControllers,
   // Fonctions
-  startUploads,
+  _startUploads,
   pauseAllTransfers,
   resumeAllTransfers,
   cancelAllTransfers,
@@ -848,6 +845,7 @@ const {
   totalSpaceLeft,
   liste_decrypted_items,
   addNotification,
+  isSidebarOpen
 });
 const {
   infoPanelVisible,
@@ -919,9 +917,6 @@ const handleShareClose = async (contacts, accessLevel) => {
   isSharing.value = false;
   shareItemTarget.value = null;
 };
-
-// 7. Context Menu Global
-const { showContextMenu, hideContextMenu } = useContextMenu();
 
 // Recherche & filtrage
 const searchQuery = ref('')

@@ -1,7 +1,7 @@
-import { ref, computed, watch } from "vue";
+import { ref, computed } from "vue";
 import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 
-export function useInfoPanel({ API_URL, selectedItemsMap, formatBytes, addNotification, clearSelection, renameItem, downloadFile, deleteItem, shareItem }) {
+export function useInfoPanel({ _API_URL, selectedItemsMap, formatBytes, addNotification, clearSelection, renameItem, downloadFile, deleteItem, shareItem }) {
     const { fetchWithAuth } = useFetchWithAuth();
     const infoPanelVisible = ref(false);
     const infoItem = ref(null);
@@ -95,7 +95,7 @@ export function useInfoPanel({ API_URL, selectedItemsMap, formatBytes, addNotifi
         console.log("Revoking access for user:", sharedUser, "on item:", itemId);
 
         // Trouver l'élément DOM correspondant
-        const req = fetchWithAuth('/drive/revoke-access', {
+        const _req = fetchWithAuth('/drive/revoke-access', {
             method: "POST",
             body: JSON.stringify({
                 item_type: selectedItemsMap.value.get(itemId)?.type || "file",

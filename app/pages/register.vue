@@ -5,98 +5,84 @@
       <div class="card-header">
         <span class="brand">GAUZIAN</span>
         <div class="header-right">
-        <button class="theme-toggle" @click="toggleTheme" :aria-label="isDark ? 'Mode clair' : 'Mode sombre'">
-          <!-- Soleil -->
-          <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-          </svg>
-          <!-- Lune -->
-          <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-        </button>
-        <div class="step-dots">
-          <span
-            v-for="(s, i) in visibleSteps"
-            :key="s"
-            class="dot"
-            :class="{
+          <button class="theme-toggle" @click="toggleTheme" :aria-label="isDark ? 'Mode clair' : 'Mode sombre'">
+            <!-- Soleil -->
+            <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+            <!-- Lune -->
+            <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          </button>
+          <div class="step-dots">
+            <span v-for="(s, i) in visibleSteps" :key="s" class="dot" :class="{
               active: currentStep === s,
               completed: stepIndex > i,
-            }"
-          ></span>
-        </div>
+            }"></span>
+          </div>
         </div>
       </div>
 
       <!-- Contenu par étape avec transition -->
       <div class="card-body">
         <Transition :name="direction === 'forward' ? 'slide-left' : 'slide-right'" mode="out-in">
-
           <!-- Étape 1 : username -->
           <div v-if="currentStep === 'username'" key="username" class="step">
             <div class="step-label">Bienvenue !</div>
-            <h2 class="step-title">Comment souhaitez-vous<br>vous appeler ?</h2>
+            <h2 class="step-title">
+              Comment souhaitez-vous<br />vous appeler ?
+            </h2>
             <div class="field-group">
-              <input
-                id="reg-username"
-                v-model="registerForm.username"
-                type="text"
-                placeholder="Nom d'utilisateur"
-                autocomplete="nickname"
-                @keydown.enter="goNext"
-                autofocus
-                class="field-input"
-                :class="{ 'field-input--error': usernameError }"
-              />
-              <p v-if="usernameError" class="field-error">{{ usernameError }}</p>
+              <input id="reg-username" v-model="registerForm.username" type="text" placeholder="Nom d'utilisateur"
+                autocomplete="nickname" @keydown.enter="goNext" autofocus class="field-input"
+                :class="{ 'field-input--error': usernameError }" />
+              <p v-if="usernameError" class="field-error">
+                {{ usernameError }}
+              </p>
             </div>
           </div>
 
           <!-- Étape 2 : email -->
           <div v-else-if="currentStep === 'email'" key="email" class="step">
-            <div class="step-label">Parfait ! Bonjour <b>{{ registerForm.username }}</b> !</div>
+            <div class="step-label">
+              Parfait ! Bonjour <b>{{ registerForm.username }}</b> !
+            </div>
             <h2 class="step-title">Quelle est votre adresse email ?</h2>
             <div class="field-group">
-              <input
-                id="reg-email"
-                ref="emailInputRef"
-                v-model="registerForm.email"
-                type="email"
-                placeholder="votre@email.com"
-                autocomplete="username"
-                @input="onEmailInput"
-                @keydown.enter="goNext"
-                class="field-input"
-                :class="{ 'field-input--error': emailError }"
-              />
+              <input id="reg-email" ref="emailInputRef" v-model="registerForm.email" type="email"
+                placeholder="votre@email.com" autocomplete="username" @input="onEmailInput" @keydown.enter="goNext"
+                class="field-input" :class="{ 'field-input--error': emailError }" />
               <p v-if="emailError" class="field-error">{{ emailError }}</p>
-              <p v-else-if="emailDomainChecking" class="field-hint">Vérification du domaine email…</p>
+              <p v-else-if="emailDomainChecking" class="field-hint">
+                Vérification du domaine email…
+              </p>
             </div>
           </div>
 
-            <!-- Étape 2.5 : otp -->
+          <!-- Étape 2.5 : otp -->
           <div v-else-if="currentStep === 'otp'" key="otp" class="step">
             <div class="step-label">Un dernier effort !</div>
-            <h2 class="step-title">Entrez le code de vérification<br>envoyé à votre email {{ registerForm.email }}</h2>
+            <h2 class="step-title">
+              Entrez le code de vérification<br />envoyé à votre email
+              {{ registerForm.email }}
+            </h2>
             <div class="field-group">
               <!-- 6 gros input number -->
               <div class="otp-inputs">
-                <input
-                  v-for="(_, i) in 6"
-                  :key="i"
-                  type="text"
-                  inputmode="numeric"
-                  maxlength="1"
-                  class="otp-input"
-                  :class="{ 'field-input--error': otpError }"
-                  :ref="(el) => setOtpInputRef(el, i)"
-                  @input="(e) => handleOtpInput(e, i)"
-                  @keydown.backspace="(e) => handleOtpBackspace(e, i)"
-                />
+                <input v-for="(_, i) in 6" :key="i" type="text" inputmode="numeric" maxlength="1" class="otp-input"
+                  :class="{ 'field-input--error': otpError }" :ref="(el) => setOtpInputRef(el, i)"
+                  @input="(e) => handleOtpInput(e, i)" @keydown.backspace="(e) => handleOtpBackspace(e, i)" />
               </div>
 
               <p v-if="otpError" class="field-error">{{ otpError }}</p>
@@ -106,64 +92,53 @@
           <!-- Étape 3 : password -->
           <div v-else-if="currentStep === 'password'" key="password" class="step">
             <div class="step-label">Presque !</div>
-            <h2 class="step-title">Créez un mot de<br>passe sécurisé</h2>
+            <h2 class="step-title">Créez un mot de<br />passe sécurisé</h2>
             <div class="field-group">
               <div class="input-with-icon">
-                <input
-                  id="reg-password"
-                  v-model="registerForm.password"
-                  :type="showRegisterPassword ? 'text' : 'password'"
-                  placeholder="Mot de passe"
-                  autocomplete="new-password"
-                  @input="changement"
-                  @keydown.enter="goNext"
-                  class="field-input"
-                  :class="{ 'field-input--error': passwordError }"
-                />
-                <button
-                  type="button"
-                  class="icon-btn"
-                  @click="showRegisterPassword = !showRegisterPassword"
-                  :aria-label="showRegisterPassword ? 'Masquer' : 'Afficher'"
-                >
-                  <svg v-if="!showRegisterPassword" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
-                    <circle cx="12" cy="12" r="3"/>
+                <input id="reg-password" v-model="registerForm.password"
+                  :type="showRegisterPassword ? 'text' : 'password'" placeholder="Mot de passe"
+                  autocomplete="new-password" @input="changement" @keydown.enter="goNext" class="field-input"
+                  :class="{ 'field-input--error': passwordError }" />
+                <button type="button" class="icon-btn" @click="showRegisterPassword = !showRegisterPassword"
+                  :aria-label="showRegisterPassword ? 'Masquer' : 'Afficher'">
+                  <svg v-if="!showRegisterPassword" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
                   </svg>
-                  <svg v-else class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M3 3l18 18"/>
+                  <svg v-else class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M3 3l18 18" />
                   </svg>
                 </button>
               </div>
               <!-- Indicateur de force -->
               <div v-if="registerForm.password.length > 0" class="strength-bar">
-                <span
-                  v-for="n in 4"
-                  :key="n"
-                  class="strength-segment"
-                  :class="strengthClass(n)"
-                ></span>
+                <span v-for="n in 4" :key="n" class="strength-segment" :class="strengthClass(n)"></span>
               </div>
-              <p v-if="passwordMsg" class="field-hint" :style="{ color: passwordMsgColor === 'green' ? 'var(--color-success)' : '#e05c4b' }">
+              <p v-if="passwordMsg" class="field-hint" :style="{
+                color:
+                  passwordMsgColor === 'green'
+                    ? 'var(--color-success)'
+                    : '#e05c4b',
+              }">
                 {{ passwordMsg }}
               </p>
-              <p v-if="passwordError" class="field-error">{{ passwordError }}</p>
+              <p v-if="passwordError" class="field-error">
+                {{ passwordError }}
+              </p>
             </div>
-            <div class="field-group" style="margin-top: 12px;">
+            <div class="field-group" style="margin-top: 12px">
               <div class="input-with-icon">
-                <input
-                  v-model="confirmPassword"
-                  :type="showRegisterPassword ? 'text' : 'password'"
-                  placeholder="Confirmer le mot de passe"
-                  autocomplete="new-password"
-                  @keydown.enter="goNext"
-                  class="field-input"
-                  :class="{ 'field-input--error': confirmPasswordError }"
-                />
+                <input v-model="confirmPassword" :type="showRegisterPassword ? 'text' : 'password'"
+                  placeholder="Confirmer le mot de passe" autocomplete="new-password" @keydown.enter="goNext"
+                  class="field-input" :class="{ 'field-input--error': confirmPasswordError }" />
               </div>
-              <p v-if="confirmPasswordError" class="field-error">{{ confirmPasswordError }}</p>
+              <p v-if="confirmPasswordError" class="field-error">
+                {{ confirmPasswordError }}
+              </p>
             </div>
           </div>
 
@@ -171,100 +146,114 @@
           <div v-else-if="currentStep === 'generating'" key="generating" class="step step--centered">
             <div class="spinner-wrap">
               <svg class="spinner" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
-                <circle class="spinner-track" cx="25" cy="25" r="20" fill="none" stroke-width="4"/>
-                <circle class="spinner-arc" cx="25" cy="25" r="20" fill="none" stroke-width="4"/>
+                <circle class="spinner-track" cx="25" cy="25" r="20" fill="none" stroke-width="4" />
+                <circle class="spinner-arc" cx="25" cy="25" r="20" fill="none" stroke-width="4" />
               </svg>
             </div>
-            <h2 class="step-title step-title--center">Génération de votre<br>espace sécurisé…</h2>
+            <h2 class="step-title step-title--center">
+              Génération de votre<br />espace sécurisé…
+            </h2>
             <p class="step-subtitle">Clés RSA-4096 en cours de génération</p>
-            <p v-if="generateError" class="field-error" style="margin-top:12px; text-align:center;">{{ generateError }}</p>
+            <p v-if="generateError" class="field-error" style="margin-top: 12px; text-align: center">
+              {{ generateError }}
+            </p>
           </div>
 
           <!-- Étape 5 : recovery -->
           <div v-else-if="currentStep === 'recovery'" key="recovery" class="step step--recovery">
             <div class="recovery-header">
               <div class="recovery-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <path d="M9 12l2 2 4-4"/>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="M9 12l2 2 4-4" />
                 </svg>
               </div>
               <div>
                 <div class="step-label">Votre espace est prêt !</div>
-                <h2 class="step-title step-title--recovery">Sauvegardez votre clé de récupération</h2>
+                <h2 class="step-title step-title--recovery">
+                  Sauvegardez votre clé de récupération
+                </h2>
               </div>
             </div>
 
             <p class="recovery-warning">
-              Cette clé est <strong>la seule façon</strong> de retrouver l'accès à votre compte si vous oubliez votre mot de passe. <strong>Il n'en existe qu'un seul exemplaire.</strong>
+              Cette clé est <strong>la seule façon</strong> de retrouver l'accès
+              à votre compte si vous oubliez votre mot de passe.
+              <strong>Il n'en existe qu'un seul exemplaire.</strong>
             </p>
 
             <div class="recovery-key-preview">
               <div class="recovery-key-header">
                 <div class="recovery-key-label">Votre clé</div>
                 <button class="btn-copy" @click="copyRecoveryKey" :class="{ copied: copyStatus === 'copied' }">
-                  <svg v-if="copyStatus !== 'copied'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  <svg v-if="copyStatus !== 'copied'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14"
+                    height="14">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                   </svg>
-                  <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <polyline points="20 6 9 17 4 12"/>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  {{ copyStatus === 'copied' ? 'Copié !' : 'Copier' }}
+                  {{ copyStatus === "copied" ? "Copié !" : "Copier" }}
                 </button>
               </div>
               <div class="recovery-key-value">{{ recoveryKeyValue }}</div>
             </div>
 
             <p class="recovery-last-chance">
-              Cette page est la <strong>seule occasion</strong> de récupérer cette clé — elle ne sera plus jamais affichée.
+              Cette page est la <strong>seule occasion</strong> de récupérer
+              cette clé — elle ne sera plus jamais affichée.
             </p>
 
             <div class="recovery-actions">
-              <button class="btn btn--primary btn--recovery-dl" @click="downloadRecoveryKey" :disabled="downloadStatus === 'downloading'">
-                <svg v-if="downloadStatus !== 'done'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon" :class="{ 'btn-icon--spinning': downloadStatus === 'downloading' }">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
+              <button class="btn btn--primary btn--recovery-dl" @click="downloadRecoveryKey"
+                :disabled="downloadStatus === 'downloading'">
+                <svg v-if="downloadStatus !== 'done'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"
+                  :class="{
+                    'btn-icon--spinning': downloadStatus === 'downloading',
+                  }">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
-                  <polyline points="20 6 9 17 4 12"/>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
+                  <polyline points="20 6 9 17 4 12" />
                 </svg>
-                {{ downloadStatus === 'downloading' ? 'Préparation…' : downloadStatus === 'done' ? 'Téléchargé !' : 'Télécharger la clé' }}
+                {{
+                  downloadStatus === "downloading"
+                    ? "Préparation…"
+                    : downloadStatus === "done"
+                      ? "Téléchargé !"
+                      : "Télécharger la clé"
+                }}
               </button>
               <p v-if="downloadStatus === 'done'" class="download-hint">
-                Dans la fenêtre qui s'est ouverte, choisissez "Enregistrer en PDF".
+                Dans la fenêtre qui s'est ouverte, choisissez "Enregistrer en
+                PDF".
               </p>
             </div>
           </div>
-
         </Transition>
       </div>
 
       <!-- Actions navigation -->
       <div class="card-footer" v-if="currentStep !== 'generating'">
-        <button
-          v-if="currentStep !== 'username'"
-          class="btn btn--ghost btn--arrow-left"
-          @click="goBack"
-          :disabled="currentStep === 'recovery'"
-        >
+        <button v-if="currentStep !== 'username'" class="btn btn--ghost btn--arrow-left" @click="goBack"
+          :disabled="currentStep === 'recovery'">
           Retour
         </button>
         <div v-else></div>
 
-        <button
-          v-if="currentStep !== 'recovery'"
-          class="btn btn--primary btn--arrow-right"
-          @click="goNext"
-          :disabled="!canGoNext"
-        >
+        <button v-if="currentStep !== 'recovery'" class="btn btn--primary btn--arrow-right" @click="goNext"
+          :disabled="!canGoNext">
           Suivant
         </button>
-        <button
-          v-else
-          class="btn btn--primary btn--arrow-right"
-          @click="navigateTo('/drive')"
-        >
+        <button v-else class="btn btn--primary btn--arrow-right" @click="navigateTo('/drive')">
           Accéder à mon drive
         </button>
       </div>
@@ -272,19 +261,21 @@
       <!-- Lien login -->
       <div class="card-login-link" v-if="currentStep !== 'generating' && currentStep !== 'recovery'">
         Déjà un compte ?
-        <button class="link-btn" @click="navigateTo('/login')">Se connecter</button>
+        <button class="link-btn" @click="navigateTo('/login')">
+          Se connecter
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-definePageMeta({
-  layout: "blank",
-});
 import { ref, computed, watch, nextTick } from "vue";
 import { useHead } from "#imports";
 import { useAuth } from "~/composables/useAuth";
+definePageMeta({
+  layout: "blank",
+});
 
 const { requestOtp, validateOtp, finalizeRegistration } = useAuth();
 const { isDark, toggleTheme } = useTheme();
@@ -311,9 +302,9 @@ const setOtpInputRef = (el, index) => {
 const handleOtpInput = (event, index) => {
   const target = event.target;
   const sanitizedValue = (target.value || "")
-  .toUpperCase()
-  .replace(/[^A-Z0-9]/g, "")
-  .slice(0, 1);
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 1);
   target.value = sanitizedValue;
 
   otpCode.value = otpInputRefs.value
@@ -338,7 +329,14 @@ const handleOtpBackspace = (event, index) => {
 // ─── Navigation par étapes ────────────────────────────────────────────────────
 const currentStep = ref("username"); // 'username'|'email'|'otp'|'password'|'generating'|'recovery'
 const direction = ref("forward");
-const steps = ["username", "email","otp","password", "generating", "recovery"];
+const steps = [
+  "username",
+  "email",
+  "otp",
+  "password",
+  "generating",
+  "recovery",
+];
 const visibleSteps = ["username", "email", "otp", "password", "recovery"]; // dots de progression (4 visibles)
 
 const stepIndex = computed(() => steps.indexOf(currentStep.value));
@@ -363,11 +361,19 @@ const validateEmailDetailed = (rawEmail) => {
   }
 
   if (email.length > 254) {
-    return { valid: false, reason: "Email trop long (max 254 caractères)", email };
+    return {
+      valid: false,
+      reason: "Email trop long (max 254 caractères)",
+      email,
+    };
   }
 
   if (/\s/.test(email)) {
-    return { valid: false, reason: "L'email ne doit pas contenir d'espaces", email };
+    return {
+      valid: false,
+      reason: "L'email ne doit pas contenir d'espaces",
+      email,
+    };
   }
 
   if (email.startsWith(".") || email.endsWith(".")) {
@@ -389,7 +395,11 @@ const validateEmailDetailed = (rawEmail) => {
   }
 
   if (local.length > 64) {
-    return { valid: false, reason: "Partie locale de l'email trop longue", email };
+    return {
+      valid: false,
+      reason: "Partie locale de l'email trop longue",
+      email,
+    };
   }
 
   if (local.startsWith(".") || local.endsWith(".")) {
@@ -402,7 +412,11 @@ const validateEmailDetailed = (rawEmail) => {
   }
 
   if (!domain.includes(".")) {
-    return { valid: false, reason: "Le domaine de l'email est incomplet", email };
+    return {
+      valid: false,
+      reason: "Le domaine de l'email est incomplet",
+      email,
+    };
   }
 
   const domainParts = domain.split(".");
@@ -517,7 +531,9 @@ const passwordRules = computed(() => {
 
 const passwordStrength = computed(() => {
   const r = passwordRules.value;
-  return [r.hasMinLength, r.hasUpperCase, r.hasNumber, r.hasSpecialChar].filter(Boolean).length;
+  return [r.hasMinLength, r.hasUpperCase, r.hasNumber, r.hasSpecialChar].filter(
+    Boolean,
+  ).length;
 });
 
 const isPasswordValid = computed(() => passwordStrength.value === 4);
@@ -562,7 +578,10 @@ const canGoNext = computed(() => {
     case "username":
       return registerForm.value.username.trim().length >= 2;
     case "email":
-      return validateEmailDetailed(registerForm.value.email).valid && !emailDomainChecking.value;
+      return (
+        validateEmailDetailed(registerForm.value.email).valid &&
+        !emailDomainChecking.value
+      );
     case "otp":
       return otpCode.value.trim().length === 6;
     case "password":
@@ -617,7 +636,10 @@ const goNext = async () => {
 
   if (currentStep.value === "otp") {
     try {
-      tempToken.value = await validateOtp(registerForm.value.email, otpCode.value.trim().toUpperCase());
+      tempToken.value = await validateOtp(
+        registerForm.value.email,
+        otpCode.value.trim().toUpperCase(),
+      );
       currentStep.value = "password";
     } catch (error) {
       otpError.value = error.message || "Code OTP invalide";
@@ -688,14 +710,16 @@ const handleRegister = async () => {
 
 // ─── Générer QR code SVG inline (sans appel réseau) ───────────────────────────
 const generateQRSvg = async (text) => {
-  const { renderSVG } = await import('uqr');
-  return renderSVG(text, { ecc: 'M' });
+  const { renderSVG } = await import("uqr");
+  return renderSVG(text, { ecc: "M" });
 };
 
 const copyRecoveryKey = async () => {
   await navigator.clipboard.writeText(recoveryKeyValue.value);
   copyStatus.value = "copied";
-  setTimeout(() => { copyStatus.value = "idle"; }, 2000);
+  setTimeout(() => {
+    copyStatus.value = "idle";
+  }, 2000);
 };
 
 // ─── Télécharger la clé de récupération (PDF imprimable) ──────────────────────
@@ -704,7 +728,11 @@ const downloadRecoveryKey = async () => {
   const key = recoveryKeyValue.value;
   const recoveryUrl = `${window.location.origin}/recovery#recoveryKey=${encodeURIComponent(key)}`;
   const qrSvg = await generateQRSvg(recoveryUrl);
-  const date = new Date().toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
+  const date = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
@@ -1048,7 +1076,8 @@ useHead({
   gap: 3px;
   width: 100%;
 }
-.otp-input{
+
+.otp-input {
   width: 100%;
   padding: 10px;
   border: 1px solid #cccccc;
@@ -1111,10 +1140,21 @@ useHead({
   transition: background-color 0.3s ease;
 }
 
-.strength--weak   { background: var(--color-danger) !important; }
-.strength--fair   { background: #f59d3d !important; }
-.strength--good   { background: #e8c23a !important; }
-.strength--strong { background: var(--color-success) !important; }
+.strength--weak {
+  background: var(--color-danger) !important;
+}
+
+.strength--fair {
+  background: #f59d3d !important;
+}
+
+.strength--good {
+  background: #e8c23a !important;
+}
+
+.strength--strong {
+  background: var(--color-success) !important;
+}
 
 /* ─── Spinner ────────────────────────────────────────────────────────────────── */
 .spinner-wrap {
@@ -1142,13 +1182,26 @@ useHead({
 }
 
 @keyframes rotate {
-  100% { transform: rotate(360deg); }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes dash {
-  0%   { stroke-dasharray: 1 200; stroke-dashoffset: 0; }
-  50%  { stroke-dasharray: 89 200; stroke-dashoffset: -35; }
-  100% { stroke-dasharray: 89 200; stroke-dashoffset: -124; }
+  0% {
+    stroke-dasharray: 1 200;
+    stroke-dashoffset: 0;
+  }
+
+  50% {
+    stroke-dasharray: 89 200;
+    stroke-dashoffset: -35;
+  }
+
+  100% {
+    stroke-dasharray: 89 200;
+    stroke-dashoffset: -124;
+  }
 }
 
 /* ─── Recovery ───────────────────────────────────────────────────────────────── */
@@ -1229,7 +1282,7 @@ useHead({
 }
 
 .recovery-key-value {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 12px;
   word-break: break-all;
   line-height: 1.8;
@@ -1249,7 +1302,10 @@ useHead({
   border-radius: 5px;
   padding: 3px 9px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
   font-family: inherit;
 }
 
@@ -1297,8 +1353,15 @@ useHead({
 }
 
 @keyframes btn-spin {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(3px);
+  }
 }
 
 .recovery-actions {
@@ -1423,10 +1486,25 @@ useHead({
     transform 0.22s ease;
 }
 
-.slide-left-enter-from  { opacity: 0; transform: translateX(28px); }
-.slide-left-leave-to    { opacity: 0; transform: translateX(-28px); }
-.slide-right-enter-from { opacity: 0; transform: translateX(-28px); }
-.slide-right-leave-to   { opacity: 0; transform: translateX(28px); }
+.slide-left-enter-from {
+  opacity: 0;
+  transform: translateX(28px);
+}
+
+.slide-left-leave-to {
+  opacity: 0;
+  transform: translateX(-28px);
+}
+
+.slide-right-enter-from {
+  opacity: 0;
+  transform: translateX(-28px);
+}
+
+.slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(28px);
+}
 
 /* ─── Theme toggle button ────────────────────────────────────────────────────── */
 .header-right {
@@ -1447,7 +1525,9 @@ useHead({
   cursor: pointer;
   color: #666;
   padding: 0;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
   flex-shrink: 0;
 }
 

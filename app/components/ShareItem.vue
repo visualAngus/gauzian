@@ -60,17 +60,7 @@
 <script setup>
 const inputRef = ref(null);
 
-const props = defineProps({
-  itemName: {
-    type: String,
-    required: true,
-    default: "Élément sans nom",
-  },
-  itemId: {
-    type: String,
-    required: true,
-  },
-});
+
 const contacts = ref([]);
 const accessLevel = ref('read');
 

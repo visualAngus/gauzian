@@ -15,10 +15,10 @@ export function useFileActions({
     API_URL,
     activeFolderId,
     listToUpload,
-    listUploadInProgress,
-    listUploaded,
-    fileProgressMap,
-    abortControllers,
+    _listUploadInProgress,
+    _listUploaded,
+    _fileProgressMap,
+    _abortControllers,
     refreshTreeNode,
     loadPath,
     usedSpace,
@@ -29,7 +29,8 @@ export function useFileActions({
     clearSelection,
     foldersList,
     liste_decrypted_items,
-    addNotification
+    addNotification,
+    isSidebarOpen
 } = {}) {
 
     const router = useRouter();
@@ -63,7 +64,7 @@ export function useFileActions({
         zIndex: 9999,
     }));
 
-    const click_on_item = (item, event) => {
+    const click_on_item = (item, _event) => {
         // console.log("Item event:", item, event);
 
         // Si on est en corbeille, restaurer l'item au lieu de l'ouvrir/télécharger

@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 
-export function useSelection(API_URL) {
+export function useSelection(_API_URL) {
   const selectedItems = ref(new Set());
   const selectedItemsMap = ref(new Map());
 

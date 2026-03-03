@@ -91,13 +91,13 @@
 </template>
 
 <script setup>
-definePageMeta({
-  layout: "blank",
-});
 import { ref } from "vue";
 import { useHead } from "#imports";
 import { useAuth } from "~/composables/useAuth";
 
+definePageMeta({
+  layout: "blank",
+});
 const { login } = useAuth();
 const { isDark, toggleTheme } = useTheme();
 
