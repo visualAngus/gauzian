@@ -148,14 +148,8 @@ h1 {
 }
 
 @media (max-width: 600px) {
-	/* header {
-		padding: 15px 20px;
-		height: 70px;
-	} */
-
 	h1 {
 		font-size: 25px;
-		/* margin-left: 0px; */
 	}
 
 	.a-menu {

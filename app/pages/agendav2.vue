@@ -107,7 +107,6 @@ main {
 #top-section--left {
   height: 100%;
   width: 100%;
-  /* background-color: black; */
   padding: 4px 10px;
 }
 

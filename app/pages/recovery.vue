@@ -516,7 +516,6 @@ useHead({
 
 .card-body {
   padding: 20px 0 12px;
-  /* min-height: 260px; */
   overflow: hidden;
 }
 

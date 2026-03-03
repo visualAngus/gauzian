@@ -82,10 +82,6 @@
   grid-template-columns: auto repeat(var(--grid-columns, 7), 1fr);
   grid-template-rows: auto repeat(24, 1fr);
   overflow: auto;
-}
-
-/* Scrollbar personnalisée pour la grille */
-.agenda-page--center--center {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
@@ -216,10 +212,6 @@
   border-left: 3px solid #3D5FC4;
 }
 
-.agenda-event:active {
-  cursor: grabbing;
-}
-
 .agenda-event:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -227,6 +219,7 @@
 }
 
 .agenda-event:active {
+  cursor: grabbing;
   transform: translateY(0);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }

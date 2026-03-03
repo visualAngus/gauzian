@@ -5,18 +5,14 @@
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 body {
   font-family: "Roboto", "Segoe UI", sans-serif;
   /* Police style Google */
   background-color: #fff;
-}
-
-/* Global scrollbar styling for all elements */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -51,7 +47,6 @@ body {
 }
 
 main {
-  /* position: relative; */
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -164,7 +159,6 @@ main {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  /* margin-left: 35px; */
   margin-top: 0px;
 }
 
@@ -320,11 +314,6 @@ html.dark #shared-with-me-button:hover {
   }
 }
 
-/* .section_items.is-disabled {
-  opacity: 0.6;
-  pointer-events: none;
-  cursor: not-allowed;
-} */
 
 .file-grid {
   display: grid;
@@ -405,7 +394,6 @@ html.dark #shared-with-me-button:hover {
   display: none;
   align-items: center;
   justify-content: space-between;
-  /* width: 100%; */
   margin-bottom: 12px;
   top: 25px;
   left: 25px;
@@ -421,7 +409,6 @@ html.dark #shared-with-me-button:hover {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -450,7 +437,6 @@ html.dark #shared-with-me-button:hover {
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 998;
-  /* animation: fadeIn 0.2s ease-in; */
 }
 
 @media (max-width: 768px) {
@@ -607,7 +593,7 @@ html.dark #shared-with-me-button:hover {
 
 @media (max-width: 768px) {
   .breadcrumb-item span {
-    font-size: 14pxx;
+    font-size: 14px;
   }
 }
 
@@ -859,7 +845,6 @@ html.dark #shared-with-me-button:hover {
   width: 100%;
   max-height: 80%;
   margin-bottom: 20px;
-  overflow-y: auto;
   padding: 10px;
   padding-left: 2px;
 
@@ -891,7 +876,6 @@ html.dark #shared-with-me-button:hover {
 .three-folder-name {
   font-family: "Roboto", "Segoe UI", sans-serif;
   font-size: 15px;
-  /* font-weight: 600; */
   color: var(--color-neutral-900);
   text-decoration: none;
   padding: 3px 20px;
@@ -994,7 +978,6 @@ html.dark #shared-with-me-button:hover {
   .div-autre-menu {
     gap: 5px;
     margin-bottom: 10px;
-    /* flex-direction: column; */
   }
 }
 
@@ -1071,12 +1054,10 @@ html.dark #shared-with-me-button:hover {
   align-items: flex-start;
   justify-content: flex-end;
 
-  /* background-color: #f7f7f7; */
   height: 20%;
   width: 100%;
   border-radius: 10px;
   padding: 16px 12px;
-  /* box-shadow: 0 2px 8px rgba(76, 142, 175, 0.08); */
   margin-top: auto;
   transition: all 0.3s ease;
 }
@@ -1475,21 +1456,13 @@ html.dark #shared-with-me-button:hover {
 }
 
 .btn-control.btn-cancel:hover {
-  background: var(--color-danger) 1a;
+  background: var(--color-danger);
   border-color: var(--color-danger);
 }
 
 .btn-control svg {
   width: 16px;
   height: 16px;
-}
-
-.breadcrumb-left {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
 }
 
 #empty-trash-button {
