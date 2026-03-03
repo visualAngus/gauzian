@@ -37,7 +37,9 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Audit dependencies (vulnérabilités)
-        run: cargo audit
+        # RUSTSEC-2023-0071: rsa Marvin Attack - dep transitive de sqlx/jsonwebtoken,
+        # aucun fix disponible upstream. À re-vérifier lors des mises à jour de sqlx/jsonwebtoken.
+        run: cargo audit --ignore RUSTSEC-2023-0071
 
   test:
     name: Tests unitaires
