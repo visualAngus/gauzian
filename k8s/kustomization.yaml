@@ -27,5 +27,4 @@ resources:
   - middleware.yaml
   - ingressroute.yaml
 
-  # Monitoring (Grafana, Prometheus ServiceMonitor)
-  - monitoring/
+  # Monitoring : appliqué séparément via deploy.sh (namespace monitoring)

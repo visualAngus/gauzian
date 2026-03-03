@@ -82,9 +82,13 @@ kubectl apply -f "$K8S_DIR/monitoring-namespace.yaml"
 ok "Namespaces OK"
 
 # ── Étape 3 : kubectl apply -k ───────────────────────────────
-log "Application de la stack complète (kustomize)..."
+log "Application de la stack gauzian-v2 (kustomize)..."
 kubectl apply -k "$K8S_DIR"
-ok "Manifests appliqués"
+ok "Stack gauzian-v2 appliquée"
+
+log "Application de la stack monitoring (kustomize)..."
+kubectl apply -k "$K8S_DIR/monitoring"
+ok "Stack monitoring appliquée"
 
 # ── Étape 4 : Rollout des déploiements ───────────────────────
 log "Attente du rollout des déploiements..."
