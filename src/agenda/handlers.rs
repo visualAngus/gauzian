@@ -1,12 +1,9 @@
-
-use axum::{extract::State, http::StatusCode, Json, extract::Query};
+use axum::{Json, extract::Query, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 // uuid
-use uuid::Uuid;
 use crate::{auth::Claims, response::ApiResponse, state::AppState};
 use sqlx::FromRow;
-
-
+use uuid::Uuid;
 
 #[derive(Serialize)]
 pub struct EventResponse {
@@ -21,13 +18,13 @@ pub struct Event {
     #[serde(rename = "dayId")]
     pub day_id: i64,
     #[serde(rename = "startDayId")]
-    pub start_day_id: String,  // Crypté → TEXT
+    pub start_day_id: String, // Crypté → TEXT
     #[serde(rename = "endDayId")]
-    pub end_day_id: String,    // Crypté → TEXT
+    pub end_day_id: String, // Crypté → TEXT
     #[serde(rename = "startHour")]
-    pub start_hour: String,     // Crypté → TEXT
+    pub start_hour: String, // Crypté → TEXT
     #[serde(rename = "endHour")]
-    pub end_hour: String,       // Crypté → TEXT
+    pub end_hour: String, // Crypté → TEXT
     #[serde(rename = "isAllDay")]
     pub is_all_day: bool,
     #[serde(rename = "isMultiDay")]
@@ -35,7 +32,7 @@ pub struct Event {
     pub category: Option<String>,
     pub color: Option<String>,
     #[serde(rename = "encryptedDataKey")]
-    pub encrypted_data_key: String,  // Clé de chiffrement (converti depuis BYTEA)
+    pub encrypted_data_key: String, // Clé de chiffrement (converti depuis BYTEA)
     pub created_at: String,
     pub updated_at: String,
 }
@@ -55,11 +52,11 @@ pub async fn get_events_handler(
     let pool = &state.db_pool;
     let user_id = claims.id;
     let events = super::repo::get_events_date_to_date(
-            pool,
-            user_id,
-            &params.start_day_id,
-            &params.end_day_id,
-        )
+        pool,
+        user_id,
+        &params.start_day_id,
+        &params.end_day_id,
+    )
     .await
     .map_err(|e| {
         tracing::error!("Database error: {}", e);
@@ -68,7 +65,7 @@ pub async fn get_events_handler(
             "Internal server error".to_string(),
         )
     })?;
-    
+
     Ok(Json(ApiResponse::ok(EventResponse { events })))
 }
 #[derive(Deserialize)]
@@ -78,13 +75,13 @@ pub struct CreateEventPayload {
     #[serde(rename = "dayId")]
     pub day_id: i64,
     #[serde(rename = "startHour")]
-    pub start_hour: String,     // Crypté → TEXT
+    pub start_hour: String, // Crypté → TEXT
     #[serde(rename = "endHour")]
-    pub end_hour: String,       // Crypté → TEXT
+    pub end_hour: String, // Crypté → TEXT
     #[serde(rename = "startDayId")]
-    pub start_day_id: String,   // Crypté → TEXT
+    pub start_day_id: String, // Crypté → TEXT
     #[serde(rename = "endDayId")]
-    pub end_day_id: String,     // Crypté → TEXT
+    pub end_day_id: String, // Crypté → TEXT
     #[serde(rename = "isAllDay")]
     pub is_all_day: bool,
     #[serde(rename = "isMultiDay")]
@@ -100,25 +97,17 @@ pub async fn create_event_handler(
     claims: Claims,
     Json(payload): Json<CreateEventPayload>,
 ) -> Result<Json<ApiResponse<EventResponse>>, (StatusCode, String)> {
+    let new_event = super::repo::create_event(&state.db_pool, claims.id, &payload)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
 
-
-
-    let new_event = super::repo::create_event(
-        &state.db_pool,
-        claims.id,
-        &payload,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!("Database error: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),
-        )
-    })?;
-
-
-    let _event_access = super::repo::add_event_participant(
+    super::repo::add_event_participant(
         &state.db_pool,
         new_event.id,
         claims.id,
@@ -133,5 +122,7 @@ pub async fn create_event_handler(
         )
     })?;
 
-    Ok(Json(ApiResponse::ok(EventResponse { events: vec![new_event] })))
+    Ok(Json(ApiResponse::ok(EventResponse {
+        events: vec![new_event],
+    })))
 }

@@ -4,8 +4,8 @@ use serde::Deserialize;
 use tracing::{info, instrument};
 use uuid::Uuid;
 
-use crate::{auth::Claims, response::ApiResponse, state::AppState};
 use super::{repo, services};
+use crate::{auth::Claims, response::ApiResponse, state::AppState};
 use base64::Engine;
 use sqlx;
 
@@ -96,7 +96,6 @@ pub async fn protected_handler(claims: Claims) -> ApiResponse<String> {
     ))
 }
 
-
 pub async fn get_account_and_drive_info_handler(
     State(state): State<AppState>,
     claims: Claims,
@@ -128,7 +127,8 @@ pub async fn get_account_and_drive_info_handler(
             Ok(info) => info,
             Err(e) => {
                 tracing::error!("Failed to retrieve drive info: {:?}", e);
-                return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+                return ApiResponse::internal_error("Failed to retrieve drive info")
+                    .into_response();
             }
         };
 
@@ -391,7 +391,9 @@ pub async fn upload_chunk_restful_handler(
 
                 let parsed_index = match value.parse::<i32>() {
                     Ok(index) => index,
-                    Err(_) => return ApiResponse::bad_request("Invalid chunk index").into_response(),
+                    Err(_) => {
+                        return ApiResponse::bad_request("Invalid chunk index").into_response();
+                    }
                 };
 
                 chunk_index = Some(parsed_index);
@@ -419,10 +421,10 @@ pub async fn upload_chunk_restful_handler(
     let Some(iv) = iv else {
         return ApiResponse::bad_request("Missing IV").into_response();
     };
-    
+
     if drive_info.used_space + body.len() as i64 > drive_info.storage_limit_bytes {
         return ApiResponse::insufficient_storage("Insufficient storage space").into_response();
-    } 
+    }
 
     let upload_start = std::time::Instant::now();
     let meta_data_s3 = match state
@@ -443,7 +445,14 @@ pub async fn upload_chunk_restful_handler(
         }
     };
 
-    let s3_record_id = match repo::save_chunk_metadata(&state.db_pool, file_id, index, &meta_data_s3.s3_id).await {
+    let s3_record_id = match repo::save_chunk_metadata(
+        &state.db_pool,
+        file_id,
+        index,
+        &meta_data_s3.s3_id,
+    )
+    .await
+    {
         Ok(id) => id,
         Err(e) => {
             tracing::error!("Failed to insert S3 key into database: {:?}", e);
@@ -524,7 +533,8 @@ pub async fn get_file_folder_handler(
             Ok(info) => info,
             Err(e) => {
                 tracing::error!("Failed to retrieve drive info: {:?}", e);
-                return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+                return ApiResponse::internal_error("Failed to retrieve drive info")
+                    .into_response();
             }
         };
 
@@ -554,9 +564,10 @@ pub async fn get_file_folder_handler(
             "full_path": [],
         }))
         .into_response();
-    }
-    else if is_shared_with_me {
-        let files_and_folders = match repo::get_shared_with_me_contents(&state.db_pool, claims.id).await {
+    } else if is_shared_with_me {
+        let files_and_folders = match repo::get_shared_with_me_contents(&state.db_pool, claims.id)
+            .await
+        {
             Ok(list) => list,
             Err(e) => {
                 tracing::error!("Failed to retrieve shared with me contents: {:?}", e);
@@ -569,7 +580,8 @@ pub async fn get_file_folder_handler(
             Ok(info) => info,
             Err(e) => {
                 tracing::error!("Failed to retrieve drive info: {:?}", e);
-                return ApiResponse::internal_error("Failed to retrieve drive info").into_response();
+                return ApiResponse::internal_error("Failed to retrieve drive info")
+                    .into_response();
             }
         };
 
@@ -646,15 +658,15 @@ pub async fn get_folder_handler(
     Path(folder_id): Path<String>,
 ) -> Response {
     if folder_id.eq_ignore_ascii_case("root") {
-        let folder_contents =
-            match repo::get_folder_contents(&state.db_pool, claims.id, None).await {
-                Ok(list) => list,
-                Err(e) => {
-                    tracing::error!("Failed to retrieve root folder contents: {:?}", e);
-                    return ApiResponse::internal_error("Failed to retrieve folder contents")
-                        .into_response();
-                }
-            };
+        let folder_contents = match repo::get_folder_contents(&state.db_pool, claims.id, None).await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                tracing::error!("Failed to retrieve root folder contents: {:?}", e);
+                return ApiResponse::internal_error("Failed to retrieve folder contents")
+                    .into_response();
+            }
+        };
 
         return ApiResponse::ok(serde_json::json!({
             "folder_contents": folder_contents
@@ -676,7 +688,8 @@ pub async fn get_folder_handler(
         }
     };
 
-    let has_access = match repo::user_has_folder_access(&state.db_pool, claims.id, folder_id).await {
+    let has_access = match repo::user_has_folder_access(&state.db_pool, claims.id, folder_id).await
+    {
         Ok(access) => access,
         Err(e) => {
             tracing::error!("Failed to check folder access: {:?}", e);
@@ -744,7 +757,14 @@ pub async fn delete_file_handler(
     Json(body): Json<DeleteFileRequest>,
 ) -> Response {
     // transfer-tracking removed: deletions no longer blocked by Redis
-    match repo::delete_file(&state.db_pool, &state.storage_client, claims.id, body.file_id).await {
+    match repo::delete_file(
+        &state.db_pool,
+        &state.storage_client,
+        claims.id,
+        body.file_id,
+    )
+    .await
+    {
         Ok(_) => ApiResponse::ok("File deleted successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found").into_response(),
         Err(e) => {
@@ -1105,7 +1125,8 @@ pub async fn get_folder_contents_handler(
             Ok(access) => access,
             Err(e) => {
                 tracing::error!("Failed to check folder access: {:?}", e);
-                return ApiResponse::internal_error("Failed to verify folder access").into_response();
+                return ApiResponse::internal_error("Failed to verify folder access")
+                    .into_response();
             }
         };
         if !has_access {
@@ -1141,13 +1162,8 @@ pub async fn finalize_upload_handler(
     match etat.as_str() {
         "aborted" => {
             // If upload was aborted, clean up
-            match repo::abort_file_upload(
-                &state.db_pool,
-                &state.storage_client,
-                claims.id,
-                file_id,
-            )
-            .await
+            match repo::abort_file_upload(&state.db_pool, &state.storage_client, claims.id, file_id)
+                .await
             {
                 Ok(_) => {
                     crate::metrics::track_file_upload(false, 0);
@@ -1181,15 +1197,10 @@ pub async fn finalize_upload_handler(
                 }
             }
         }
-        _ => {
-            ApiResponse::bad_request(
-                "Invalid etat value (expected 'aborted' or 'completed')",
-            )
-            .into_response()
-        }
+        _ => ApiResponse::bad_request("Invalid etat value (expected 'aborted' or 'completed')")
+            .into_response(),
     }
 }
-
 
 #[derive(Deserialize)]
 pub struct RestoreFileRequest {
@@ -1235,10 +1246,7 @@ pub async fn restore_folder_handler(
     }
 }
 
-pub async fn empty_trash_handler(
-    State(state): State<AppState>,
-    claims: Claims,
-) -> Response {
+pub async fn empty_trash_handler(State(state): State<AppState>, claims: Claims) -> Response {
     match repo::empty_corbeille(&state.db_pool, &state.storage_client, claims.id).await {
         Ok(_) => ApiResponse::ok("Corbeille emptied successfully").into_response(),
         Err(e) => {
@@ -1281,8 +1289,8 @@ pub struct ShareFolderBatchRequest {
     pub folder_id: Uuid,
     pub contact_id: Uuid,
     pub access_level: String,
-    pub folder_keys: Vec<FolderKeyBatch>,  // Toutes les clés des sous-dossiers rechiffrées
-    pub file_keys: Vec<FileKeyBatch>,      // Toutes les clés des fichiers rechiffrées
+    pub folder_keys: Vec<FolderKeyBatch>, // Toutes les clés des sous-dossiers rechiffrées
+    pub file_keys: Vec<FileKeyBatch>,     // Toutes les clés des fichiers rechiffrées
 }
 
 pub async fn share_folder_handler(
@@ -1304,9 +1312,7 @@ pub async fn share_folder_handler(
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder or contact not found").into_response()
         }
-        Err(sqlx::Error::Protocol(msg)) => {
-            ApiResponse::bad_request(&msg).into_response()
-        }
+        Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
         Err(e) => {
             tracing::error!("Failed to share folder: {:?}", e);
             ApiResponse::internal_error("Failed to share folder").into_response()
@@ -1333,9 +1339,7 @@ pub async fn share_file_handler(
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("File or contact not found").into_response()
         }
-        Err(sqlx::Error::Protocol(msg)) => {
-            ApiResponse::bad_request(&msg).into_response()
-        }
+        Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
         Err(e) => {
             tracing::error!("Failed to share file: {:?}", e);
             ApiResponse::internal_error("Failed to share file").into_response()
@@ -1349,12 +1353,14 @@ pub async fn share_folder_batch_handler(
     Json(body): Json<ShareFolderBatchRequest>,
 ) -> Response {
     // Convertir les vecs en format attendu par repo::share_folder_batch
-    let folder_keys: Vec<(Uuid, String)> = body.folder_keys
+    let folder_keys: Vec<(Uuid, String)> = body
+        .folder_keys
         .into_iter()
         .map(|fk| (fk.folder_id, fk.encrypted_folder_key))
         .collect();
 
-    let file_keys: Vec<(Uuid, String)> = body.file_keys
+    let file_keys: Vec<(Uuid, String)> = body
+        .file_keys
         .into_iter()
         .map(|fk| (fk.file_id, fk.encrypted_file_key))
         .collect();
@@ -1374,16 +1380,13 @@ pub async fn share_folder_batch_handler(
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder or contact not found").into_response()
         }
-        Err(sqlx::Error::Protocol(msg)) => {
-            ApiResponse::bad_request(&msg).into_response()
-        }
+        Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
         Err(e) => {
             tracing::error!("Failed to share folder batch: {:?}", e);
             ApiResponse::internal_error("Failed to share folder").into_response()
         }
     }
 }
-
 
 pub async fn get_public_key_handler_by_email(
     State(state): State<AppState>,
@@ -1404,7 +1407,8 @@ pub async fn get_public_key_handler_by_email(
         "id": user_info.id,
         "username": user_info.username,
         "public_key": user_info.public_key,
-    })).into_response()
+    }))
+    .into_response()
 }
 
 /// Récupère la liste des utilisateurs ayant accès à un dossier (pour le partage dynamique)
@@ -1425,7 +1429,9 @@ pub async fn get_folder_shared_users_handler(
             // Récupérer les clés publiques pour chaque utilisateur
             let mut users_with_keys = Vec::new();
             for (user_id, access_level) in users {
-                if let Ok(user_info) = crate::auth::repo::get_user_by_id(&state.db_pool, user_id).await {
+                if let Ok(user_info) =
+                    crate::auth::repo::get_user_by_id(&state.db_pool, user_id).await
+                {
                     users_with_keys.push(serde_json::json!({
                         "user_id": user_id,
                         "access_level": access_level,
@@ -1436,7 +1442,8 @@ pub async fn get_folder_shared_users_handler(
             }
             ApiResponse::ok(serde_json::json!({
                 "shared_users": users_with_keys
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder not found or access denied").into_response()
@@ -1466,21 +1473,23 @@ pub async fn get_file_info_item_handler(
             let mut shared_users_list: Vec<serde_json::Value> = Vec::new();
 
             for (user_id, access_level) in users {
-                if let Ok(user_info) = crate::auth::repo::get_user_by_id(&state.db_pool, user_id).await {
+                if let Ok(user_info) =
+                    crate::auth::repo::get_user_by_id(&state.db_pool, user_id).await
+                {
                     // construire la liste enrichie ici
                     shared_users_list.push(serde_json::json!({
                         "user_id": user_id,
                         "permission": access_level,
                         "public_key": user_info.public_key,
                         "username": user_info.username,
-                    }) );
+                    }));
                 }
             }
-            
 
             ApiResponse::ok(serde_json::json!({
                 "shared_users": shared_users_list
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("File not found or access denied").into_response()
@@ -1510,19 +1519,22 @@ pub async fn get_folder_info_item_handler(
             let mut shared_users_list: Vec<serde_json::Value> = Vec::new();
 
             for (user_id, access_level) in users {
-                if let Ok(user_info) = crate::auth::repo::get_user_by_id(&state.db_pool, user_id).await {
+                if let Ok(user_info) =
+                    crate::auth::repo::get_user_by_id(&state.db_pool, user_id).await
+                {
                     // construire la liste enrichie ici
                     shared_users_list.push(serde_json::json!({
                         "user_id": user_id,
                         "permission": access_level,
                         "public_key": user_info.public_key,
                         "username": user_info.username,
-                    }) );
+                    }));
                 }
             }
             ApiResponse::ok(serde_json::json!({
                 "shared_users": shared_users_list
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder not found or access denied").into_response()
@@ -1553,7 +1565,8 @@ pub async fn propagate_file_access_handler(
     claims: Claims,
     Json(body): Json<PropagateFileAccessRequest>,
 ) -> Response {
-    let user_keys: Vec<(Uuid, String, String)> = body.user_keys
+    let user_keys: Vec<(Uuid, String, String)> = body
+        .user_keys
         .into_iter()
         .map(|uk| (uk.user_id, uk.encrypted_key, uk.access_level))
         .collect();
@@ -1582,12 +1595,14 @@ pub async fn propagate_folder_access_handler(
     claims: Claims,
     Json(body): Json<PropagateFolderAccessRequest>,
 ) -> Response {
-    let user_keys: Vec<(Uuid, String, String)> = body.user_keys
+    let user_keys: Vec<(Uuid, String, String)> = body
+        .user_keys
         .into_iter()
         .map(|uk| (uk.user_id, uk.encrypted_key, uk.access_level))
         .collect();
 
-    match repo::propagate_folder_access(&state.db_pool, claims.id, body.folder_id, user_keys).await {
+    match repo::propagate_folder_access(&state.db_pool, claims.id, body.folder_id, user_keys).await
+    {
         Ok(_) => ApiResponse::ok("Folder access propagated successfully").into_response(),
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder not found or access denied").into_response()
@@ -1608,35 +1623,32 @@ pub async fn health_check_handler(State(state): State<AppState>) -> Response {
     // Test PostgreSQL
     let db_ok = tokio::time::timeout(
         Duration::from_secs(5),
-        repo::health_check_db(&state.db_pool)
+        repo::health_check_db(&state.db_pool),
     )
     .await
     .is_ok();
 
     // Test Redis
-    let redis_ok = tokio::time::timeout(
-        Duration::from_secs(5),
-        async {
-            use redis::AsyncCommands;
-            let mut con = state.redis_manager.clone();
-            con.ping::<()>().await
-        }
-    )
+    let redis_ok = tokio::time::timeout(Duration::from_secs(5), async {
+        use redis::AsyncCommands;
+        let mut con = state.redis_manager.clone();
+        con.ping::<()>().await
+    })
     .await
     .is_ok();
 
     // Test MinIO/S3
-    let s3_ok = tokio::time::timeout(
-        Duration::from_secs(5),
-        state.storage_client.health_check()
-    )
-    .await
-    .is_ok();
+    let s3_ok = tokio::time::timeout(Duration::from_secs(5), state.storage_client.health_check())
+        .await
+        .is_ok();
 
     if db_ok && redis_ok && s3_ok {
         (axum::http::StatusCode::OK, "Ready").into_response()
     } else {
-        info!("Health check failed - DB: {}, Redis: {}, S3: {}", db_ok, redis_ok, s3_ok);
+        info!(
+            "Health check failed - DB: {}, Redis: {}, S3: {}",
+            db_ok, redis_ok, s3_ok
+        );
         (axum::http::StatusCode::SERVICE_UNAVAILABLE, "Not ready").into_response()
     }
 }
@@ -1667,10 +1679,15 @@ pub async fn revoke_access_handler(
     };
 
     let result = match body.item_type.as_str() {
-        "file" => repo::revoke_file_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await,
-        "folder" => repo::revoke_folder_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await,
+        "file" => {
+            repo::revoke_file_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await
+        }
+        "folder" => {
+            repo::revoke_folder_access(&state.db_pool, claims.id, item_uuid, contact_uuid).await
+        }
         _ => {
-            return ApiResponse::bad_request("Invalid item_type (expected 'file' or 'folder')").into_response();
+            return ApiResponse::bad_request("Invalid item_type (expected 'file' or 'folder')")
+                .into_response();
         }
     };
 
@@ -1750,9 +1767,7 @@ pub async fn share_file_restful_handler(
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("File or contact not found").into_response()
         }
-        Err(sqlx::Error::Protocol(msg)) => {
-            ApiResponse::bad_request(&msg).into_response()
-        }
+        Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
         Err(e) => {
             tracing::error!("Failed to share file: {:?}", e);
             ApiResponse::internal_error("Failed to share file").into_response()
@@ -1790,9 +1805,7 @@ pub async fn share_folder_restful_handler(
         Err(sqlx::Error::RowNotFound) => {
             ApiResponse::not_found("Folder or contact not found").into_response()
         }
-        Err(sqlx::Error::Protocol(msg)) => {
-            ApiResponse::bad_request(&msg).into_response()
-        }
+        Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
         Err(e) => {
             tracing::error!("Failed to share folder: {:?}", e);
             ApiResponse::internal_error("Failed to share folder").into_response()
@@ -1850,9 +1863,18 @@ pub async fn rename_file_restful_handler(
     Path(file_id): Path<Uuid>,
     Json(body): Json<RenameItemRequest>,
 ) -> Response {
-    match repo::rename_file(&state.db_pool, claims.id, file_id, &body.new_encrypted_metadata).await {
+    match repo::rename_file(
+        &state.db_pool,
+        claims.id,
+        file_id,
+        &body.new_encrypted_metadata,
+    )
+    .await
+    {
         Ok(_) => ApiResponse::ok("File renamed successfully").into_response(),
-        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File not found or access denied").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File not found or access denied").into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to rename file {}: {:?}", file_id, e);
             ApiResponse::internal_error("Failed to rename file").into_response()
@@ -1867,9 +1889,18 @@ pub async fn rename_folder_restful_handler(
     Path(folder_id): Path<Uuid>,
     Json(body): Json<RenameItemRequest>,
 ) -> Response {
-    match repo::rename_folder(&state.db_pool, claims.id, folder_id, &body.new_encrypted_metadata).await {
+    match repo::rename_folder(
+        &state.db_pool,
+        claims.id,
+        folder_id,
+        &body.new_encrypted_metadata,
+    )
+    .await
+    {
         Ok(_) => ApiResponse::ok("Folder renamed successfully").into_response(),
-        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder not found or access denied").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder not found or access denied").into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to rename folder {}: {:?}", folder_id, e);
             ApiResponse::internal_error("Failed to rename folder").into_response()
@@ -1893,7 +1924,9 @@ pub async fn move_file_restful_handler(
 ) -> Response {
     match repo::move_file(&state.db_pool, claims.id, file_id, body.target_folder_id).await {
         Ok(_) => ApiResponse::ok("File moved successfully").into_response(),
-        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("File or target folder not found").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("File or target folder not found").into_response()
+        }
         Err(e) => {
             tracing::error!("Failed to move file {}: {:?}", file_id, e);
             ApiResponse::internal_error("Failed to move file").into_response()
@@ -1910,7 +1943,9 @@ pub async fn move_folder_restful_handler(
 ) -> Response {
     match repo::move_folder(&state.db_pool, claims.id, folder_id, body.target_folder_id).await {
         Ok(_) => ApiResponse::ok("Folder moved successfully").into_response(),
-        Err(sqlx::Error::RowNotFound) => ApiResponse::not_found("Folder or target folder not found").into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Folder or target folder not found").into_response()
+        }
         Err(sqlx::Error::Protocol(msg)) => ApiResponse::bad_request(&msg).into_response(),
         Err(e) => {
             tracing::error!("Failed to move folder {}: {:?}", folder_id, e);
@@ -1920,10 +1955,7 @@ pub async fn move_folder_restful_handler(
 }
 
 /// GET /files - Liste tous les fichiers accessibles par l'utilisateur
-pub async fn list_files_handler(
-    State(state): State<AppState>,
-    claims: Claims,
-) -> Response {
+pub async fn list_files_handler(State(state): State<AppState>, claims: Claims) -> Response {
     match repo::get_files_list(&state.db_pool, claims.id).await {
         Ok(files) => ApiResponse::ok(files).into_response(),
         Err(e) => {
@@ -2020,6 +2052,19 @@ pub async fn reject_shared_folder_handler(
         Err(e) => {
             tracing::error!("Failed to reject shared folder: {:?}", e);
             ApiResponse::internal_error("Failed to reject shared folder").into_response()
+        }
+    }
+}
+
+pub async fn get_drive_info_handler(State(state): State<AppState>, claims: Claims) -> Response {
+    match repo::get_drive_info(&state.db_pool, claims.id).await {
+        Ok(info) => ApiResponse::ok(info).into_response(),
+        Err(sqlx::Error::RowNotFound) => {
+            ApiResponse::not_found("Drive info not found").into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to retrieve drive info: {:?}", e);
+            ApiResponse::internal_error("Failed to retrieve drive info").into_response()
         }
     }
 }

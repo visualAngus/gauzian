@@ -128,4 +128,5 @@ pub fn drive_routes() -> Router<AppState> {
             get(handlers::get_file_folder_handler),
         )
         .route("/empty_trash", post(handlers::empty_trash_handler))
+        .route("/get_drive_info", get(handlers::get_drive_info_handler))
 }

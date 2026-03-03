@@ -1,12 +1,8 @@
-use axum::{
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, middleware::Next, response::Response};
 use lazy_static::lazy_static;
 use prometheus::{
-    opts, register_counter_vec, register_histogram_vec, register_int_gauge, CounterVec, Encoder,
-    HistogramOpts, HistogramVec, IntGauge, TextEncoder,
+    CounterVec, Encoder, HistogramOpts, HistogramVec, IntGauge, TextEncoder, opts,
+    register_counter_vec, register_histogram_vec, register_int_gauge,
 };
 use std::time::Instant;
 

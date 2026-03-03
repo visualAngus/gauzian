@@ -3,8 +3,8 @@
 
 use crate::state::AppState;
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 
 use super::handlers;
@@ -25,6 +25,9 @@ pub fn auth_routes() -> Router<AppState> {
         )
         .route("/register/send-otp", post(handlers::send_otp_handler))
         .route("/register/verify-otp", post(handlers::verify_otp_handler))
-        .route("/register/finalize", post(handlers::finalize_registration_handler))
-        // .route("/recovery", post(handlers::recovery_handler))
+        .route(
+            "/register/finalize",
+            post(handlers::finalize_registration_handler),
+        )
+    // .route("/recovery", post(handlers::recovery_handler))
 }

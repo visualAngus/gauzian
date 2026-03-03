@@ -1,9 +1,9 @@
-use aws_sdk_s3::{config::Region, Client};
 use aws_credential_types::Credentials;
+use aws_sdk_s3::{Client, config::Region};
 use bytes::Bytes;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /// Métadonnées pour une ligne de données stockée
@@ -48,8 +48,8 @@ pub struct StorageClient {
 impl StorageClient {
     /// Créer un nouveau client S3
     pub async fn new(bucket: String) -> Result<Self, StorageError> {
-        let s3_endpoint = std::env::var("S3_ENDPOINT")
-            .unwrap_or_else(|_| "http://localhost:9000".to_string());
+        let s3_endpoint =
+            std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string());
         let region = std::env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".to_string());
         let access_key = std::env::var("S3_ACCESS_KEY")
             .or_else(|_| std::env::var("AWS_ACCESS_KEY_ID"))
@@ -58,18 +58,24 @@ impl StorageClient {
             .or_else(|_| std::env::var("AWS_SECRET_ACCESS_KEY"))
             .unwrap_or_else(|_| "minioadmin".to_string());
 
-        tracing::info!("Initializing S3 client with endpoint: {} and bucket: {}", s3_endpoint, bucket);
+        tracing::info!(
+            "Initializing S3 client with endpoint: {} and bucket: {}",
+            s3_endpoint,
+            bucket
+        );
 
         let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region(Region::new(region))
-            .credentials_provider(Credentials::new(access_key, secret_key, None, None, "static"))
+            .credentials_provider(Credentials::new(
+                access_key, secret_key, None, None, "static",
+            ))
             .load()
             .await;
 
         let client = Client::from_conf(
             aws_sdk_s3::config::Builder::from(&shared_config)
                 .endpoint_url(&s3_endpoint)
-                .force_path_style(true)  // Important pour MinIO
+                .force_path_style(true) // Important pour MinIO
                 .build(),
         );
 
@@ -87,8 +93,8 @@ impl StorageClient {
         iv: String,
     ) -> Result<StorageMetadata, StorageError> {
         let start_time = std::time::Instant::now();
-        const MAX_RETRIES: u32 = 5;  // Augmenté pour Cellar Clever Cloud
-        const RETRY_DELAY_MS: u64 = 1000;  // 1s au lieu de 500ms
+        const MAX_RETRIES: u32 = 5; // Augmenté pour Cellar Clever Cloud
+        const RETRY_DELAY_MS: u64 = 1000; // 1s au lieu de 500ms
 
         let s3_id = Uuid::new_v4().to_string();
         let date_upload = Utc::now().to_rfc3339();
@@ -109,11 +115,14 @@ impl StorageClient {
         // Stocker les données chiffrées avec retry
         let mut last_error = None;
         for attempt in 1..=MAX_RETRIES {
-            match self.client
+            match self
+                .client
                 .put_object()
                 .bucket(&self.bucket)
                 .key(&s3_id)
-                .body(aws_sdk_s3::primitives::ByteStream::from(data_encrypted.clone()))
+                .body(aws_sdk_s3::primitives::ByteStream::from(
+                    data_encrypted.clone(),
+                ))
                 .metadata("index", &index)
                 .metadata("date-upload", &date_upload)
                 .metadata("data-hash", &metadata.data_hash)
@@ -128,12 +137,16 @@ impl StorageClient {
                     if attempt > 1 {
                         tracing::info!(
                             "S3 upload succeeded after {} attempts: s3_id={}, index={}",
-                            attempt, s3_id, index
+                            attempt,
+                            s3_id,
+                            index
                         );
                     } else {
                         tracing::info!(
                             "Data uploaded to S3: s3_id={}, index={}, size={}",
-                            s3_id, index, data_encrypted.len()
+                            s3_id,
+                            index,
+                            data_encrypted.len()
                         );
                     }
                     return Ok(metadata);
@@ -146,7 +159,10 @@ impl StorageClient {
                         let delay = RETRY_DELAY_MS * (1 << (attempt - 1)); // Backoff exponentiel
                         tracing::warn!(
                             "S3 upload failed (attempt {}/{}), retrying in {}ms: {}",
-                            attempt, MAX_RETRIES, delay, err_str
+                            attempt,
+                            MAX_RETRIES,
+                            delay,
+                            err_str
                         );
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                     }
@@ -173,14 +189,15 @@ impl StorageClient {
         s3_id: &str,
     ) -> Result<(Bytes, StorageMetadata), StorageError> {
         let start_time = std::time::Instant::now();
-        const MAX_RETRIES: u32 = 5;  // Augmenté pour Cellar Clever Cloud
-        const RETRY_DELAY_MS: u64 = 1000;  // 1s au lieu de 500ms
+        const MAX_RETRIES: u32 = 5; // Augmenté pour Cellar Clever Cloud
+        const RETRY_DELAY_MS: u64 = 1000; // 1s au lieu de 500ms
 
         let mut last_error = None;
         let resp = {
             let mut result = None;
             for attempt in 1..=MAX_RETRIES {
-                match self.client
+                match self
+                    .client
                     .get_object()
                     .bucket(&self.bucket)
                     .key(s3_id)
@@ -191,7 +208,8 @@ impl StorageClient {
                         if attempt > 1 {
                             tracing::info!(
                                 "S3 download succeeded after {} attempts: s3_id={}",
-                                attempt, s3_id
+                                attempt,
+                                s3_id
                             );
                         }
                         result = Some(r);
@@ -212,7 +230,10 @@ impl StorageClient {
                             let delay = RETRY_DELAY_MS * (1 << (attempt - 1));
                             tracing::warn!(
                                 "S3 download failed (attempt {}/{}), retrying in {}ms: {}",
-                                attempt, MAX_RETRIES, delay, err_str
+                                attempt,
+                                MAX_RETRIES,
+                                delay,
+                                err_str
                             );
                             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         }
@@ -240,10 +261,7 @@ impl StorageClient {
                 .and_then(|m| m.get("index"))
                 .cloned()
                 .unwrap_or_default(),
-            iv: resp
-                .metadata()
-                .and_then(|m| m.get("iv"))
-                .cloned(),
+            iv: resp.metadata().and_then(|m| m.get("iv")).cloned(),
             date_upload: resp
                 .metadata()
                 .and_then(|m| m.get("date-upload"))
@@ -294,7 +312,8 @@ impl StorageClient {
     pub async fn delete_line(&self, s3_id: &str) -> Result<(), StorageError> {
         let start_time = std::time::Instant::now();
 
-        let result = self.client
+        let result = self
+            .client
             .delete_object()
             .bucket(&self.bucket)
             .key(s3_id)
@@ -328,7 +347,10 @@ impl StorageClient {
                 if err_str.contains("NoSuchKey") {
                     return Ok(false);
                 }
-                Err(StorageError::S3Error(format!("Failed to check existence: {}", e)))
+                Err(StorageError::S3Error(format!(
+                    "Failed to check existence: {}",
+                    e
+                )))
             }
         }
     }
@@ -339,7 +361,13 @@ impl StorageClient {
         const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
         for attempt in 1..=MAX_RETRIES {
-            match self.client.create_bucket().bucket(&self.bucket).send().await {
+            match self
+                .client
+                .create_bucket()
+                .bucket(&self.bucket)
+                .send()
+                .await
+            {
                 Ok(_) => {
                     tracing::info!("S3 bucket created: {}", self.bucket);
                     return Ok(());
@@ -380,13 +408,19 @@ impl StorageClient {
                         return Ok(());
                     }
 
-                    return Err(StorageError::S3Error(format!("Failed to init bucket: {}", e)));
+                    return Err(StorageError::S3Error(format!(
+                        "Failed to init bucket: {}",
+                        e
+                    )));
                 }
             }
         }
 
         // Si toutes les retries échouent mais on n'a pas déclenché d'erreur fatale
-        tracing::warn!("S3 bucket initialization failed after {} retries, will retry on first use", MAX_RETRIES);
+        tracing::warn!(
+            "S3 bucket initialization failed after {} retries, will retry on first use",
+            MAX_RETRIES
+        );
         Ok(())
     }
 

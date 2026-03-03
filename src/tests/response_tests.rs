@@ -1,9 +1,9 @@
 use axum::{
-    body::{to_bytes, Body},
-    http::{header::SET_COOKIE, StatusCode},
+    body::{Body, to_bytes},
+    http::{StatusCode, header::SET_COOKIE},
     response::IntoResponse,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::{LazyLock, Mutex};
 
 use crate::response::{ApiResponse, ErrorResponse};
@@ -77,7 +77,10 @@ async fn test_api_response_cookie_secure_flag_false_when_env_is_false() {
         .to_str()
         .expect("Set-Cookie header should be valid UTF-8");
 
-    assert!(!cookie_header.contains("Secure"), "Secure must be disabled when COOKIE_SECURE=false");
+    assert!(
+        !cookie_header.contains("Secure"),
+        "Secure must be disabled when COOKIE_SECURE=false"
+    );
 
     unsafe { std::env::remove_var("COOKIE_SECURE") };
 }
@@ -97,7 +100,10 @@ async fn test_api_response_cookie_secure_flag_true_by_default_and_when_true() {
         .expect("Set-Cookie header should be present")
         .to_str()
         .expect("Set-Cookie header should be valid UTF-8");
-    assert!(cookie_default.contains("Secure"), "Secure must be enabled by default");
+    assert!(
+        cookie_default.contains("Secure"),
+        "Secure must be enabled by default"
+    );
 
     unsafe { std::env::set_var("COOKIE_SECURE", "true") };
     let response_true = ApiResponse::ok(json!({ "logged": true }))
@@ -110,7 +116,10 @@ async fn test_api_response_cookie_secure_flag_true_by_default_and_when_true() {
         .expect("Set-Cookie header should be present")
         .to_str()
         .expect("Set-Cookie header should be valid UTF-8");
-    assert!(cookie_true.contains("Secure"), "Secure must be enabled when COOKIE_SECURE=true");
+    assert!(
+        cookie_true.contains("Secure"),
+        "Secure must be enabled when COOKIE_SECURE=true"
+    );
 
     unsafe { std::env::remove_var("COOKIE_SECURE") };
 }

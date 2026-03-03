@@ -1,29 +1,28 @@
 // Services - Logique métier pure (password hashing, JWT, token blacklist)
 // Ce fichier ne fait PAS d'accès DB direct (c'est le rôle de repo.rs)
 
-use axum::{
-    extract::FromRequestParts,
-    http::{header::AUTHORIZATION, request::Parts, StatusCode},
-    response::{IntoResponse, Response},
-    Json,
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
+use axum::{
+    Json,
+    extract::FromRequestParts,
+    http::{StatusCode, header::AUTHORIZATION, request::Parts},
+    response::{IntoResponse, Response},
+};
+use base64::{Engine as _, engine::general_purpose};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation, decode, encode};
+use rand::RngCore;
 use redis::AsyncCommands;
 use uuid::Uuid;
-use rand::RngCore;
-use base64::{engine::general_purpose, Engine as _};
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Validation};
-use chrono::{Duration, Utc};
 
 use crate::state::AppState;
 
-
-use lettre::message::{header::ContentType, MultiPart, SinglePart};
-use lettre::{Message, SmtpTransport, Transport};
 use lettre::message::Mailbox;
+use lettre::message::{MultiPart, SinglePart, header::ContentType};
+use lettre::{Message, SmtpTransport, Transport};
 
 // ========== Erreurs ==========
 
@@ -116,7 +115,10 @@ fn revoked_key(jti: &str) -> String {
 
 /// Vérifie si un token est révoqué.
 /// FAIL-CLOSED: si Redis est indisponible, on bloque l'accès par sécurité.
-async fn is_token_blacklisted(manager: &mut redis::aio::ConnectionManager, jti: &str) -> Result<bool, AuthError> {
+async fn is_token_blacklisted(
+    manager: &mut redis::aio::ConnectionManager,
+    jti: &str,
+) -> Result<bool, AuthError> {
     let exists: bool = manager.exists(revoked_key(jti)).await.map_err(|e| {
         tracing::error!("Redis query failed (fail-closed): {}", e);
         crate::metrics::track_redis_operation("get", false);
@@ -136,7 +138,8 @@ pub async fn blacklist_token(
     jti: &str,
     ttl_seconds: usize,
 ) -> Result<(), redis::RedisError> {
-    let result = manager.set_ex(revoked_key(jti), "revoked", ttl_seconds as u64)
+    let result = manager
+        .set_ex(revoked_key(jti), "revoked", ttl_seconds as u64)
         .await;
 
     crate::metrics::track_redis_operation("set", result.is_ok());
@@ -178,7 +181,9 @@ pub async fn increment_failed_login(
     let ttl: i64 = manager.ttl(&key).await?;
     if ttl == -1 {
         // Pas de TTL défini → première tentative
-        manager.expire::<&str, i32>(&key, RATE_LIMIT_WINDOW_SECONDS as i64).await?;
+        manager
+            .expire::<&str, i32>(&key, RATE_LIMIT_WINDOW_SECONDS as i64)
+            .await?;
     }
 
     crate::metrics::track_redis_operation("incr", true);
@@ -226,7 +231,9 @@ pub async fn increment_register_attempt(
 
     let ttl: i64 = manager.ttl(&key).await?;
     if ttl == -1 {
-        manager.expire::<&str, i32>(&key, RATE_LIMIT_WINDOW_SECONDS as i64).await?;
+        manager
+            .expire::<&str, i32>(&key, RATE_LIMIT_WINDOW_SECONDS as i64)
+            .await?;
     }
 
     crate::metrics::track_redis_operation("incr", true);
@@ -307,12 +314,12 @@ pub fn verify_password(password: &str, password_hash: &str, _salt: &str) -> bool
 pub async fn send_otp(email: &str, otp: &str, mailer: &SmtpTransport) -> Result<(), String> {
     tracing::info!("Sending OTP to email {}", email);
 
-        let plain_body = format!(
-                "Bonjour,\n\nVoici votre code OTP pour finaliser votre inscription sur Gauzian:\n\n{}\n\nCe code est valide pendant 10 minutes.\n\nMerci,\nL'équipe Gauzian",
-                otp
-        );
+    let plain_body = format!(
+        "Bonjour,\n\nVoici votre code OTP pour finaliser votre inscription sur Gauzian:\n\n{}\n\nCe code est valide pendant 10 minutes.\n\nMerci,\nL'équipe Gauzian",
+        otp
+    );
 
-        let html_body = format!(
+    let html_body = format!(
                 "<!doctype html>
                 <html lang=\"fr\">
                     <body style=\"margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#1f2937;\">
@@ -342,26 +349,28 @@ pub async fn send_otp(email: &str, otp: &str, mailer: &SmtpTransport) -> Result<
         );
 
     let message = Message::builder()
-        .from("GAUZIAN <gauzian@pupin.fr>"
-            .parse::<Mailbox>()
-            .map_err(|e| e.to_string())?)
+        .from(
+            "GAUZIAN <gauzian@pupin.fr>"
+                .parse::<Mailbox>()
+                .map_err(|e| e.to_string())?,
+        )
         .to(format!("Destinataire <{}>", email)
             .parse::<Mailbox>()
             .map_err(|e| e.to_string())?)
         .subject("Votre code OTP pour Gauzian")
-                .multipart(
-                        MultiPart::alternative()
-                                .singlepart(
-                                        SinglePart::builder()
-                                                .header(ContentType::TEXT_PLAIN)
-                                                .body(plain_body),
-                                )
-                                .singlepart(
-                                        SinglePart::builder()
-                                                .header(ContentType::TEXT_HTML)
-                                                .body(html_body),
-                                ),
+        .multipart(
+            MultiPart::alternative()
+                .singlepart(
+                    SinglePart::builder()
+                        .header(ContentType::TEXT_PLAIN)
+                        .body(plain_body),
                 )
+                .singlepart(
+                    SinglePart::builder()
+                        .header(ContentType::TEXT_HTML)
+                        .body(html_body),
+                ),
+        )
         .map_err(|e| e.to_string())?;
 
     match mailer.send(&message) {
@@ -375,22 +384,34 @@ pub async fn send_otp(email: &str, otp: &str, mailer: &SmtpTransport) -> Result<
         }
     }
 }
-// store dans le redis l'OTP avec une TTL de 10 minutes 
-pub async fn store_otp(manager: &mut redis::aio::ConnectionManager, email: String, otp: String) -> Result<(), redis::RedisError> {
+// store dans le redis l'OTP avec une TTL de 10 minutes
+pub async fn store_otp(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+    otp: String,
+) -> Result<(), redis::RedisError> {
     let key = format!("otp:{}", email.trim().to_ascii_lowercase());
     let hased_otp = hash_password(&otp).map_err(|e| {
         tracing::error!("Failed to hash OTP: {}", e);
-        redis::RedisError::from(std::io::Error::new(std::io::ErrorKind::Other, "Failed to hash OTP"))
+        redis::RedisError::from(std::io::Error::other(
+            "Failed to hash OTP",
+        ))
     })?;
     manager.set_ex(key, hased_otp, 600).await
 }
 
-pub async fn cooldown_otp(manager: &mut redis::aio::ConnectionManager, email: String) -> Result<(), redis::RedisError> {
+pub async fn cooldown_otp(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+) -> Result<(), redis::RedisError> {
     let key = format!("otp_cooldown:{}", email.trim().to_ascii_lowercase());
     manager.set_ex(key, "cooldown", 30).await
 }
 
-pub async fn counter_otp_attempts(manager: &mut redis::aio::ConnectionManager, email: String) -> Result<u32, redis::RedisError> {
+pub async fn counter_otp_attempts(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+) -> Result<u32, redis::RedisError> {
     let key = format!("otp_attempts:{}", email.trim().to_ascii_lowercase());
     let attempts: u32 = manager.incr::<&str, u32, u32>(&key, 1).await?;
     if attempts == 1 {
@@ -399,7 +420,11 @@ pub async fn counter_otp_attempts(manager: &mut redis::aio::ConnectionManager, e
     Ok(attempts)
 }
 
-pub async fn verify_otp(manager: &mut redis::aio::ConnectionManager, email: String, otp: String) -> Result<bool, redis::RedisError> {
+pub async fn verify_otp(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+    otp: String,
+) -> Result<bool, redis::RedisError> {
     let key = format!("otp:{}", email.trim().to_ascii_lowercase());
     let stored_otp: Option<String> = manager.get(&key).await?;
     if let Some(stored_otp) = stored_otp {
@@ -409,43 +434,68 @@ pub async fn verify_otp(manager: &mut redis::aio::ConnectionManager, email: Stri
     }
 }
 
-pub async fn get_otp_attempts(manager: &mut redis::aio::ConnectionManager, email: String) -> Result<u32, redis::RedisError> {
+pub async fn get_otp_attempts(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+) -> Result<u32, redis::RedisError> {
     let key = format!("otp_attempts:{}", email.trim().to_ascii_lowercase());
     let attempts: Option<u32> = manager.get(&key).await?;
     Ok(attempts.unwrap_or(0))
 }
 
-pub async fn is_otp_cooldown(manager: &mut redis::aio::ConnectionManager, email: String) -> Result<bool, redis::RedisError> {
+pub async fn is_otp_cooldown(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+) -> Result<bool, redis::RedisError> {
     let key = format!("otp_cooldown:{}", email.trim().to_ascii_lowercase());
     let exists: bool = manager.exists(key).await?;
     Ok(exists)
 }
 
-pub async fn delete_otp(manager: &mut redis::aio::ConnectionManager, email: &str) -> Result<(), redis::RedisError> {
+pub async fn delete_otp(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<(), redis::RedisError> {
     let key = format!("otp:{}", email.trim().to_ascii_lowercase());
     manager.del(key).await
 }
 
-pub async fn delete_otp_attempts(manager: &mut redis::aio::ConnectionManager, email: &str) -> Result<(), redis::RedisError> {
+pub async fn delete_otp_attempts(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<(), redis::RedisError> {
     let key = format!("otp_attempts:{}", email.trim().to_ascii_lowercase());
     manager.del(key).await
 }
-pub async fn delete_otp_cooldown(manager: &mut redis::aio::ConnectionManager, email: &str) -> Result<(), redis::RedisError> {
+pub async fn delete_otp_cooldown(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<(), redis::RedisError> {
     let key = format!("otp_cooldown:{}", email.trim().to_ascii_lowercase());
     manager.del(key).await
 }
-    
-pub async fn store_temp_token(manager: &mut redis::aio::ConnectionManager, email: String, temp_token: String) -> Result<(), redis::RedisError> {
+
+pub async fn store_temp_token(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+    temp_token: String,
+) -> Result<(), redis::RedisError> {
     let key = format!("temp_token:{}", email.trim().to_ascii_lowercase());
     manager.set_ex(key, temp_token, 600).await // 10 minutes TTL (aligné avec JWT exp)
 }
 
-pub async fn delete_temp_token(manager: &mut redis::aio::ConnectionManager, email: &str) -> Result<(), redis::RedisError> {
+pub async fn delete_temp_token(
+    manager: &mut redis::aio::ConnectionManager,
+    email: &str,
+) -> Result<(), redis::RedisError> {
     let key = format!("temp_token:{}", email.trim().to_ascii_lowercase());
     manager.del(key).await
 }
 
-pub async fn get_temp_token(manager: &mut redis::aio::ConnectionManager, email: String) -> Result<Option<String>, redis::RedisError> {
+pub async fn get_temp_token(
+    manager: &mut redis::aio::ConnectionManager,
+    email: String,
+) -> Result<Option<String>, redis::RedisError> {
     let key = format!("temp_token:{}", email.trim().to_ascii_lowercase());
     manager.get(key).await
 }
@@ -457,9 +507,8 @@ pub async fn create_temp_token(
     let expiration = Utc::now()
         .checked_add_signed(Duration::minutes(10))
         .expect("valid timestamp")
-        .timestamp() as usize;  
+        .timestamp() as usize;
 
-    
     // let claims = jsonwebtoken::claims::Claims::new(email, expiration);
     let claims = TempClaims {
         email: email.to_string(),
@@ -471,7 +520,11 @@ pub async fn create_temp_token(
     jsonwebtoken::encode(&header, &claims, &key)
 }
 
-pub async fn verify_temp_token(token: &str, email: &str, secret: &[u8]) -> Result<TempClaims, jsonwebtoken::errors::Error> {
+pub async fn verify_temp_token(
+    token: &str,
+    email: &str,
+    secret: &[u8],
+) -> Result<TempClaims, jsonwebtoken::errors::Error> {
     let key = DecodingKey::from_secret(secret);
 
     let mut validation = Validation::new(Algorithm::HS256);
@@ -481,10 +534,10 @@ pub async fn verify_temp_token(token: &str, email: &str, secret: &[u8]) -> Resul
 
     let token_data = decode::<TempClaims>(token, &key, &validation)?;
     let claims = token_data.claims;
-    
+
     if claims.email != email {
         return Err(jsonwebtoken::errors::ErrorKind::InvalidToken.into());
     }
-    
+
     Ok(claims)
 }

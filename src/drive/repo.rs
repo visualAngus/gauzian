@@ -89,7 +89,7 @@ pub async fn get_file_size(pool: &PgPool, file_id: Uuid) -> Result<i64, sqlx::Er
 pub async fn health_check_db(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").fetch_one(pool).await.map(|_| ())
 }
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, serde::Serialize)]
 pub struct DriveInfo {
     pub used_space: i64,
     pub file_count: i64,
@@ -100,8 +100,9 @@ pub struct DriveInfo {
 
 /// Récupérer les informations du drive (espace utilisé, nombre de fichiers et dossiers)
 pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<DriveInfo, sqlx::Error> {
-    let (used_space, file_count, folder_count,storage_limit_bytes, account_tier) = sqlx::query_as::<_, (i64, i64, i64, i64, String)>(
-        "
+    let (used_space, file_count, folder_count, storage_limit_bytes, account_tier) =
+        sqlx::query_as::<_, (i64, i64, i64, i64, String)>(
+            "
         WITH file_stats AS (
             SELECT 
                 u.id as user_id,
@@ -136,10 +137,10 @@ pub async fn get_drive_info(pool: &PgPool, user_id: Uuid) -> Result<DriveInfo, s
         LEFT JOIN users ON users.id = u.id
         LEFT JOIN account_tiers at ON at.id = users.account_tier_id;
         ",
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await?;
+        )
+        .bind(user_id)
+        .fetch_one(pool)
+        .await?;
     Ok(DriveInfo {
         used_space,
         file_count,
@@ -2446,8 +2447,6 @@ pub async fn accept_shared_folder(
     tx.commit().await?;
     Ok(())
 }
-
-/// Refuser un dossier partagé (le retirer de la hiérarchie de l'utilisateur)
 
 pub async fn reject_shared_folder(
     pool: &PgPool,

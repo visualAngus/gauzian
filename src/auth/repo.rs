@@ -1,9 +1,9 @@
 // Repository - Accès aux données utilisateurs (queries SQL)
 // Toutes les interactions avec la table `users`
 
+use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
-use serde::Serialize;
 
 // ========== Types de données ==========
 
@@ -52,8 +52,8 @@ pub async fn create_user(pool: &PgPool, new_user: NewUser) -> Result<Uuid, sqlx:
         r#"
         INSERT INTO users (
             id, username, password_hash, encrypted_private_key, public_key,
-            email, encrypted_settings, private_key_salt, iv, auth_salt, encrypted_record_key
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            email, encrypted_settings, private_key_salt, iv, auth_salt, encrypted_record_key, account_tier_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, (SELECT id FROM account_tiers WHERE name = 'free'))
         RETURNING id
         "#,
     )

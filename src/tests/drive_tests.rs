@@ -66,7 +66,9 @@ fn test_format_string_to_uuid_or_root_with_whitespace() {
 fn test_format_string_to_uuid_or_root_invalid_format() {
     assert!(services::format_string_to_uuid_or_root("not-a-uuid").is_none());
     assert!(services::format_string_to_uuid_or_root("12345").is_none());
-    assert!(services::format_string_to_uuid_or_root("gggggggg-gggg-gggg-gggg-gggggggggggg").is_none());
+    assert!(
+        services::format_string_to_uuid_or_root("gggggggg-gggg-gggg-gggg-gggggggggggg").is_none()
+    );
 }
 
 // ========== Tests parse_uuid_or_error ==========
@@ -170,8 +172,16 @@ fn test_special_values_are_consistently_mapped_to_none() {
     ];
 
     for value in special_values {
-        assert_eq!(services::format_string_to_uuid_or_root(value), None, "format should map to None for {value:?}");
-        assert_eq!(services::parse_uuid_or_error(value), Ok(None), "parse should map to Ok(None) for {value:?}");
+        assert_eq!(
+            services::format_string_to_uuid_or_root(value),
+            None,
+            "format should map to None for {value:?}"
+        );
+        assert_eq!(
+            services::parse_uuid_or_error(value),
+            Ok(None),
+            "parse should map to Ok(None) for {value:?}"
+        );
     }
 }
 
@@ -180,7 +190,7 @@ fn test_parse_rejects_obviously_invalid_uuid_patterns() {
     let invalid_values = [
         "123",
         "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
-        "123e4567-e89b-12d3-a456-42661417400",  // too short
+        "123e4567-e89b-12d3-a456-42661417400",   // too short
         "123e4567-e89b-12d3-a456-4266141740000", // too long
         "123e4567--e89b-12d3-a456-426614174000", // malformed separators
         "123e4567-e89b-12d3-a456-42661417400g",  // invalid char

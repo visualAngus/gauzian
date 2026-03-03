@@ -1,5 +1,5 @@
-use std::net::SocketAddr;
 use sqlx::postgres::PgPoolOptions;
+use std::net::SocketAddr;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -52,7 +52,10 @@ async fn main() {
         }
         Ok(Err(e)) => {
             // Non-fatal: le bucket sera créé à la première requête
-            tracing::warn!("Failed to initialize S3 bucket at startup: {}. It will be created on first use.", e);
+            tracing::warn!(
+                "Failed to initialize S3 bucket at startup: {}. It will be created on first use.",
+                e
+            );
         }
         Err(_) => {
             tracing::warn!("S3 bucket initialization timed out. It will be created on first use.");

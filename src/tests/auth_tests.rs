@@ -1,10 +1,10 @@
 // Tests unitaires pour auth/services.rs
 // Teste: JWT (create_jwt, decode_jwt), password hashing (hash_password, verify_password)
 
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -22,7 +22,10 @@ fn test_create_jwt_generates_valid_token() {
 
     // Le token doit être une chaîne non vide
     assert!(!token.is_empty());
-    assert!(token.matches('.').count() == 2, "JWT should have 2 dots (header.payload.signature)");
+    assert!(
+        token.matches('.').count() == 2,
+        "JWT should have 2 dots (header.payload.signature)"
+    );
 }
 
 #[test]
@@ -47,7 +50,8 @@ fn test_decode_jwt_wrong_secret_fails() {
     let correct_secret = b"correct-secret";
     let wrong_secret = b"wrong-secret";
 
-    let token = services::create_jwt(user_id, role, correct_secret).expect("JWT creation should succeed");
+    let token =
+        services::create_jwt(user_id, role, correct_secret).expect("JWT creation should succeed");
 
     let result = services::decode_jwt(&token, wrong_secret);
 
@@ -99,11 +103,19 @@ fn test_decode_jwt_tampered_signature_fails() {
     let token = services::create_jwt(user_id, "user", secret).expect("JWT creation should succeed");
     let mut tampered = token.clone().into_bytes();
     let last_index = tampered.len() - 1;
-    tampered[last_index] = if tampered[last_index] == b'a' { b'b' } else { b'a' };
-    let tampered_token = String::from_utf8(tampered).expect("Tampered token should remain valid UTF-8");
+    tampered[last_index] = if tampered[last_index] == b'a' {
+        b'b'
+    } else {
+        b'a'
+    };
+    let tampered_token =
+        String::from_utf8(tampered).expect("Tampered token should remain valid UTF-8");
 
     let result = services::decode_jwt(&tampered_token, secret);
-    assert!(result.is_err(), "Tampered JWT signature must fail validation");
+    assert!(
+        result.is_err(),
+        "Tampered JWT signature must fail validation"
+    );
 }
 
 #[test]
@@ -142,13 +154,18 @@ fn test_create_jwt_generates_unique_jti() {
     let user_id = Uuid::new_v4();
     let secret = b"test-secret";
 
-    let token_1 = services::create_jwt(user_id, "user", secret).expect("First JWT should be created");
-    let token_2 = services::create_jwt(user_id, "user", secret).expect("Second JWT should be created");
+    let token_1 =
+        services::create_jwt(user_id, "user", secret).expect("First JWT should be created");
+    let token_2 =
+        services::create_jwt(user_id, "user", secret).expect("Second JWT should be created");
 
     let claims_1 = services::decode_jwt(&token_1, secret).expect("First token should decode");
     let claims_2 = services::decode_jwt(&token_2, secret).expect("Second token should decode");
 
-    assert_ne!(claims_1.jti, claims_2.jti, "JWT IDs should be unique per token");
+    assert_ne!(
+        claims_1.jti, claims_2.jti,
+        "JWT IDs should be unique per token"
+    );
 }
 
 #[test]
@@ -158,12 +175,16 @@ fn test_jwt_roundtrip_stress_200_iterations() {
     let mut seen_jti = HashSet::new();
 
     for _ in 0..200 {
-        let token = services::create_jwt(user_id, "user", secret).expect("JWT creation should succeed");
+        let token =
+            services::create_jwt(user_id, "user", secret).expect("JWT creation should succeed");
         let claims = services::decode_jwt(&token, secret).expect("JWT decode should succeed");
 
         assert_eq!(claims.id, user_id);
         assert_eq!(claims.role, "user");
-        assert!(seen_jti.insert(claims.jti), "JTI collision detected in stress test");
+        assert!(
+            seen_jti.insert(claims.jti),
+            "JTI collision detected in stress test"
+        );
     }
 }
 
@@ -183,7 +204,10 @@ async fn test_jwt_generation_concurrent_uniqueness() {
     for task in tasks {
         let token = task.await.expect("Task should complete successfully");
         let claims = services::decode_jwt(&token, secret).expect("JWT decode should succeed");
-        assert!(seen_jti.insert(claims.jti), "Duplicate JTI in concurrent generation");
+        assert!(
+            seen_jti.insert(claims.jti),
+            "Duplicate JTI in concurrent generation"
+        );
     }
 }
 
@@ -191,7 +215,8 @@ async fn test_jwt_generation_concurrent_uniqueness() {
 fn test_decode_jwt_fuzz_like_invalid_inputs_do_not_pass() {
     let user_id = Uuid::new_v4();
     let secret = b"fuzz-secret";
-    let valid_token = services::create_jwt(user_id, "user", secret).expect("JWT creation should succeed");
+    let valid_token =
+        services::create_jwt(user_id, "user", secret).expect("JWT creation should succeed");
 
     let mut rng = StdRng::seed_from_u64(42);
 
@@ -204,11 +229,11 @@ fn test_decode_jwt_fuzz_like_invalid_inputs_do_not_pass() {
             bytes[idx] = rng.random_range(33u8..=126u8);
         }
 
-        if let Ok(candidate) = String::from_utf8(bytes) {
-            if candidate != valid_token {
-                let result = services::decode_jwt(&candidate, secret);
-                assert!(result.is_err(), "Mutated token unexpectedly validated");
-            }
+        if let Ok(candidate) = String::from_utf8(bytes)
+            && candidate != valid_token
+        {
+            let result = services::decode_jwt(&candidate, secret);
+            assert!(result.is_err(), "Mutated token unexpectedly validated");
         }
     }
 }
@@ -222,7 +247,10 @@ fn test_hash_password_generates_valid_argon2_hash() {
     let hash = services::hash_password(password).expect("Hashing should succeed");
 
     // Les hash Argon2 commencent par "$argon2"
-    assert!(hash.starts_with("$argon2"), "Hash should start with $argon2");
+    assert!(
+        hash.starts_with("$argon2"),
+        "Hash should start with $argon2"
+    );
     assert!(!hash.is_empty());
 }
 
@@ -295,7 +323,11 @@ fn test_generate_salt_is_valid_base64_and_16_bytes() {
         .decode(salt.as_bytes())
         .expect("Generated salt should be valid base64");
 
-    assert_eq!(decoded.len(), 16, "Generated salt should decode to 16 bytes");
+    assert_eq!(
+        decoded.len(),
+        16,
+        "Generated salt should decode to 16 bytes"
+    );
 }
 
 #[test]
@@ -306,5 +338,9 @@ fn test_generate_salt_uniqueness_over_128_samples() {
         salts.insert(services::generate_salt());
     }
 
-    assert_eq!(salts.len(), 128, "Generated salts should be unique over sample set");
+    assert_eq!(
+        salts.len(),
+        128,
+        "Generated salts should be unique over sample set"
+    );
 }

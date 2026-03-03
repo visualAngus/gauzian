@@ -1,7 +1,7 @@
-use axum::{middleware, routing::get, Router};
+use axum::{Router, middleware, routing::get};
 use tower_http::trace::TraceLayer;
 
-use crate::{auth, drive, agenda, metrics, state::AppState};
+use crate::{agenda, auth, drive, metrics, state::AppState};
 
 /// Comparaison en temps constant pour éviter les timing attacks.
 /// Retourne false immédiatement si les longueurs diffèrent (pas d'information
@@ -10,7 +10,10 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.bytes()
+        .zip(b.bytes())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 pub fn app(state: AppState) -> Router {
@@ -42,9 +45,7 @@ async fn health_check_handler() -> &'static str {
 ///       bearer_token: '<valeur de METRICS_SECRET>'
 ///       static_configs:
 ///         - targets: ['backend:3000']
-async fn metrics_handler(
-    headers: axum::http::HeaderMap,
-) -> axum::response::Response {
+async fn metrics_handler(headers: axum::http::HeaderMap) -> axum::response::Response {
     use axum::response::IntoResponse;
 
     let secret = std::env::var("METRICS_SECRET").unwrap_or_default();
@@ -57,11 +58,7 @@ async fn metrics_handler(
             .unwrap_or("");
 
         if !constant_time_eq(provided, &secret) {
-            return (
-                axum::http::StatusCode::UNAUTHORIZED,
-                "Unauthorized",
-            )
-                .into_response();
+            return (axum::http::StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
         }
     }
 

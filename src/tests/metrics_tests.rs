@@ -1,16 +1,16 @@
 use axum::{
+    Router,
     body::Body,
     http::{Method, Request, StatusCode},
     middleware,
     routing::get,
-    Router,
 };
 use tower::ServiceExt;
 use uuid::Uuid;
 
 use crate::metrics::{
-    metrics_text, track_auth_attempt, track_file_upload, track_metrics, HTTP_CONNECTIONS_ACTIVE,
-    HTTP_REQUESTS_TOTAL,
+    HTTP_CONNECTIONS_ACTIVE, HTTP_REQUESTS_TOTAL, metrics_text, track_auth_attempt,
+    track_file_upload, track_metrics,
 };
 
 fn unique_segment(prefix: &str) -> String {
@@ -85,10 +85,13 @@ async fn test_metrics_middleware_tracks_405_status() {
 async fn test_metrics_middleware_concurrent_requests_leave_zero_active_connections() {
     let segment = unique_segment("mxconc");
     let app = Router::new()
-        .route(&format!("/{segment}"), get(|| async {
-            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
-            "ok"
-        }))
+        .route(
+            &format!("/{segment}"),
+            get(|| async {
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                "ok"
+            }),
+        )
         .layer(middleware::from_fn(track_metrics));
 
     let mut tasks = Vec::new();

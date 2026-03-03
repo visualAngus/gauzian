@@ -1,16 +1,16 @@
-use sqlx::PgPool;
 use crate::storage::StorageClient;
+use redis::aio::ConnectionManager;
+use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use redis::aio::ConnectionManager;
 
+use lettre::SmtpTransport;
 use lettre::transport::smtp::authentication::Credentials;
-use lettre::{SmtpTransport};
 
 #[derive(Clone)]
 pub struct AppState {
     pub jwt_secret: String,
-    pub redis_manager: ConnectionManager,  // ConnectionManager au lieu de Client
+    pub redis_manager: ConnectionManager, // ConnectionManager au lieu de Client
     pub db_pool: PgPool,
     pub storage_client: StorageClient,
     // Limite le nombre d'uploads concurrents pour éviter la saturation RAM
@@ -22,7 +22,8 @@ impl AppState {
     pub async fn from_env(db_pool: PgPool) -> Self {
         let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
 
-        let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set (ex: redis://127.0.0.1:6379)");
+        let redis_url =
+            std::env::var("REDIS_URL").expect("REDIS_URL must be set (ex: redis://127.0.0.1:6379)");
         let redis_client = redis::Client::open(redis_url).expect("Invalid REDIS_URL");
 
         // Utiliser ConnectionManager pour pooler les connexions Redis automatiquement
@@ -45,7 +46,10 @@ impl AppState {
         tracing::info!("Max concurrent uploads: {}", max_concurrent_uploads);
 
         // mail
-        let creds = Credentials::new("gauzian@pupin.fr".to_string(), std::env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD must be set"));
+        let creds = Credentials::new(
+            "gauzian@pupin.fr".to_string(),
+            std::env::var("SMTP_PASSWORD").expect("SMTP_PASSWORD must be set"),
+        );
         let mailer = SmtpTransport::relay("smtp.ionos.fr")
             .expect("Failed to create SMTP transport")
             .credentials(creds)

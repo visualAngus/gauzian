@@ -1,7 +1,7 @@
 use axum::{
-    http::{header::SET_COOKIE, StatusCode},
-    response::{IntoResponse, Response},
     Json,
+    http::{StatusCode, header::SET_COOKIE},
+    response::{IntoResponse, Response},
 };
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::Serialize;
@@ -21,8 +21,8 @@ pub struct ApiResponse<T> {
 
 impl<T: Serialize> ApiResponse<T> {
     pub fn ok(data: T) -> Self {
-        Self { 
-            data, 
+        Self {
+            data,
             token: None,
             status: StatusCode::OK,
         }
@@ -37,7 +37,9 @@ impl<T: Serialize> ApiResponse<T> {
 impl ApiResponse<ErrorResponse> {
     pub fn conflict(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::CONFLICT,
         }
@@ -45,7 +47,9 @@ impl ApiResponse<ErrorResponse> {
 
     pub fn not_found(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::NOT_FOUND,
         }
@@ -53,7 +57,9 @@ impl ApiResponse<ErrorResponse> {
 
     pub fn internal_error(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -61,14 +67,18 @@ impl ApiResponse<ErrorResponse> {
 
     pub fn unauthorized(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::UNAUTHORIZED,
         }
     }
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::BAD_REQUEST,
         }
@@ -76,7 +86,9 @@ impl ApiResponse<ErrorResponse> {
 
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::FORBIDDEN,
         }
@@ -84,7 +96,9 @@ impl ApiResponse<ErrorResponse> {
 
     pub fn insufficient_storage(message: impl Into<String>) -> Self {
         Self {
-            data: ErrorResponse { error: message.into() },
+            data: ErrorResponse {
+                error: message.into(),
+            },
             token: None,
             status: StatusCode::INSUFFICIENT_STORAGE,
         }
