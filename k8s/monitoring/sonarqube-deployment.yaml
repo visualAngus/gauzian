@@ -10,18 +10,6 @@ spec:
     requests:
       storage: 5Gi
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: sonarqube-extensions-pvc
-  namespace: monitoring
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -68,8 +56,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /opt/sonarqube/data
-        - name: extensions
-          mountPath: /opt/sonarqube/extensions
         resources:
           requests:
             cpu: 500m
@@ -102,9 +88,6 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: sonarqube-data-pvc
-      - name: extensions
-        persistentVolumeClaim:
-          claimName: sonarqube-extensions-pvc
 ---
 apiVersion: v1
 kind: Service
