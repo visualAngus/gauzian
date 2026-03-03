@@ -6,3 +6,4 @@ resources:
   - backend-servicemonitor.yaml
   - prometheus-metrics-secret.yaml
   - sonarqube-ingressroute.yaml
+  - sonarqube-deployment.yaml
