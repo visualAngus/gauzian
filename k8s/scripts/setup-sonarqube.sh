@@ -104,14 +104,24 @@ log "Vérification de la base de données 'sonarqube'..."
 DB_EXISTS=$(run_sql "SELECT 1 FROM pg_database WHERE datname='sonarqube';" || true)
 
 if [[ "$DB_EXISTS" == "1" ]]; then
-  ok "Base de données 'sonarqube' existe déjà"
-else
-  log "Création de la base de données 'sonarqube'..."
+  warn "Base de données 'sonarqube' existe déjà — reset en cours..."
+  log "Révocation des connexions actives..."
   kubectl exec -n gauzian-v2 "$POSTGRES_POD" -- \
     psql -U "$POSTGRES_USER_ENV" -d postgres -c \
-    "CREATE DATABASE sonarqube OWNER sonarqube;"
-  ok "Base de données 'sonarqube' créée"
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='sonarqube' AND pid <> pg_backend_pid();" \
+    > /dev/null 2>&1 || true
+  log "Suppression de la base de données 'sonarqube'..."
+  kubectl exec -n gauzian-v2 "$POSTGRES_POD" -- \
+    psql -U "$POSTGRES_USER_ENV" -d postgres -c \
+    "DROP DATABASE sonarqube;"
+  ok "Ancienne base supprimée"
 fi
+
+log "Création de la base de données 'sonarqube'..."
+kubectl exec -n gauzian-v2 "$POSTGRES_POD" -- \
+  psql -U "$POSTGRES_USER_ENV" -d postgres -c \
+  "CREATE DATABASE sonarqube OWNER sonarqube;"
+ok "Base de données 'sonarqube' créée"
 
 # ── Étape 3 : Vérification des droits ───────────────────────
 log "Vérification des droits sur la base..."
