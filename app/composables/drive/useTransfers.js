@@ -273,7 +273,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             a.download = metadata.filename || filename;
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
+            a.remove();
 
             // Libérer la mémoire
             URL.revokeObjectURL(url);
@@ -637,7 +637,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             a.download = `${folderName}.zip`;
             document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
+            a.remove();
 
             URL.revokeObjectURL(url);
 
@@ -712,7 +712,6 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         };
 
         const stringifiedMetadata = JSON.stringify(metadata);
-        //   console.log("Stringified Metadata:", stringifiedMetadata);
 
         const encryptedMetadata = await encryptSimpleDataWithDataKey(
             stringifiedMetadata,
@@ -925,7 +924,6 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
                         // Vider listUploaded après le rechargement pour éviter les doublons
                         listUploaded.value = [];
                     }
-                    // console.log(listUploadInProgress.value);
                     startUploads();
                 })
                 .catch((err) => {

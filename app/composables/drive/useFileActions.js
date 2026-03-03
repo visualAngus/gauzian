@@ -61,15 +61,11 @@ export function useFileActions({
     }));
 
     const click_on_item = (item) => {
-        // console.log("Item event:", item, event);
-
         // Si on est en corbeille, restaurer l'item au lieu de l'ouvrir/télécharger
         if (activeFolderId.value === "corbeille") {
-            // restoreItem(item);
             return;
         }
         if (activeFolderId.value === "shared_with_me") {
-            // acceptSharedItem(item);
             return;
         }
 
@@ -312,12 +308,9 @@ export function useFileActions({
 
         // Créer un élément virtuel pour le dossier du tree
         const virtualItem = document.createElement("div");
-        virtualItem.setAttribute("data-item-type", "folder");
-        virtualItem.setAttribute("data-item-id", node.folder_id);
-        virtualItem.setAttribute(
-            "data-folder-name",
-            node.metadata?.folder_name || "Dossier",
-        );
+        virtualItem.dataset.itemType = "folder";
+        virtualItem.dataset.itemId = node.folder_id;
+        virtualItem.dataset.folderName = node.metadata?.folder_name || "Dossier";
 
         rightClikedItem.value = virtualItem;
 
@@ -362,15 +355,13 @@ export function useFileActions({
                 panel.style.left = event.pageX + "px";
             }
         }
-        else {
-            if (event && event.pageY && event.pageX) {
-                panel.style.top = event.pageY + "px";
-                panel.style.left = event.pageX + "px";
-            } else {
-                const rect = realElement.getBoundingClientRect();
-                panel.style.top = (rect.bottom + window.scrollY) + "px";
-                panel.style.left = (rect.left + window.scrollX) + "px";
-            }
+        else if (event && event.pageY && event.pageX) {
+            panel.style.top = event.pageY + "px";
+            panel.style.left = event.pageX + "px";
+        } else {
+            const rect = realElement.getBoundingClientRect();
+            panel.style.top = (rect.bottom + window.scrollY) + "px";
+            panel.style.left = (rect.left + window.scrollX) + "px";
         }
     };
 
@@ -462,8 +453,6 @@ export function useFileActions({
             listToUpload.value.push(file);
         }
 
-        // console.log("Dossiers créés:", foldersList.value);
-        // console.log("Fichiers prêts pour upload:", filesToUpload);
     };
     const handleDragStart = (data) => {
         isDragging.value = true;
@@ -791,7 +780,6 @@ export function useFileActions({
         const itemId = item.dataset?.itemId;
         const itemType = item.dataset?.itemType;
         const metadata = JSON.parse(item.dataset?.itemMetadata || "{}");
-        // console.log(metadata);
 
         if (!metadata) {
             console.error("No metadata found for item");
@@ -922,7 +910,6 @@ export function useFileActions({
         };
         nameElement.addEventListener("blur", finishEditing, { once: true });
         nameElement.addEventListener("keydown", (e) => {
-            // console.log(e.key);
             if (e.key === "Enter") {
                 e.preventDefault();
                 nameElement.blur(); // Utiliser blur pour déclencher finishEditing
