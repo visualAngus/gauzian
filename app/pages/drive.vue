@@ -35,6 +35,14 @@
     </InfoItem>
   </Transition>
 
+  <RechercheBar
+    ref="rechercheBarRef"
+    v-if="activeSection === 'my_drive'"
+    @search="handleSearch"
+    @clear="handleClearSearch"
+    @filter="handleFilter"
+  />
+
   <ShareItemVue
     v-if="isSharing && shareItemTarget"
     :itemName="shareItemTarget.name"
@@ -569,7 +577,7 @@
           @after-leave="onFileListAfterLeave"
         >
           <FileItem
-            v-for="item in displayedDriveItems"
+            v-for="item in filteredDriveItems"
             :key="
               'uploaded-' + item.type + '-' + (item.folder_id || item.file_id)
             "
@@ -676,6 +684,7 @@ import FolderTreeNode from "~/components/FolderTreeNode.vue";
 import Notification from "~/components/Notification.vue";
 import InfoItem from "~/components/InfoItem.vue";
 import ContextMenu from "~/components/ContextMenu.vue";
+import RechercheBar from "~/components/RechercheBar.vue";
 
 const vDropzone = dropzone;
 // Configuration dynamique de l'API URL (Clever Cloud, K8s, local)
@@ -733,7 +742,7 @@ const {
   onBreadcrumbWheel,
   navigateToBreadcrumb,
   loadingDrive,
-} = useDriveData(router, API_URL, usedSpace, addNotification);
+} = useDriveData(router, API_URL, usedSpace, null, addNotification, maxspace);
 
 // displayFolderId : ne se synchronise sur activeFolderId qu'après que
 // displayedDriveItems ait changé → évite les boutons "fantômes" pendant la navigation
@@ -913,6 +922,70 @@ const handleShareClose = async (contacts, accessLevel) => {
 
 // 7. Context Menu Global
 const { showContextMenu, hideContextMenu } = useContextMenu();
+
+// Recherche & filtrage
+const searchQuery = ref('')
+const rechercheBarRef = ref(null)
+const activeFileFilter = ref('all')
+
+function handleSearch(query) {
+  searchQuery.value = query
+}
+
+function handleClearSearch() {
+  searchQuery.value = ''
+  activeFileFilter.value = 'all'
+  rechercheBarRef.value?.reset()
+}
+
+function handleFilter(filterValue) {
+  activeFileFilter.value = filterValue
+}
+
+const MIME_CATEGORIES = {
+  image:    (mime) => mime?.startsWith('image/'),
+  video:    (mime) => mime?.startsWith('video/'),
+  audio:    (mime) => mime?.startsWith('audio/'),
+  document: (mime) => mime?.startsWith('text/') || [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ].includes(mime),
+  archive:  (mime) => [
+    'application/zip',
+    'application/x-rar-compressed',
+    'application/x-7z-compressed',
+    'application/x-tar',
+    'application/gzip',
+  ].includes(mime),
+  folder:   (_mime, item) => item.type === 'folder',
+}
+
+const filteredDriveItems = computed(() => {
+  let items = displayedDriveItems.value
+
+  if (activeFileFilter.value !== 'all') {
+    const matcher = MIME_CATEGORIES[activeFileFilter.value]
+    items = items.filter(item => {
+      const mime = item.metadata?.mime_type
+      return matcher(mime, item)
+    })
+  }
+
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.toLowerCase()
+    items = items.filter(item => {
+      const name = item.metadata?.filename || item.metadata?.folder_name || item._name || ''
+      return name.toLowerCase().includes(q)
+    })
+  }
+
+  return items
+})
 
 // --- Logique "Glue" (Spécifique à la vue qui combine les états) ---
 

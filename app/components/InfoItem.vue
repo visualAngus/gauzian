@@ -198,7 +198,18 @@ defineProps({
   gap: 20px;
 }
 
-@media  screen and (max-width: 768px) {
+@media  screen and (max-width: 1500px) {
+  .info-item {
+    width: calc(100% - 40px);
+    max-width: 400px;
+    right: 20px;
+    bottom: 0px;
+    max-height: 60vh;
+    top: auto;
+  }
+    
+}
+@media  screen and (max-width: 700px) {
   .info-item {
     width: calc(100% - 40px);
     max-width: 400px;
@@ -438,8 +449,8 @@ defineProps({
 }
 .notification--close {
   position: absolute;
-  top: 0px;
-  right: 8px;
+  top: 20px;
+  right: 20px;
 }
 .notification--close button {
   background: none;

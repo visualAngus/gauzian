@@ -393,7 +393,7 @@ html.dark #shared-with-me-button:hover {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-75%, -100%);
   font-size: 20px;
   color: var(--color-text-muted);
   pointer-events: none;
@@ -1571,7 +1571,7 @@ html.dark #shared-with-me-button:hover {
   width: calc(100% - 350px);
 }
 
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 1500px) {
   .panel_ouvert {
     width: 100%;
   }

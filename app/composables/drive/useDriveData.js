@@ -3,7 +3,7 @@ import { nextTick } from 'vue';
 import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 import { decryptWithStoredPrivateKey, decryptSimpleDataWithDataKey } from '~/utils/crypto';
 
-export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotification) {
+export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotification,maxspace) {
     const { fetchWithAuth } = useFetchWithAuth();
     const activeFolderId = ref("root");
     const liste_decrypted_items = ref([]);
@@ -487,6 +487,9 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
         const fullPathData = resData.full_path;
 
         usedSpace.value = drive_info.used_space;
+        if (maxspace && drive_info.storage_limit_bytes) {
+            maxspace.value = drive_info.storage_limit_bytes;
+        }
 
         full_path.value = [];
 
