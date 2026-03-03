@@ -525,7 +525,7 @@ const passwordRules = computed(() => {
     hasMinLength: p.length >= 10,
     hasUpperCase: /[A-Z]/.test(p),
     hasNumber: /[0-9]/.test(p),
-    hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p),
+    hasSpecialChar: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(p),
   };
 });
 
@@ -883,7 +883,7 @@ const downloadRecoveryKey = async () => {
   <hr>
   <div class="footer">Gauzian — stockage privé &bull; gauzian.pupin.fr</div>
 
-  <script>window.onload = () => window.print();<\/script>
+  <script>window.onload = () => window.print();</script>
 </body>
 </html>`;
 

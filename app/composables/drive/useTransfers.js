@@ -5,7 +5,6 @@ import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 import {
     decryptWithStoredPrivateKey,
     decryptSimpleDataWithDataKey,
-    decryptDataWithDataKey,
     encryptWithStoredPublicKey,
     encryptSimpleDataWithDataKey,
     generateDataKey,
@@ -350,7 +349,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
         return pausedTransfers.value.has(transferId);
     };
 
-    const togglePauseTransfer = (transferId, _type) => {
+    const togglePauseTransfer = (transferId) => {
         if (pausedTransfers.value.has(transferId)) {
             pausedTransfers.value.delete(transferId);
         } else {

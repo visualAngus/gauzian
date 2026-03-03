@@ -2,7 +2,7 @@
  * Middleware global d'authentification
  * Vérifie la session utilisateur avant chaque navigation
  */
-export default defineNuxtRouteMiddleware(async (to, _from) => {
+export default defineNuxtRouteMiddleware(async (to) => {
     // Désactiver en développement local
   if (import.meta.dev) return;
   // Uniquement côté client (pas SSR)

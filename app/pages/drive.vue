@@ -669,7 +669,6 @@ import { useDriveData } from "~/composables/drive/useDriveData";
 import { useFileActions } from "~/composables/drive/useFileActions";
 import { useInfoPanel } from "~/composables/drive/useInfoPanel";
 import { useTransfers } from "~/composables/drive/useTransfers";
-import { useContextMenu } from "~/composables/drive/useContextMenu";
 import { useNotification } from "~/composables/useNotification";
 
 // Directives & Components

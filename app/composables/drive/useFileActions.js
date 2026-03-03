@@ -15,10 +15,6 @@ export function useFileActions({
     API_URL,
     activeFolderId,
     listToUpload,
-    _listUploadInProgress,
-    _listUploaded,
-    _fileProgressMap,
-    _abortControllers,
     refreshTreeNode,
     loadPath,
     usedSpace,
@@ -64,7 +60,7 @@ export function useFileActions({
         zIndex: 9999,
     }));
 
-    const click_on_item = (item, _event) => {
+    const click_on_item = (item) => {
         // console.log("Item event:", item, event);
 
         // Si on est en corbeille, restaurer l'item au lieu de l'ouvrir/télécharger

@@ -4,8 +4,6 @@ import { ref, computed, watch } from 'vue';
 import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 // import de utils pour l'encryption
 import {
-    decryptWithStoredPrivateKey,
-    encryptWithPublicKey,
     generateDataKey,
     encryptWithStoredPublicKey,
     encryptSimpleDataWithDataKey

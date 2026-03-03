@@ -134,7 +134,7 @@ const closeWithContacts = () => {
     return;
   }
 
-  emit("close", contacts.value, accessLevel);
+  emit("close", contacts.value, accessLevel.value);
 };
 </script>
 <style scoped>

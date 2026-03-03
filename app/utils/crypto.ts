@@ -534,7 +534,7 @@ export async function decryptPrivateKeyPemWithPassword(params: {
     toArrayBuffer(encryptedBuf) as BufferSource
   );
   return new TextDecoder().decode(decryptedBuf);
-  } catch (_error) {
+  } catch {
     throw new Error("Failed to decrypt private key with provided password");
   }
 }

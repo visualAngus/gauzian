@@ -45,6 +45,7 @@
       <div class="share-list">
         <div
           v-for="shared in shared_persons"
+          :key="shared.username"
           class="share-item"
         >
           <div class="share-user">

@@ -1,5 +1,4 @@
-import { ref, watch } from 'vue';
-import { nextTick } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { useFetchWithAuth } from '~/composables/useFetchWithAuth';
 import { decryptWithStoredPrivateKey, decryptSimpleDataWithDataKey } from '~/utils/crypto';
 
