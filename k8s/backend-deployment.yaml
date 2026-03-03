@@ -27,9 +27,10 @@ spec:
             apt-get update -qq && apt-get install -y -qq mold
           fi
           [ -f "$CARGO_HOME/bin/cargo-watch" ] || cargo install cargo-watch --locked
-          # -d 1 : debounce 1s pour éviter les recompils en rafale lors des sauvegardes
-          # -w src -w Cargo.toml : surveille uniquement ce qui compte
-          exec cargo watch -d 1 -w src -w Cargo.toml -x run
+          # Recompile en dev, mais pas agressif:
+          # -d 8 : attend 8s de calme avant relance
+          # -w ... : ne surveille que les fichiers Rust et manifests
+          exec cargo watch -d 8 -w src -w Cargo.toml -w Cargo.lock -x run
         ports:
         - containerPort: 8080
         resources:
