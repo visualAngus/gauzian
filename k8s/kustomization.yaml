@@ -27,5 +27,8 @@ resources:
   - middleware.yaml
   - ingressroute.yaml
 
+  # SonarQube (qualité de code)
+  - sonarqube-deployment.yaml
+
   # Monitoring (Grafana, Prometheus ServiceMonitor)
   - monitoring/
