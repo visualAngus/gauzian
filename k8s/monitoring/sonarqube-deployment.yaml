@@ -37,7 +37,7 @@ spec:
           privileged: true
       containers:
       - name: sonarqube
-        image: mc1arke/sonarqube-with-community-branch-plugin:10.8-community
+        image: mc1arke/sonarqube-with-community-branch-plugin:26.2.0.119303-community
         ports:
         - containerPort: 9000
           name: http
