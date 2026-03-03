@@ -17,7 +17,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@nuxt/eslint": "^0.7.7",
+    "@nuxt/eslint": "^1.15.2",
     "typescript": "^5.9.3"
   },
   "overrides": {
