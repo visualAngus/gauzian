@@ -67,8 +67,9 @@ spec:
           httpGet:
             path: /api/system/status
             port: 9000
-          failureThreshold: 30
-          periodSeconds: 10
+          failureThreshold: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
         livenessProbe:
           httpGet:
             path: /api/system/status
