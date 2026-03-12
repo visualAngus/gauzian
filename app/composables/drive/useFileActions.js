@@ -938,7 +938,7 @@ export function useFileActions({
         const res = await fetchWithAuth(endpoint, {
             method: "PATCH",
             body: JSON.stringify({
-                target_folder_id: targetFolderId,
+                target_folder_id: targetFolderId === "root" ? null : targetFolderId,
             }),
         });
 

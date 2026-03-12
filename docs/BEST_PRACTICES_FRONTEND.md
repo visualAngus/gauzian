@@ -840,14 +840,14 @@ async function fetchWithoutErrorHandling(url) {
 ```javascript
 // ✅ GOOD - Une seule requête pour tout charger
 async function loadDashboard() {
-  const data = await fetch(`${API_URL}/drive/get_all_drive_info/${folderId}`, {
+  const data = await fetch(`${API_URL}/drive/get_file_folder/${folderId}`, {
     credentials: 'include'
   }).then(r => r.json());
 
-  // data contient : user, files, folders, quota
-  files.value = data.files;
-  folders.value = data.folders;
-  quota.value = data.quota;
+  // data contient : files_and_folders, full_path, drive_info
+  files.value = data.files_and_folders.filter(i => i.type === 'file');
+  folders.value = data.files_and_folders.filter(i => i.type === 'folder');
+  quota.value = data.drive_info;
 }
 
 // ❌ BAD - Requêtes séquentielles (N+1 problem)

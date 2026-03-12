@@ -114,8 +114,9 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
             }
 
             const resData = await res.json();
+            const parentId = node.folder_id === "root" ? null : node.folder_id;
             const folders = resData.folder_contents.filter(
-                (item) => item.type === "folder",
+                (item) => item.type === "folder" && item.parent_folder_id === parentId,
             );
             const childrenNodes = [];
 
@@ -364,9 +365,11 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
                 );
             }
 
+            // Filtrer par parent_folder_id : root → null, sous-dossier → UUID du dossier
+            const parentId = activeFolderId.value === "root" ? null : activeFolderId.value;
             const items = [
-                ...(files_and_folders?.folders ?? []),
-                ...(files_and_folders?.files ?? []),
+                ...(files_and_folders?.folders ?? []).filter(f => f.parent_folder_id === parentId),
+                ...(files_and_folders?.files ?? []).filter(f => f.parent_folder_id === parentId),
             ];
 
             const decryptedItems = [];
@@ -465,123 +468,26 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
         const urlParams = new URLSearchParams(window.location.search);
         const id_parent_folder = urlParams.get("folder_id") || "root";
 
-        activeFolderId.value = id_parent_folder;
-
-        const res = await fetchWithAuth(
-            `/drive/get_all_drive_info/${id_parent_folder}`,
-            {
-                method: "GET",
-            },
-        );
+        const res = await fetchWithAuth(`/drive/get_drive_info`, { method: "GET" });
         if (!res.ok) {
-            throw new Error("Failed to get all drive info");
+            throw new Error("Failed to get drive info");
         }
-        const resData = await res.json();
-        const drive_info = resData.drive_info;
-        const files_and_folders = resData.files_and_folders;
-        const fullPathData = resData.full_path;
+        const drive_info = await res.json();
 
         usedSpace.value = drive_info.used_space;
         if (maxspace && drive_info.storage_limit_bytes) {
             maxspace.value = drive_info.storage_limit_bytes;
         }
 
-        full_path.value = [];
-
-        // Reset des placeholders "uploaded" pour ce dossier pour éviter les doublons
-        if (listUploaded && listUploaded.value) {
-            listUploaded.value = listUploaded.value.filter(
-                (file) => (file._targetFolderId || "root") !== activeFolderId.value,
-            );
+        // Charger les items via get_file_folder (filtre SQL correct par parent_folder_id)
+        // Si activeFolderId n'a pas changé (cas root au démarrage), le watcher ne se déclenche pas
+        // → on appelle loadPath explicitement. Sinon le watcher s'en charge.
+        const prevFolderId = activeFolderId.value;
+        activeFolderId.value = id_parent_folder;
+        if (prevFolderId === id_parent_folder) {
+            await loadPath();
         }
 
-        const items = [
-            ...(files_and_folders?.folders ?? []),
-            ...(files_and_folders?.files ?? []),
-        ];
-
-        const decryptedItems = [];
-        for (const item of items) {
-            if (item.type === "file") {
-                try {
-                    const encryptedMetadata = item.encrypted_metadata;
-                    const decryptkey = await decryptWithStoredPrivateKey(
-                        item.encrypted_file_key,
-                    );
-                    const metadataStr = await decryptSimpleDataWithDataKey(
-                        encryptedMetadata,
-                        decryptkey,
-                    );
-                    const metadata = JSON.parse(metadataStr);
-                    // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
-                    metadata.encrypted_data_key = item.encrypted_file_key;
-                    decryptedItems.push({
-                        ...item,
-                        metadata: metadata,
-                    });
-                } catch (err) {
-                    console.error(
-                        "Failed to decrypt metadata for file:",
-                        item.file_id,
-                        err,
-                    );
-                }
-            } else if (item.type === "folder") {
-                try {
-                    const encryptedMetadata = item.encrypted_metadata;
-                    const decryptkey = await decryptWithStoredPrivateKey(
-                        item.encrypted_folder_key,
-                    );
-                    const metadataStr = await decryptSimpleDataWithDataKey(
-                        encryptedMetadata,
-                        decryptkey,
-                    );
-                    const metadata = JSON.parse(metadataStr);
-                    metadata.encrypted_data_key = item.encrypted_folder_key;
-                    decryptedItems.push({
-                        ...item,
-                        metadata: metadata,
-                    });
-                } catch (err) {
-                    console.error(
-                        "Failed to decrypt metadata for folder:",
-                        item.folder_id,
-                        err,
-                    );
-                }
-            }
-        }
-
-        applyDriveItemsForDisplay(decryptedItems);
-
-        for (const pathItem of fullPathData) {
-            if (
-                !pathItem ||
-                !pathItem.encrypted_folder_key ||
-                !pathItem.encrypted_metadata
-            ) {
-                console.warn("Invalid pathItem:", pathItem);
-                continue;
-            }
-            try {
-                const encryptedMetadata = pathItem.encrypted_metadata;
-                const decryptkey = await decryptWithStoredPrivateKey(
-                    pathItem.encrypted_folder_key,
-                );
-                const metadataStr = await decryptSimpleDataWithDataKey(
-                    encryptedMetadata,
-                    decryptkey,
-                );
-                const metadata = JSON.parse(metadataStr);
-                full_path.value.push({
-                    ...pathItem,
-                    metadata: metadata,
-                });
-                console.log("Full path item:", full_path.value);
-            } catch (error) {
-                console.error("Failed to decrypt pathItem:", pathItem, error);
-            }
-        }
         loadingDrive.value = false;
     };
 
