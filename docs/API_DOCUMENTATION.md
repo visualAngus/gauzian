@@ -1130,25 +1130,6 @@ Reject a shared folder.
 
 ## Module Drive - Global
 
-### GET `/drive/get_all_drive_info/{parent_id}`
-
-**Description** : Récupère les informations complètes du drive (fichiers, dossiers, quota). Endpoint principal utilisé au chargement de la page drive.
-
-**Authentification** : ✅ Requise
-
-**Path Parameters** :
-- `parent_id` (string) - UUID du dossier parent, `"root"`, `"corbeille"`, ou `"shared_with_me"`
-
-**Response** : `200 OK`
-
-```json
-{
-  "folder_id": "880e8400-e29b-41d4-a716-446655440004"
-}
-```
-
----
-
 ### GET `/drive/get_file_folder/{parent_id}`
 
 **Description** : Liste les fichiers et dossiers d'un dossier. Supporte les vues virtuelles `root`, `corbeille`, `shared_with_me`.
@@ -1282,80 +1263,6 @@ Revoke access to a resource (file or folder).
 ---
 
 ## Drive Module - Global Views
-
-### GET /drive/get_all_drive_info/{parent_id} *(Non-RESTful)*
-
-Get complete drive information: user, used space, files and folders, full path.
-
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `parent_id` | path | Parent folder UUID, "corbeille" for trash, or special ID |
-
-**Success Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "user_info": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "username": "johndoe",
-      "email": "user@example.com"
-    },
-    "drive_info": {
-      "used_space": 1073741824,
-      "file_count": 42,
-      "folder_count": 10
-    },
-    "files_and_folders": [
-      {
-        "type": "folder",
-        "id": "880e8400-e29b-41d4-a716-446655440004",
-        "encrypted_metadata": "base64_encrypted_metadata"
-      },
-      {
-        "type": "file",
-        "id": "660e8400-e29b-41d4-a716-446655440001",
-        "encrypted_metadata": "base64_encrypted_metadata"
-      }
-    ],
-    "full_path": [
-      {
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "name": "root"
-      }
-    ]
-  },
-  "error": null
-}
-```
-
-**For trash:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "corbeille_info": {
-      "used_space": 52428800,
-      "file_count": 5,
-      "folder_count": 2
-    },
-    "files_and_folders": [],
-    "drive_info": {
-      "used_space": 1073741824,
-      "file_count": 42,
-      "folder_count": 10
-    },
-    "full_path": []
-  },
-  "error": null
-}
-```
-
----
 
 ### GET /drive/get_file_folder/{parent_id} *(Non-RESTful)*
 

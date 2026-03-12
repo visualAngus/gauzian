@@ -249,15 +249,16 @@ pub async fn info_handler(
     State(state): State<AppState>,
     claims: services::Claims,
 ) -> Result<ApiResponse<repo::UserInfo>, (StatusCode, String)> {
-    let user_info = repo::get_user_by_id(&state.db_pool, claims.id)
-        .await
-        .map_err(|e| {
+    let user_info = match repo::get_user_by_id(&state.db_pool, claims.id).await {
+        Ok(user) => user,
+        Err(sqlx::Error::RowNotFound) => {
+            return Err((StatusCode::UNAUTHORIZED, "Session invalide, veuillez vous reconnecter".to_string()));
+        }
+        Err(e) => {
             tracing::error!("Failed to fetch user info: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal server error".to_string(),
-            )
-        })?;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string()));
+        }
+    };
 
     Ok(ApiResponse::ok(user_info))
 }

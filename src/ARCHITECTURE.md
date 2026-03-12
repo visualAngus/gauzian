@@ -259,9 +259,8 @@ GET    /folder/:folder_id/InfoItem      # Infos détaillées
 POST   /propagate_folder_access         # Propage permissions
 ```
 
-**Vues Globales (5 routes)**
+**Vues Globales (4 routes)**
 ```rust
-GET    /get_all_drive_info/:parent_id  # Infos compte + drive (stockage, quotas)
 GET    /get_file_folder/:parent_id     # Liste fichiers + dossiers d'un parent
 POST   /empty_trash                    # Supprime définitivement tous les éléments de la corbeille
 ```

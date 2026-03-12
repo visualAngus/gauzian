@@ -120,10 +120,6 @@ pub fn drive_routes() -> Router<AppState> {
         .route("/revoke-access", post(handlers::revoke_access_handler))
         // ========== Vues globales ==========
         .route(
-            "/get_all_drive_info/{parent_id}",
-            get(handlers::get_account_and_drive_info_handler),
-        )
-        .route(
             "/get_file_folder/{parent_id}",
             get(handlers::get_file_folder_handler),
         )
