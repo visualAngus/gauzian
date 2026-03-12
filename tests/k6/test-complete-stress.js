@@ -201,7 +201,7 @@ function createFolder(token, parentId = 'root') {
 
 // Get drive info
 function getDriveInfo(token, parentId = 'root') {
-    const res = http.get(`${BASE_URL}/drive/get_all_drive_info/${parentId}`, {
+    const res = http.get(`${BASE_URL}/drive/get_file_folder/${parentId}`, {
         headers: getAuthHeaders(token),
     });
     check(res, { 'get drive info OK': (r) => r.status === 200 });

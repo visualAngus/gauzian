@@ -228,7 +228,7 @@ function uploadFile(token, fileName, numChunks = 3) {
  * Action: Lister les fichiers du drive
  */
 function listFiles(token) {
-    const res = http.get(`${BASE_URL}/drive/get_all_drive_info/root`, {
+    const res = http.get(`${BASE_URL}/drive/get_file_folder/root`, {
         headers: getHeaders(token),
         tags: { name: 'list_files' },
     });

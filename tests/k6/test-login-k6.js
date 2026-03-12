@@ -234,7 +234,7 @@ function testCreateFolder(token, parentId = 'root') {
 
 // Test get drive info
 function testGetDriveInfo(token, parentId = 'root') {
-    const res = http.get(`${BASE_URL}/drive/get_all_drive_info/${parentId}`, {
+    const res = http.get(`${BASE_URL}/drive/get_file_folder/${parentId}`, {
         headers: getAuthHeaders(token),
     });
 

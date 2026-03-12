@@ -104,8 +104,7 @@ struct AppState {
 - `GET folder/:id/shared_users`, `GET folder/:id/InfoItem`
 - `POST propagate_folder_access`
 
-*Vues (5 routes) :*
-- `GET get_all_drive_info/:parent_id` — contenu complet d'un répertoire
+*Vues (4 routes) :*
 - `GET get_file_folder/:parent_id` — liste fichiers + dossiers
 - `DELETE empty_trash` — vidage de la corbeille
 
