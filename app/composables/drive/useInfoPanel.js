@@ -9,7 +9,7 @@ export function useInfoPanel({ selectedItemsMap, formatBytes, addNotification, c
     const formatDateField = (value) => {
         if (!value) return "—";
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return value;
+        if (Number.Number.isNaN(date.getTime())) return value;
         return date.toLocaleString("fr-FR", {
             year: "numeric",
             month: "short",

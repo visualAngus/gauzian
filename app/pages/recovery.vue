@@ -290,7 +290,7 @@ const extractRecoveryKeyFromText = (content) => {
 
   const keyBoxMatch = content.match(/<div class="key-box">([\s\S]*?)<\/div>/i);
   if (keyBoxMatch?.[1]) {
-    return keyBoxMatch[1].replace(/<[^>]+>/g, "").trim();
+    return keyBoxMatch[1].replaceAll(/<[^>]*>/g, "").trim();
   }
 
   const base64Like = content.match(/[A-Za-z0-9+/=]{80,}/);

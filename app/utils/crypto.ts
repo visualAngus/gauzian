@@ -14,6 +14,7 @@ const MAX_RSA_PLAINTEXT_BYTES = 446;
 
 export const DEFAULT_KEYSTORE: KeyStoreConfig = {
   dbName: "gauzian_key_store",
+  dbVersion: 1,
   storeName: "keys",
 };
 
@@ -41,11 +42,10 @@ function toArrayBuffer(source: ArrayBuffer | ArrayBufferView): ArrayBuffer {
 export function buffToB64(buff: ArrayBuffer | ArrayBufferView): string {
   assertClient();
   const arr = normalizeU8(new Uint8Array(toArrayBuffer(buff)) as U8);
-  // Utilisation d'un reduce pour éviter l'erreur de pile sur les très gros buffers avec spread operator (...)
   let binary = "";
   const len = arr.byteLength;
   for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(arr[i]!);
+    binary += String.fromCodePoint(arr[i]!);
   }
   return window.btoa(binary);
 }
@@ -59,7 +59,7 @@ export function b64ToBuff(str: string): U8 {
   }
 
   // Trim whitespace (newlines, spaces, etc.)
-  const trimmedStr = str.replace(/\s/g, '');
+  const trimmedStr = str.replaceAll(/\s/g, '');
   
   // Check for invalid characters
   const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -75,9 +75,9 @@ export function b64ToBuff(str: string): U8 {
   try {
     const bin = window.atob(trimmedStr);
     const out = new Uint8Array(bin.length) as U8;
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.codePointAt(i)!;
     return out;
-  } catch (error) {
+    } catch (error) {
     const message = typeof error === "object" && error !== null && "message" in error
       ? (error as { message: string }).message
       : String(error);
@@ -94,7 +94,7 @@ export function toPem(buffer: ArrayBuffer, type: KeyType): string {
   assertClient();
   const u8 = new Uint8Array(buffer);
   let binary = "";
-  for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]!);
+  for (let i = 0; i < u8.length; i++) binary += String.fromCodePoint(u8[i]!);
   const b64 = window.btoa(binary);
   const formatted = b64.match(/.{1,64}/g)?.join("\n") ?? b64;
   return `-----BEGIN ${type} KEY-----\n${formatted}\n-----END ${type} KEY-----`;
@@ -102,9 +102,9 @@ export function toPem(buffer: ArrayBuffer, type: KeyType): string {
 
 export function pemToArrayBuffer(pem: string): ArrayBuffer {
   const b64 = pem
-    .replace(/-----BEGIN.*?-----/g, "")
-    .replace(/-----END.*?-----/g, "")
-    .replace(/\s/g, ""); // Enlève aussi les retours à la ligne
+    .replaceAll(/-----BEGIN.*?-----/g, "")
+    .replaceAll(/-----END.*?-----/g, "")
+    .replaceAll(/\s/g, ""); // Enlève aussi les retours à la ligne
   return toArrayBuffer(b64ToBuff(b64));
 }
 
@@ -345,7 +345,7 @@ export async function clearAllKeys(config: KeyStoreConfig = DEFAULT_KEYSTORE): P
     const clearRequest = store.clear();
 
     clearRequest.onsuccess = () => {
-      if (import.meta.dev) {
+      if ((import.meta as any)?.dev) {
         console.log('All crypto keys cleared from IndexedDB');
       }
       resolve();
@@ -404,9 +404,9 @@ export async function importPublicKeyFromPem(pemString: string): Promise<CryptoK
   const pemHeader = "-----BEGIN PUBLIC KEY-----";
   const pemFooter = "-----END PUBLIC KEY-----";
   const pemContents = pemString
-    .replace(pemHeader, "")
-    .replace(pemFooter, "")
-    .replace(/\s/g, "");
+    .replaceAll(pemHeader, "")
+    .replaceAll(pemFooter, "")
+    .replaceAll(/\s/g, "");
 
   // Décoder le base64
   const binaryDer = b64ToBuff(pemContents);

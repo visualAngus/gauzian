@@ -309,7 +309,7 @@ export const useEvents = () => {
         Object.entries(dayCount).forEach(([dayId, count]) => {
             if (count > maxCount) {
                 maxCount = count;
-                busiestDay = parseInt(dayId);
+                busiestDay = Number.parseInt(dayId);
             }
         });
 

@@ -303,7 +303,7 @@ const handleOtpInput = (event, index) => {
   const target = event.target;
   const sanitizedValue = (target.value || "")
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
+    .replaceAll(/[^A-Z0-9]/g, "")
     .slice(0, 1);
   target.value = sanitizedValue;
 

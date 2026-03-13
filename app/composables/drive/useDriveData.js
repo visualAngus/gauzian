@@ -216,252 +216,152 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
     };
 
 
+    // Helper: decrypt file metadata
+    const decryptFileMetadata = async (item) => {
+        try {
+            item.parent_folder_id = null;
+            const encryptedMetadata = item.encrypted_metadata;
+            const decryptkey = await decryptWithStoredPrivateKey(item.encrypted_file_key);
+            const metadataStr = await decryptSimpleDataWithDataKey(encryptedMetadata, decryptkey);
+            const metadata = JSON.parse(metadataStr);
+            metadata.encrypted_data_key = item.encrypted_file_key;
+            return { ...item, metadata };
+        } catch (err) {
+            console.error("Failed to decrypt metadata for file:", item.file_id, err);
+            return null;
+        }
+    };
+
+    // Helper: decrypt folder metadata
+    const decryptFolderMetadataItem = async (item) => {
+        try {
+            item.parent_folder_id = null;
+            const encryptedMetadata = item.encrypted_metadata;
+            const decryptkey = await decryptWithStoredPrivateKey(item.encrypted_folder_key);
+            const metadataStr = await decryptSimpleDataWithDataKey(encryptedMetadata, decryptkey);
+            const metadata = JSON.parse(metadataStr);
+            metadata.encrypted_data_key = item.encrypted_folder_key;
+            return { ...item, metadata };
+        } catch (err) {
+            console.error("Failed to decrypt metadata for folder:", item.folder_id, err);
+            return null;
+        }
+    };
+
+    // Helper: decrypt path items
+    const decryptPathItems = async (pathItems) => {
+        const newFullPath = [];
+        for (const pathItem of pathItems) {
+            if (!pathItem || !pathItem.encrypted_folder_key || !pathItem.encrypted_metadata) {
+                console.warn("Invalid pathItem in loadPath:", pathItem);
+                continue;
+            }
+            try {
+                const encryptedMetadata = pathItem.encrypted_metadata;
+                const decryptkey = await decryptWithStoredPrivateKey(pathItem.encrypted_folder_key);
+                const metadataStr = await decryptSimpleDataWithDataKey(encryptedMetadata, decryptkey);
+                const metadata = JSON.parse(metadataStr);
+                newFullPath.push({ ...pathItem, metadata });
+            } catch (error) {
+                console.error("Failed to decrypt pathItem in loadPath:", pathItem, error);
+            }
+        }
+        return newFullPath;
+    };
+
+    // Helper: update used space and maxspace
+    const updateDriveInfo = (drive_info) => {
+        usedSpace.value = drive_info.used_space;
+        if (maxspace && drive_info.storage_limit_bytes) {
+            maxspace.value = drive_info.storage_limit_bytes;
+        }
+    };
+
+    // Helper: filter items by parent_folder_id
+    const filterItemsByParent = (files_and_folders, parentId) => [
+        ...(files_and_folders?.folders ?? []).filter(f => f.parent_folder_id === parentId),
+        ...(files_and_folders?.files ?? []).filter(f => f.parent_folder_id === parentId),
+    ];
+
     const loadPath = async ({ outIn = false } = {}) => {
-        // dans l'url ?folder_id=xxx
-        const res = await fetchWithAuth(
-            `/drive/get_file_folder/${activeFolderId.value}`,
-            {
-                method: "GET",
-            },
+        const res = await fetchWithAuth(`/drive/get_file_folder/${activeFolderId.value}`, { method: "GET" });
+        if (!res.ok) throw new Error("Failed to get file/folder info");
+        const resData = await res.json();
+
+        // Special folders
+        if (activeFolderId.value === "corbeille" || activeFolderId.value === "shared_with_me") {
+            const files_and_folders = resData.files_and_folders;
+            const drive_info = resData.drive_info;
+            updateDriveInfo(drive_info);
+
+            let items = [];
+            let fullPathLabel = "";
+            if (activeFolderId.value === "corbeille") {
+                items = [...(files_and_folders?.files ?? [])];
+                fullPathLabel = "Corbeille";
+            } else {
+                items = [
+                    ...(files_and_folders?.folders ?? []),
+                    ...(files_and_folders?.files ?? []),
+                ];
+                fullPathLabel = "Partagés avec moi";
+            }
+
+            const decryptedItems = await Promise.all(
+                items.map(item =>
+                    item.type === "file"
+                        ? decryptFileMetadata(item)
+                        : item.type === "folder"
+                            ? decryptFolderMetadataItem(item)
+                            : null
+                )
+            );
+            full_path.value = [
+                {
+                    folder_id: activeFolderId.value,
+                    metadata: { folder_name: fullPathLabel },
+                },
+            ];
+            await applyDriveItemsForDisplay(decryptedItems.filter(Boolean), { outIn });
+            return;
+        }
+
+        // Normal folders
+        const files_and_folders = resData.files_and_folders;
+        const fullPathData = resData.full_path;
+        const drive_info = resData.drive_info;
+        updateDriveInfo(drive_info);
+
+        // Redirect if full path is empty and not root
+        if (fullPathData.length === 0 && activeFolderId.value !== "root") {
+            activeFolderId.value = "root";
+            router.push(`/drive?folder_id=root`);
+            return;
+        }
+
+        // Reset uploaded placeholders for this folder
+        if (listUploaded && listUploaded.value) {
+            listUploaded.value = listUploaded.value.filter(
+                file => (file._targetFolderId || "root") !== activeFolderId.value
+            );
+        }
+
+        const parentId = activeFolderId.value === "root" ? null : activeFolderId.value;
+        const items = filterItemsByParent(files_and_folders, parentId);
+
+        const decryptedItems = await Promise.all(
+            items.map(item =>
+                item.type === "file"
+                    ? decryptFileMetadata(item)
+                    : item.type === "folder"
+                        ? decryptFolderMetadataItem(item)
+                        : null
+            )
         );
-        if (!res.ok) {
-            throw new Error("Failed to get file/folder info");
-        }
+        await applyDriveItemsForDisplay(decryptedItems.filter(Boolean), { outIn });
 
-        if (activeFolderId.value === "corbeille") {
-            const resData = await res.json();
-            const files_and_folders = resData.files_and_folders;
-            const drive_info = resData.drive_info;
-            usedSpace.value = drive_info.used_space;
-            const items = [...(files_and_folders?.files ?? [])];
-            const decryptedItems = [];
-            full_path.value = [
-                {
-                    folder_id: "corbeille",
-                    metadata: { folder_name: "Corbeille" },
-                },
-            ];
-            for (const item of items) {
-                if (item.type === "file") {
-                    try {
-                        item.parent_folder_id = null;
-                        const encryptedMetadata = item.encrypted_metadata;
-                        const decryptkey = await decryptWithStoredPrivateKey(
-                            item.encrypted_file_key,
-                        );
-                        const metadataStr = await decryptSimpleDataWithDataKey(
-                            encryptedMetadata,
-                            decryptkey,
-                        );
-                        const metadata = JSON.parse(metadataStr);
-                        // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
-                        metadata.encrypted_data_key = item.encrypted_file_key;
-                        decryptedItems.push({
-                            ...item,
-                            metadata: metadata,
-                        });
-                    } catch (err) {
-                        console.error(
-                            "Failed to decrypt metadata for file:",
-                            item.file_id,
-                            err,
-                        );
-                    }
-                }
-            }
-
-            await applyDriveItemsForDisplay(decryptedItems, { outIn });
-        } else if (activeFolderId.value === "shared_with_me") {
-            const resData = await res.json();
-            const files_and_folders = resData.files_and_folders;
-            const drive_info = resData.drive_info;
-            usedSpace.value = drive_info.used_space;
-            const items = [
-                ...(files_and_folders?.folders ?? []),
-                ...(files_and_folders?.files ?? []),
-            ];
-            const decryptedItems = [];
-            full_path.value = [
-                {
-                    folder_id: "shared_with_me",
-                    metadata: { folder_name: "Partagés avec moi" },
-                },
-            ];
-            for (const item of items) {
-                if (item.type === "file") {
-                    try {
-                        item.parent_folder_id = null;
-                        const encryptedMetadata = item.encrypted_metadata;
-                        const decryptkey = await decryptWithStoredPrivateKey(
-                            item.encrypted_file_key,
-                        );
-                        const metadataStr = await decryptSimpleDataWithDataKey(
-                            encryptedMetadata,
-                            decryptkey,
-                        );
-                        const metadata = JSON.parse(metadataStr);
-                        // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
-                        metadata.encrypted_data_key = item.encrypted_file_key;
-                        decryptedItems.push({
-                            ...item,
-                            metadata: metadata,
-                        });
-                    } catch (err) {
-                        console.error(
-                            "Failed to decrypt metadata for file:",
-                            item.file_id,
-                            err,
-                        );
-                    }
-                } else if (item.type === "folder") {
-                    try {
-                        item.parent_folder_id = null;
-                        const encryptedMetadata = item.encrypted_metadata;
-                        const decryptkey = await decryptWithStoredPrivateKey(
-                            item.encrypted_folder_key,
-                        );
-                        const metadataStr = await decryptSimpleDataWithDataKey(
-                            encryptedMetadata,
-                            decryptkey,
-                        );
-                        const metadata = JSON.parse(metadataStr);
-                        metadata.encrypted_data_key = item.encrypted_folder_key;
-                        decryptedItems.push({
-                            ...item,
-                            metadata: metadata,
-                        });
-                    } catch (err) {
-                        console.error(
-                            "Failed to decrypt metadata for folder:",
-                            item.folder_id,
-                            err,
-                        );
-                    }
-                }
-            }
-
-            await applyDriveItemsForDisplay(decryptedItems, { outIn });
-        }
-
-        else {
-            const resData = await res.json();
-            const files_and_folders = resData.files_and_folders;
-            const fullPathData = resData.full_path;
-            const drive_info = resData.drive_info;
-
-            usedSpace.value = drive_info.used_space;
-
-            //   si full path est vide on renvoie vers root pour etre sur et on reset le ?folder_id
-            if (fullPathData.length === 0 && activeFolderId.value !== "root") {
-                activeFolderId.value = "root";
-                router.push(`/drive?folder_id=root`);
-                return;
-            }
-
-            // Reset des placeholders "uploaded" pour ce dossier pour éviter les doublons
-            if (listUploaded && listUploaded.value) {
-                listUploaded.value = listUploaded.value.filter(
-                    (file) => (file._targetFolderId || "root") !== activeFolderId.value,
-                );
-            }
-
-            // Filtrer par parent_folder_id : root → null, sous-dossier → UUID du dossier
-            const parentId = activeFolderId.value === "root" ? null : activeFolderId.value;
-            const items = [
-                ...(files_and_folders?.folders ?? []).filter(f => f.parent_folder_id === parentId),
-                ...(files_and_folders?.files ?? []).filter(f => f.parent_folder_id === parentId),
-            ];
-
-            const decryptedItems = [];
-            for (const item of items) {
-                if (item.type === "file") {
-                    try {
-                        const encryptedMetadata = item.encrypted_metadata;
-                        const decryptkey = await decryptWithStoredPrivateKey(
-                            item.encrypted_file_key,
-                        );
-                        const metadataStr = await decryptSimpleDataWithDataKey(
-                            encryptedMetadata,
-                            decryptkey,
-                        );
-                        const metadata = JSON.parse(metadataStr);
-                        // rajouter dans les metatdata l'encrypted_data_key pour les futurs téléchargements
-                        metadata.encrypted_data_key = item.encrypted_file_key;
-                        decryptedItems.push({
-                            ...item,
-                            metadata: metadata,
-                        });
-                    } catch (err) {
-                        console.error(
-                            "Failed to decrypt metadata for file:",
-                            item.file_id,
-                            err,
-                        );
-                    }
-                } else if (item.type === "folder") {
-                    try {
-                        const encryptedMetadata = item.encrypted_metadata;
-                        const decryptkey = await decryptWithStoredPrivateKey(
-                            item.encrypted_folder_key,
-                        );
-                        const metadataStr = await decryptSimpleDataWithDataKey(
-                            encryptedMetadata,
-                            decryptkey,
-                        );
-                        const metadata = JSON.parse(metadataStr);
-                        metadata.encrypted_data_key = item.encrypted_folder_key;
-                        decryptedItems.push({
-                            ...item,
-                            metadata: metadata,
-                        });
-                    } catch (err) {
-                        console.error(
-                            "Failed to decrypt metadata for folder:",
-                            item.folder_id,
-                            err,
-                        );
-                    }
-                }
-            }
-
-            await applyDriveItemsForDisplay(decryptedItems, { outIn });
-
-            // Mettre à jour le breadcrumb sans le vider complètement pour éviter le clignotement
-            const newFullPath = [];
-            for (const pathItem of fullPathData) {
-                if (
-                    !pathItem ||
-                    !pathItem.encrypted_folder_key ||
-                    !pathItem.encrypted_metadata
-                ) {
-                    console.warn("Invalid pathItem in loadPath:", pathItem);
-                    continue;
-                }
-                try {
-                    const encryptedMetadata = pathItem.encrypted_metadata;
-                    const decryptkey = await decryptWithStoredPrivateKey(
-                        pathItem.encrypted_folder_key,
-                    );
-                    const metadataStr = await decryptSimpleDataWithDataKey(
-                        encryptedMetadata,
-                        decryptkey,
-                    );
-                    const metadata = JSON.parse(metadataStr);
-                    newFullPath.push({
-                        ...pathItem,
-                        metadata: metadata,
-                    });
-                } catch (error) {
-                    console.error(
-                        "Failed to decrypt pathItem in loadPath:",
-                        pathItem,
-                        error,
-                    );
-                }
-            }
-            // Remplacer en une seule opération pour éviter le clignotement
-            full_path.value = newFullPath;
-        }
+        // Update breadcrumb
+        full_path.value = await decryptPathItems(fullPathData);
     };
     const get_all_info = async () => {
         // dans l'url ?folder_id=xxx

@@ -162,7 +162,7 @@ export const useLayout = (events) => {
         Object.entries(hourCounts).forEach(([hour, count]) => {
             if (count > maxCount) {
                 maxCount = count;
-                busiestHour = parseInt(hour);
+                busiestHour = Number.parseInt(hour);
             }
         });
 

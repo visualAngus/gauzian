@@ -61,7 +61,7 @@ export const useNavigation = () => {
     };
 
     const goToDate = (date) => {
-        if (date instanceof Date && !isNaN(date)) {
+        if (date instanceof Date && !Number.isNaN(date)) {
             currentDate.value = new Date(date);
             selectedDate.value = new Date(date);
         } else {
@@ -325,7 +325,6 @@ export const useNavigation = () => {
     };
 
     // ***** RACCOURCIS CLAVIER *****
-
     const handleKeyboardNavigation = (event) => {
         // Ignorer si on est dans un input, textarea ou autre élément éditable
         const target = event.target;
@@ -333,37 +332,24 @@ export const useNavigation = () => {
             return;
         }
 
-        if (event.key === 'ArrowLeft') {
-            if (event.ctrlKey || event.metaKey) {
-                previousWeek();
-            } else {
-                previousDay();
-            }
-            event.preventDefault();
-        } else if (event.key === 'ArrowRight') {
-            if (event.ctrlKey || event.metaKey) {
-                nextWeek();
-            } else {
-                nextDay();
-            }
-            event.preventDefault();
-        } else if (event.key === 'ArrowUp') {
-            if (event.ctrlKey || event.metaKey) {
-                previousMonth();
-            } else {
-                previousWeek();
-            }
-            event.preventDefault();
-        } else if (event.key === 'ArrowDown') {
-            if (event.ctrlKey || event.metaKey) {
-                nextMonth();
-            } else {
-                nextWeek();
-            }
-            event.preventDefault();
-        } else if (event.key === 't' || event.key === 'T') {
-            if (!event.ctrlKey && !event.metaKey) {
-                goToToday();
+        const { key, ctrlKey, metaKey } = event;
+        const isModifier = ctrlKey || metaKey;
+
+        const actions = {
+            ArrowLeft: () => isModifier ? previousWeek() : previousDay(),
+            ArrowRight: () => isModifier ? nextWeek() : nextDay(),
+            ArrowUp: () => isModifier ? previousMonth() : previousWeek(),
+            ArrowDown: () => isModifier ? nextMonth() : nextWeek(),
+            t: () => !isModifier && goToToday(),
+            T: () => !isModifier && goToToday()
+        };
+
+        if (actions[key]) {
+            actions[key]();
+            // Only preventDefault if not 't'/'T' with modifier
+            if (key !== 't' && key !== 'T') {
+                event.preventDefault();
+            } else if (!isModifier) {
                 event.preventDefault();
             }
         }

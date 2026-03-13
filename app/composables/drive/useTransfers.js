@@ -132,7 +132,7 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
 
 
     const downloadFile = async (item) => {
-        const downloadId = `download-${Date.now()}-${Math.random()}`;
+        const downloadId = `download-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     
         // Créer un AbortController pour ce download
         const abortController = new AbortController();
@@ -805,11 +805,11 @@ export function useTransfers({ API_URL, activeFolderId, loadPath, liste_decrypte
             const progress = Math.min((end / file.size) * 100, 100).toFixed(2);
             fileProgressMap.value = {
                 ...fileProgressMap.value,
-                [file_id]: parseFloat(progress),
+                [file_id]: Number.parseFloat(progress),
             };
 
             // Mise à jour des stats de transfert
-            updateTransferStats(file_id, parseFloat(progress), file.size);
+            updateTransferStats(file_id, Number.parseFloat(progress), file.size);
 
             // Petit délai pour éviter le rate limiting
             await new Promise((resolve) => setTimeout(resolve, 50));

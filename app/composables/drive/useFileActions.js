@@ -159,84 +159,60 @@ export function useFileActions({
             });
         }
     };
-
     const restoreItem = async (item) => {
-        // si item.type existe
+        // Helper to restore by type/id
+        const restoreByTypeAndId = async (type, id) => {
+            const endpoint =
+                type === "file"
+                    ? "/drive/restore_file"
+                    : type === "folder"
+                    ? "/drive/restore_folder"
+                    : null;
+            if (!endpoint) throw new Error("Invalid item type for restore");
 
-        if (!item.type || (item.type !== "file" && item.type !== "folder")) {
-            // c'est l'objet html avec les data-attributes
+            const body =
+                type === "file"
+                    ? JSON.stringify({ file_id: id })
+                    : JSON.stringify({ folder_id: id });
 
-            const itemType = item.dataset.itemType;
-            const itemId = item.dataset.itemId;
-
-            try {
-                if (itemType === "file") {
-                    const res = await fetchWithAuth('/drive/restore_file', {
-                        method: "POST",
-                        body: JSON.stringify({ file_id: itemId }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to restore file ${itemId}`);
-                    }
-                } else if (itemType === "folder") {
-                    const res = await fetchWithAuth('/drive/restore_folder', {
-                        method: "POST",
-                        body: JSON.stringify({ folder_id: itemId }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to restore folder ${itemId}`);
-                    }
-                }
-                addNotification({
-                    title: "Restauration réussie",
-                    message: `L'élément a été restauré avec succès.`,
-                    duration: 5000,
-                });
-
-
-
-                await loadPath();
-                await refreshTreeNode(activeFolderId.value);
-            } catch (error) {
-                console.error("Error restoring item:", error);
-                alert("Erreur lors de la restauration de l'élément");
-                return;
+            const res = await fetchWithAuth(endpoint, {
+                method: "POST",
+                body,
+            });
+            if (!res.ok) {
+                throw new Error(`Failed to restore ${type} ${id}`);
             }
+        };
+
+        let itemType, itemId;
+        if (item.type && (item.type === "file" || item.type === "folder")) {
+            itemType = item.type;
+            itemId = itemType === "file" ? item.file_id : item.folder_id;
         } else {
-            // Se sont les donnés direct du serveur
-            try {
-                if (item.type === "file") {
-                    const res = await fetchWithAuth('/drive/restore_file', {
-                        method: "POST",
-                        body: JSON.stringify({ file_id: item.file_id }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to restore file ${item.file_id}`);
-                    }
-                } else if (item.type === "folder") {
-                    const res = await fetchWithAuth('/drive/restore_folder', {
-                        method: "POST",
-                        body: JSON.stringify({ folder_id: item.folder_id }),
-                    });
-                    if (!res.ok) {
-                        throw new Error(`Failed to restore folder ${item.folder_id}`);
-                    }
-                }
-                addNotification({
-                    title: "Restauration réussie",
-                    message: `L'élément a été restauré avec succès.`,
-                    duration: 5000,
-                });
-                // Rafraîchir l'affichage
-                await loadPath();
-                await refreshTreeNode(activeFolderId.value);
-            } catch (error) {
-                console.error("Error restoring item:", error);
-                alert("Erreur lors de la restauration de l'élément");
-            }
+            itemType = item.dataset?.itemType;
+            itemId = item.dataset?.itemId;
+        }
+
+        if (!itemType || !itemId) {
+            console.error("Invalid item for restore:", item);
+            alert("Erreur lors de la restauration de l'élément");
+            return;
+        }
+
+        try {
+            await restoreByTypeAndId(itemType, itemId);
+            addNotification({
+                title: "Restauration réussie",
+                message: `L'élément a été restauré avec succès.`,
+                duration: 5000,
+            });
+            await loadPath();
+            await refreshTreeNode(activeFolderId.value);
+        } catch (error) {
+            console.error("Error restoring item:", error);
+            alert("Erreur lors de la restauration de l'élément");
         }
     };
-
 
     const createFolder = async () => {
         const folderName = "name_folder"; // Tu peux remplacer par une saisie utilisateur
@@ -691,10 +667,18 @@ export function useFileActions({
         const normalizeItem = (rawItem) => {
             const id =
                 rawItem?.dataset?.itemId ?? rawItem?.file_id ?? rawItem?.folder_id ?? null;
-            const type =
-                rawItem?.dataset?.itemType ??
-                rawItem?.type ??
-                (rawItem?.file_id ? "file" : rawItem?.folder_id ? "folder" : null);
+            let type;
+            if (rawItem?.dataset?.itemType) {
+                type = rawItem.dataset.itemType;
+            } else if (rawItem?.type) {
+                type = rawItem.type;
+            } else if (rawItem?.file_id) {
+                type = "file";
+            } else if (rawItem?.folder_id) {
+                type = "folder";
+            } else {
+                type = null;
+            }
 
             return {
                 type,
