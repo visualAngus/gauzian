@@ -345,7 +345,7 @@ export async function clearAllKeys(config: KeyStoreConfig = DEFAULT_KEYSTORE): P
     const clearRequest = store.clear();
 
     clearRequest.onsuccess = () => {
-      if ((import.meta as any)?.dev) {
+      if ((import.meta as unknown as { dev?: boolean }).dev) {
         console.log('All crypto keys cleared from IndexedDB');
       }
       resolve();

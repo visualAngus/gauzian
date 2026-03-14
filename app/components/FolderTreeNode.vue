@@ -1,8 +1,9 @@
 <template>
   <div v-if="node" class="folder-three" :data-folder-id="node.folder_id" >
     <div class="div-name-bnt" :class="{ 'is-active-folder': activeId === node.folder_id }">
-      <button class="tree-toggle" @click.stop="$emit('toggle', node)" 
-        :disabled="node.isLoading || ((node.children?.length ?? 0) === 0 && node.isLoaded)"
+      <button
+class="tree-toggle" :disabled="node.isLoading || ((node.children?.length ?? 0) === 0 && node.isLoaded)" 
+        @click.stop="$emit('toggle', node)"
       >
         <span v-if="node.isLoading">⋯</span>
         <span v-else-if="(node.children?.length ?? 0) > 0 || !node.isLoaded">
@@ -22,7 +23,7 @@
         {{ node.metadata?.folder_name || "Dossier sans nom" }}
       </a>
     </div>
-    <div class="div-enfants" v-show="node.isExpanded">
+    <div v-show="node.isExpanded" class="div-enfants">
       <FolderTreeNode
         v-for="child in node.children?.filter(c => c)"
         :key="child.folder_id"

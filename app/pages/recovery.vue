@@ -6,8 +6,8 @@
         <div class="header-right">
           <button
             class="theme-toggle"
-            @click="toggleTheme"
             :aria-label="isDark ? 'Mode clair' : 'Mode sombre'"
+            @click="toggleTheme"
           >
             <svg
               v-if="isDark"
@@ -47,12 +47,12 @@
             <span
               class="dot"
               :class="{ active: step === 1, completed: step > 1 }"
-            ></span>
+            />
             <span
               class="dot"
               :class="{ active: step === 2, completed: step > 2 }"
-            ></span>
-            <span class="dot" :class="{ active: step === 3 }"></span>
+            />
+            <span class="dot" :class="{ active: step === 3 }"/>
           </div>
         </div>
       </div>
@@ -77,7 +77,7 @@
                 :class="{ 'field-input--error': emailError }"
                 @input="validateEmail(form.email)"
                 @keydown.enter="goToStep2"
-              />
+              >
               <p v-if="emailError" class="field-error">{{ emailError }}</p>
             </div>
           </div>
@@ -93,7 +93,7 @@
                 :class="{ 'field-input--error': recoveryKeyError }"
                 placeholder="Collez votre clé de récupération ici"
                 @input="recoveryKeyError = ''"
-              ></textarea>
+              />
               <p v-if="recoveryKeyError" class="field-error">
                 {{ recoveryKeyError }}
               </p>
@@ -108,7 +108,7 @@
                 class="hidden-input"
                 accept=".pdf,.html,.txt"
                 @change="handleRecoveryFile"
-              />
+              >
               <button class="btn btn--ghost" @click="openFilePicker">
                 Importer un fichier de récupération
               </button>
@@ -137,7 +137,7 @@
                 class="field-input"
                 :class="{ 'field-input--error': passwordError }"
                 @input="passwordError = ''"
-              />
+              >
 
               <input
                 v-model="form.confirmPassword"
@@ -147,7 +147,7 @@
                 class="field-input"
                 :class="{ 'field-input--error': passwordError }"
                 @input="passwordError = ''"
-              />
+              >
 
               <p class="field-hint">Utilisez au moins 10 caractères.</p>
               <p v-if="passwordError" class="field-error">
@@ -163,7 +163,7 @@
         <button v-if="step > 1" class="btn btn--ghost" @click="goBack">
           Retour
         </button>
-        <div v-else></div>
+        <div v-else/>
 
         <button
           v-if="step === 1"

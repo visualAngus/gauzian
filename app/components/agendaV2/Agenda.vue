@@ -2,9 +2,9 @@
     <main>
         <div class="agenda-container">
             <div class="agenda-hours">
-                <div></div>
+                <div/>
                 <div>00:00</div>
-                <div></div>
+                <div/>
                 <div>01:00</div>
                 <div>02:00</div>
                 <div>03:00</div>
@@ -31,24 +31,24 @@
             </div>
             <div class="agenda-content">
                 <div class="agenda-content--header">
-                    <div class="head-day" v-for="(day, index) in daysWithDate" :key="index">
+                    <div v-for="(day, index) in daysWithDate" :key="index" class="head-day">
                         <span>{{ day.day }}</span>
                         <span :class="{ 'today': day.isToday }">{{ day.date }}</span>
                     </div>
                 </div>
                 <div class="agenda-content--events">
-                    <div class="day_full" v-for="(day, index) in daysWithDate" :key="index">
+                    <div v-for="(day, index) in daysWithDate" :key="index" class="day_full">
                         <template v-for="event in normalizedWeekEvents" :key="event.id">
                             <div
                                 v-if="event && event.start && event.end && event.start.getDate() === day.date && event.start.getMonth() === day.fullDate.getMonth() && event.start.getFullYear() === day.fullDate.getFullYear()"
                                 class="event"
-                                @mousedown="onEventMouseDown(event, $event)"
                                 :style="{
                                     top: `${(event.start.getHours() + (event.start.getMinutes() / 60)) * (100 / 24)}%`,
                                     height: `${((event.end.getHours() - event.start.getHours()) + ((event.end.getMinutes() - event.start.getMinutes()) / 60)) * (100 / 24)}%`,
                                     width: eventLayouts[event.id] ? `calc(${100 / eventLayouts[event.id].totalColumns}% - 6px)` : 'calc(100% - 6px)',
                                     left: eventLayouts[event.id] ? `${((eventLayouts[event.id].column - 1) * 100) / eventLayouts[event.id].totalColumns}%` : '0',
                                 }"
+                                @mousedown="onEventMouseDown(event, $event)"
                             >
                                 <span class="event-title">{{ event.title }}</span>
                                 <span 
@@ -65,7 +65,7 @@
 
                 </div>
                 <div class="agenda-content--events__overlay">
-                    <div v-for="hour in 24*7" :key="hour" class="event-slot"></div>
+                    <div v-for="hour in 24*7" :key="hour" class="event-slot"/>
                 </div>
 
             </div>

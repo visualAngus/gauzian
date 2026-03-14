@@ -1,10 +1,10 @@
 <template>
-  <div class="info-item" :id="itemId">
+  <div :id="itemId" class="info-item">
     <div class="header_info">
       <h3>Informations</h3>
       <div class="notification--close">
         <button @click="emit('close')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"/></svg>
         </button>
       </div>
     </div>
@@ -12,35 +12,35 @@
     <div class="info-list">
       <div class="info-row">
         <span class="info-label">Nom</span>
-        <span class="info-value"><slot name="name"></slot></span>
+        <span class="info-value"><slot name="name"/></span>
       </div>
 
       <div class="info-row">
         <span class="info-label">Type</span>
-        <span class="info-value"><slot name="type"></slot></span>
+        <span class="info-value"><slot name="type"/></span>
       </div>
 
       <div class="info-row">
         <span class="info-label">Taille</span>
-        <span class="info-value"><slot name="size"></slot></span>
+        <span class="info-value"><slot name="size"/></span>
       </div>
 
       <div class="info-row">
         <span class="info-label">Créé le</span>
-        <span class="info-value"><slot name="created"></slot></span>
+        <span class="info-value"><slot name="created"/></span>
       </div>
 
       <div class="info-row">
         <span class="info-label">Modifié le</span>
-        <span class="info-value"><slot name="modified"></slot></span>
+        <span class="info-value"><slot name="modified"/></span>
       </div>
 
       <div class="info-row">
         <span class="info-label">Propriétaire</span>
-        <span class="info-value"><slot name="owner"></slot></span>
+        <span class="info-value"><slot name="owner"/></span>
       </div>
     </div>
-    <div class="share-section" v-if="shared_persons && shared_persons.length > 0">
+    <div v-if="shared_persons && shared_persons.length > 0" class="share-section">
       <h3>Partagé avec</h3>
       <div class="share-list">
         <div
@@ -71,8 +71,8 @@
               stroke-linecap="round"
               stroke-linejoin="round"
             >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
@@ -92,9 +92,9 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
         Télécharger
       </button>
@@ -110,15 +110,16 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <circle cx="18" cy="5" r="3"></circle>
-          <circle cx="6" cy="12" r="3"></circle>
-          <circle cx="18" cy="19" r="3"></circle>
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          <circle cx="18" cy="5" r="3"/>
+          <circle cx="6" cy="12" r="3"/>
+          <circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
         </svg>
         Partager
       </button>
-      <button class="btn-secondary"
+      <button
+class="btn-secondary"
         @click="$emit('rename', itemId)"
       >
         <svg
@@ -134,10 +135,10 @@
         >
           <path
             d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-          ></path>
+          />
           <path
             d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-          ></path>
+          />
         </svg>
         Renommer
       </button>
@@ -153,10 +154,10 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <polyline points="3 6 5 6 21 6"></polyline>
+          <polyline points="3 6 5 6 21 6"/>
           <path
             d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-          ></path>
+          />
         </svg>
         Supprimer
       </button>

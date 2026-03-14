@@ -2,7 +2,7 @@
   <div>
     <Loading
       :message="loadingMessage"
-      :isLoading="loadingDrive === true"
+      :is-loading="loadingDrive === true"
       />
 
     <Transition name="notif-pop">
@@ -37,8 +37,8 @@
   </Transition>
 
   <RechercheBar
-    ref="rechercheBarRef"
     v-if="activeSection === 'my_drive'"
+    ref="rechercheBarRef"
     @search="handleSearch"
     @clear="handleClearSearch"
     @filter="handleFilter"
@@ -46,8 +46,8 @@
 
   <ShareItemVue
     v-if="isSharing && shareItemTarget"
-    :itemName="shareItemTarget.name"
-    :itemId="shareItemTarget.id"
+    :item-name="shareItemTarget.name"
+    :item-id="shareItemTarget.id"
     @close="handleShareClose"
     @annuler="
       () => {
@@ -66,8 +66,8 @@
 
   <!-- Panneau Upload/Download moderne -->
   <div
-    class="transfer-panel"
     v-if="listUploadInProgress.length > 0 || listDownloadInProgress.length > 0"
+    class="transfer-panel"
   >
     <div class="transfer-header">
       <div class="transfer-title">
@@ -90,10 +90,10 @@
       </div>
       <div class="transfer-actions">
         <button
-          class="btn-action"
-          @click="pauseAllTransfers"
           v-if="!allTransfersPaused"
+          class="btn-action"
           title="Tout mettre en pause"
+          @click="pauseAllTransfers"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -104,10 +104,10 @@
           </svg>
         </button>
         <button
-          class="btn-action"
-          @click="resumeAllTransfers"
           v-else
+          class="btn-action"
           title="Tout reprendre"
+          @click="resumeAllTransfers"
         >
           <svg
             fill="currentColor"
@@ -117,8 +117,8 @@
         </button>
         <button
           class="btn-action btn-danger"
-          @click="cancelAllTransfers"
           title="Tout annuler"
+          @click="cancelAllTransfers"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -145,12 +145,12 @@
       </div>
     </div>
 
-    <div class="transfer-list" v-show="!isPanelCollapsed">
+    <div v-show="!isPanelCollapsed" class="transfer-list">
       <!-- Uploads -->
       <div
-        class="transfer-item"
         v-for="file in listUploadInProgress"
         :key="file._uploadId"
+        class="transfer-item"
       >
         <div class="transfer-icon upload-icon">
           <svg
@@ -175,7 +175,7 @@
             <span class="transfer-speed">{{
               formatSpeed(transferSpeeds[file._uploadId])
             }}</span>
-            <span class="transfer-eta" v-if="transferETAs[file._uploadId]">{{
+            <span v-if="transferETAs[file._uploadId]" class="transfer-eta">{{
               formatETA(transferETAs[file._uploadId])
             }}</span>
           </div>
@@ -183,15 +183,15 @@
             <div
               class="progress-fill upload-progress"
               :style="{ width: (fileProgressMap[file._uploadId] || 0) + '%' }"
-            ></div>
+            />
           </div>
         </div>
         <div class="transfer-controls">
           <button
-            class="btn-control"
-            @click="togglePauseTransfer(file._uploadId, 'upload')"
             v-if="!isPaused(file._uploadId)"
+            class="btn-control"
             title="Pause"
+            @click="togglePauseTransfer(file._uploadId, 'upload')"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -202,10 +202,10 @@
             </svg>
           </button>
           <button
-            class="btn-control"
-            @click="togglePauseTransfer(file._uploadId, 'upload')"
             v-else
+            class="btn-control"
             title="Reprendre"
+            @click="togglePauseTransfer(file._uploadId, 'upload')"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -217,8 +217,8 @@
           </button>
           <button
             class="btn-control btn-cancel"
-            @click="abort_upload(file._uploadId)"
             title="Annuler"
+            @click="abort_upload(file._uploadId)"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -235,9 +235,9 @@
 
       <!-- Downloads -->
       <div
-        class="transfer-item"
         v-for="file in listDownloadInProgress"
         :key="file._downloadId"
+        class="transfer-item"
       >
         <div class="transfer-icon download-icon">
           <svg
@@ -264,7 +264,7 @@
             <span class="transfer-speed">{{
               formatSpeed(transferSpeeds[file._downloadId])
             }}</span>
-            <span class="transfer-eta" v-if="transferETAs[file._downloadId]">{{
+            <span v-if="transferETAs[file._downloadId]" class="transfer-eta">{{
               formatETA(transferETAs[file._downloadId])
             }}</span>
           </div>
@@ -274,15 +274,15 @@
               :style="{
                 width: (downloadProgressMap[file._downloadId] || 0) + '%',
               }"
-            ></div>
+            />
           </div>
         </div>
         <div class="transfer-controls">
           <button
-            class="btn-control"
-            @click="togglePauseTransfer(file._downloadId, 'download')"
             v-if="!isPaused(file._downloadId)"
+            class="btn-control"
             title="Pause"
+            @click="togglePauseTransfer(file._downloadId, 'download')"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -293,10 +293,10 @@
             </svg>
           </button>
           <button
-            class="btn-control"
-            @click="togglePauseTransfer(file._downloadId, 'download')"
             v-else
+            class="btn-control"
             title="Reprendre"
+            @click="togglePauseTransfer(file._downloadId, 'download')"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -308,8 +308,8 @@
           </button>
           <button
             class="btn-control btn-cancel"
-            @click="cancelDownload(file._downloadId)"
             title="Annuler"
+            @click="cancelDownload(file._downloadId)"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -331,34 +331,34 @@
     v-if="isSidebarOpen"
     class="sidebar-overlay"
     @click="isSidebarOpen = false"
-  ></div>
+  />
 
   <main>
     <div class="div_left_section" :class="{ 'sidebar-open': isSidebarOpen }">
       <button
+        id="create-folder-button"
+        :disabled="activeFolderId === 'corbeille' || activeFolderId === 'shared_with_me'"
         @click="
           createFolder();
           isSidebarOpen = false;
         "
-        id="create-folder-button"
-        :disabled="activeFolderId === 'corbeille' || activeFolderId === 'shared_with_me'"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
           fill="currentColor"
         >
-          <path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"></path>
+          <path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/>
         </svg>
         Nouveau dossier
       </button>
       <button
+        id="import-files-button"
+        :disabled="activeFolderId === 'corbeille' || activeFolderId === 'shared_with_me'"
         @click="
           fileInput.click();
           isSidebarOpen = false;
         "
-        id="import-files-button"
-        :disabled="activeFolderId === 'corbeille' || activeFolderId === 'shared_with_me'"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -373,15 +373,15 @@
       </button>
       <div class="div-autre-menu">
         <a
-          @click="
-            gohome();
-            isSidebarOpen = false;
-          "
           :class="{
             active:
               activeFolderId !== 'corbeille' &&
               activeFolderId !== 'shared_with_me',
           }"
+          @click="
+            gohome();
+            isSidebarOpen = false;
+          "
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -390,16 +390,16 @@
           >
             <path
               d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"
-            ></path>
+            />
           </svg>
           Accueil
         </a>
         <a
+          :class="{ active: activeFolderId === 'corbeille' }"
           @click="
             goToTrash();
             isSidebarOpen = false;
           "
-          :class="{ active: activeFolderId === 'corbeille' }"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -408,17 +408,17 @@
           >
             <path
               d="M3 6H5H21V8H19.6667L18.6667 20C18.6667 21.1046 17.7712 22 16.6667 22H7.33333C6.22881 22 5.33333 21.1046 5.33333 20L4.33333 8H3V6ZM7.33333 20H16.6667L17.6667 8H6.33333L7.33333 20ZM9.33333 10H11.3333V18H9.33333V10ZM12.6667 10H14.6667V18H12.6667V10ZM10 4V2H14V4H19V6H5V4H10Z"
-            ></path>
+            />
           </svg>
           Corbeille
         </a>
         <a
+          :class="{ active: activeFolderId === 'shared_with_me' }"
           @click="
             goToSharedWithMe();
             isSidebarOpen = false;
             console.log(activeFolderId);
           "
-          :class="{ active: activeFolderId === 'shared_with_me' }"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -427,7 +427,7 @@
           >
             <path
               d="M13.1202 17.0228L8.92129 14.7324C8.19135 15.5125 7.15261 16 6 16C3.79086 16 2 14.2091 2 12C2 9.79086 3.79086 8 6 8C7.15255 8 8.19125 8.48746 8.92118 9.26746L13.1202 6.97713C13.0417 6.66441 13 6.33707 13 6C13 3.79086 14.7909 2 17 2C19.2091 2 21 3.79086 21 6C21 8.20914 19.2091 10 17 10C15.8474 10 14.8087 9.51251 14.0787 8.73246L9.87977 11.0228C9.9583 11.3355 10 11.6629 10 12C10 12.3371 9.95831 12.6644 9.87981 12.9771L14.0788 15.2675C14.8087 14.4875 15.8474 14 17 14C19.2091 14 21 15.7909 21 18C21 20.2091 19.2091 22 17 22C14.7909 22 13 20.2091 13 18C13 17.6629 13.0417 17.3355 13.1202 17.0228ZM6 14C7.10457 14 8 13.1046 8 12C8 10.8954 7.10457 10 6 10C4.89543 10 4 10.8954 4 12C4 13.1046 4.89543 14 6 14ZM17 8C18.1046 8 19 7.10457 19 6C19 4.89543 18.1046 4 17 4C15.8954 4 15 4.89543 15 6C15 7.10457 15.8954 8 17 8ZM17 20C18.1046 20 19 19.1046 19 18C19 16.8954 18.1046 16 17 16C15.8954 16 15 16.8954 15 18C15 19.1046 15.8954 20 17 20Z"
-            ></path>
+            />
           </svg>
           Partagés avec moi
         </a>
@@ -458,7 +458,7 @@
             :style="{
               width: (usedSpace / maxspace) * 100 + '%',
             }"
-          ></div>
+          />
         </div>
         <div class="storage-info">
           <span>{{ formatBytes(usedSpace) }} utilisés</span>
@@ -468,7 +468,7 @@
     </div>
 
     <div class="mobile-header">
-      <button class="hamburger-menu" @click="toggleSidebar" aria-label="Menu">
+      <button class="hamburger-menu" aria-label="Menu" @click="toggleSidebar">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -482,8 +482,8 @@
       <!-- multiple files -->
 
       <div
-        class="breadcrumb"
         ref="breadcrumbRef"
+        class="breadcrumb"
         @wheel.prevent="onBreadcrumbWheel"
       >
         <div class="breadcrumb-left">
@@ -496,7 +496,7 @@
             >
               <path
                 d="M19 21H5C4.44772 21 4 20.5523 4 20V11L1 11L11.3273 1.6115C11.7087 1.26475 12.2913 1.26475 12.6727 1.6115L23 11L20 11V20C20 20.5523 19.5523 21 19 21ZM6 19H18V9.15745L12 3.7029L6 9.15745V19Z"
-              ></path>
+              />
             </svg>
             <span v-if="activeSection == 'my_drive'"> Mon Drive </span>
           </div>
@@ -513,7 +513,7 @@
             >
               <path
                 d="M13.1717 12.0007L8.22192 7.05093L9.63614 5.63672L16.0001 12.0007L9.63614 18.3646L8.22192 16.9504L13.1717 12.0007Z"
-              ></path>
+              />
             </svg>
             <div
               class="breadcrumb-item"
@@ -532,9 +532,9 @@
           v-if="
             activeFolderId === 'corbeille' && liste_decrypted_items.length > 0
           "
-          @click="emptyTrash()"
           id="empty-trash-button"
           class="breadcrumb-action"
+          @click="emptyTrash()"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -543,20 +543,13 @@
           >
             <path
               d="M7 4V2H17V4H22V6H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V6H2V4H7ZM6 6V20H18V6H6ZM9 9H11V17H9V9ZM13 9H15V17H13V9Z"
-            ></path>
+            />
           </svg>
           Vider la corbeille
         </button>
       </div>
 
       <div
-        :class="[
-          'section_items',
-          { is_empty: displayedDriveItems.length === 0 },
-          { panel_ouvert: infoPanelVisible },
-        ]"
-        @click.self="clearSelection"
-        @contextmenu.self="openEmptySpaceMenu"
         v-dropzone="{
           inputRef: fileInput,
   rightClickPanel,
@@ -564,6 +557,13 @@
           onOverChange: setIsOver,
           isDisabled: activeFolderId === 'corbeille',
         }"
+        :class="[
+          'section_items',
+          { is_empty: displayedDriveItems.length === 0 },
+          { panel_ouvert: infoPanelVisible },
+        ]"
+        @click.self="clearSelection"
+        @contextmenu.self="openEmptySpaceMenu"
       >
         <TransitionGroup
           name="file-list"
@@ -581,7 +581,7 @@
             :item="item"
             status="uploaded"
             data-item-group="drive"
-            :currentFolderId="displayFolderId"
+            :current-folder-id="displayFolderId"
             @click="click_on_item(item, $event)"
             @contextmenu="(item, event) => openItemMenu(item, event)"
             @move-start="handleDragStart"
@@ -601,7 +601,7 @@
             :item="item"
             :status="item._status"
             :progress="item._progress"
-            :currentFolderId="displayFolderId"
+            :current-folder-id="displayFolderId"
             data-item-group="queue"
             @click="click_on_item(item)"
             @contextmenu="(item, event) => openItemMenu(item, event)"
@@ -627,12 +627,12 @@
       >
         <path
           d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
-        ></path>
+        />
       </svg>
       <svg v-else viewBox="0 0 24 24" fill="currentColor">
         <path
           d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
-        ></path>
+        />
       </svg>
     </span>
     <span class="drag-label">
@@ -653,7 +653,7 @@
     style="display: none"
     multiple
     @change="handleFileInputChange"
-  />
+  >
   </div>
 </template>
 

@@ -1,10 +1,10 @@
 <template>
     <div class="notification">
         <div class="notification-title">
-            <slot name="title"></slot>
+            <slot name="title"/>
         </div>
         <div class="notification-content">
-            <slot name="default"></slot>
+            <slot name="default"/>
         </div>
         <div class="notification--close">
             <button @click="$emit('close')">x</button>

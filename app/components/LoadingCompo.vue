@@ -5,15 +5,15 @@
       <div class="loading-center">
         <p class="app-name">GAUZIAN</p>
         <div class="bars">
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
+          <span/>
+          <span/>
+          <span/>
+          <span/>
+          <span/>
         </div>
       </div>
 
-      <div class="progress-bar"></div>
+      <div class="progress-bar"/>
 
     </div>
   </Transition>

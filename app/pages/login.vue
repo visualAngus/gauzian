@@ -4,7 +4,7 @@
       <!-- En-tête -->
       <div class="card-header">
         <span class="brand">GAUZIAN</span>
-        <button class="theme-toggle" @click="toggleTheme" :aria-label="isDark ? 'Mode clair' : 'Mode sombre'">
+        <button class="theme-toggle" :aria-label="isDark ? 'Mode clair' : 'Mode sombre'" @click="toggleTheme">
           <!-- Soleil -->
           <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
@@ -24,42 +24,42 @@
         <div class="step-label">Bon retour !</div>
         <h2 class="step-title">Connectez-vous à votre espace</h2>
 
-        <form @submit.prevent="handleLogin" autocomplete="on">
+        <form autocomplete="on" @submit.prevent="handleLogin">
           <div class="field-group">
             <label class="field-label" for="login_email">Adresse email</label>
             <input
+              id="login_email"
               ref="emailInputRef"
               v-model="loginForm.email"
               type="email"
-              id="login_email"
               name="username"
               autocomplete="username"
               placeholder="votre@email.com"
-              @input="validateEmail(loginForm.email)"
-              @keydown.enter.prevent
               class="field-input"
               required
-            />
+              @input="validateEmail(loginForm.email)"
+              @keydown.enter.prevent
+            >
           </div>
 
           <div class="field-group">
             <label class="field-label" for="login_password">Mot de passe</label>
             <div class="input-with-icon">
               <input
+                id="login_password"
                 v-model="loginForm.password"
                 :type="showLoginPassword ? 'text' : 'password'"
-                id="login_password"
                 name="password"
                 autocomplete="current-password"
                 placeholder="Mot de passe"
                 class="field-input"
                 required
-              />
+              >
               <button
                 type="button"
                 class="icon-btn"
-                @click="showLoginPassword = !showLoginPassword"
                 :aria-label="showLoginPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+                @click="showLoginPassword = !showLoginPassword"
               >
                 <svg v-if="!showLoginPassword" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>

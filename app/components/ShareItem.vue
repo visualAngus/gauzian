@@ -18,20 +18,20 @@
 
         <button
           class="remove-contact"
-          @click.stop="removeContact(contact.id)"
           aria-label="Supprimer"
+          @click.stop="removeContact(contact.id)"
         >
           ×
         </button>
       </div>
 
       <input
+        ref="inputRef"
         type="email"
         placeholder="Entrez l'email"
-        ref="inputRef"
         @input="validateEmail($event.target.value.trim())"
         @keyup.enter="verifyEmail($event)"
-      />
+      >
     </div>
 
     <div class="access_level">
@@ -48,8 +48,8 @@
       <!-- annuler -->
       <button
         class="close-btn"
-        @click="emit('annuler', [], accessLevel)"
         style="margin-left: 8px"
+        @click="emit('annuler', [], accessLevel)"
       >
         Annuler
       </button>

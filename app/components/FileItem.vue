@@ -28,16 +28,16 @@
       >
         <path
           d="M12.4142 5H21C21.5523 5 22 5.44772 22 6V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H10.4142L12.4142 5Z"
-        ></path>
+        />
       </svg>
       <svg v-else viewBox="0 0 24 24" fill="currentColor">
         <path
           d="M9 2.00318V2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8L9 2.00318ZM5.82918 8H9V4.83086L5.82918 8ZM11 4V9C11 9.55228 10.5523 10 10 10H5V20H19V4H11Z"
-        ></path>
+        />
       </svg>
 
       <!-- Spinner pour les fichiers en upload -->
-      <div v-if="status === 'uploading'" class="upload-spinner"></div>
+      <div v-if="status === 'uploading'" class="upload-spinner"/>
     </span>
 
     <div class="file-info">
@@ -56,11 +56,11 @@
         <div
           class="inline-progress-bar"
           :style="{ width: progress + '%' }"
-        ></div>
+        />
       </div>
     </div>
 
-    <span class="status-indicator" v-if="status === 'pending'">
+    <span v-if="status === 'pending'" class="status-indicator">
       <svg viewBox="0 0 24 24" fill="currentColor">
         <path
           d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
@@ -69,8 +69,8 @@
     </span>
 
     <span
-      class="menu-dots"
       v-if="currentFolderId !== 'shared_with_me' && currentFolderId !== 'corbeille'"
+      class="menu-dots"
       @click="$emit('dotclick', item, $event)"
     >
       <svg viewBox="0 0 24 24">
@@ -79,8 +79,9 @@
         <circle cx="12" cy="19" r="1.5" />
       </svg>
     </span>
-    <div class="accepted-rejected" v-if="currentFolderId === 'shared_with_me'">
-      <button class="accepted-rejected__accepted"
+    <div v-if="currentFolderId === 'shared_with_me'" class="accepted-rejected">
+      <button
+class="accepted-rejected__accepted"
         @click="$emit('accept', item)"
       >
         <svg
@@ -88,10 +89,11 @@
           viewBox="0 0 24 24"
           fill="currentColor"
         >
-          <path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"></path>
+          <path d="M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z"/>
         </svg>
       </button>
-      <button class="accepted-rejected__rejected"
+      <button
+class="accepted-rejected__rejected"
         @click="$emit('reject', item)"
       >
         <svg
@@ -101,11 +103,11 @@
         >
           <path
             d="M11.9997 10.5865L16.9495 5.63672L18.3637 7.05093L13.4139 12.0007L18.3637 16.9504L16.9495 18.3646L11.9997 13.4149L7.04996 18.3646L5.63574 16.9504L10.5855 12.0007L5.63574 7.05093L7.04996 5.63672L11.9997 10.5865Z"
-          ></path>
+          />
         </svg>
       </button>
     </div>
-    <div class="trash-actions" v-if="currentFolderId === 'corbeille'">
+    <div v-if="currentFolderId === 'corbeille'" class="trash-actions">
       <button class="trash-actions__restore" @click.stop="$emit('restore', item)">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
           <path d="M5.463 4.433A9.961 9.961 0 0 1 12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12h2a8 8 0 1 0 2.46-5.772L10 9H2V1l3.463 3.433z"/>

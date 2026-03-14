@@ -1,0 +1,5 @@
+
+> lint
+> eslint .
+
+sh: 1: eslint: not found
