@@ -8,7 +8,10 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "jszip": "^3.10.1",
@@ -18,7 +21,11 @@
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.15.2",
-    "typescript": "^5.9.3"
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
   },
   "overrides": {
     "minimatch": "^10.2.2"

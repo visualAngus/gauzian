@@ -9,7 +9,7 @@ export function useNotification() {
     title = objet.title || 'Notification';
     duration = objet.duration || 5000;
     
-    const id = Date.now();
+    const id = Date.now() + Math.random().toString(36).substr(2, 9);
     notifications.value.push({ id, title, message });
     console.log("Notification added:", { id, title, message });
     setTimeout(() => {

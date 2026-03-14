@@ -27,4 +27,6 @@ logs
 gauzian_back/
 k8s/
 sqlmap_reports/
-tests/
+
+# Rapport de couverture (généré automatiquement)
+coverage/
