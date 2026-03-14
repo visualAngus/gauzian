@@ -347,9 +347,7 @@ export const useNavigation = () => {
         if (actions[key]) {
             actions[key]();
             // Only preventDefault if not 't'/'T' with modifier
-            if (key !== 't' && key !== 'T') {
-                event.preventDefault();
-            } else if (!isModifier) {
+            if ((key !== 't' && key !== 'T' ) || !isModifier) {
                 event.preventDefault();
             }
         }

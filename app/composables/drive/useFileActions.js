@@ -162,12 +162,12 @@ export function useFileActions({
     const restoreItem = async (item) => {
         // Helper to restore by type/id
         const restoreByTypeAndId = async (type, id) => {
-            const endpoint =
-                type === "file"
-                    ? "/drive/restore_file"
-                    : type === "folder"
-                    ? "/drive/restore_folder"
-                    : null;
+            let endpoint = null;
+            if (type === "file") {
+                endpoint = "/drive/restore_file";
+            } else if (type === "folder") {
+                endpoint = "/drive/restore_folder";
+            }
             if (!endpoint) throw new Error("Invalid item type for restore");
 
             const body =

@@ -277,10 +277,11 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
         }
     };
 
-    // Helper: filter items by parent_folder_id
-    const filterItemsByParent = (files_and_folders, parentId) => [
-        ...(files_and_folders?.folders ?? []).filter(f => f.parent_folder_id === parentId),
-        ...(files_and_folders?.files ?? []).filter(f => f.parent_folder_id === parentId),
+    // Le backend (get_file_folder) filtre déjà les enfants directs au niveau SQL.
+    // Aucun filtre client-side nécessaire : folders filtrés par parent_folder_id, files par folder_id.
+    const filterItemsByParent = (files_and_folders) => [
+        ...(files_and_folders?.folders ?? []),
+        ...(files_and_folders?.files ?? []),
     ];
 
     const loadPath = async ({ outIn = false } = {}) => {
@@ -307,15 +308,16 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
                 fullPathLabel = "Partagés avec moi";
             }
 
-            const decryptedItems = await Promise.all(
-                items.map(item =>
-                    item.type === "file"
-                        ? decryptFileMetadata(item)
-                        : item.type === "folder"
-                            ? decryptFolderMetadataItem(item)
-                            : null
-                )
-            );
+            const decryptedItemsPromises = items.map(item => {
+                if (item.type === "file") {
+                    return decryptFileMetadata(item);
+                } else if (item.type === "folder") {
+                    return decryptFolderMetadataItem(item);
+                } else {
+                    return null;
+                }
+            });
+            const decryptedItems = await Promise.all(decryptedItemsPromises);
             full_path.value = [
                 {
                     folder_id: activeFolderId.value,
@@ -346,18 +348,18 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
             );
         }
 
-        const parentId = activeFolderId.value === "root" ? null : activeFolderId.value;
-        const items = filterItemsByParent(files_and_folders, parentId);
+        const items = filterItemsByParent(files_and_folders);
 
-        const decryptedItems = await Promise.all(
-            items.map(item =>
-                item.type === "file"
-                    ? decryptFileMetadata(item)
-                    : item.type === "folder"
-                        ? decryptFolderMetadataItem(item)
-                        : null
-            )
-        );
+        const decryptedItemsPromises = items.map(item => {
+            if (item.type === "file") {
+            return decryptFileMetadata(item);
+            } else if (item.type === "folder") {
+            return decryptFolderMetadataItem(item);
+            } else {
+            return null;
+            }
+        });
+        const decryptedItems = await Promise.all(decryptedItemsPromises);
         await applyDriveItemsForDisplay(decryptedItems.filter(Boolean), { outIn });
 
         // Update breadcrumb
