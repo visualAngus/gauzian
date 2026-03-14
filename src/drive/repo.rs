@@ -398,16 +398,20 @@ pub async fn create_folder_in_db(
     .await?;
 
     let folder_access_id = Uuid::new_v4();
+    // is_root_anchor = TRUE uniquement pour les dossiers à la racine (parent_folder_id IS NULL)
+    // Pour les sous-dossiers, is_root_anchor = FALSE afin de ne pas les remonter dans la vue racine
+    let is_root_anchor = parent_folder_id.is_none();
     sqlx::query(
         "
         INSERT INTO folder_access (id, folder_id, user_id, access_level, created_at, encrypted_folder_key, is_accepted, is_root_anchor)
-        VALUES ($1, $2, $3, 'owner', NOW(), $4, TRUE, TRUE)
+        VALUES ($1, $2, $3, 'owner', NOW(), $4, TRUE, $5)
         "
     )
     .bind(folder_access_id)
     .bind(folder_id)
     .bind(user_id)
     .bind(encrypted_folder_key.as_bytes())
+    .bind(is_root_anchor)
     .execute(db_pool)
     .await?;
 
