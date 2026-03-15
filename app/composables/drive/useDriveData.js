@@ -317,9 +317,8 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
                     } else {
                         return null;
                     }
-                })
-                .filter(Boolean);
-            const decryptedItems = await Promise.all(decryptedItemsPromises);
+                });
+            const decryptedItems = (await Promise.all(decryptedItemsPromises)).filter(Boolean);
             full_path.value = [
                 {
                     folder_id: activeFolderId.value,
@@ -354,15 +353,14 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
 
         const decryptedItemsPromises = items.map(item => {
             if (item.type === "file") {
-            return decryptFileMetadata(item);
+                return decryptFileMetadata(item);
             } else if (item.type === "folder") {
-            return decryptFolderMetadataItem(item);
+                return decryptFolderMetadataItem(item);
             } else {
-            return null;
+                return null;
             }
-        })
-        .filter(Boolean);
-        const decryptedItems = await Promise.all(decryptedItemsPromises);
+        });
+        const decryptedItems = (await Promise.all(decryptedItemsPromises)).filter(Boolean);
         await applyDriveItemsForDisplay(decryptedItems.filter(Boolean), { outIn });
 
         // Update breadcrumb

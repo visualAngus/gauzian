@@ -283,16 +283,19 @@ const openFilePicker = () => {
 };
 
 const extractRecoveryKeyFromText = (content) => {
-  const hashMatch = content.match(/recoveryKey=([^\s"'<>]+)/i);
+  // Safe extraction for recoveryKey=... (no ambiguous quantifiers)
+  const hashMatch = content.match(/recoveryKey=([A-Za-z0-9+/=]{80,})/i);
   if (hashMatch?.[1]) {
     return decodeURIComponent(hashMatch[1]).trim();
   }
 
-  const keyBoxMatch = content.match(/<div class="key-box">([\s\S]*?)<\/div>/i);
+  // Safe extraction for <div class="key-box">...</div> (no [\s\S]*? usage)
+  const keyBoxMatch = content.match(/<div class="key-box">([^<]{80,})<\/div>/i);
   if (keyBoxMatch?.[1]) {
     return keyBoxMatch[1].replaceAll(/<[^>]*>/g, "").trim();
   }
 
+  // Safe base64-like extraction (no ambiguous quantifiers)
   const base64Like = content.match(/[A-Za-z0-9+/=]{80,}/);
   if (base64Like?.[0]) {
     return base64Like[0].trim();

@@ -113,7 +113,7 @@ export async function generateRsaKeyPairPem(): Promise<{
   privateKey: string;
 }> {
   assertClient();
-  const keyPair = await window.crypto.subtle.generateKey(
+  const keyPair = await globalThis.crypto.subtle.generateKey(
     {
       name: "RSA-OAEP",
       modulusLength: 4096,

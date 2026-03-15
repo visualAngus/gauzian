@@ -2,4 +2,23 @@
 > lint
 > eslint .
 
-sh: 1: eslint: not found
+
+Oops! Something went wrong! :(
+
+ESLint: 9.39.3
+
+Error: EACCES: permission denied, open '/home/dev/gauzian/gauzianFront/.nuxt/eslint-typegen.d.ts'
+    at async open (node:internal/fs/promises:636:25)
+    at async Object.writeFile (node:internal/fs/promises:1205:14)
+
+/home/dev/gauzian/gauzianFront/app/components/InfoItem.vue
+  175:3  warning  Prop "shared_persons" is not in camelCase  vue/prop-name-casing
+
+/home/dev/gauzian/gauzianFront/app/components/NotificationCompo.vue
+  10:35  warning  The "close" event has been triggered but not declared on `defineEmits`  vue/require-explicit-emits
+
+/home/dev/gauzian/gauzianFront/tests/unit/composables/useNotification.test.ts
+  1:32  error  'beforAach' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 3 problems (1 error, 2 warnings)
+

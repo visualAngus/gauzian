@@ -388,8 +388,8 @@ export function useFileActions({
 
             // Vérifier la taille si les refs sont fournies
             if (
-                typeof totalSpaceLeft?.value !== "undefined" &&
-                typeof usedSpace?.value !== "undefined"
+                totalSpaceLeft?.value !== undefined &&
+                usedSpace?.value !== undefined
             ) {
                 if (someSize > totalSpaceLeft.value - usedSpace.value) {
                     addNotification({
