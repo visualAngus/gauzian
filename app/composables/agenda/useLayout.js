@@ -12,7 +12,7 @@ export const useLayout = (events) => {
 
     // Calculer le layout avec colonnes pour gérer les chevauchements
     const eventsWithLayout = computed(() => {
-        if (!events || !events.value || events.value.length === 0) {
+        if (!events?.value?.length) {
             return [];
         }
 

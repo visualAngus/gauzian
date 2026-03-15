@@ -95,7 +95,7 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
     };
 
     const selectFolderFromTree = async (node) => {
-        if (!node || !node.folder_id) return;
+        if (!node?.folder_id) return;
         activeFolderId.value = node.folder_id;
         router.push(`/drive?folder_id=${node.folder_id}`);
     };
@@ -252,7 +252,7 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
     const decryptPathItems = async (pathItems) => {
         const newFullPath = [];
         for (const pathItem of pathItems) {
-            if (!pathItem || !pathItem.encrypted_folder_key || !pathItem.encrypted_metadata) {
+            if (!pathItem?.encrypted_folder_key || !pathItem?.encrypted_metadata) {
                 console.warn("Invalid pathItem in loadPath:", pathItem);
                 continue;
             }
@@ -308,15 +308,17 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
                 fullPathLabel = "Partagés avec moi";
             }
 
-            const decryptedItemsPromises = items.map(item => {
-                if (item.type === "file") {
-                    return decryptFileMetadata(item);
-                } else if (item.type === "folder") {
-                    return decryptFolderMetadataItem(item);
-                } else {
-                    return null;
-                }
-            });
+            const decryptedItemsPromises = items
+                .map(item => {
+                    if (item.type === "file") {
+                        return decryptFileMetadata(item);
+                    } else if (item.type === "folder") {
+                        return decryptFolderMetadataItem(item);
+                    } else {
+                        return null;
+                    }
+                })
+                .filter(Boolean);
             const decryptedItems = await Promise.all(decryptedItemsPromises);
             full_path.value = [
                 {
@@ -342,7 +344,7 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
         }
 
         // Reset uploaded placeholders for this folder
-        if (listUploaded && listUploaded.value) {
+        if (listUploaded?.value) {
             listUploaded.value = listUploaded.value.filter(
                 file => (file._targetFolderId || "root") !== activeFolderId.value
             );
@@ -358,7 +360,8 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
             } else {
             return null;
             }
-        });
+        })
+        .filter(Boolean);
         const decryptedItems = await Promise.all(decryptedItemsPromises);
         await applyDriveItemsForDisplay(decryptedItems.filter(Boolean), { outIn });
 

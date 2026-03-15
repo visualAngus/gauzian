@@ -113,8 +113,7 @@ export async function generateRsaKeyPairPem(): Promise<{
   privateKey: string;
 }> {
   assertClient();
-  // Correction : Cast explicite en CryptoKeyPair car generateKey peut renvoyer CryptoKey simple
-  const keyPair = (await window.crypto.subtle.generateKey(
+  const keyPair = await window.crypto.subtle.generateKey(
     {
       name: "RSA-OAEP",
       modulusLength: 4096,
@@ -123,14 +122,14 @@ export async function generateRsaKeyPairPem(): Promise<{
     },
     true,
     ["encrypt", "decrypt"]
-  )) as CryptoKeyPair;
+  );
 
   const pubBuf = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
   const privBuf = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
 
   return {
-    publicKey: toPem(pubBuf as ArrayBuffer, "PUBLIC"),
-    privateKey: toPem(privBuf as ArrayBuffer, "PRIVATE"),
+    publicKey: toPem(pubBuf, "PUBLIC"),
+    privateKey: toPem(privBuf, "PRIVATE"),
   };
 }
 

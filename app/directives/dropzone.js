@@ -22,7 +22,7 @@ const collectEntries = async (dataTransfer) => {
   const items = dataTransfer.items ? Array.from(dataTransfer.items) : []
   await Promise.all(
     items
-      .map((item) => item.webkitGetAsEntry && item.webkitGetAsEntry())
+      .map((item) => item.webkitGetAsEntry?.())
       .filter(Boolean)
       .map((entry) => traverseEntry(entry, ""))
   )
@@ -38,7 +38,7 @@ const buildHandlers = (el, binding) => {
     } else {
       el.classList.remove(highlightClass)
     }
-    onOverChange && onOverChange(state)
+    onOverChange?.(state)
   }
 
   const setDisabled = (disabled) => {
@@ -72,7 +72,7 @@ const buildHandlers = (el, binding) => {
       inputRef.value.files = dt.files
       inputRef.value.dispatchEvent(new Event("change", { bubbles: true }))
     }
-    onFiles && onFiles(files)
+    onFiles?.(files)
   }
 
   const onClick = () => {

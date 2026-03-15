@@ -267,8 +267,8 @@ export const useEvents = () => {
     const searchEvents = (query) => {
         const lowerQuery = query.toLowerCase();
         return events.value.filter(event =>
-            event.title.toLowerCase().includes(lowerQuery) ||
-            (event.description && event.description.toLowerCase().includes(lowerQuery))
+            event.title?.toLowerCase().includes(lowerQuery) ||
+            event.description?.toLowerCase().includes(lowerQuery)
         );
     };
 

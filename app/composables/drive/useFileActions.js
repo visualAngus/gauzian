@@ -317,7 +317,7 @@ export function useFileActions({
         panel.style.display = "flex";
 
         if ((event.pageX - pageSize.width > - panel.offsetWidth && event.pageX - pageSize.width < 0)) {
-            if (event && event.pageY && event.pageX) {
+            if (event?.pageY && event?.pageX) {
                 panel.style.top = event.pageY + "px";
                 panel.style.left = event.pageX - panel.offsetWidth + "px";
             } else {
@@ -326,12 +326,12 @@ export function useFileActions({
                 panel.style.left = (rect.left + window.scrollX) + "px";
             }
         } else if ((event.pageY - pageSize.height > - panel.offsetHeight && event.pageY - pageSize.height < 0)){
-            if (event && event.pageY && event.pageX) {
+            if (event?.pageY && event?.pageX) {
                 panel.style.top = event.pageY - panel.offsetHeight + "px";
                 panel.style.left = event.pageX + "px";
             }
         }
-        else if (event && event.pageY && event.pageX) {
+        else if (event?.pageY && event?.pageX) {
             panel.style.top = event.pageY + "px";
             panel.style.left = event.pageX + "px";
         } else {
@@ -388,10 +388,8 @@ export function useFileActions({
 
             // Vérifier la taille si les refs sont fournies
             if (
-                totalSpaceLeft &&
-                typeof totalSpaceLeft.value !== "undefined" &&
-                usedSpace &&
-                typeof usedSpace.value !== "undefined"
+                typeof totalSpaceLeft?.value !== "undefined" &&
+                typeof usedSpace?.value !== "undefined"
             ) {
                 if (someSize > totalSpaceLeft.value - usedSpace.value) {
                     addNotification({
@@ -1019,7 +1017,7 @@ export function useFileActions({
         if (itemType === "file") {
             // PARTAGE DE FICHIER SIMPLE
             const item = liste_decrypted_items.value.find(i => i.file_id === itemId);
-            if (!item || !item.encrypted_file_key) {
+            if (!item?.encrypted_file_key) {
                 throw new Error("File not found or missing encrypted key");
             }
 
@@ -1059,7 +1057,7 @@ export function useFileActions({
 
             // Récupérer le dossier principal depuis la liste décryptée
             const mainFolder = liste_decrypted_items.value.find(i => i.folder_id === itemId);
-            if (!mainFolder || !mainFolder.encrypted_folder_key) {
+            if (!mainFolder?.encrypted_folder_key) {
                 throw new Error("Folder not found or missing encrypted key");
             }
 
