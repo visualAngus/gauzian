@@ -32,6 +32,4 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_SCANNER_OPTS: >-
-            -Dsonar.projectKey=gauzian-front
-            -Dsonar.projectName="Gauzian Frontend (dev)"
+          SONAR_SCANNER_OPTS: -Dsonar.projectKey=gauzian-front
