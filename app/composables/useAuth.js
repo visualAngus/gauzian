@@ -24,10 +24,11 @@ export const useAuth = () => {
 
   // IMPORTANT : Lire localStorage EXPLICITEMENT à chaque appel
   // (la factory useState n'est pas fiable pour localStorage lors de hard refresh)
-  if (import.meta.client && !authToken.value) {
+  if (import.meta.client) {
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (storedToken) {
       authToken.value = storedToken;
+      isAuthenticated.value = true;
     }
   }
 
@@ -51,7 +52,12 @@ export const useAuth = () => {
 
       if (!response.ok) {
         let errorMessage = 'Erreur lors de la connexion';
-        const raw = await response.text().catch(() => '');
+        let raw;
+        try {
+          raw = await response.text().catch(() => '');
+        }catch {
+          raw = 'Error response with non-text body';
+        }
         try {
           const data = JSON.parse(raw);
           errorMessage = data.error || data.message || raw || errorMessage;
@@ -277,50 +283,30 @@ export const useAuth = () => {
     try {
       // 1. Notifier le backend (blacklist token Redis)
       if (authToken.value) {
-        // Note: fetchWithAuth sera créé dans Phase 3, pour l'instant on peut utiliser fetch direct
         await fetch(`${apiUrl}/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${authToken.value}`
           }
         }).catch(err => {
-          // Ignorer les erreurs (401 si token déjà expiré)
           if (import.meta.dev) {
             console.warn('Logout backend call failed:', err);
           }
         });
       }
-
-      // 2. Effacer localStorage
-      if (import.meta.client) {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-      }
-      authToken.value = null;
-
-      // 3. Effacer IndexedDB (clés crypto)
-      await clearAllKeys();
-
-      // 4. Reset état authentification
-      isAuthenticated.value = false;
-      user.value = null;
-
-      if (import.meta.dev) {
-        console.log('Logout successful, token and keys cleared');
-      }
-
-      // 5. Rediriger vers login
-      navigateTo('/login');
     } catch (error) {
       if (import.meta.dev) {
         console.error('Logout error:', error);
       }
-      // Même en cas d'erreur, nettoyer l'état local
+    } finally {
+      // Toujours nettoyer localStorage et l'état local
       if (import.meta.client) {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
       }
       authToken.value = null;
       isAuthenticated.value = false;
       user.value = null;
+      await clearAllKeys();
       navigateTo('/login');
     }
   };

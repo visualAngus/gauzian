@@ -21,6 +21,15 @@ if (typeof globalThis.window === 'undefined') {
   }
 }
 
+// ─── localStorage (non disponible en environnement node) ─────────────────
+const localStorageStore = new Map<string, string>()
+vi.stubGlobal('localStorage', {
+  getItem: (key: string) => localStorageStore.get(key) ?? null,
+  setItem: (key: string, value: string) => localStorageStore.set(key, value),
+  removeItem: (key: string) => localStorageStore.delete(key),
+  clear: () => localStorageStore.clear(),
+})
+
 // ─── Nuxt auto-imports stubs ─────────────────────────────────────────────
 // Ces fonctions sont injectées automatiquement par Nuxt mais n'existent
 // pas dans Vitest. On les définit globalement pour tous les composables.
@@ -32,6 +41,9 @@ vi.stubGlobal('useState', (_key: string, init: () => unknown) => ref(init()))
 vi.stubGlobal('useRuntimeConfig', () => ({
   public: { apiUrl: '/api' },
 }))
+
+// useApiUrl : composable custom auto-importé par Nuxt, non disponible dans Vitest
+vi.stubGlobal('useApiUrl', () => '/api')
 
 // navigateTo : stub vide — on vérifie juste qu'il est appelé
 vi.stubGlobal('navigateTo', vi.fn())

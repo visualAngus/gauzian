@@ -309,16 +309,12 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
             }
 
             const decryptedItemsPromises = items
-                .map(item => {
-                    if (item.type === "file") {
-                        return decryptFileMetadata(item);
-                    } else if (item.type === "folder") {
-                        return decryptFolderMetadataItem(item);
-                    } else {
-                        return null;
-                    }
-                });
-            const decryptedItems = await Promise.all(decryptedItemsPromises.filter(Boolean));
+                .filter(item => item.type === "file" || item.type === "folder")
+                .map(item => item.type === "file"
+                    ? decryptFileMetadata(item)
+                    : decryptFolderMetadataItem(item)
+                );
+            const decryptedItems = await Promise.all(decryptedItemsPromises);
             full_path.value = [
                 {
                     folder_id: activeFolderId.value,
@@ -351,16 +347,13 @@ export function useDriveData(router, API_URL, usedSpace, listUploaded, addNotifi
 
         const items = filterItemsByParent(files_and_folders);
 
-        const decryptedItemsPromises = items.map(item => {
-            if (item.type === "file") {
-                return decryptFileMetadata(item);
-            } else if (item.type === "folder") {
-                return decryptFolderMetadataItem(item);
-            } else {
-                return null;
-            }
-        });
-        const decryptedItems = await Promise.all(decryptedItemsPromises.filter(Boolean));
+        const decryptedItemsPromises = items
+            .filter(item => item.type === "file" || item.type === "folder")
+            .map(item => item.type === "file"
+                ? decryptFileMetadata(item)
+                : decryptFolderMetadataItem(item)
+            );
+        const decryptedItems = await Promise.all(decryptedItemsPromises);
         await applyDriveItemsForDisplay(decryptedItems, { outIn });
 
         // Update breadcrumb
