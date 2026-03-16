@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   strToBuff,
   buffToB64,
@@ -16,7 +16,111 @@ import {
   decryptDataWithDataKeyRaw,
   generateRecordKey,
   decryptRecordKey,
+  saveUserKeysToIndexedDb,
+  getKeyStatus,
+  getUserPublicKeyFromIndexedDb,
+  getUserPrivateKeyFromIndexedDb,
+  clearAllKeys,
+  encryptWithStoredPublicKey,
+  decryptWithStoredPrivateKey,
+  importPublicKeyFromPem,
+  encryptWithPublicKey,
+  deleteKeyStore,
 } from '~/utils/crypto'
+
+type MemoryStore = Map<string, unknown>
+
+function createIndexedDbMock(options?: { clearFails?: boolean; deleteMode?: 'success' | 'blocked' }) {
+  const stores = new Map<string, MemoryStore>()
+
+  const getStore = (storeName: string): MemoryStore => {
+    if (!stores.has(storeName)) {
+      stores.set(storeName, new Map())
+    }
+    return stores.get(storeName)!
+  }
+
+  const indexedDBMock = {
+    open: vi.fn((_dbName: string, _version: number) => {
+      const request: Record<string, (() => void) | undefined> & { result?: unknown } = {}
+
+      setTimeout(() => {
+        const db = {
+          objectStoreNames: {
+            contains: (name: string) => stores.has(name),
+          },
+          createObjectStore: (name: string) => {
+            getStore(name)
+            return {}
+          },
+          transaction: (storeNameOrNames: string | string[], _mode: string) => {
+            const storeName = Array.isArray(storeNameOrNames)
+              ? storeNameOrNames[0]!
+              : storeNameOrNames
+            const store = getStore(storeName)
+            const tx: Record<string, (() => void) | undefined> & {
+              objectStore?: () => {
+                get: (key: string) => Record<string, (() => void) | undefined> & { result?: unknown }
+                put: (value: { id: string }) => void
+                clear: () => Record<string, (() => void) | undefined>
+              }
+            } = {}
+
+            const objectStore = {
+              get: (key: string) => {
+                const req: Record<string, (() => void) | undefined> & { result?: unknown } = {}
+                setTimeout(() => {
+                  req.result = store.get(key)
+                  req.onsuccess?.()
+                }, 0)
+                return req
+              },
+              put: (value: { id: string }) => {
+                store.set(value.id, value)
+                setTimeout(() => tx.oncomplete?.(), 0)
+              },
+              clear: () => {
+                const req: Record<string, (() => void) | undefined> = {}
+                setTimeout(() => {
+                  if (options?.clearFails) {
+                    req.onerror?.()
+                    tx.onerror?.()
+                    return
+                  }
+                  store.clear()
+                  req.onsuccess?.()
+                }, 0)
+                return req
+              },
+            }
+
+            tx.objectStore = () => objectStore
+            return tx
+          },
+        }
+
+        request.result = db
+        request.onupgradeneeded?.({ target: request } as unknown as IDBVersionChangeEvent)
+        request.onsuccess?.({ target: request } as unknown as Event)
+      }, 0)
+
+      return request
+    }),
+    deleteDatabase: vi.fn((_dbName: string) => {
+      const req: Record<string, (() => void) | undefined> = {}
+      setTimeout(() => {
+        if (options?.deleteMode === 'blocked') {
+          req.onblocked?.()
+          return
+        }
+        req.onsuccess?.()
+      }, 0)
+      return req
+    }),
+  }
+
+  return { indexedDBMock, stores }
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // strToBuff : convertit une string en Uint8Array (bytes UTF-8)
@@ -436,5 +540,200 @@ describe('pemToArrayBuffer - cas supplémentaires', () => {
     // Round-trip
     const recovered = pemToArrayBuffer(pem)
     expect(Array.from(new Uint8Array(recovered))).toEqual(Array.from(data))
+  })
+})
+
+describe('crypto key store (IndexedDB) et helpers avancés', () => {
+  const config = {
+    dbName: 'test_key_store',
+    dbVersion: 1,
+    storeName: 'keys',
+  }
+
+  let originalIndexedDb: IDBFactory | undefined
+
+  beforeEach(() => {
+    originalIndexedDb = globalThis.indexedDB
+    vi.restoreAllMocks()
+  })
+
+  afterEach(() => {
+    if (originalIndexedDb) {
+      // @ts-expect-error test override
+      globalThis.indexedDB = originalIndexedDb
+    }
+    vi.restoreAllMocks()
+  })
+
+  it('saveUserKeysToIndexedDb puis getKeyStatus retourne ready', async () => {
+    const { indexedDBMock } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    const privateKey = { type: 'private' } as CryptoKey
+    const publicKey = { type: 'public' } as CryptoKey
+
+    vi.spyOn(window.crypto.subtle, 'importKey')
+      .mockResolvedValueOnce(privateKey)
+      .mockResolvedValueOnce(publicKey)
+
+    const privatePem = toPem(new Uint8Array([1, 2, 3, 4]).buffer, 'PRIVATE')
+    const publicPem = toPem(new Uint8Array([5, 6, 7, 8]).buffer, 'PUBLIC')
+
+    await saveUserKeysToIndexedDb(privatePem, publicPem, config)
+    await expect(getKeyStatus(config)).resolves.toBe('ready')
+  })
+
+  it('getKeyStatus retourne expired quand la clé est expirée', async () => {
+    const { indexedDBMock, stores } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    const privateKey = { type: 'private' } as CryptoKey
+    const publicKey = { type: 'public' } as CryptoKey
+    vi.spyOn(window.crypto.subtle, 'importKey')
+      .mockResolvedValueOnce(privateKey)
+      .mockResolvedValueOnce(publicKey)
+
+    await saveUserKeysToIndexedDb(
+      toPem(new Uint8Array([1, 1, 1, 1]).buffer, 'PRIVATE'),
+      toPem(new Uint8Array([2, 2, 2, 2]).buffer, 'PUBLIC'),
+      config,
+    )
+
+    const keysStore = stores.get('keys')!
+    keysStore.set('user_private_key', {
+      id: 'user_private_key',
+      key: privateKey,
+      expires: Date.now() - 1000,
+    })
+
+    await expect(getKeyStatus(config)).resolves.toBe('expired')
+  })
+
+  it('getKeyStatus retourne none quand aucune clé privée n existe', async () => {
+    const { indexedDBMock } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    await expect(getKeyStatus(config)).resolves.toBe('none')
+  })
+
+  it('getUserPublicKeyFromIndexedDb et getUserPrivateKeyFromIndexedDb lèvent si absentes', async () => {
+    const { indexedDBMock } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    await expect(getUserPublicKeyFromIndexedDb(config)).rejects.toThrow('No public key found')
+    await expect(getUserPrivateKeyFromIndexedDb(config)).rejects.toThrow('No private key found')
+  })
+
+  it('clearAllKeys vide le store', async () => {
+    const { indexedDBMock } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    const privateKey = { type: 'private' } as CryptoKey
+    const publicKey = { type: 'public' } as CryptoKey
+    vi.spyOn(window.crypto.subtle, 'importKey')
+      .mockResolvedValueOnce(privateKey)
+      .mockResolvedValueOnce(publicKey)
+
+    await saveUserKeysToIndexedDb(
+      toPem(new Uint8Array([9, 9, 9, 9]).buffer, 'PRIVATE'),
+      toPem(new Uint8Array([8, 8, 8, 8]).buffer, 'PUBLIC'),
+      config,
+    )
+
+    await expect(getKeyStatus(config)).resolves.toBe('ready')
+    await clearAllKeys(config)
+    await expect(getKeyStatus(config)).resolves.toBe('none')
+  })
+
+  it('deleteKeyStore résout sur succès et sur blocked', async () => {
+    const success = createIndexedDbMock({ deleteMode: 'success' })
+    // @ts-expect-error test override
+    globalThis.indexedDB = success.indexedDBMock
+    await expect(deleteKeyStore(config)).resolves.toBeUndefined()
+
+    const blocked = createIndexedDbMock({ deleteMode: 'blocked' })
+    // @ts-expect-error test override
+    globalThis.indexedDB = blocked.indexedDBMock
+    await expect(deleteKeyStore(config)).resolves.toBeUndefined()
+  })
+
+  it('encryptWithStoredPublicKey et decryptWithStoredPrivateKey utilisent les clés stockées', async () => {
+    const { indexedDBMock } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    const privateKey = { type: 'private' } as CryptoKey
+    const publicKey = { type: 'public' } as CryptoKey
+
+    vi.spyOn(window.crypto.subtle, 'importKey')
+      .mockResolvedValueOnce(privateKey)
+      .mockResolvedValueOnce(publicKey)
+
+    await saveUserKeysToIndexedDb(
+      toPem(new Uint8Array([3, 3, 3, 3]).buffer, 'PRIVATE'),
+      toPem(new Uint8Array([4, 4, 4, 4]).buffer, 'PUBLIC'),
+      config,
+    )
+
+    vi.spyOn(window.crypto.subtle, 'encrypt').mockResolvedValueOnce(new Uint8Array([65, 66, 67]).buffer)
+    vi.spyOn(window.crypto.subtle, 'decrypt').mockResolvedValueOnce(new TextEncoder().encode('secret-data').buffer)
+
+    const encrypted = await encryptWithStoredPublicKey('payload', config)
+    const decrypted = await decryptWithStoredPrivateKey(encrypted, config)
+    expect(typeof encrypted).toBe('string')
+    expect(decrypted).toBe('secret-data')
+  })
+
+  it('encryptWithStoredPublicKey lève une erreur si payload RSA trop grand', async () => {
+    const { indexedDBMock } = createIndexedDbMock()
+    // @ts-expect-error test override
+    globalThis.indexedDB = indexedDBMock
+
+    const privateKey = { type: 'private' } as CryptoKey
+    const publicKey = { type: 'public' } as CryptoKey
+    vi.spyOn(window.crypto.subtle, 'importKey')
+      .mockResolvedValueOnce(privateKey)
+      .mockResolvedValueOnce(publicKey)
+
+    await saveUserKeysToIndexedDb(
+      toPem(new Uint8Array([1, 2, 3, 4]).buffer, 'PRIVATE'),
+      toPem(new Uint8Array([5, 6, 7, 8]).buffer, 'PUBLIC'),
+      config,
+    )
+
+    const oversized = 'x'.repeat(447)
+    await expect(encryptWithStoredPublicKey(oversized, config)).rejects.toThrow('Data too large for RSA encryption')
+  })
+
+  it('importPublicKeyFromPem et encryptWithPublicKey appellent subtle.importKey/encrypt', async () => {
+    const publicKey = { type: 'public' } as CryptoKey
+    const importSpy = vi.spyOn(window.crypto.subtle, 'importKey').mockResolvedValue(publicKey)
+    vi.spyOn(window.crypto.subtle, 'encrypt').mockResolvedValue(new Uint8Array([10, 11]).buffer)
+
+    const publicPem = toPem(new Uint8Array([10, 20, 30, 40]).buffer, 'PUBLIC')
+    const imported = await importPublicKeyFromPem(publicPem)
+    expect(imported).toBe(publicKey)
+
+    const cipher = await encryptWithPublicKey(publicPem, 'hello')
+    expect(typeof cipher).toBe('string')
+    expect(importSpy).toHaveBeenCalled()
+  })
+})
+
+describe('assertClient guard', () => {
+  it('lève une erreur si window est indisponible', () => {
+    const originalWindow = globalThis.window
+    // @ts-expect-error simulate SSR runtime
+    delete globalThis.window
+
+    expect(() => strToBuff('hello')).toThrow('Crypto utilities are only available client-side')
+
+    // @ts-expect-error restore test environment
+    globalThis.window = originalWindow
   })
 })
