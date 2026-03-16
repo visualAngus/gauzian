@@ -2,6 +2,19 @@ import { vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import { ref } from 'vue'
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    currentRoute: { value: { query: {} } },
+  }),
+  useRoute: () => ({
+    query: {},
+    params: {},
+    path: '/',
+  }),
+}))
+
 // ─── Web Crypto API ──────────────────────────────────────────────────────
 // Node >= 16 expose globalThis.crypto mais on le force pour être sûr
 if (!globalThis.crypto) {
@@ -18,6 +31,8 @@ if (typeof globalThis.window === 'undefined') {
     crypto: webcrypto,
     btoa: (s: string) => Buffer.from(s, 'binary').toString('base64'),
     atob: (s: string) => Buffer.from(s, 'base64').toString('binary'),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   }
 }
 
