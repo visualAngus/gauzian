@@ -42,5 +42,4 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_SCANNER_OPTS: >-
             -Dsonar.projectKey=gauzian-back-release
-            -Dsonar.projectName="Gauzian Backend (release)"
             -Dsonar.projectVersion=${{ github.ref_name }}
