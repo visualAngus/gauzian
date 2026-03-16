@@ -284,7 +284,7 @@ const openFilePicker = () => {
 
 const extractRecoveryKeyFromText = (content) => {
   // Safe extraction for recoveryKey=... (no ambiguous quantifiers)
-  const hashMatch = content.match(/recoveryKey=([A-Za-z0-9+/=]{80,})/i);
+  const hashMatch = content.match(/recoveryKey=([A-Z0-9+/=]{80,})/i);
   if (hashMatch?.[1]) {
     return decodeURIComponent(hashMatch[1]).trim();
   }

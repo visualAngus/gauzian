@@ -1,5 +1,5 @@
-import { describe,it,expect,vi,beforAach,afterEach } from "vitest";
-import { useNotification } from "~/composables/useNotification";
+import { describe,it,expect,vi,beforeEach,afterEach } from "vitest";
+import { useNotification } from "@/composables/useNotification";
 
 describe("useNotification", () => {
   beforeEach(() => {

@@ -1,14 +1,13 @@
-name: SonarQube Analysis
+name: SonarQube Analysis (Release)
 
 on:
   push:
-    branches: [front]
-  pull_request:
-    branches: [front]
+    tags:
+      - 'v*-stable'
 
 jobs:
   sonar:
-    name: SonarQube
+    name: SonarQube Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,5 +32,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_SCANNER_OPTS: >-
-            -Dsonar.projectKey=gauzian-front
-            -Dsonar.projectName="Gauzian Frontend (dev)"
+            -Dsonar.projectKey=gauzian-front-release
+            -Dsonar.projectName="Gauzian Frontend (release)"
+            -Dsonar.projectVersion=${{ github.ref_name }}
