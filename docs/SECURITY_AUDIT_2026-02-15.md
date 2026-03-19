@@ -609,7 +609,7 @@ MINIO_PASSWORD = generate_password(32)
 JWT_SECRET = generate_jwt_secret()
 REDIS_PASSWORD = generate_password(32)
 GRAFANA_PASSWORD = generate_password()
-PROMETHEUS_PASSWORD = "GauzianProm2026!"
+PROMETHEUS_PASSWORD = generate_password(16)  # valeur stockée dans k8s/secrets.yaml (non versionné)
 ```
 
 ### Nouveaux Secrets
