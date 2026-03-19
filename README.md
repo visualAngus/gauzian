@@ -35,35 +35,6 @@ docs/               # DATABASE_SCHEMA.md, ENV_VARIABLES.md
 
 ---
 
-## Développement
-
-```bash
-cargo build
-cargo run
-RUST_LOG=debug cargo run
-cargo test
-cargo watch -x run
-```
-
-### Migrations
-
-```bash
-ssh vps 'kubectl port-forward -n gauzian-v2 svc/postgres 5432:5432' &
-sqlx migrate run --database-url $DATABASE_URL
-```
-
----
-
-## Déploiement
-
-```bash
-git push origin back   # → CI/CD build Docker + deploy VPS automatique
-```
-
-> Ajouter `[skip ci]` dans le message de commit pour éviter le déploiement.
-
----
-
 ## Documentation
 
 - [`src/ARCHITECTURE.md`](src/ARCHITECTURE.md) — Architecture détaillée (26KB)
