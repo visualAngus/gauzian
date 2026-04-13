@@ -291,6 +291,30 @@ let folder_id = match services::parse_uuid_or_error(&body.folder_id) {
 };
 ```
 
+#### Structs internes (`drive/repo.rs`)
+
+```rust
+/// Retournée par get_drive_info() — résumé de l'espace disque et du compte
+#[derive(sqlx::FromRow, serde::Serialize)]
+pub struct DriveInfo {
+    pub used_space: i64,            // Somme des tailles des fichiers dont l'utilisateur est owner
+    pub file_count: i64,            // Nombre de fichiers en propriété
+    pub folder_count: i64,          // Nombre de dossiers en propriété
+    pub storage_limit_bytes: i64,   // Quota du compte (défaut : 2 GiB)
+    pub account_tier: String,       // Niveau de compte (ex: "free", "pro")
+}
+
+/// Struct interne utilisée dans la CTE récursive de get_full_path()
+/// Mappe chaque nœud du chemin ancêtre → dossier courant
+#[derive(FromRow)]
+struct FolderPathRow {
+    path_index: i32,                        // 0 = dossier courant, N = ancêtre le plus loin
+    id: Uuid,
+    encrypted_metadata: Vec<u8>,            // BYTEA
+    encrypted_folder_key: Option<Vec<u8>>,  // BYTEA, None si l'utilisateur n'a pas d'accès direct
+}
+```
+
 #### Repo (`drive/repo.rs`) - 1900 lignes de SQL
 ```rust
 // Fichiers
@@ -313,6 +337,111 @@ pub async fn propagate_folder_access_recursive(...) -> Result<()>
 pub async fn restore_file(...) -> Result<()>
 pub async fn empty_trash(pool: &PgPool, user_id: Uuid) -> Result<()>
 ```
+
+---
+
+### 📅 Module `agenda/` - Calendrier E2EE
+
+#### Routes (`agenda/routes.rs`)
+```rust
+GET    /events   # Récupère les événements d'un utilisateur sur une plage de dates
+POST   /events   # Crée un événement et enregistre le créateur comme participant
+```
+
+Les deux routes sont protégées par le middleware JWT (`Claims` extrait automatiquement).
+
+#### Handlers (`agenda/handlers.rs`)
+- **`get_events_handler`** : extrait `EventsQuery` (query params `startDayId` / `endDayId`), délègue à `repo::get_events_date_to_date`, retourne `EventResponse`
+- **`create_event_handler`** : reçoit `Json<CreateEventPayload>`, crée l'événement via `repo::create_event`, puis inscrit le créateur via `repo::add_event_participant`
+
+#### Structs (`agenda/handlers.rs`)
+
+```rust
+/// Réponse wrappant une liste d'événements
+#[derive(Serialize)]
+pub struct EventResponse {
+    events: Vec<Event>,
+}
+
+/// Événement retourné au client (champs temporels stockés chiffrés → TEXT)
+#[derive(Serialize, Deserialize, Debug, FromRow)]
+pub struct Event {
+    pub id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub day_id: i64,           // "dayId" — identifiant numérique du jour (timestamp-like)
+    pub start_day_id: String,  // "startDayId" — chiffré → TEXT
+    pub end_day_id: String,    // "endDayId" — chiffré → TEXT
+    pub start_hour: String,    // "startHour" — chiffré → TEXT
+    pub end_hour: String,      // "endHour" — chiffré → TEXT
+    pub is_all_day: bool,
+    pub is_multi_day: bool,
+    pub category: Option<String>,
+    pub color: Option<String>,
+    pub encrypted_data_key: String, // "encryptedDataKey" — clé de chiffrement (BYTEA converti)
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Query params pour GET /events
+#[derive(Deserialize)]
+pub struct EventsQuery {
+    pub start_day_id: String, // "startDayId"
+    pub end_day_id: String,   // "endDayId"
+}
+
+/// Payload pour POST /events
+#[derive(Deserialize)]
+pub struct CreateEventPayload {
+    pub title: String,
+    pub description: Option<String>,
+    pub day_id: i64,
+    pub start_hour: String,        // chiffré
+    pub end_hour: String,          // chiffré
+    pub start_day_id: String,      // chiffré
+    pub end_day_id: String,        // chiffré
+    pub is_all_day: bool,
+    pub is_multi_day: bool,
+    pub category: Option<String>,
+    pub color: Option<String>,
+    pub encrypted_data_key: String, // "encryptedDataKey"
+}
+```
+
+#### Repo (`agenda/repo.rs`)
+
+```rust
+/// Struct interne pour mapper le BYTEA `encrypted_data_key` depuis la DB
+/// Convertie en Event via impl From<EventRow> (BYTEA → String UTF-8 ou Base64)
+struct EventRow { ... }
+
+/// Récupère les événements d'un utilisateur entre deux day_id inclusifs
+/// Joint agenda_event_participants pour filtrer par participant
+pub async fn get_events_date_to_date(
+    pool: &PgPool,
+    user_id: Uuid,
+    start_date: &str,
+    end_date: &str,
+) -> Result<Vec<Event>, sqlx::Error>
+
+/// Insère un événement dans agenda_events, retourne l'Event créé
+pub async fn create_event(
+    pool: &PgPool,
+    user_id: Uuid,
+    event: &CreateEventPayload,
+) -> Result<Event, sqlx::Error>
+
+/// Inscrit un participant à un événement (table agenda_event_participants)
+/// Stocke la clé de chiffrement de l'événement pour ce participant
+pub async fn add_event_participant(
+    pool: &PgPool,
+    event_id: Uuid,
+    user_id: Uuid,
+    encrypted_event_key: &str,
+) -> Result<(), sqlx::Error>
+```
+
+**Note E2EE** : `encrypted_data_key` et `encrypted_event_key` sont stockés en `BYTEA` en base. La conversion BYTEA → String se fait via `bytes_to_text_or_b64()` (UTF-8 si valide, sinon Base64 standard).
 
 ---
 

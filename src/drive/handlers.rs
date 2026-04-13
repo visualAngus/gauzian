@@ -177,7 +177,6 @@ pub async fn upload_chunk_handler(
 
     ApiResponse::ok(serde_json::json!({
         "s3_record_id": s3_record_id,
-        "s3_id": meta_data_s3.s3_id,
         "index": meta_data_s3.index,
         "date_upload": meta_data_s3.date_upload,
         "data_hash": meta_data_s3.data_hash,
@@ -267,7 +266,10 @@ pub async fn upload_chunk_restful_handler(
                 };
 
                 let parsed_index = match value.parse::<i32>() {
-                    Ok(index) => index,
+                    Ok(index) if index >= 0 => index,
+                    Ok(_) => {
+                        return ApiResponse::bad_request("Chunk index must be non-negative").into_response();
+                    }
                     Err(_) => {
                         return ApiResponse::bad_request("Invalid chunk index").into_response();
                     }
@@ -339,7 +341,6 @@ pub async fn upload_chunk_restful_handler(
 
     ApiResponse::ok(serde_json::json!({
         "s3_record_id": s3_record_id,
-        "s3_id": meta_data_s3.s3_id,
         "index": meta_data_s3.index,
         "date_upload": meta_data_s3.date_upload,
         "data_hash": meta_data_s3.data_hash,

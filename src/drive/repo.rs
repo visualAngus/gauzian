@@ -11,7 +11,15 @@ use uuid::Uuid;
 fn bytes_to_text_or_b64(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
         Ok(s) if !s.trim().is_empty() => s.to_string(),
-        _ => base64::engine::general_purpose::STANDARD.encode(bytes),
+        _ => {
+            // Ce cas ne devrait pas se produire : les données chiffrées sont toujours
+            // insérées en base64 (UTF-8 valide). Un fallback ici indique une insertion anormale.
+            tracing::error!(
+                "bytes_to_text_or_b64: données non-UTF8 détectées ({} bytes), fallback base64 appliqué",
+                bytes.len()
+            );
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        }
     }
 }
 
@@ -303,7 +311,7 @@ pub async fn initialize_file_in_db(
 
     if let Some(folder_id) = folder_id {
         let has_access = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = FALSE)",
+            "SELECT EXISTS(SELECT 1 FROM folder_access WHERE folder_id = $1 AND user_id = $2 AND is_deleted = FALSE AND is_accepted = TRUE)",
         )
         .bind(folder_id)
         .bind(user_id)
