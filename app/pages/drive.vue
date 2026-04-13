@@ -702,7 +702,6 @@ useHead({
       href: "https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap",
     },
   ],
-  // versioning pour forcer le rafraîchissement du CSS après chaque déploiement
   meta: [
     { name: "version", content: import.meta.env.VITE_APP_VERSION || "1.0.0" },
   ],

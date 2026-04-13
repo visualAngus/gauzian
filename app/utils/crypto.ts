@@ -294,6 +294,7 @@ export async function saveUserKeysToIndexedDb(
     {
       id: "user_public_key",
       key: publicKey,
+      expires: Date.now() + KEY_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
     },
     config
   );

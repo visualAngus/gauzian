@@ -72,7 +72,9 @@ h1 {
 	font-style: normal;
 	font-size: 28px;
 
-	margin-left: 40px;
+	/* margin-left: 40px; */
+	width: 225px;
+	text-align: center;
 }
 
 .div-menu {
