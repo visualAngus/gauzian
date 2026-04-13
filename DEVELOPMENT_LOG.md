@@ -1,5 +1,33 @@
 # Journal de Développement - GAUZIAN
 
+## 2026-04-12
+
+### [2026-04-12] - fix(security): Correction vulnérabilités MEDIUM/LOW audit E2EE [skip ci]
+
+Corrections issues de l'audit de sécurité E2EE (`docs/SECURITY_AUDIT_E2EE_2026-04-12.md`).
+
+**V7 — `crypto.ts` : Clé publique sans expiration (MEDIUM)**
+- Ajout de `expires: Date.now() + KEY_EXPIRY_DAYS * 24 * 60 * 60 * 1000` lors du `idbPut` de `user_public_key`
+- Aligne l'expiry de la clé publique (90 jours) sur celui de la clé privée pour éviter un état incohérent en IndexedDB
+
+**V8 — `repo.rs` : Upload dans dossier non accepté (MEDIUM)**
+- Ajout de `AND is_accepted = TRUE` dans la query de vérification d'accès dossier (`initialize_file_in_db`)
+- Empêche l'upload dans un dossier partagé dont l'invitation n'a pas encore été acceptée
+
+**V9 — `handlers.rs` : `chunk_index` sans validation de plage (MEDIUM)**
+- Rejet explicite si `chunk_index < 0` avec réponse `400 Bad Request`
+- Évite la perturbation de la reconstruction de fichier via des indices arbitraires
+
+**V10 — `repo.rs` : `bytes_to_text_or_b64` fallback silencieux (MEDIUM)**
+- Ajout d'un `tracing::error!` dans la branche fallback base64
+- Rend détectable toute insertion anormale de données non-UTF8 (ne devrait jamais se produire)
+
+**V11 — `handlers.rs` : `s3_id` exposé dans réponse upload chunk (LOW)**
+- Suppression du champ `s3_id` dans les deux handlers d'upload (multipart + RESTful)
+- Le frontend ne consommait pas ce champ
+
+**V12 — Recovery key non révocable (LOW)** : non corrigée, effort architectural.
+
 ## 2026-02-25
 
 ### [2026-02-25] - chore(k8s): Automatisation chiffrement/déchiffrement secrets SOPS [skip ci]
